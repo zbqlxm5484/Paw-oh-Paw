@@ -1,0 +1,29 @@
+services:
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - spring
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+
+  spring:
+    build:
+      context: .
+      dockerfile: spring/Dockerfile
+    restart: unless-stopped
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: fastapi/Dockerfile
+    restart: unless-stopped
