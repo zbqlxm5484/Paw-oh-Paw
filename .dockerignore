@@ -4,26 +4,9 @@
 
 # 실제 환경 변수 및 비밀키
 .env
-.env.*
-!.env.example
-!.env.*.example
 *.pem
-*.key
-*.p12
-*.pfx
-
-# 모델 가중치
-*.pt
-*.pth
-*.onnx
-*.ckpt
-*.safetensors
 
 # 데이터 및 실행 결과
-data/
-datasets/
-uploads/
-outputs/
 logs/
 *.log
 
@@ -32,14 +15,10 @@ logs/
 venv/
 __pycache__/
 *.pyc
-.pytest_cache/
-.mypy_cache/
-.ipynb_checkpoints/
 
 # Java 빌드 결과 및 캐시
 .gradle/
 build/
-target/
 
 # 프론트엔드 의존성 및 빌드 결과
 node_modules/
