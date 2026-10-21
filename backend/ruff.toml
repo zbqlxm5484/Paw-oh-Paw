@@ -1,6 +1,8 @@
 # 코드 모양 맞추기(선택). pip install ruff 후 backend 폴더에서: ruff format . && ruff check .
 line-length = 120
 target-version = "py311"
+# ruff 0.17부터 Markdown 안의 Python 코드 블록도 포맷한다. 명세(docs/)와 README는 문서라 건드리지 않는다.
+extend-exclude = ["docs", "*.md"]
 
 [lint]
 select = ["E", "F", "I", "UP", "B"]
