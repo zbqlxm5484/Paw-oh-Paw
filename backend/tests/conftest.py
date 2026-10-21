@@ -148,6 +148,27 @@ def staff(db: Session):
     return row
 
 
+@pytest.fixture
+def other_staff(db: Session):
+    """다른 기관 T02의 담당자 staff2. 기관 분리(11.6) 확인용."""
+    from app.models import Institution, Staff
+
+    institution = Institution(code="T02", name="다른 병원")
+    db.add(institution)
+    db.flush()
+    row = Staff(
+        institution_id=institution.id,
+        login_id="staff2",
+        password_hash=password_hash_for(GOOD_PASSWORD),
+        name="다른 담당자",
+        role="STAFF",
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return row
+
+
 def bearer(staff) -> dict[str, str]:
     """담당자의 Bearer 헤더."""
     from app.core.security import create_access_token

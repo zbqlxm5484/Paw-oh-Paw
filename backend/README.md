@@ -1,6 +1,6 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.3. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리)이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.4. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류)다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
@@ -9,6 +9,9 @@
 | 비밀번호 해시·JWT·서명 URL (11.6, 13.4) | `app/core/security.py` |
 | 요청 DB 세션, 로그인 담당자·관리자 확인 (11.6, 11.7) | `app/api/deps.py` |
 | `POST /api/v1/auth/login`, `GET /api/v1/auth/me` (15.4) | `app/api/routes/auth.py`, `app/services/auth.py` |
+| 반려견 목록·등록·상세·수정 (13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
+| 체급 분류 `classify_size`(체중 기준)와 견종 이름 목록 (12.5) | `app/services/size_class.py`, `config/breeds.yaml` |
+| "오늘"의 시간대 (16절 APP_TIMEZONE) | `app/core/dates.py` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
 | 화면 문구 (14.5) | `messages/ko.yaml` |
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
@@ -18,7 +21,7 @@
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-반려견·회차 API, 업로드, 워커, 보고서 등은 다음 작업 단위에서 더한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
+회차 API, 업로드, 워커, 보고서 등은 다음 작업 단위에서 더한다. 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
 
 ## 준비 (처음 한 번)
 

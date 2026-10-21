@@ -1,0 +1,196 @@
+"""반려견 업무 규칙(12.5, 13.2, 15.5). 모든 조회는 기관 ID로 거른다(11.6).
+
+Spring의 @Service. 첫 인자는 DB 세션이고 flush()까지만 한다.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.core.errors import AppError, ErrorCode
+from app.models import Dog, MeasureSession
+from app.models.enums import SessionStatus
+from app.schemas.dogs import DogCreate, DogOut, DogUpdate
+from app.services.size_class import classify_size
+
+
+@dataclass(frozen=True)
+class DogStats:
+    """DogOut에 붙는 회차 요약(15.3): 회차 수, 가장 최근 측정일, 측정 중인 회차 ID."""
+
+    session_count: int
+    last_measured_on: date | None
+    open_session_id: uuid.UUID | None
+
+
+def classify(weight_kg: Decimal) -> str:
+    """설정의 기준 체중으로 classify_size를 부른다(12.5: 체중만 본다)."""
+    settings = get_settings()
+    return classify_size(
+        weight_kg,
+        small_max_kg=Decimal(str(settings.SIZE_SMALL_MAX_KG)),
+        medium_max_kg=Decimal(str(settings.SIZE_MEDIUM_MAX_KG)),
+    )
+
+
+def to_dog_out(dog: Dog, stats: DogStats) -> DogOut:
+    return DogOut.model_validate(dog).model_copy(
+        update={
+            "session_count": stats.session_count,
+            "last_measured_on": stats.last_measured_on,
+            "open_session_id": stats.open_session_id,
+        }
+    )
+
+
+def _stats_subquery():
+    """반려견별 회차 수와 가장 최근 측정일. GROUP BY 한 번으로 세어 N+1을 피한다(15.1)."""
+    return (
+        select(
+            MeasureSession.dog_id.label("dog_id"),
+            func.count().label("session_count"),
+            func.max(MeasureSession.measured_on).label("last_measured_on"),
+        )
+        .group_by(MeasureSession.dog_id)
+        .subquery()
+    )
+
+
+def _open_session_subquery():
+    """MEASURING 회차의 ID. 반려견마다 많아야 하나다(13.3)."""
+    return (
+        select(MeasureSession.id)
+        .where(MeasureSession.dog_id == Dog.id, MeasureSession.status == SessionStatus.MEASURING.value)
+        .order_by(MeasureSession.created_at.desc())
+        .limit(1)
+        .correlate(Dog)
+        .scalar_subquery()
+    )
+
+
+def _dogs_query(institution_id: uuid.UUID):
+    """반려견 + 회차 요약. 정렬은 15.5: 최근 측정일 내림차순(NULLS LAST, 안 잰 반려견은 뒤), 같으면 등록 시각."""
+    stats = _stats_subquery()
+    return (
+        select(
+            Dog,
+            func.coalesce(stats.c.session_count, 0).label("session_count"),
+            stats.c.last_measured_on.label("last_measured_on"),
+            _open_session_subquery().label("open_session_id"),
+        )
+        .outerjoin(stats, stats.c.dog_id == Dog.id)
+        .where(Dog.institution_id == institution_id)
+        .order_by(stats.c.last_measured_on.desc().nulls_last(), Dog.created_at.desc(), Dog.id.desc())
+    )
+
+
+def list_dogs(
+    db: Session, institution_id: uuid.UUID, *, q: str | None, page: int, size: int
+) -> tuple[list[DogOut], int]:
+    """목록·검색(15.5). q는 이름에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다."""
+    query = _dogs_query(institution_id)
+    count_query = select(func.count()).select_from(Dog).where(Dog.institution_id == institution_id)
+    if q:
+        query = query.where(Dog.name.icontains(q, autoescape=True))
+        count_query = count_query.where(Dog.name.icontains(q, autoescape=True))
+    rows = db.execute(query.offset((page - 1) * size).limit(size)).all()
+    total = db.scalar(count_query) or 0
+    items = [
+        to_dog_out(dog, DogStats(session_count, last_measured_on, open_session_id))
+        for dog, session_count, last_measured_on, open_session_id in rows
+    ]
+    return items, total
+
+
+def get_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID) -> Dog:
+    """없거나 다른 기관의 반려견이면 똑같이 404 NOT_FOUND(15.1)."""
+    dog = db.scalars(select(Dog).where(Dog.id == dog_id, Dog.institution_id == institution_id)).one_or_none()
+    if dog is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return dog
+
+
+def get_dog_out(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID) -> DogOut:
+    row = db.execute(_dogs_query(institution_id).where(Dog.id == dog_id)).one_or_none()
+    if row is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    dog, session_count, last_measured_on, open_session_id = row
+    return to_dog_out(dog, DogStats(session_count, last_measured_on, open_session_id))
+
+
+def create_dog(db: Session, institution_id: uuid.UUID, data: DogCreate) -> Dog:
+    """size_class를 보내지 않으면 체중으로 정하고, 보내면 그 값을 쓰며 size_class_manual=TRUE(15.5)."""
+    manual = data.size_class is not None
+    dog = Dog(
+        institution_id=institution_id,
+        name=data.name,
+        breed=data.breed,
+        weight_kg=data.weight_kg,
+        size_class=data.size_class.value if data.size_class is not None else classify(data.weight_kg),
+        size_class_manual=manual,
+        birth_year=data.birth_year,
+        sex=data.sex.value if data.sex is not None else None,
+        rehab_start_date=data.rehab_start_date,
+        focus_limb=data.focus_limb.value if data.focus_limb is not None else None,
+        memo=data.memo,
+    )
+    db.add(dog)
+    db.flush()
+    db.refresh(dog)
+    return dog
+
+
+def _check_baseline(db: Session, dog: Dog, session_id: uuid.UUID) -> None:
+    """기준 회차는 같은 반려견의 DONE 회차여야 한다. 아니면 400 BASELINE_INVALID(13.2)."""
+    found = db.scalar(
+        select(MeasureSession.id).where(
+            MeasureSession.id == session_id,
+            MeasureSession.dog_id == dog.id,
+            MeasureSession.status == SessionStatus.DONE.value,
+        )
+    )
+    if found is None:
+        raise AppError(ErrorCode.BASELINE_INVALID)
+
+
+def update_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, data: DogUpdate) -> Dog:
+    """보낸 필드만 바꾼다(15.5). 체급 규칙은 12.5:
+    - size_class 값을 보내면 그 값 + manual=TRUE. null을 보내면 manual=FALSE로 돌리고 저장된 체중으로 다시 분류.
+    - weight_kg를 바꾸면 manual=FALSE일 때만 새 체중으로 다시 분류. breed는 체급과 상관없다.
+    - weight_kg와 size_class가 함께 오면 size_class가 이긴다.
+    """
+    dog = get_dog(db, institution_id, dog_id)
+    changes = data.model_dump(exclude_unset=True)
+
+    if "baseline_session_id" in changes:
+        session_id = changes.pop("baseline_session_id")
+        if session_id is not None:
+            _check_baseline(db, dog, session_id)
+        dog.baseline_session_id = session_id
+
+    size_class = changes.pop("size_class", "unset")
+    weight_changed = "weight_kg" in changes and changes["weight_kg"] != dog.weight_kg
+
+    for field, value in changes.items():
+        setattr(dog, field, value.value if hasattr(value, "value") else value)
+
+    if size_class != "unset":
+        if size_class is not None:
+            dog.size_class = size_class.value if hasattr(size_class, "value") else size_class
+            dog.size_class_manual = True
+        else:
+            dog.size_class_manual = False
+            dog.size_class = classify(dog.weight_kg)
+    elif weight_changed and not dog.size_class_manual:
+        dog.size_class = classify(dog.weight_kg)
+
+    db.flush()
+    db.refresh(dog)
+    return dog

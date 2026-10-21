@@ -183,7 +183,7 @@
 
 - `session_count`: 이 반려견의 회차 수(상태 상관없이). `last_measured_on`: 가장 최근 회차의 측정일. 없으면 `null`.
 - `open_session_id`: 측정 중(MEASURING)인 회차가 있으면 그 ID. 목록에서 "측정 중" 표시와 이어서 측정하기에 쓴다.
-- `size_class_manual`: 담당자가 체급을 직접 고쳤으면 true. false면 견종(없으면 체중)으로 자동 분류한 값이다.
+- `size_class_manual`: 담당자가 체급을 직접 고쳤으면 true. false면 등록 체중으로 자동 분류한 값이다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE. 견종은 보지 않는다).
 - `baseline_session_id`: 담당자가 지정한 기준 회차. `null`이면 가장 이른 완료 회차가 기준이다.
 - `memo`: 내부 메모. 담당자 화면에만 보이고 보고서에는 들어가지 않는다.
 
@@ -341,7 +341,7 @@
 ```
 
 - 응답 201 **DogOut**. 필드 규칙은 12.2.
-- `size_class`를 빼면 서버가 견종(견종표에 없으면 체중)으로 정한다. 보내면 그 값을 쓰고 `size_class_manual`이 true가 된다.
+- `size_class`를 빼면 서버가 체중으로 정한다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE). 보내면 그 값을 쓰고 `size_class_manual`이 true가 된다.
 - `baseline_session_id`는 등록 때 받지 않는다. 회차가 아직 없기 때문이다.
 
 ### `GET /dogs/{dog_id}` — 상세
@@ -357,7 +357,7 @@
 
 - 응답 200 **DogOut**.
 - 보내지 않은 필드는 그대로다. 값을 비우려면 `null`을 보낸다. `name`·`breed`·`weight_kg`은 비울 수 없다.
-- `breed`를 바꾸면 체급을 직접 고친 적이 없을 때만 체급이 다시 정해진다. `weight_kg`만 바꾸면 체급은 그대로다.
+- `weight_kg`를 바꾸면 체급을 직접 고친 적이 없을 때만 새 체중으로 체급이 다시 정해진다. `breed`를 바꿔도 체급은 그대로다.
 - `size_class`에 값을 보내면 직접 고친 것으로 저장되고, `null`을 보내면 자동 분류로 돌아간다.
 - `baseline_session_id`는 이 반려견의 완료(DONE) 회차여야 한다. 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 가장 이른 완료 회차가 기준이 된다.
 

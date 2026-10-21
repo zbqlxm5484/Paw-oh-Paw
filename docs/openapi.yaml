@@ -96,7 +96,7 @@ paths:
       tags: [반려견]
       operationId: createDog
       summary: 반려견 등록 (BE-02, S2)
-      description: size_class를 빼면 견종(없으면 체중)으로 자동 분류한다. 보내면 그 값을 쓰고 size_class_manual이 true가 된다.
+      description: size_class를 빼면 체중으로 자동 분류한다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE). 보내면 그 값을 쓰고 size_class_manual이 true가 된다.
       requestBody:
         required: true
         content:

@@ -6,6 +6,7 @@ Oct 19, 2026 · @조영운
 
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
+| v1.4 | 2026-10-22 | 체급 분류를 견종 기준에서 등록 체중 기준으로 바꿈(박규원의 체급 기준 자료 반영, 10절 Q15 결정): 4절 BE-02, 12.2 주석, 12.5 규칙·classify\_size, 13.2, 15.5, 16 설정 설명, 17.2 BE-02. 10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 견종표는 화면 자동완성용 이름 목록으로만 남김 |
 | v1.3 | 2026-10-20 | DB를 MySQL에서 PostgreSQL로 바꿈(10-20 팀 결정): 11.1 PostgreSQL 18·pg8000(cryptography 삭제), 11.3, 11.4 ID·시각 타입, 11.7 오류 뒤 처리·격리 수준·잠금 조회·오류 종류, 11.9, 12.2 DDL(UUID·TIMESTAMPTZ·CHECK), 12.5 상태 값·updated\_at·도구·이유, 13.4 대소문자, 15.1 ID 형식·NUMERIC, 15.5 검색·정렬, 16절 접속 주소·Docker·설치 절차, 3절 구성 그림·확장 표, 10절 Q12·Q13, 12.1 그림 오타. PostgreSQL 18.4에서 DDL과 규칙을 시험해 확인 |
 | v1.2 | 2026-10-19 | 기업 납품(D-06)과 큰 규모를 전제로 고침: 1절 위치(발표 + D-06 서버), 7절·11.11 파일 저장소(서버 디스크·AWS S3 교체, MinIO 삭제, 키 형식), 15.1 파일 주소, 3절 몰릴 때와 확장 계획, 12.4 워커(렌더 프로세스, 보고서 전용 자리, 재시작, 기관별 상한, 보고서 키 덮어쓰기), 16절 S3·워커 변수와 설치 절차, 11.1 boto3·moto 추가, 17·18절, 10절 Q19\~Q23, Q3·Q20 팀 결정(기업에 따로 묻지 않음), 오타 수정 |
 | v1.1 | 2026-10-19 | 문서만으로 작업 단위 1\~6을 시험 구현해 찾은 빈칸을 채움: DB commit 시점(11.7), 시각 처리(11.4), 서명 계산(11.6), 로그(11.8), 잠금과 파일 정리(12.4), classify\_size(12.5), 값 해석·크기 검사(13.1), 비밀번호 바이트 기준(13.4), PyYAML·cryptography 추가(11.1), Q18 |
@@ -134,7 +135,7 @@ Oct 19, 2026 · @조영운
 | ID | 기능 | 하는 일 | 왜 필요한가 | 근거 |
 | --- | --- | --- | --- | --- |
 | BE-01 | 로그인·기관 분리 (필수) | 기관 코드·아이디·비밀번호로 로그인하고, 모든 조회를 자기 기관 데이터로 제한한다. 회원가입 없이 관리자가 미리 만든 계정만 쓴다 | 보고서는 미리 확인된 사람만 봐야 한다. 결과 화면을 만들면 기관별 데이터 분리가 조건부 필수다 | PR-F09-04, 10-15 회의 |
-| BE-02 | 반려견 등록·수정 (필수) | 이름·견종·체중, 선택으로 생년·성별, 재활 정보(재활 시작일·관심 다리·내부 메모). 체급(소·중·대)은 기업 자료에 따로 없어서 견종으로 자동 분류하고(견종표에 없거나 믹스견이면 체중으로), 담당자가 고칠 수 있다 | 보고서 설명이 이름·체중·견종·체급에 따라 바뀐다. 보호자 이름·연락처는 쓰는 곳이 없어 받지 않는다 | PR-F08-02, REQ-CM-002 |
+| BE-02 | 반려견 등록·수정 (필수) | 이름·견종·체중, 선택으로 생년·성별, 재활 정보(재활 시작일·관심 다리·내부 메모). 체급(소·중·대)은 기업 자료에 따로 없어서 등록 체중으로 자동 분류하고(박규원 체급 기준: 10 kg 미만 소형, 25 kg 미만 중형, 25 kg 이상 대형), 담당자가 고칠 수 있다 | 보고서 설명이 이름·체중·견종·체급에 따라 바뀐다. 보호자 이름·연락처는 쓰는 곳이 없어 받지 않는다 | PR-F08-02, REQ-CM-002 |
 | BE-03 | 반려견 목록·검색 (필수) | 이름 검색, 마지막 측정일, 회차 수, 진행 중 회차 표시 | 하루 여러 마리를 재므로 바로 찾아 들어가야 한다 | 4.1 측정 담당자 |
 
 ### 회차 측정 (S3·S4)
@@ -368,7 +369,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 | Q12 | 팀 전체 | DB는 PostgreSQL로 간다(10-20 팀 결정, 세부명세서 9절). Redis는 이 설계에서 쓰지 않는데, 기술스택 페이지에서 빼도 되는가? | 이 설계는 Redis 없이 돈다 |  |
 | Q13 | 팀 전체 | 역할표와 기술스택 페이지의 팀 서비스를 Spring → FastAPI로, DB를 MySQL → PostgreSQL로 고친다 | 문서 일치 |  |
 | Q14 | 팀 전체 | 재활 중심이면 "측정 이력·재측정 비교"를 빼는 순서에서 뒤로 미룬다(5절) | 일정이 밀릴 때의 기준 |  |
-| Q15 | 박규원·기업 | 체급(소·중·대)을 어떻게 나누는가? 제안: 견종 기준, 견종표에 없거나 믹스견이면 체중 기준(12.5). 체급별 권장 통과 수(D-14)와 같은 규칙을 써야 한다 | 기업 자료에 체급 구분이 없다(10-18). 권장 통과 수(D-14)도 체급별이다 |  |
+| Q15 | 박규원·기업 | 체급(소·중·대)을 어떻게 나누는가? 체급별 권장 통과 수(D-14)와 같은 규칙을 써야 한다 | 기업 자료에 체급 구분이 없다(10-18). 권장 통과 수(D-14)도 체급별이다 | 결정(10-22): 박규원의 체급 기준 자료대로 등록 체중만으로 나눈다. 10 kg 미만 소형, 25 kg 미만 중형, 25 kg 이상 대형(12.5). 견종은 보지 않는다 |
 | Q16 | 기업 | 분석은 촬영 1건마다 등록 즉시 하는가(세부명세서 5.1절, REQ-OP-014), 16건을 모아 한 번에 하는가? | 모아서 하면 1건 약 11초 × 16 = 약 3분을 기다린다. 이 설계는 촬영마다 바로 보내므로, 분석 서버가 여러 건을 동시에 처리하면 마지막 촬영 뒤 약 11초만 남는다 |  |
 | Q17 | 기업 | 반려견이 같은 제품을 쓰는 다른 병원으로 옮기면 측정 이력을 넘길 수 있게 할 것인가? 한다면 방식은 무엇인가? (예: 병원끼리 1회용 공유 코드, 또는 보호자가 크림오프 앱에서 자기 반려견 기록을 보고 새 병원에 직접 공유) | 재활 경과를 이어 볼 수 있어 제품 확산에 도움이 될 수 있다. 다만 보호자 동의(REQ-CM-002)와, 같은 반려견임을 알아볼 식별 정보가 필요하다. 보호자 앱 방식은 기업이 말한 B2C 방향(1차 멘토링, 10-14 회의)과도 맞는다. 과제 범위 밖이면 기관 분리를 유지한다 |  |
 | Q18 | 조유진 | 분석 API 연동 형식을 정해 2부에 넣을 수 있는가? 엔드포인트, 인증 방식, 작업 상태 값, 결과 JSON(통과·판정·사유 코드·수치·프레임별 각도), 촬영 판정과 측대보 제외를 어느 쪽이 하는지. 정해지기 전에는 Mock 견본 JSON 형식부터 맞춘다 | 작업 단위 6부터 필요하다. 시험 구현에서 이 부분을 AI가 전부 지어냈다. 두 사람이 따로 만들면 연결할 때 맞지 않는다(Q2·Q6과 함께) |  |
@@ -441,7 +442,7 @@ backend/
 ├─ report/                   # 보고서 모듈 (납품물, app을 import하지 않음)
 ├─ video/                    # 결과 영상 처리 (납품물, app을 import하지 않음)
 ├─ messages/ko.yaml          # 화면 안내 문구 (김지윤 편집)
-├─ config/breeds.yaml        # 견종별 체급 표 (12.5)
+├─ config/breeds.yaml        # 견종 이름 목록, 화면 자동완성용 (12.5)
 ├─ config/tolerance.yaml     # 회차 비교 오차 범위 (15.8, 10절 Q4)
 ├─ scripts/seed.py           # 기관·담당자 계정 만들기
 ├─ scripts/purge.py          # 전체 파기: python -m scripts.purge --all (15.9)
@@ -672,7 +673,7 @@ CREATE TABLE dog (
   name                 VARCHAR(50)   NOT NULL,
   breed                VARCHAR(50)   NOT NULL,
   weight_kg            NUMERIC(5,2)  NOT NULL,  -- 등록할 때 체중
-  size_class           VARCHAR(20)   NOT NULL,  -- 견종으로 분류, 견종표에 없으면 체중으로(12.5)
+  size_class           VARCHAR(20)   NOT NULL,  -- 등록 체중으로 분류(12.5)
   size_class_manual    BOOLEAN       NOT NULL DEFAULT FALSE,  -- 담당자가 직접 고쳤으면 TRUE
   birth_year           SMALLINT      NULL,
   sex                  VARCHAR(20)   NULL,
@@ -885,12 +886,12 @@ CREATE TABLE purge_log (
 - **이름**: 회차 테이블은 `measure_session`, 모델 클래스는 `MeasureSession`이다. SQLAlchemy의 DB 세션(`Session`)과 이름이 겹치면 AI가 둘을 헷갈린 코드를 만들기 때문이다. API 주소와 JSON에서는 그대로 `sessions`, `session_id`를 쓴다.
 - **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`.
 - **측정 불가**: `value`는 NULL, `measurable`은 FALSE, 사유는 `unmeasurable_reason`에 넣는다. 0을 넣지 않는다. 0은 측정값으로 오해되기 때문이다(PR-F02-05).
-- **체급 분류**: 체급은 몸집(화면에 찍히는 크기)을 나누는 값이라 견종으로 정한다. 세부명세서가 체급을 쓰는 곳이 소형견이 화면에 작게 찍히는 문제(RK-09), 체급별 권장 통과 수(D-14), 보고서 맞춤 설명(PR-F08-02)이기 때문이다. 체중으로 나누면 비만인 소형견이 중형으로 잡히고, 재활 중 체중이 바뀌면 회차마다 체급이 달라진다. 규칙은 다음과 같다.
-  1. `config/breeds.yaml` 견종표에 있는 견종은 표의 체급을 쓴다. 화면에서는 견종을 이 표의 목록에서 고르고, 없으면 직접 입력한다.
-  2. 표에 없는 견종이나 믹스견은 등록 체중으로 나눈다. 10 kg 미만 SMALL, 25 kg 이하 MEDIUM, 그보다 무거우면 LARGE이고, 기준값은 설정값(16절)이다.
-  3. 담당자가 체급을 고치면 `size_class_manual`을 TRUE로 하고, 이후 자동으로 바꾸지 않는다.
-  4. 체중이 바뀌어도 체급은 다시 정하지 않는다. 견종을 고칠 때만 다시 정한다.
-  5. 견종표와 이 규칙은 박규원의 체급별 권장 통과 수 분석(D-14)과 같은 것을 쓴다. 분류는 `classify_size(breed, weight_kg)` 함수 하나로 두고 양쪽이 함께 쓴다(10절 Q15).
+- **체급 분류**: 체급은 등록 체중만으로 나눈다(박규원의 체급 기준 자료, 10-22. v1.3까지는 견종 기준이었다). 세부명세서가 체급을 쓰는 곳은 소형견이 화면에 작게 찍히는 문제(RK-09), 체급별 권장 통과 수(D-14), 보고서 맞춤 설명(PR-F08-02)인데, 분석 쪽의 체급별 KPI 집계(KPI-08·25·26)와 개 보행 임상 연구(압력 매트)가 같은 체중 경계를 쓴다. 백엔드가 견종으로 나누면 분석 쪽 집계와 보고서의 체급이 어긋나므로 같은 규칙을 쓴다. 규칙은 다음과 같다.
+  1. 등록 체중이 10 kg 미만이면 SMALL, 25 kg 미만이면 MEDIUM, 25 kg 이상이면 LARGE다. 경계값은 설정값(16절)이고, 경계에 있는 값은 위 구간에 든다(10.00 kg은 MEDIUM, 25.00 kg은 LARGE).
+  2. `config/breeds.yaml`은 화면의 견종 자동완성용 이름 목록이다. 화면에서는 견종을 이 목록에서 고르고, 없으면 직접 입력한다. 체급 분류에는 쓰지 않는다.
+  3. 담당자가 체급을 고치면 `size_class_manual`을 TRUE로 하고, 이후 자동으로 바꾸지 않는다. `size_class`에 `null`을 보내면 FALSE로 돌아가 저장된 체중으로 다시 정한다.
+  4. 체중을 고치면 `size_class_manual`이 FALSE일 때만 새 체중으로 다시 정한다. 견종을 고쳐도 체급은 바뀌지 않는다.
+  5. 이 규칙은 박규원의 체급별 권장 통과 수 분석(D-14)·KPI 집계와 같은 것이다. 분류는 `classify_size(weight_kg)` 함수 하나로 두고 양쪽이 함께 쓴다(10절 Q15).
 - **기준 회차**: `baseline_session_id`가 비어 있으면 그 반려견의 가장 이른 DONE 회차를 기준으로 쓴다. 회차 순서는 언제나 (measured\_on, created\_at) 오름차순이고, 가장 이른·가장 최근·바로 앞 회차를 모두 이 순서로 정한다. 측정일을 직접 고를 수 있고 같은 날 회차가 둘일 수 있어서다.
 - **촬영 순번**: `seq_no`는 같은 회차의 가장 큰 값 + 1이다. 동시에 올려도 겹치지 않도록 업로드는 회차 행을 SELECT … FOR UPDATE로 잠근 뒤 순번을 매긴다(12.4). 그런데도 겹치면(`uq_shot_seq` 위반) 잠금이 빠진 버그이므로 500으로 끝내고 로그를 남긴다.
 - **도구**: PostgreSQL 17, SQLAlchemy 2(테이블을 Python 클래스로 정의), pg8000(Python에서 PostgreSQL에 접속하는 드라이버), Alembic(테이블 변경 이력을 파일로 남겨 팀원 누구나 같은 DB를 만든다. Spring의 Flyway와 같은 역할).
@@ -898,18 +899,15 @@ CREATE TABLE purge_log (
 - **updated\_at**: PostgreSQL에는 MySQL의 `ON UPDATE CURRENT_TIMESTAMP`가 없다. 모델에 `onupdate=func.now()`를 두어 SQLAlchemy가 채우게 하고, 행을 바꾸는 UPDATE는 ORM이나 `update()`로만 쓴다. `text()`로 쓴 SQL로 바꾸면 `updated_at`이 그대로다. 보고서 작업 순서(12.4)가 이 값을 쓴다.
 - **PostgreSQL을 쓰는 이유**: 세부명세서 9절(개발 요소)이 데이터 저장으로 "PostgreSQL 등 규모에 맞춰 선정"을 권장하고, 팀도 이에 맞춰 PostgreSQL로 정했다(10-20). 드라이버는 BSD 라이선스인 pg8000을 쓴다. 더 널리 쓰는 psycopg 3는 LGPL-3.0이라, 세부명세서 7.1절(납품물에 소스 공개 의무를 만드는 라이선스 금지, 조건이 불명확하면 쓸 수 없음) 검토가 길어질 수 있어서다. Redis는 쓰지 않는다(3절).
 
-**classify\_size 세부**: `app/services/size_class.py`에 `classify_size(breed, weight_kg, breeds) -> "SMALL" | "MEDIUM" | "LARGE"`로 둔다. `breeds`는 `load_breeds(path)`가 견종표를 읽어 만든 `{견종 이름: 체급}` 사전이다. DB·설정을 읽지 않는 순수 함수라 박규원의 D-14 코드도 이 파일을 그대로 쓴다. 견종 이름은 앞뒤 공백을 지운 뒤 정확히 같아야 표의 체급을 쓴다. PATCH에 `breed`와 `size_class`가 함께 오면 `size_class`가 이긴다. `size_class: null`로 자동 분류로 돌릴 때는 지금 저장된 `weight_kg`를 쓴다.
+**classify\_size 세부**: `app/services/size_class.py`에 `classify_size(weight_kg, *, small_max_kg, medium_max_kg) -> "SMALL" | "MEDIUM" | "LARGE"`로 둔다. 비교는 Decimal로 한다. DB·설정을 읽지 않는 순수 함수라 박규원의 D-14 코드도 이 파일을 그대로 쓴다. `load_breeds(path)`는 견종 이름 목록을 읽어 돌려주고(앞뒤 공백·중복 제거) 체급과는 상관없다. PATCH에 `weight_kg`와 `size_class`가 함께 오면 `size_class`가 이긴다. `size_class: null`로 자동 분류로 돌릴 때는 지금 저장된 `weight_kg`를 쓴다.
 
-견종표 형식(예시 세 줄, 실제 목록은 박규원과 함께 채운다):
+견종 목록 형식(예시 세 줄, 실제 목록은 박규원과 함께 채운다):
 
 ```yaml
 # config/breeds.yaml
-- name: 말티즈
-  size_class: SMALL
-- name: 웰시코기
-  size_class: MEDIUM
-- name: 골든 리트리버
-  size_class: LARGE
+- 말티즈
+- 웰시코기
+- 골든 리트리버
 ```
 
 ## 13. 입력 검증
@@ -945,7 +943,7 @@ CREATE TABLE purge_log (
 | 필드 | 필수 | 규칙 |
 | --- | --- | --- |
 | `name` | 등록 때 필수 | 1\~50자. 앞뒤 공백은 지운다. 같은 기관에 같은 이름이 있어도 된다 |
-| `breed` | 등록 때 필수 | 1\~50자. 견종표에 있는 이름이면 그 체급, 없으면 체중으로 분류한다(12.5) |
+| `breed` | 등록 때 필수 | 1\~50자. 체급과는 상관없고, 견종 목록(`config/breeds.yaml`)에 없는 이름도 받는다(12.5) |
 | `weight_kg` | 등록 때 필수 | 0.5\~100.0, 소수 둘째 자리까지 |
 | `size_class` | 선택 | `SMALL`·`MEDIUM`·`LARGE`. 보내면 `size_class_manual`=TRUE |
 | `birth_year` | 선택 | 1990\~올해 |
@@ -1318,7 +1316,7 @@ STOPPED: "중간에 멈췄습니다."
 ```
 
 - 응답 201 **DogOut**.
-- `size_class`를 보내지 않으면 `classify_size(breed, weight_kg)`로 정한다(12.5). 보내면 그 값을 쓰고 `size_class_manual`을 TRUE로 한다.
+- `size_class`를 보내지 않으면 `classify_size(weight_kg)`로 정한다(12.5). 보내면 그 값을 쓰고 `size_class_manual`을 TRUE로 한다.
 - `baseline_session_id`는 등록 때 받지 않는다. 회차가 아직 없기 때문이다.
 
 **`GET /dogs/{dog_id}`** — 반려견 상세. 응답 200 **DogOut**.
@@ -1331,7 +1329,7 @@ STOPPED: "중간에 멈췄습니다."
 ```
 
 - 응답 200 **DogOut**. 보내지 않은 필드와 `null`을 보낸 필드를 구분해야 하므로 `model_dump(exclude_unset=True)`로 바꿀 값을 꺼낸다.
-- `breed`를 바꾸면 `size_class_manual`이 FALSE일 때만 체급을 다시 정한다. `weight_kg`만 바꾸면 체급은 그대로다(12.5).
+- `weight_kg`를 바꾸면 `size_class_manual`이 FALSE일 때만 새 체중으로 체급을 다시 정한다. `breed`를 바꿔도 체급은 그대로다(12.5).
 - `size_class`에 값을 보내면 `size_class_manual`이 TRUE가 되고, `null`을 보내면 FALSE로 돌아가 자동 분류로 다시 정한다.
 - `baseline_session_id`가 이 반려견의 DONE 회차가 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 12.5 규칙을 따른다.
 
@@ -1710,9 +1708,9 @@ stride_length: 2.0   # pct_body
 | `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION` | `4` | 한 기관이 동시에 분석 API에 맡길 수 있는 촬영 수 | 3절, 12.4 |
 | `WORKER_RENDER_CONCURRENCY` | `1` | 결과 영상을 동시에 만드는 프로세스 수. 보고서는 따로 1개다. 서버 코어가 넉넉하면 올린다 | 3절, 12.4 |
 | `RECOMMENDED_PASSES` | `8` | 방향별 권장 유효 통과 수. D-14 결과가 나오면 바꾼다 | 15.6 |
-| `SIZE_SMALL_MAX_KG` | `10` | 견종표에 없는 견종은 이 값 미만이면 SMALL | 12.5 |
-| `SIZE_MEDIUM_MAX_KG` | `25` | 이 값 이하면 MEDIUM, 넘으면 LARGE | 12.5 |
-| `BREEDS_FILE` | `config/breeds.yaml` | 견종별 체급 표 | 12.5 |
+| `SIZE_SMALL_MAX_KG` | `10` | 등록 체중이 이 값 미만이면 SMALL | 12.5 |
+| `SIZE_MEDIUM_MAX_KG` | `25` | 이 값 미만이면 MEDIUM, 이 값 이상이면 LARGE | 12.5 |
+| `BREEDS_FILE` | `config/breeds.yaml` | 견종 이름 목록(화면 자동완성용) | 12.5 |
 | `TOLERANCE_FILE` | `config/tolerance.yaml` | 회차 비교 오차 범위 | 15.8 |
 | `MESSAGES_FILE` | `messages/ko.yaml` | 화면 문구 | 14.5 |
 | `LOG_LEVEL` | `INFO` | 로그 수준 | 11.8 |
@@ -1767,9 +1765,9 @@ ANALYSIS_API_MODE=mock
 
 - [ ] BE-01: 맞는 기관 코드·아이디·비밀번호로 토큰을 받고, 하나라도 틀리면 401 `LOGIN_FAILED` 하나로만 답한다.
 - [ ] BE-01: `is_active`가 FALSE인 계정은 로그인도, 이미 받은 토큰으로 부르는 것도 403 `ACCOUNT_DISABLED`다.
-- [ ] BE-02: 견종표에 있는 견종은 표의 체급이 나오고, 없는 견종은 체중 기준이다. 9.99 kg은 SMALL, 10.00 kg과 25.00 kg은 MEDIUM, 25.01 kg은 LARGE다.
-- [ ] BE-02: 체급을 직접 고치면 이후 견종을 바꿔도 체급이 그대로고, `size_class`에 `null`을 보내면 자동 분류로 돌아간다.
-- [ ] BE-02: 체중만 바꾸면 체급이 바뀌지 않는다.
+- [ ] BE-02: 체급은 등록 체중으로만 정한다. 9.99 kg은 SMALL, 10.00 kg과 24.99 kg은 MEDIUM, 25.00 kg은 LARGE다. 견종은 체급에 영향을 주지 않는다.
+- [ ] BE-02: 체급을 직접 고치면 이후 체중을 바꿔도 체급이 그대로고, `size_class`에 `null`을 보내면 저장된 체중으로 자동 분류로 돌아간다.
+- [ ] BE-02: 체급을 직접 고친 적이 없으면 체중을 바꿀 때 체급이 새 체중으로 다시 정해지고, 견종을 바꿔도 체급은 바뀌지 않는다.
 - [ ] BE-02: 다른 반려견의 회차나 DONE이 아닌 회차를 기준 회차로 지정하면 400 `BASELINE_INVALID`다.
 - [ ] BE-03: `q`로 이름 일부를 검색하면 그 글자가 들어간 반려견만 나오고, `%`를 넣어도 전체가 나오지 않는다.
 - [ ] BE-03: 목록이 최근 측정일 내림차순이고 측정이 없는 반려견은 뒤에 있으며, `total`·`page`·`size`가 맞다.

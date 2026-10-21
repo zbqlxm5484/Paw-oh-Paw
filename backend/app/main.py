@@ -21,7 +21,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
-from app.api.routes import auth, health
+from app.api.routes import auth, dogs, health
 from app.core.config import Settings, get_settings
 from app.core.errors import ErrorCode, error_response, register_exception_handlers
 
@@ -123,6 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
+    app.include_router(dogs.router, prefix=API_PREFIX)
     return app
 
 
