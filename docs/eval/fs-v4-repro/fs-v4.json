@@ -1,0 +1,1704 @@
+{
+ "paw_eval": "0.1.0",
+ "angle_def": "v1",
+ "gt": {
+  "path": "../dataset/keypoints_260820/annotations.json",
+  "sha256": "a08e9d47b6804305630a0ea1b79275ab5604b414d14368ae37f96613aa765fb7",
+  "annotations": 221,
+  "scored": 221,
+  "skipped_no_anchor": 0
+ },
+ "pred": {
+  "path": "fs-v4.preds.json",
+  "sha256": "8b08c80c5b939655ff2263d9e65af3f8d0d909892546943a96e9ba8d0c218f03",
+  "meta": {
+   "paw_eval": "0.1.0",
+   "created": "2026-10-22T08:35:56",
+   "model": {
+    "file": "models\\fs-v4.toml",
+    "config": {
+     "name": "fs-v4",
+     "backend": "mmpose",
+     "config": "fs-v4/pose.py",
+     "weights": "fs-v4/pose.pth",
+     "device": "cpu",
+     "stack": {
+      "backend": "mmdet-mmpose",
+      "det_config": "fs-v4/det.py",
+      "det_weights": "fs-v4/det.pth",
+      "det_conf": 0.25,
+      "batch": 8
+     }
+    },
+    "weights_sha256": "a4261a107bc8e2f6a0418e8ffb02f510eb396c892aae1843092883b9fd63882f"
+   },
+   "device": "cuda:0",
+   "input_box": "정답 상자 +15%",
+   "gt_sha256": "a08e9d47b6804305630a0ea1b79275ab5604b414d14368ae37f96613aa765fb7",
+   "seconds": 7.4,
+   "env": {
+    "python": "3.11.16",
+    "platform": "Windows-10-10.0.26300-SP0",
+    "numpy": "1.26.4",
+    "opencv": "4.10.0",
+    "torch": "2.1.2+cu121",
+    "mmpose": "1.3.2",
+    "mmcv": "2.1.0",
+    "test_cfg": {
+     "flip_test": false
+    }
+   }
+  }
+ },
+ "env": {
+  "python": "3.11.16",
+  "platform": "Windows-10-10.0.26300-SP0"
+ },
+ "kpi": {
+  "KPI-04": {
+   "mae": 8.03,
+   "median": 5.18,
+   "p90": 17.91,
+   "n": 1318,
+   "touched_only": {
+    "mae": 13.34,
+    "median": 8.64,
+    "p90": 29.72,
+    "n": 468
+   },
+   "per_joint": {
+    "어깨": {
+     "mae": 7.15,
+     "median": 5.02,
+     "p90": 16.53,
+     "n": 221,
+     "touched_only": {
+      "mae": 13.98,
+      "median": 11.55,
+      "p90": 31.9,
+      "n": 27
+     }
+    },
+    "팔꿈치": {
+     "mae": 6.39,
+     "median": 3.74,
+     "p90": 14.53,
+     "n": 220,
+     "touched_only": {
+      "mae": 11.23,
+      "median": 6.28,
+      "p90": 25.41,
+      "n": 62
+     }
+    },
+    "앞발목": {
+     "mae": 10.26,
+     "median": 5.66,
+     "p90": 19.43,
+     "n": 217,
+     "touched_only": {
+      "mae": 18.0,
+      "median": 10.1,
+      "p90": 33.22,
+      "n": 94
+     }
+    },
+    "고관절": {
+     "mae": 9.5,
+     "median": 6.24,
+     "p90": 23.87,
+     "n": 220,
+     "touched_only": {
+      "mae": 14.43,
+      "median": 10.43,
+      "p90": 31.82,
+      "n": 92
+     }
+    },
+    "무릎": {
+     "mae": 6.58,
+     "median": 5.26,
+     "p90": 14.1,
+     "n": 220,
+     "touched_only": {
+      "mae": 8.59,
+      "median": 7.07,
+      "p90": 16.23,
+      "n": 102
+     }
+    },
+    "뒷발목": {
+     "mae": 8.33,
+     "median": 5.06,
+     "p90": 23.69,
+     "n": 220,
+     "touched_only": {
+      "mae": 14.01,
+      "median": 9.94,
+      "p90": 31.16,
+      "n": 91
+     }
+    }
+   }
+  },
+  "KPI-18": {
+   "value": 0.8985,
+   "n": 2621,
+   "touched_only": 0.6066,
+   "n_touched": 544
+  },
+  "KPI-19": {
+   "value": 0.7028,
+   "n": 2621,
+   "touched_only": 0.2849,
+   "n_touched": 544
+  },
+  "KPI-20": {
+   "value": 0.035,
+   "n": 3399,
+   "touched_only": 0.085,
+   "n_touched": 1096
+  },
+  "KPI-21": {
+   "front": {
+    "value": 0.0396,
+    "n": 429,
+    "touched_only": 0.0684,
+    "n_touched": 190
+   },
+   "hind": {
+    "value": 0.1304,
+    "n": 437,
+    "touched_only": 0.2336,
+    "n_touched": 244
+   }
+  },
+  "KPI-22": {
+   "left_ear": {
+    "value": 0.7,
+    "n": 100,
+    "touched_only": 0.5915,
+    "n_touched": 71
+   },
+   "right_ear": {
+    "value": 0.6061,
+    "n": 99,
+    "touched_only": 0.5352,
+    "n_touched": 71
+   },
+   "t13_spinous_process": {
+    "value": 0.9726,
+    "n": 219,
+    "touched_only": null,
+    "n_touched": 0
+   },
+   "left_dorsal_scapular_spine": {
+    "value": 0.973,
+    "n": 111,
+    "touched_only": 0.6667,
+    "n_touched": 3
+   },
+   "left_acromion_greater_tubercle": {
+    "value": 0.8919,
+    "n": 111,
+    "touched_only": 0.8333,
+    "n_touched": 6
+   },
+   "left_lateral_humeral_epicondyle": {
+    "value": 0.9279,
+    "n": 111,
+    "touched_only": 0.5556,
+    "n_touched": 9
+   },
+   "left_ulnar_styloid_process": {
+    "value": 0.9182,
+    "n": 110,
+    "touched_only": 0.7,
+    "n_touched": 20
+   },
+   "left_fifth_metacarpal_distal": {
+    "value": 0.9346,
+    "n": 107,
+    "touched_only": 0.8293,
+    "n_touched": 41
+   },
+   "right_dorsal_scapular_spine": {
+    "value": 0.9909,
+    "n": 110,
+    "touched_only": 0.5,
+    "n_touched": 2
+   },
+   "right_acromion_greater_tubercle": {
+    "value": 0.9182,
+    "n": 110,
+    "touched_only": 0.5,
+    "n_touched": 6
+   },
+   "right_lateral_humeral_epicondyle": {
+    "value": 0.9727,
+    "n": 110,
+    "touched_only": 0.7273,
+    "n_touched": 11
+   },
+   "right_ulnar_styloid_process": {
+    "value": 0.9636,
+    "n": 110,
+    "touched_only": 0.88,
+    "n_touched": 25
+   },
+   "right_fifth_metacarpal_distal": {
+    "value": 0.9545,
+    "n": 110,
+    "touched_only": 0.8947,
+    "n_touched": 38
+   },
+   "iliac_crest": {
+    "value": 0.9774,
+    "n": 221,
+    "touched_only": null,
+    "n_touched": 0
+   },
+   "left_femoral_greater_trochanter": {
+    "value": 0.9273,
+    "n": 110,
+    "touched_only": 0.75,
+    "n_touched": 32
+   },
+   "left_femorotibial_joint": {
+    "value": 0.8636,
+    "n": 110,
+    "touched_only": 0.3478,
+    "n_touched": 23
+   },
+   "left_lateral_malleolus": {
+    "value": 0.7838,
+    "n": 111,
+    "touched_only": 0.25,
+    "n_touched": 32
+   },
+   "left_fifth_metatarsal_distal": {
+    "value": 0.7387,
+    "n": 111,
+    "touched_only": 0.4286,
+    "n_touched": 49
+   },
+   "right_femoral_greater_trochanter": {
+    "value": 0.8909,
+    "n": 110,
+    "touched_only": 0.6571,
+    "n_touched": 35
+   },
+   "right_femorotibial_joint": {
+    "value": 0.8636,
+    "n": 110,
+    "touched_only": 0.4444,
+    "n_touched": 18
+   },
+   "right_lateral_malleolus": {
+    "value": 0.9091,
+    "n": 110,
+    "touched_only": 0.4444,
+    "n_touched": 18
+   },
+   "right_fifth_metatarsal_distal": {
+    "value": 0.8909,
+    "n": 110,
+    "touched_only": 0.6471,
+    "n_touched": 34
+   }
+  },
+  "reference": {
+   "near_pck@0.20": 0.9611,
+   "far_pck@0.10": {
+    "value": 0.6038,
+    "n": 1812,
+    "touched_only": 0.3366,
+    "n_touched": 1031
+   },
+   "lr_swap_per_pair": {
+    "left_ear / right_ear": {
+     "value": 0.2181,
+     "n": 321,
+     "touched_only": 0.2651,
+     "n_touched": 249
+    },
+    "left_dorsal_scapular_spine / right_dorsal_scapular_spine": {
+     "value": 0.1883,
+     "n": 377,
+     "touched_only": 0.3889,
+     "n_touched": 54
+    },
+    "left_acromion_greater_tubercle / right_acromion_greater_tubercle": {
+     "value": 0.2261,
+     "n": 376,
+     "touched_only": 0.4845,
+     "n_touched": 161
+    },
+    "left_lateral_humeral_epicondyle / right_lateral_humeral_epicondyle": {
+     "value": 0.1829,
+     "n": 410,
+     "touched_only": 0.4437,
+     "n_touched": 160
+    },
+    "left_ulnar_styloid_process / right_ulnar_styloid_process": {
+     "value": 0.03,
+     "n": 434,
+     "touched_only": 0.0619,
+     "n_touched": 113
+    },
+    "left_fifth_metacarpal_distal / right_fifth_metacarpal_distal": {
+     "value": 0.0396,
+     "n": 429,
+     "touched_only": 0.0684,
+     "n_touched": 190
+    },
+    "left_femoral_greater_trochanter / right_femoral_greater_trochanter": {
+     "value": 0.3342,
+     "n": 380,
+     "touched_only": 0.5828,
+     "n_touched": 163
+    },
+    "left_femorotibial_joint / right_femorotibial_joint": {
+     "value": 0.0345,
+     "n": 406,
+     "touched_only": 0.1275,
+     "n_touched": 102
+    },
+    "left_lateral_malleolus / right_lateral_malleolus": {
+     "value": 0.1373,
+     "n": 415,
+     "touched_only": 0.413,
+     "n_touched": 138
+    },
+    "left_fifth_metatarsal_distal / right_fifth_metatarsal_distal": {
+     "value": 0.1304,
+     "n": 437,
+     "touched_only": 0.2336,
+     "n_touched": 244
+    }
+   }
+  },
+  "counts": {
+   "annotations": 221,
+   "side_unknown": 0
+  }
+ },
+ "by_camera": {
+  "main": {
+   "KPI-04": {
+    "mae": 7.72,
+    "median": 5.45,
+    "p90": 16.05,
+    "n": 336,
+    "touched_only": {
+     "mae": 12.71,
+     "median": 9.97,
+     "p90": 30.81,
+     "n": 110
+    },
+    "per_joint": {
+     "어깨": {
+      "mae": 7.01,
+      "median": 6.22,
+      "p90": 13.05,
+      "n": 56,
+      "touched_only": {
+       "mae": 14.91,
+       "median": 14.62,
+       "p90": 18.86,
+       "n": 4
+      }
+     },
+     "팔꿈치": {
+      "mae": 5.66,
+      "median": 3.29,
+      "p90": 13.17,
+      "n": 56,
+      "touched_only": {
+       "mae": 10.42,
+       "median": 7.92,
+       "p90": 23.11,
+       "n": 13
+      }
+     },
+     "앞발목": {
+      "mae": 7.51,
+      "median": 5.47,
+      "p90": 16.87,
+      "n": 56,
+      "touched_only": {
+       "mae": 12.63,
+       "median": 10.17,
+       "p90": 23.06,
+       "n": 18
+      }
+     },
+     "고관절": {
+      "mae": 11.0,
+      "median": 7.26,
+      "p90": 30.81,
+      "n": 56,
+      "touched_only": {
+       "mae": 15.71,
+       "median": 10.5,
+       "p90": 43.2,
+       "n": 29
+      }
+     },
+     "무릎": {
+      "mae": 7.81,
+      "median": 6.05,
+      "p90": 15.56,
+      "n": 56,
+      "touched_only": {
+       "mae": 9.73,
+       "median": 7.39,
+       "p90": 15.88,
+       "n": 29
+      }
+     },
+     "뒷발목": {
+      "mae": 7.35,
+      "median": 3.99,
+      "p90": 16.25,
+      "n": 56,
+      "touched_only": {
+       "mae": 14.02,
+       "median": 6.38,
+       "p90": 38.11,
+       "n": 17
+      }
+     }
+    }
+   },
+   "KPI-18": {
+    "value": 0.9072,
+    "n": 668,
+    "touched_only": 0.6032,
+    "n_touched": 126
+   },
+   "KPI-19": {
+    "value": 0.7006,
+    "n": 668,
+    "touched_only": 0.3095,
+    "n_touched": 126
+   },
+   "KPI-20": {
+    "value": 0.0374,
+    "n": 897,
+    "touched_only": 0.0896,
+    "n_touched": 282
+   },
+   "KPI-21": {
+    "front": {
+     "value": 0.0179,
+     "n": 112,
+     "touched_only": 0.0465,
+     "n_touched": 43
+    },
+    "hind": {
+     "value": 0.0636,
+     "n": 110,
+     "touched_only": 0.1458,
+     "n_touched": 48
+    }
+   },
+   "KPI-22": {
+    "left_ear": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_ear": {
+     "value": 0.6154,
+     "n": 52,
+     "touched_only": 0.5,
+     "n_touched": 38
+    },
+    "t13_spinous_process": {
+     "value": 0.9643,
+     "n": 56,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_dorsal_scapular_spine": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_acromion_greater_tubercle": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_lateral_humeral_epicondyle": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_ulnar_styloid_process": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_fifth_metacarpal_distal": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_dorsal_scapular_spine": {
+     "value": 0.9821,
+     "n": 56,
+     "touched_only": 0.5,
+     "n_touched": 2
+    },
+    "right_acromion_greater_tubercle": {
+     "value": 0.9464,
+     "n": 56,
+     "touched_only": 0.5,
+     "n_touched": 2
+    },
+    "right_lateral_humeral_epicondyle": {
+     "value": 0.9643,
+     "n": 56,
+     "touched_only": 0.5,
+     "n_touched": 4
+    },
+    "right_ulnar_styloid_process": {
+     "value": 0.9821,
+     "n": 56,
+     "touched_only": 1.0,
+     "n_touched": 12
+    },
+    "right_fifth_metacarpal_distal": {
+     "value": 0.9821,
+     "n": 56,
+     "touched_only": 1.0,
+     "n_touched": 14
+    },
+    "iliac_crest": {
+     "value": 0.9464,
+     "n": 56,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_femoral_greater_trochanter": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_femorotibial_joint": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_lateral_malleolus": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_fifth_metatarsal_distal": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_femoral_greater_trochanter": {
+     "value": 0.8393,
+     "n": 56,
+     "touched_only": 0.6087,
+     "n_touched": 23
+    },
+    "right_femorotibial_joint": {
+     "value": 0.8214,
+     "n": 56,
+     "touched_only": 0.2,
+     "n_touched": 10
+    },
+    "right_lateral_malleolus": {
+     "value": 0.9286,
+     "n": 56,
+     "touched_only": 0.4286,
+     "n_touched": 7
+    },
+    "right_fifth_metatarsal_distal": {
+     "value": 0.8929,
+     "n": 56,
+     "touched_only": 0.5714,
+     "n_touched": 14
+    }
+   },
+   "reference": {
+    "near_pck@0.20": 0.9775,
+    "far_pck@0.10": {
+     "value": 0.6207,
+     "n": 464,
+     "touched_only": 0.3412,
+     "n_touched": 255
+    },
+    "lr_swap_per_pair": {
+     "left_ear / right_ear": {
+      "value": 0.2143,
+      "n": 84,
+      "touched_only": 0.25,
+      "n_touched": 64
+     },
+     "left_dorsal_scapular_spine / right_dorsal_scapular_spine": {
+      "value": 0.2062,
+      "n": 97,
+      "touched_only": 0.3,
+      "n_touched": 20
+     },
+     "left_acromion_greater_tubercle / right_acromion_greater_tubercle": {
+      "value": 0.1667,
+      "n": 96,
+      "touched_only": 0.3571,
+      "n_touched": 42
+     },
+     "left_lateral_humeral_epicondyle / right_lateral_humeral_epicondyle": {
+      "value": 0.1905,
+      "n": 105,
+      "touched_only": 0.4524,
+      "n_touched": 42
+     },
+     "left_ulnar_styloid_process / right_ulnar_styloid_process": {
+      "value": 0.0,
+      "n": 111,
+      "touched_only": 0.0,
+      "n_touched": 27
+     },
+     "left_fifth_metacarpal_distal / right_fifth_metacarpal_distal": {
+      "value": 0.0179,
+      "n": 112,
+      "touched_only": 0.0465,
+      "n_touched": 43
+     },
+     "left_femoral_greater_trochanter / right_femoral_greater_trochanter": {
+      "value": 0.2857,
+      "n": 98,
+      "touched_only": 0.4681,
+      "n_touched": 47
+     },
+     "left_femorotibial_joint / right_femorotibial_joint": {
+      "value": 0.0288,
+      "n": 104,
+      "touched_only": 0.1111,
+      "n_touched": 27
+     },
+     "left_lateral_malleolus / right_lateral_malleolus": {
+      "value": 0.0874,
+      "n": 103,
+      "touched_only": 0.4286,
+      "n_touched": 21
+     },
+     "left_fifth_metatarsal_distal / right_fifth_metatarsal_distal": {
+      "value": 0.0636,
+      "n": 110,
+      "touched_only": 0.1458,
+      "n_touched": 48
+     }
+    }
+   },
+   "counts": {
+    "annotations": 56,
+    "side_unknown": 0
+   }
+  },
+  "sub1": {
+   "KPI-04": {
+    "mae": 7.8,
+    "median": 5.1,
+    "p90": 16.84,
+    "n": 328,
+    "touched_only": {
+     "mae": 12.83,
+     "median": 8.04,
+     "p90": 28.18,
+     "n": 121
+    },
+    "per_joint": {
+     "어깨": {
+      "mae": 6.62,
+      "median": 4.02,
+      "p90": 15.63,
+      "n": 55,
+      "touched_only": {
+       "mae": 12.5,
+       "median": 9.17,
+       "p90": 25.75,
+       "n": 5
+      }
+     },
+     "팔꿈치": {
+      "mae": 6.22,
+      "median": 3.33,
+      "p90": 14.6,
+      "n": 54,
+      "touched_only": {
+       "mae": 10.76,
+       "median": 3.26,
+       "p90": 22.35,
+       "n": 14
+      }
+     },
+     "앞발목": {
+      "mae": 11.26,
+      "median": 6.0,
+      "p90": 19.43,
+      "n": 54,
+      "touched_only": {
+       "mae": 19.15,
+       "median": 12.09,
+       "p90": 34.48,
+       "n": 26
+      }
+     },
+     "고관절": {
+      "mae": 9.16,
+      "median": 6.3,
+      "p90": 18.53,
+      "n": 55,
+      "touched_only": {
+       "mae": 13.85,
+       "median": 10.98,
+       "p90": 31.7,
+       "n": 24
+      }
+     },
+     "무릎": {
+      "mae": 5.2,
+      "median": 4.69,
+      "p90": 10.56,
+      "n": 55,
+      "touched_only": {
+       "mae": 6.54,
+       "median": 5.36,
+       "p90": 13.7,
+       "n": 26
+      }
+     },
+     "뒷발목": {
+      "mae": 8.35,
+      "median": 5.64,
+      "p90": 25.22,
+      "n": 55,
+      "touched_only": {
+       "mae": 13.03,
+       "median": 8.39,
+       "p90": 30.09,
+       "n": 26
+      }
+     }
+    }
+   },
+   "KPI-18": {
+    "value": 0.9083,
+    "n": 654,
+    "touched_only": 0.6304,
+    "n_touched": 138
+   },
+   "KPI-19": {
+    "value": 0.7324,
+    "n": 654,
+    "touched_only": 0.3406,
+    "n_touched": 138
+   },
+   "KPI-20": {
+    "value": 0.0341,
+    "n": 856,
+    "touched_only": 0.0853,
+    "n_touched": 283
+   },
+   "KPI-21": {
+    "front": {
+     "value": 0.0377,
+     "n": 106,
+     "touched_only": 0.0612,
+     "n_touched": 49
+    },
+    "hind": {
+     "value": 0.1364,
+     "n": 110,
+     "touched_only": 0.2174,
+     "n_touched": 69
+    }
+   },
+   "KPI-22": {
+    "left_ear": {
+     "value": 0.7241,
+     "n": 29,
+     "touched_only": 0.5789,
+     "n_touched": 19
+    },
+    "right_ear": {
+     "value": 0.5909,
+     "n": 22,
+     "touched_only": 0.5625,
+     "n_touched": 16
+    },
+    "t13_spinous_process": {
+     "value": 0.9818,
+     "n": 55,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_dorsal_scapular_spine": {
+     "value": 1.0,
+     "n": 30,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_acromion_greater_tubercle": {
+     "value": 0.9333,
+     "n": 30,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_lateral_humeral_epicondyle": {
+     "value": 0.9667,
+     "n": 30,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_ulnar_styloid_process": {
+     "value": 0.931,
+     "n": 29,
+     "touched_only": 0.5,
+     "n_touched": 2
+    },
+    "left_fifth_metacarpal_distal": {
+     "value": 1.0,
+     "n": 29,
+     "touched_only": 1.0,
+     "n_touched": 10
+    },
+    "right_dorsal_scapular_spine": {
+     "value": 1.0,
+     "n": 25,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_acromion_greater_tubercle": {
+     "value": 0.92,
+     "n": 25,
+     "touched_only": 0.0,
+     "n_touched": 1
+    },
+    "right_lateral_humeral_epicondyle": {
+     "value": 0.96,
+     "n": 25,
+     "touched_only": 0.75,
+     "n_touched": 4
+    },
+    "right_ulnar_styloid_process": {
+     "value": 0.96,
+     "n": 25,
+     "touched_only": 0.875,
+     "n_touched": 8
+    },
+    "right_fifth_metacarpal_distal": {
+     "value": 0.88,
+     "n": 25,
+     "touched_only": 0.7692,
+     "n_touched": 13
+    },
+    "iliac_crest": {
+     "value": 1.0,
+     "n": 55,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_femoral_greater_trochanter": {
+     "value": 0.8667,
+     "n": 30,
+     "touched_only": 0.6364,
+     "n_touched": 11
+    },
+    "left_femorotibial_joint": {
+     "value": 0.9,
+     "n": 30,
+     "touched_only": 0.5,
+     "n_touched": 6
+    },
+    "left_lateral_malleolus": {
+     "value": 0.8,
+     "n": 30,
+     "touched_only": 0.3333,
+     "n_touched": 9
+    },
+    "left_fifth_metatarsal_distal": {
+     "value": 0.7,
+     "n": 30,
+     "touched_only": 0.4667,
+     "n_touched": 15
+    },
+    "right_femoral_greater_trochanter": {
+     "value": 0.96,
+     "n": 25,
+     "touched_only": 0.8571,
+     "n_touched": 7
+    },
+    "right_femorotibial_joint": {
+     "value": 0.96,
+     "n": 25,
+     "touched_only": 0.75,
+     "n_touched": 4
+    },
+    "right_lateral_malleolus": {
+     "value": 0.88,
+     "n": 25,
+     "touched_only": 0.25,
+     "n_touched": 4
+    },
+    "right_fifth_metatarsal_distal": {
+     "value": 0.88,
+     "n": 25,
+     "touched_only": 0.6667,
+     "n_touched": 9
+    }
+   },
+   "reference": {
+    "near_pck@0.20": 0.9633,
+    "far_pck@0.10": {
+     "value": 0.6022,
+     "n": 455,
+     "touched_only": 0.3509,
+     "n_touched": 265
+    },
+    "lr_swap_per_pair": {
+     "left_ear / right_ear": {
+      "value": 0.2073,
+      "n": 82,
+      "touched_only": 0.2787,
+      "n_touched": 61
+     },
+     "left_dorsal_scapular_spine / right_dorsal_scapular_spine": {
+      "value": 0.1828,
+      "n": 93,
+      "touched_only": 0.5714,
+      "n_touched": 14
+     },
+     "left_acromion_greater_tubercle / right_acromion_greater_tubercle": {
+      "value": 0.2043,
+      "n": 93,
+      "touched_only": 0.4474,
+      "n_touched": 38
+     },
+     "left_lateral_humeral_epicondyle / right_lateral_humeral_epicondyle": {
+      "value": 0.1275,
+      "n": 102,
+      "touched_only": 0.3171,
+      "n_touched": 41
+     },
+     "left_ulnar_styloid_process / right_ulnar_styloid_process": {
+      "value": 0.037,
+      "n": 108,
+      "touched_only": 0.087,
+      "n_touched": 23
+     },
+     "left_fifth_metacarpal_distal / right_fifth_metacarpal_distal": {
+      "value": 0.0377,
+      "n": 106,
+      "touched_only": 0.0612,
+      "n_touched": 49
+     },
+     "left_femoral_greater_trochanter / right_femoral_greater_trochanter": {
+      "value": 0.3511,
+      "n": 94,
+      "touched_only": 0.6047,
+      "n_touched": 43
+     },
+     "left_femorotibial_joint / right_femorotibial_joint": {
+      "value": 0.0392,
+      "n": 102,
+      "touched_only": 0.1818,
+      "n_touched": 22
+     },
+     "left_lateral_malleolus / right_lateral_malleolus": {
+      "value": 0.1321,
+      "n": 106,
+      "touched_only": 0.3333,
+      "n_touched": 42
+     },
+     "left_fifth_metatarsal_distal / right_fifth_metatarsal_distal": {
+      "value": 0.1364,
+      "n": 110,
+      "touched_only": 0.2174,
+      "n_touched": 69
+     }
+    }
+   },
+   "counts": {
+    "annotations": 55,
+    "side_unknown": 0
+   }
+  },
+  "sub2": {
+   "KPI-04": {
+    "mae": 8.98,
+    "median": 5.41,
+    "p90": 18.55,
+    "n": 333,
+    "touched_only": {
+     "mae": 14.73,
+     "median": 7.64,
+     "p90": 31.66,
+     "n": 122
+    },
+    "per_joint": {
+     "어깨": {
+      "mae": 7.57,
+      "median": 4.48,
+      "p90": 20.88,
+      "n": 56,
+      "touched_only": {
+       "mae": 10.75,
+       "median": 3.73,
+       "p90": 33.87,
+       "n": 8
+      }
+     },
+     "팔꿈치": {
+      "mae": 7.41,
+      "median": 5.01,
+      "p90": 14.53,
+      "n": 56,
+      "touched_only": {
+       "mae": 11.99,
+       "median": 6.53,
+       "p90": 16.34,
+       "n": 21
+      }
+     },
+     "앞발목": {
+      "mae": 14.92,
+      "median": 4.73,
+      "p90": 26.11,
+      "n": 53,
+      "touched_only": {
+       "mae": 27.3,
+       "median": 9.1,
+       "p90": 89.23,
+       "n": 25
+      }
+     },
+     "고관절": {
+      "mae": 9.23,
+      "median": 6.43,
+      "p90": 23.24,
+      "n": 56,
+      "touched_only": {
+       "mae": 13.23,
+       "median": 7.19,
+       "p90": 31.82,
+       "n": 19
+      }
+     },
+     "무릎": {
+      "mae": 6.29,
+      "median": 5.24,
+      "p90": 13.75,
+      "n": 56,
+      "touched_only": {
+       "mae": 7.51,
+       "median": 7.12,
+       "p90": 16.5,
+       "n": 23
+      }
+     },
+     "뒷발목": {
+      "mae": 8.76,
+      "median": 6.07,
+      "p90": 22.33,
+      "n": 56,
+      "touched_only": {
+       "mae": 13.57,
+       "median": 9.64,
+       "p90": 28.8,
+       "n": 26
+      }
+     }
+    }
+   },
+   "KPI-18": {
+    "value": 0.885,
+    "n": 661,
+    "touched_only": 0.5986,
+    "n_touched": 142
+   },
+   "KPI-19": {
+    "value": 0.6838,
+    "n": 661,
+    "touched_only": 0.2606,
+    "n_touched": 142
+   },
+   "KPI-20": {
+    "value": 0.0362,
+    "n": 842,
+    "touched_only": 0.0754,
+    "n_touched": 283
+   },
+   "KPI-21": {
+    "front": {
+     "value": 0.0192,
+     "n": 104,
+     "touched_only": 0.0385,
+     "n_touched": 52
+    },
+    "hind": {
+     "value": 0.1622,
+     "n": 111,
+     "touched_only": 0.2647,
+     "n_touched": 68
+    }
+   },
+   "KPI-22": {
+    "left_ear": {
+     "value": 0.6522,
+     "n": 23,
+     "touched_only": 0.5625,
+     "n_touched": 16
+    },
+    "right_ear": {
+     "value": 0.6,
+     "n": 25,
+     "touched_only": 0.5882,
+     "n_touched": 17
+    },
+    "t13_spinous_process": {
+     "value": 0.9464,
+     "n": 56,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_dorsal_scapular_spine": {
+     "value": 1.0,
+     "n": 27,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_acromion_greater_tubercle": {
+     "value": 0.8889,
+     "n": 27,
+     "touched_only": 0.5,
+     "n_touched": 2
+    },
+    "left_lateral_humeral_epicondyle": {
+     "value": 0.9259,
+     "n": 27,
+     "touched_only": 0.5,
+     "n_touched": 2
+    },
+    "left_ulnar_styloid_process": {
+     "value": 0.8519,
+     "n": 27,
+     "touched_only": 0.7273,
+     "n_touched": 11
+    },
+    "left_fifth_metacarpal_distal": {
+     "value": 0.875,
+     "n": 24,
+     "touched_only": 0.7,
+     "n_touched": 10
+    },
+    "right_dorsal_scapular_spine": {
+     "value": 1.0,
+     "n": 29,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_acromion_greater_tubercle": {
+     "value": 0.8621,
+     "n": 29,
+     "touched_only": 0.6667,
+     "n_touched": 3
+    },
+    "right_lateral_humeral_epicondyle": {
+     "value": 1.0,
+     "n": 29,
+     "touched_only": 1.0,
+     "n_touched": 3
+    },
+    "right_ulnar_styloid_process": {
+     "value": 0.931,
+     "n": 29,
+     "touched_only": 0.6,
+     "n_touched": 5
+    },
+    "right_fifth_metacarpal_distal": {
+     "value": 0.9655,
+     "n": 29,
+     "touched_only": 0.9091,
+     "n_touched": 11
+    },
+    "iliac_crest": {
+     "value": 0.9643,
+     "n": 56,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_femoral_greater_trochanter": {
+     "value": 0.9259,
+     "n": 27,
+     "touched_only": 0.75,
+     "n_touched": 8
+    },
+    "left_femorotibial_joint": {
+     "value": 0.8519,
+     "n": 27,
+     "touched_only": 0.2,
+     "n_touched": 5
+    },
+    "left_lateral_malleolus": {
+     "value": 0.7407,
+     "n": 27,
+     "touched_only": 0.125,
+     "n_touched": 8
+    },
+    "left_fifth_metatarsal_distal": {
+     "value": 0.6667,
+     "n": 27,
+     "touched_only": 0.3571,
+     "n_touched": 14
+    },
+    "right_femoral_greater_trochanter": {
+     "value": 0.931,
+     "n": 29,
+     "touched_only": 0.6,
+     "n_touched": 5
+    },
+    "right_femorotibial_joint": {
+     "value": 0.8621,
+     "n": 29,
+     "touched_only": 0.75,
+     "n_touched": 4
+    },
+    "right_lateral_malleolus": {
+     "value": 0.8966,
+     "n": 29,
+     "touched_only": 0.5714,
+     "n_touched": 7
+    },
+    "right_fifth_metatarsal_distal": {
+     "value": 0.8966,
+     "n": 29,
+     "touched_only": 0.7273,
+     "n_touched": 11
+    }
+   },
+   "reference": {
+    "near_pck@0.20": 0.9546,
+    "far_pck@0.10": {
+     "value": 0.6066,
+     "n": 455,
+     "touched_only": 0.368,
+     "n_touched": 269
+    },
+    "lr_swap_per_pair": {
+     "left_ear / right_ear": {
+      "value": 0.2278,
+      "n": 79,
+      "touched_only": 0.2787,
+      "n_touched": 61
+     },
+     "left_dorsal_scapular_spine / right_dorsal_scapular_spine": {
+      "value": 0.1458,
+      "n": 96,
+      "touched_only": 0.1818,
+      "n_touched": 11
+     },
+     "left_acromion_greater_tubercle / right_acromion_greater_tubercle": {
+      "value": 0.3125,
+      "n": 96,
+      "touched_only": 0.6512,
+      "n_touched": 43
+     },
+     "left_lateral_humeral_epicondyle / right_lateral_humeral_epicondyle": {
+      "value": 0.165,
+      "n": 103,
+      "touched_only": 0.4054,
+      "n_touched": 37
+     },
+     "left_ulnar_styloid_process / right_ulnar_styloid_process": {
+      "value": 0.0187,
+      "n": 107,
+      "touched_only": 0.0294,
+      "n_touched": 34
+     },
+     "left_fifth_metacarpal_distal / right_fifth_metacarpal_distal": {
+      "value": 0.0192,
+      "n": 104,
+      "touched_only": 0.0385,
+      "n_touched": 52
+     },
+     "left_femoral_greater_trochanter / right_femoral_greater_trochanter": {
+      "value": 0.3854,
+      "n": 96,
+      "touched_only": 0.6667,
+      "n_touched": 39
+     },
+     "left_femorotibial_joint / right_femorotibial_joint": {
+      "value": 0.0098,
+      "n": 102,
+      "touched_only": 0.0357,
+      "n_touched": 28
+     },
+     "left_lateral_malleolus / right_lateral_malleolus": {
+      "value": 0.1714,
+      "n": 105,
+      "touched_only": 0.4737,
+      "n_touched": 38
+     },
+     "left_fifth_metatarsal_distal / right_fifth_metatarsal_distal": {
+      "value": 0.1622,
+      "n": 111,
+      "touched_only": 0.2647,
+      "n_touched": 68
+     }
+    }
+   },
+   "counts": {
+    "annotations": 56,
+    "side_unknown": 0
+   }
+  },
+  "sub3": {
+   "KPI-04": {
+    "mae": 7.6,
+    "median": 4.75,
+    "p90": 19.32,
+    "n": 321,
+    "touched_only": {
+     "mae": 13.02,
+     "median": 10.06,
+     "p90": 29.72,
+     "n": 115
+    },
+    "per_joint": {
+     "어깨": {
+      "mae": 7.42,
+      "median": 4.71,
+      "p90": 18.3,
+      "n": 54,
+      "touched_only": {
+       "mae": 16.92,
+       "median": 18.11,
+       "p90": 33.21,
+       "n": 10
+      }
+     },
+     "팔꿈치": {
+      "mae": 6.24,
+      "median": 3.4,
+      "p90": 14.21,
+      "n": 54,
+      "touched_only": {
+       "mae": 11.29,
+       "median": 6.24,
+       "p90": 32.68,
+       "n": 14
+      }
+     },
+     "앞발목": {
+      "mae": 7.55,
+      "median": 5.77,
+      "p90": 18.23,
+      "n": 54,
+      "touched_only": {
+       "mae": 11.4,
+       "median": 8.19,
+       "p90": 28.67,
+       "n": 25
+      }
+     },
+     "고관절": {
+      "mae": 8.54,
+      "median": 5.04,
+      "p90": 25.13,
+      "n": 53,
+      "touched_only": {
+       "mae": 14.39,
+       "median": 12.51,
+       "p90": 31.81,
+       "n": 20
+      }
+     },
+     "무릎": {
+      "mae": 7.02,
+      "median": 6.34,
+      "p90": 14.67,
+      "n": 53,
+      "touched_only": {
+       "mae": 10.48,
+       "median": 9.59,
+       "p90": 20.66,
+       "n": 24
+      }
+     },
+     "뒷발목": {
+      "mae": 8.88,
+      "median": 4.64,
+      "p90": 26.53,
+      "n": 53,
+      "touched_only": {
+       "mae": 15.69,
+       "median": 14.49,
+       "p90": 31.16,
+       "n": 22
+      }
+     }
+    }
+   },
+   "KPI-18": {
+    "value": 0.8934,
+    "n": 638,
+    "touched_only": 0.5942,
+    "n_touched": 138
+   },
+   "KPI-19": {
+    "value": 0.6944,
+    "n": 638,
+    "touched_only": 0.2319,
+    "n_touched": 138
+   },
+   "KPI-20": {
+    "value": 0.0323,
+    "n": 804,
+    "touched_only": 0.0887,
+    "n_touched": 248
+   },
+   "KPI-21": {
+    "front": {
+     "value": 0.0841,
+     "n": 107,
+     "touched_only": 0.1304,
+     "n_touched": 46
+    },
+    "hind": {
+     "value": 0.1604,
+     "n": 106,
+     "touched_only": 0.2881,
+     "n_touched": 59
+    }
+   },
+   "KPI-22": {
+    "left_ear": {
+     "value": 0.7083,
+     "n": 48,
+     "touched_only": 0.6111,
+     "n_touched": 36
+    },
+    "right_ear": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "t13_spinous_process": {
+     "value": 1.0,
+     "n": 52,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_dorsal_scapular_spine": {
+     "value": 0.9444,
+     "n": 54,
+     "touched_only": 0.6667,
+     "n_touched": 3
+    },
+    "left_acromion_greater_tubercle": {
+     "value": 0.8704,
+     "n": 54,
+     "touched_only": 1.0,
+     "n_touched": 4
+    },
+    "left_lateral_humeral_epicondyle": {
+     "value": 0.9074,
+     "n": 54,
+     "touched_only": 0.5714,
+     "n_touched": 7
+    },
+    "left_ulnar_styloid_process": {
+     "value": 0.9444,
+     "n": 54,
+     "touched_only": 0.7143,
+     "n_touched": 7
+    },
+    "left_fifth_metacarpal_distal": {
+     "value": 0.9259,
+     "n": 54,
+     "touched_only": 0.8095,
+     "n_touched": 21
+    },
+    "right_dorsal_scapular_spine": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_acromion_greater_tubercle": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_lateral_humeral_epicondyle": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_ulnar_styloid_process": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_fifth_metacarpal_distal": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "iliac_crest": {
+     "value": 1.0,
+     "n": 54,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "left_femoral_greater_trochanter": {
+     "value": 0.9623,
+     "n": 53,
+     "touched_only": 0.8462,
+     "n_touched": 13
+    },
+    "left_femorotibial_joint": {
+     "value": 0.8491,
+     "n": 53,
+     "touched_only": 0.3333,
+     "n_touched": 12
+    },
+    "left_lateral_malleolus": {
+     "value": 0.7963,
+     "n": 54,
+     "touched_only": 0.2667,
+     "n_touched": 15
+    },
+    "left_fifth_metatarsal_distal": {
+     "value": 0.7963,
+     "n": 54,
+     "touched_only": 0.45,
+     "n_touched": 20
+    },
+    "right_femoral_greater_trochanter": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_femorotibial_joint": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_lateral_malleolus": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    },
+    "right_fifth_metatarsal_distal": {
+     "value": null,
+     "n": 0,
+     "touched_only": null,
+     "n_touched": 0
+    }
+   },
+   "reference": {
+    "near_pck@0.20": 0.9483,
+    "far_pck@0.10": {
+     "value": 0.5845,
+     "n": 438,
+     "touched_only": 0.281,
+     "n_touched": 242
+    },
+    "lr_swap_per_pair": {
+     "left_ear / right_ear": {
+      "value": 0.2237,
+      "n": 76,
+      "touched_only": 0.254,
+      "n_touched": 63
+     },
+     "left_dorsal_scapular_spine / right_dorsal_scapular_spine": {
+      "value": 0.2198,
+      "n": 91,
+      "touched_only": 0.5556,
+      "n_touched": 9
+     },
+     "left_acromion_greater_tubercle / right_acromion_greater_tubercle": {
+      "value": 0.2198,
+      "n": 91,
+      "touched_only": 0.4737,
+      "n_touched": 38
+     },
+     "left_lateral_humeral_epicondyle / right_lateral_humeral_epicondyle": {
+      "value": 0.25,
+      "n": 100,
+      "touched_only": 0.6,
+      "n_touched": 40
+     },
+     "left_ulnar_styloid_process / right_ulnar_styloid_process": {
+      "value": 0.0648,
+      "n": 108,
+      "touched_only": 0.1379,
+      "n_touched": 29
+     },
+     "left_fifth_metacarpal_distal / right_fifth_metacarpal_distal": {
+      "value": 0.0841,
+      "n": 107,
+      "touched_only": 0.1304,
+      "n_touched": 46
+     },
+     "left_femoral_greater_trochanter / right_femoral_greater_trochanter": {
+      "value": 0.3152,
+      "n": 92,
+      "touched_only": 0.6176,
+      "n_touched": 34
+     },
+     "left_femorotibial_joint / right_femorotibial_joint": {
+      "value": 0.0612,
+      "n": 98,
+      "touched_only": 0.2,
+      "n_touched": 25
+     },
+     "left_lateral_malleolus / right_lateral_malleolus": {
+      "value": 0.1584,
+      "n": 101,
+      "touched_only": 0.4324,
+      "n_touched": 37
+     },
+     "left_fifth_metatarsal_distal / right_fifth_metatarsal_distal": {
+      "value": 0.1604,
+      "n": 106,
+      "touched_only": 0.2881,
+      "n_touched": 59
+     }
+    }
+   },
+   "counts": {
+    "annotations": 54,
+    "side_unknown": 0
+   }
+  }
+ }
+}
