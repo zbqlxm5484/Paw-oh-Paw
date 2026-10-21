@@ -1,0 +1,41 @@
+# 개발용 PostgreSQL (명세 16절 Docker 줄, 11.9 테스트 DB).
+# 지금은 db 서비스만 있다. api·worker 서비스는 작업 단위 6(Docker 배포)에서 더한다.
+# POSTGRES_* 값과 볼륨 경로는 허정원의 팀 서버 compose와 맞춘다(16절).
+#
+#   docker compose up -d db   # 띄우기
+#   docker compose down       # 끄기 (데이터는 볼륨 pgdata에 남는다)
+#   docker compose down -v    # 데이터까지 지우기 (다음에 띄울 때 initdb 스크립트가 다시 돈다)
+#
+# ${이름:-기본값}은 같은 폴더의 .env에서 읽는다(docker compose 기능). 아래 네 개는 compose만 읽고
+# 앱(app/core/config.py)은 읽지 않는다. 앱이 쓰는 값은 16절 표의 DATABASE_URL·TEST_DATABASE_URL이다.
+name: creamoff
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      # .env의 DATABASE_URL(postgresql+pg8000://creamoff:creamoff@localhost:5432/creamoff)과 맞춘다
+      POSTGRES_DB: ${POSTGRES_DB:-creamoff}
+      POSTGRES_USER: ${POSTGRES_USER:-creamoff}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-creamoff}
+    ports:
+      # 호스트 포트. 내 PC에 PostgreSQL이 이미 5432를 쓰고 있으면 .env에 POSTGRES_PORT=5433을 적고
+      # DATABASE_URL·TEST_DATABASE_URL의 포트도 같이 바꾼다.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # postgres:18부터는 /var/lib/postgresql/data가 아니라 /var/lib/postgresql에 붙인다. 옛 경로면 안 켜진다(16절).
+      - pgdata:/var/lib/postgresql
+      # 볼륨이 비어 있을 때(처음 띄울 때) 한 번만 실행된다. 테스트용 DB creamoff_test를 만든다.
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h 127.0.0.1: 초기화 중에 잠깐 뜨는 임시 서버는 유닉스 소켓만 받으므로, TCP로 확인해야
+      # initdb 스크립트가 끝난 진짜 서버만 "준비됨"으로 본다. api·worker는 이 상태(healthy) 뒤에 켠다.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:

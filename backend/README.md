@@ -25,6 +25,8 @@ source .venv/bin/activate
 # Windows (PowerShell)
 .venv\Scripts\Activate.ps1
 
+# 한국어 Windows: venv에 딸려 오는 오래된 pip(24.x)는 requirements.txt의 한글 주석을 cp949로 읽다가 멈춘다. 먼저 올린다.
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -36,6 +38,18 @@ DB는 두 개 만든다: 개발용(`creamoff`)과 테스트용(`creamoff_test`).
 ```bash
 alembic upgrade head
 ```
+
+Alembic은 Spring의 Flyway와 같은 역할이다. 다른 명령:
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `alembic upgrade head` | 최신 상태로 테이블 만들기·바꾸기 |
+| `alembic downgrade -1` | 한 단계 되돌리기 |
+| `alembic revision -m "설명"` | 새 마이그레이션 파일 만들기(`upgrade()`·`downgrade()`는 직접 채운다) |
+| `alembic check` | 모델과 DB가 다르면 알려 준다 |
+
+- DB 주소는 `alembic.ini`에 적지 않는다. `alembic/env.py`가 `.env`의 `DATABASE_URL`을 읽는다. 다른 DB에 적용하려면 `alembic -x db_url=postgresql+pg8000://... upgrade head`처럼 준다.
+- `alembic.ini`의 주석은 영문(ASCII)만 쓴다. Alembic이 이 파일을 OS 로케일 인코딩(한국어 Windows는 cp949)으로 읽어서, 한글이 한 글자라도 있으면 `alembic` 명령과 pytest가 `UnicodeDecodeError`로 멈춘다. `PYTHONUTF8=1`로도 피할 수 없다.
 
 ## 계정 만들기
 
