@@ -1,12 +1,14 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.3. 지금 들어 있는 것은 작업 단위 1(서버 뼈대)과 2(DB 모델·마이그레이션·seed)다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.3. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리)이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
 | 환경 변수 읽기 (16절) | `app/core/config.py` |
 | DB 엔진·세션·오류 코드 (11.7) | `app/core/db.py` |
-| 비밀번호 해시 (13.4) | `app/core/security.py` |
+| 비밀번호 해시·JWT·서명 URL (11.6, 13.4) | `app/core/security.py` |
+| 요청 DB 세션, 로그인 담당자·관리자 확인 (11.6, 11.7) | `app/api/deps.py` |
+| `POST /api/v1/auth/login`, `GET /api/v1/auth/me` (15.4) | `app/api/routes/auth.py`, `app/services/auth.py` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
 | 화면 문구 (14.5) | `messages/ko.yaml` |
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
@@ -16,7 +18,7 @@
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-로그인, 반려견·회차 API, 워커, 보고서 등은 다음 작업 단위에서 더한다.
+반려견·회차 API, 업로드, 워커, 보고서 등은 다음 작업 단위에서 더한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
 
 ## 준비 (처음 한 번)
 
