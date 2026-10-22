@@ -1,12 +1,17 @@
-"""회차 API(15.6): 시작, 상태·진행·촬영 목록, 측정 취소. 측정 종료·업로드는 다음 작업 단위에서 더한다."""
+"""회차 API(15.6): 시작, 상태·진행·촬영 목록, 측정 취소, 영상 업로드. 측정 종료는 작업 단위 8에서 더한다."""
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, File, Response, UploadFile, status
 
 from app.api.deps import CurrentStaff, DbSession
+from app.schemas.common import reason_out
 from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionOut
+from app.schemas.shots import ShotUploadOut
 from app.services import sessions as session_service
+from app.services import uploads as upload_service
+from app.services.shots import to_shot_out
 
 router = APIRouter(tags=["회차 측정"])
 
@@ -28,3 +33,15 @@ def get_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Se
 def cancel_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
     session_service.cancel_session(db, staff.institution_id, session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/sessions/{session_id}/shots", response_model=ShotUploadOut, status_code=status.HTTP_201_CREATED)
+def upload_shot(
+    session_id: uuid.UUID, staff: CurrentStaff, db: DbSession, file: Annotated[UploadFile, File()]
+) -> ShotUploadOut:
+    """영상 업로드(BE-05). multipart 필드 file 하나. file이 없으면 FastAPI가 422 VALIDATION_ERROR를 낸다."""
+    shot, warnings = upload_service.upload_shot(
+        db, institution_id=staff.institution_id, session_id=session_id, upload=file
+    )
+    notices = [reason for reason in (reason_out(code) for code in warnings) if reason is not None]
+    return ShotUploadOut(**to_shot_out(shot).model_dump(), warnings=notices)
