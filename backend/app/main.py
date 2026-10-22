@@ -108,7 +108,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.LOG_LEVEL)
 
-    app = FastAPI(title="크림오프 팀 서비스 API", version=__version__)
+    # 16절 API_DOCS_ENABLED: 시험 화면(/docs·/redoc)과 생성 명세(/openapi.json)는 개발 환경에서만 연다.
+    # 배포에서는 끄고, 기업·화면과 맞춘 공식 명세는 docs/openapi.yaml 하나만 둔다(64 MR 리뷰).
+    docs_enabled = settings.API_DOCS_ENABLED
+    app = FastAPI(
+        title="크림오프 팀 서비스 API",
+        version=__version__,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
 
     # 미들웨어는 나중에 더한 것이 바깥쪽이다. 요청 ID를 가장 바깥에 두어 CORS 사전 요청(OPTIONS)에도 ID와 로그가 붙는다.
     app.add_middleware(

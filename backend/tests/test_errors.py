@@ -56,6 +56,13 @@ def test_missing_fields_are_reported(client: TestClient) -> None:
     assert all(field["type"] == "missing" for field in fields)
 
 
+def test_missing_body_is_reported_as_body(client: TestClient) -> None:
+    # 11.5: 본문이 통째로 없으면 위치가 body 하나뿐이라 field는 "body"다
+    response = client.post("/api/v1/_test/dogs")
+    assert response.status_code == 422
+    assert _error(response)["detail"]["fields"] == [{"field": "body", "type": "missing"}]
+
+
 def test_query_validation_error_names_the_parameter(client: TestClient) -> None:
     response = client.get("/api/v1/_test/search", params={"page": "abc"})
     assert response.status_code == 422

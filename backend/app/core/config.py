@@ -91,6 +91,8 @@ class Settings(DbSettings):
     MESSAGES_FILE: str = "messages/ko.yaml"
     LOG_LEVEL: str = "INFO"
     METRICS_ENABLED: bool = False
+    # 16절: /docs·/redoc·/openapi.json 시험 화면. 개발 환경에서만 true. 기업에 주는 공식 명세는 docs/openapi.yaml 하나다
+    API_DOCS_ENABLED: bool = False
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

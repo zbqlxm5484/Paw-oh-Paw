@@ -504,8 +504,9 @@ backend/
 
 - FastAPI가 기본으로 내는 입력 검사 오류(422)도 이 모양으로 바꿔 `VALIDATION_ERROR`로 낸다. 어느 필드가 틀렸는지는 `detail.fields`에 담는다.
 - 예상하지 못한 오류는 500 `INTERNAL_ERROR`로만 답하고, 자세한 내용은 로그에만 남긴다. 입력 문제를 500으로 끝내지 않는다.
+- 예외 하나: 허용 목록(16절 `CORS_ORIGINS`)에 없는 origin이 보낸 사전 요청(OPTIONS)은 Starlette `CORSMiddleware`가 앱에 닿기 전에 평문 `Disallowed CORS origin` 400으로 답한다. 브라우저만 보는 응답이라 위 모양을 따르지 않고, API 시험에서 결함으로 잡지 않는다.
 
-**`detail.fields` 모양**: `{"fields": [{"field": "weight_kg", "type": "less_than_equal"}]}`. `field`는 Pydantic 오류 위치에서 첫 칸(`body`·`query`·`path`)을 빼고 나머지를 `.`로 잇는다. `type`은 Pydantic 오류 종류 그대로다. 없는 주소와 UUID 형식이 아닌 경로 ID는 404 `NOT_FOUND`다. 허용되지 않는 메서드는 HTTP 405이고, `code`는 `NOT_FOUND`로 같은 모양을 쓴다.
+**`detail.fields` 모양**: `{"fields": [{"field": "weight_kg", "type": "less_than_equal"}]}`. `field`는 Pydantic 오류 위치에서 첫 칸(`body`·`query`·`path`)을 빼고 나머지를 `.`로 잇는다. 요청 본문이 통째로 없으면 위치가 `body` 하나뿐이라 뺄 것이 없는데, 이때 `field`는 `"body"`다(화면은 "요청 내용이 없습니다"처럼 바꿔 보여 줄 수 있다). `type`은 Pydantic 오류 종류 그대로다. 없는 주소와 UUID 형식이 아닌 경로 ID는 404 `NOT_FOUND`다. 허용되지 않는 메서드는 HTTP 405이고, `code`는 `NOT_FOUND`로 같은 모양을 쓴다.
 
 ### 11.6 인증과 기관 분리
 
@@ -1093,7 +1094,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ## 15. API 상세
 
-엔드포인트는 26개이고 주소는 모두 `/api/v1`로 시작한다. 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 서버를 띄우면 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어, 장준환이 바로 불러 볼 수 있다.
+엔드포인트는 26개이고 주소는 모두 `/api/v1`로 시작한다. 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
 
 ### 15.1 공통 약속
 
@@ -1717,6 +1718,7 @@ stride_length: 2.0   # pct_body
 | `MESSAGES_FILE` | `messages/ko.yaml` | 화면 문구 | 14.5 |
 | `LOG_LEVEL` | `INFO` | 로그 수준 | 11.8 |
 | `METRICS_ENABLED` | `false` | `/api/v1/metrics`를 켜는지(선택) | 15.9 |
+| `API_DOCS_ENABLED` | `false` | `/docs`·`/redoc`·`/openapi.json`을 여는지. 개발 환경에서만 `true`. 공식 명세는 `docs/openapi.yaml` | 15절 |
 
 - **필수 값**: 비어 있거나 `JWT_SECRET`·`FILE_URL_SECRET`이 32자보다 짧으면 서버와 워커가 켜지지 않고 어느 값이 문제인지 알려 주며 멈춘다. `STORAGE_BACKEND`가 `s3`인데 `S3_BUCKET`이 비어 있어도 같다. 무작위 값은 `python -c "import secrets; print(secrets.token_urlsafe(48))"`로 만든다.
 - **비밀값**: `DATABASE_URL`, `JWT_SECRET`, `FILE_URL_SECRET`, `ANALYSIS_API_KEY`, `S3_SECRET_ACCESS_KEY`는 `SecretStr`로 선언해 로그·오류 화면에 찍히지 않게 한다. `.env`는 git에 올리지 않고, `.env.example`에 이 표의 이름과 기본값만 둔다.

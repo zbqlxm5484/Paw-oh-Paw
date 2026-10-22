@@ -51,6 +51,8 @@ def test_cors_allows_only_configured_origins(client: TestClient) -> None:
 
     bad = client.options("/api/v1/health", headers={"Origin": "http://evil.test", **preflight})
     assert "access-control-allow-origin" not in bad.headers
+    # 11.5 예외: 허용되지 않은 origin의 사전 요청은 미들웨어가 앱에 닿기 전에 평문 400으로 답한다
+    assert bad.status_code == 400 and bad.text == "Disallowed CORS origin"
 
 
 def test_cors_exposes_request_id_header(client: TestClient) -> None:
@@ -58,6 +60,19 @@ def test_cors_exposes_request_id_header(client: TestClient) -> None:
     response = client.get("/api/v1/health", headers={"Origin": allowed})
     assert response.headers["access-control-allow-origin"] == allowed
     assert "x-request-id" in response.headers["access-control-expose-headers"].lower()
+
+
+def test_api_docs_open_only_when_enabled() -> None:
+    # 16절 API_DOCS_ENABLED: 기본 false면 /docs·/redoc·/openapi.json이 없고(404, 11.5 모양), true면 열린다
+    settings = get_settings()
+    closed = TestClient(create_app(settings.model_copy(update={"API_DOCS_ENABLED": False})))
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        response = closed.get(path)
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "NOT_FOUND"
+    opened = TestClient(create_app(settings.model_copy(update={"API_DOCS_ENABLED": True})))
+    assert opened.get("/openapi.json").status_code == 200
+    assert opened.get("/docs").status_code == 200
 
 
 def test_missing_required_env_stops_startup_and_names_it(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
