@@ -1,0 +1,9 @@
+{
+  "id": "9e4a7c21-3b5d-4f60-8a19-d2c7f0b6e533",
+  "shot_id": "sample-shot-003",
+  "status": "failed",
+  "error": {"code": "DECODE_FAILED", "message": "영상을 읽을 수 없습니다", "detail": null},
+  "model": {"name": "fs-v4", "version": "0.1.0/v1/a4261a10"},
+  "created_at": "2026-10-22T15:26:10+09:00",
+  "updated_at": "2026-10-22T15:26:14+09:00"
+}
