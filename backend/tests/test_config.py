@@ -1,0 +1,62 @@
+"""환경 변수 읽기(16절). DB 없이 돈다."""
+
+import pytest
+from pydantic import ValidationError
+
+from app.core.config import DbSettings, Settings
+
+URL = "postgresql+pg8000://u:p@localhost:5432/creamoff"
+SECRET_A = "a" * 32
+SECRET_B = "b" * 32
+
+
+def _settings(**values: object) -> Settings:
+    base = {"DATABASE_URL": URL, "JWT_SECRET": SECRET_A, "FILE_URL_SECRET": SECRET_B}
+    base.update(values)
+    return Settings(_env_file=None, **base)
+
+
+def test_defaults_follow_section_16() -> None:
+    settings = _settings()
+    assert settings.JWT_EXPIRE_HOURS == 12
+    assert settings.STORAGE_BACKEND == "local"
+    assert settings.ANALYSIS_API_MODE == "mock"
+    assert settings.CORS_ORIGINS == ["http://localhost:5173"]
+
+
+def test_database_url_must_use_pg8000() -> None:
+    with pytest.raises(ValidationError, match="postgresql\\+pg8000"):
+        DbSettings(_env_file=None, DATABASE_URL="mysql+pymysql://u:p@localhost/db")
+
+
+def test_cors_origins_are_split_by_comma(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORS_ORIGINS", "http://a.test, http://b.test")
+    assert _settings().CORS_ORIGINS == ["http://a.test", "http://b.test"]
+
+
+def test_cors_wildcard_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORS_ORIGINS", "*")
+    with pytest.raises(ValidationError, match="\\*"):
+        _settings()
+
+
+def test_empty_value_means_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("S3_BUCKET", "")
+    monkeypatch.setenv("JWT_EXPIRE_HOURS", "")
+    settings = _settings()
+    assert settings.S3_BUCKET is None
+    assert settings.JWT_EXPIRE_HOURS == 12
+
+
+@pytest.mark.parametrize(
+    ("values", "message"),
+    [
+        ({"JWT_SECRET": "short"}, "32자"),
+        ({"FILE_URL_SECRET": SECRET_A}, "달라야"),
+        ({"STORAGE_BACKEND": "s3"}, "S3_BUCKET"),
+        ({"ANALYSIS_API_MODE": "http"}, "ANALYSIS_API_BASE_URL"),
+    ],
+)
+def test_invalid_combinations(values: dict, message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        _settings(**values)

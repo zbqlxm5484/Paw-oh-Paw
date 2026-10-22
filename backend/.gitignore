@@ -1,0 +1,15 @@
+# 비밀값
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+/CLAUDE.md
+
+# 영상·파일 저장 폴더 (7절, 데이터 보안 규칙)
+data/
+*.mp4
+*.mov

@@ -1,0 +1,10 @@
+# 코드 모양 맞추기(선택). pip install ruff 후 backend 폴더에서: ruff format . && ruff check .
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[lint.isort]
+# alembic/ 폴더 이름이 alembic 라이브러리와 같아서 알려 준다.
+known-third-party = ["alembic"]
