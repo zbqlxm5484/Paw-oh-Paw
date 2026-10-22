@@ -59,6 +59,8 @@ class SessionOut(BaseModel):
     staff: StaffBriefOut
     measured_on: date
     weight_kg: float | None
+    # 회차 시점 체급(12.5). 반려견의 지금 체급(DogOut.size_class)과 다를 수 있다
+    size_class: str
     status: str
     fail_reason: ReasonOut | None
     model_name: str | None

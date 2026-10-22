@@ -22,6 +22,7 @@ from app.schemas.sessions import (
     SideProgressOut,
     StaffBriefOut,
 )
+from app.services.dogs import classify
 from app.services.shots import to_shot_out
 from app.storage.base import get_storage
 from app.storage.keys import session_prefix
@@ -36,6 +37,7 @@ def to_session_out(session: MeasureSession) -> SessionOut:
         staff=StaffBriefOut.model_validate(session.staff),
         measured_on=session.measured_on,
         weight_kg=session.weight_kg,
+        size_class=session.size_class,
         status=session.status,
         fail_reason=reason_out(session.fail_reason),
         model_name=session.model_name,
@@ -49,7 +51,10 @@ def to_session_out(session: MeasureSession) -> SessionOut:
 def start_session(
     db: Session, *, institution_id: uuid.UUID, staff_id: uuid.UUID, dog_id: uuid.UUID, data: SessionCreate
 ) -> MeasureSession:
-    """회차 시작(BE-04). 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다(12.4). 있으면 409 SESSION_ALREADY_OPEN."""
+    """회차 시작(BE-04). 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다(12.4). 있으면 409 SESSION_ALREADY_OPEN.
+
+    회차 체급(12.5): 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(없으면 등록 체중)으로 정한다.
+    """
     dog = db.scalars(
         select(Dog).where(Dog.id == dog_id, Dog.institution_id == institution_id).with_for_update()
     ).one_or_none()
@@ -62,11 +67,13 @@ def start_session(
     )
     if open_id is not None:
         raise AppError(ErrorCode.SESSION_ALREADY_OPEN, {"session_id": str(open_id)})
+    weight_for_size = data.weight_kg if data.weight_kg is not None else dog.weight_kg
     session = MeasureSession(
         dog_id=dog.id,
         staff_id=staff_id,
         measured_on=data.measured_on or today_local(),
         weight_kg=data.weight_kg,
+        size_class=dog.size_class if dog.size_class_manual else classify(weight_for_size),
     )
     db.add(session)
     db.flush()

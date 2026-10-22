@@ -20,7 +20,13 @@ EXPECTED_CONSTRAINTS = {
         "fk_dog_institution",
         "fk_dog_baseline",
     },
-    "measure_session": {"measure_session_pkey", "ck_session_status", "fk_session_dog", "fk_session_staff"},
+    "measure_session": {
+        "measure_session_pkey",
+        "ck_session_status",
+        "ck_session_size_class",
+        "fk_session_dog",
+        "fk_session_staff",
+    },
     "shot": {
         "shot_pkey",
         "uq_shot_seq",

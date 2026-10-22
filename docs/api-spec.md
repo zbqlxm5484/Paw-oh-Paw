@@ -196,6 +196,7 @@
   "staff": {"id": "…", "name": "김담당"},
   "measured_on": "2026-10-20",
   "weight_kg": 28.1,
+  "size_class": "LARGE",
   "status": "MEASURING",
   "fail_reason": null,
   "model_name": null,
@@ -205,6 +206,8 @@
   "created_at": "2026-10-20T00:10:00Z"
 }
 ```
+
+- `size_class`: 회차를 시작한 시점의 체급. 그날 체중(없으면 등록 체중)으로 정하고, 담당자가 직접 지정한 체급이 있으면 그 값이다. 뒤에 반려견 체급이 바뀌어도 이 값은 그대로라 반려견 화면의 체급과 다를 수 있다. 회차 결과·보고서의 체급별 기준은 이 값을 쓴다.
 
 ### ShotOut — 촬영 1건 (통과 목록 PassOut을 품는다)
 
@@ -377,6 +380,7 @@
 - 응답 201 **SessionOut**(`status`는 MEASURING).
 - `measured_on`을 빼면 오늘(한국 날짜)이다. 미래 날짜는 안 된다.
 - `weight_kg`(그날 체중)을 빼면 `null`이고, 보고서는 반려견의 등록 체중을 쓴다.
+- 응답의 `size_class`는 그날 체중(없으면 등록 체중)으로 정한 회차 체급이다. 반려견 화면의 체급과 다를 수 있다(감량한 개는 그 뒤 회차부터 중형).
 - 이미 측정 중인 회차가 있으면 409 `SESSION_ALREADY_OPEN`이고 `detail.session_id`에 그 회차 ID가 온다. 화면은 그 회차로 이동한다.
 
 ### `GET /sessions/{session_id}` — 회차 상태·진행·촬영 목록

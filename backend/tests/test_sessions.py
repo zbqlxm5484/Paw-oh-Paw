@@ -22,6 +22,7 @@ SESSION_OUT_KEYS = {
     "staff",
     "measured_on",
     "weight_kg",
+    "size_class",
     "status",
     "fail_reason",
     "model_name",
@@ -83,6 +84,7 @@ def test_start_session_defaults_to_today_and_null_weight(client: TestClient, aut
     assert body["status"] == "MEASURING"
     assert body["measured_on"] == today_local().isoformat()
     assert body["weight_kg"] is None
+    assert body["size_class"] == "LARGE"  # 그날 체중이 없으면 등록 체중 28.4 kg으로
     assert body["dog_id"] == str(dog.id)
     assert body["staff"] == {"id": str(staff.id), "name": "담당자"}
     assert body["fail_reason"] is None and body["completed_at"] is None
@@ -94,6 +96,28 @@ def test_start_session_with_values(client: TestClient, auth_headers: dict, dog) 
     assert response.status_code == 201
     assert response.json()["measured_on"] == "2026-10-01"
     assert response.json()["weight_kg"] == 28.1
+    assert response.json()["size_class"] == "LARGE"
+
+
+def test_session_size_class_follows_that_day_weight_not_the_dog(client: TestClient, auth_headers: dict, dog) -> None:
+    """감량한 반려견(등록 28.4 kg LARGE → 그날 23.0 kg): 회차는 MEDIUM, 반려견은 그대로 LARGE(12.5 6번)."""
+    response = _start(client, auth_headers, dog.id, weight_kg=23.0)
+    assert response.status_code == 201
+    assert response.json()["size_class"] == "MEDIUM"
+    dog_out = client.get(f"/api/v1/dogs/{dog.id}", headers=auth_headers).json()
+    assert (dog_out["size_class"], dog_out["weight_kg"]) == ("LARGE", 28.4)
+    detail = client.get(f"/api/v1/sessions/{response.json()['id']}", headers=auth_headers).json()
+    assert detail["size_class"] == "MEDIUM"
+    assert detail["dog"]["size_class"] == "LARGE"
+
+
+def test_session_size_class_uses_manual_dog_size(client: TestClient, db: Session, auth_headers: dict, dog) -> None:
+    dog.size_class = "SMALL"
+    dog.size_class_manual = True
+    db.flush()
+    response = _start(client, auth_headers, dog.id, weight_kg=30.0)
+    assert response.status_code == 201
+    assert response.json()["size_class"] == "SMALL"  # 직접 지정한 체급은 체중과 상관없다
 
 
 @pytest.mark.parametrize(
