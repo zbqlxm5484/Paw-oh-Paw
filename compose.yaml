@@ -8,7 +8,7 @@ services:
       - ./infra/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - frontend
-      - spring
+      - api
 
   frontend:
     build:
@@ -16,21 +16,16 @@ services:
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
 
-  spring:
+  # nginx가 /api/ 를 api:8000 으로 넘긴다 (docs/convention/apiRoutingConvention.md)
+  api:
     build:
       context: .
-      dockerfile: spring/Dockerfile
+      dockerfile: fastapi/Dockerfile
     restart: unless-stopped
     env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
-
-  fastapi:
-    build:
-      context: .
-      dockerfile: fastapi/Dockerfile
-    restart: unless-stopped
 
   postgres:
     image: postgres:17-alpine
