@@ -8,7 +8,8 @@ nginx와 백엔드 사이의 경계 규약이다. 주소 접두어, 버전, 헬�
 /api/v1/...
 ```
 
-- 백엔드의 모든 주소는 `/api/v1`로 시작한다. `/health`, `/metrics`도 예외 없이 `/api/v1/health`, `/api/v1/metrics`다
+- 백엔드의 모든 주소는 `/api/v1`로 시작한다. `/health`도 예외 없이 `/api/v1/health`다
+- 예외는 `/metrics` 하나다. nginx를 거치지 않고 내부 수집기만 읽는 경로라 접두어 없이 루트에 둔다
 - nginx는 `/api/`로 시작하는 요청만 백엔드로 넘기고, 나머지는 화면(React 정적 파일)으로 보낸다
 - 화면과 API가 한 도메인에 있으므로 CORS 설정은 배포 환경에서 필요 없다
 
@@ -32,6 +33,6 @@ GET /api/v1/health    200 정상 · 503 DB 또는 저장소 이상
 | 경로 | 누가 부르나 | nginx |
 | --- | --- | --- |
 | `/api/v1/health` | Docker healthcheck | 열어 둔다 |
-| `/api/v1/metrics` | 내부 수집기 | 외부에서 닿지 않게 막는다 |
+| `/metrics` | 내부 수집기(Prometheus, `api:8000/metrics` 직접) | 규칙 없음. `/api/` 밖이라 화면으로 가고 백엔드에 닿지 않는다 |
 
 그 밖의 경로는 백엔드가 인증을 처리하고, nginx는 관여하지 않는다.

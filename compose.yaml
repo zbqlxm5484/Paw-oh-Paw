@@ -20,7 +20,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: fastapi/Dockerfile
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file: .env
     depends_on:
