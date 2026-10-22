@@ -1,18 +1,22 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.3. 지금 들어 있는 것은 작업 단위 2(S15P31A404-66)까지다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.3. 지금 들어 있는 것은 작업 단위 1(서버 뼈대)과 2(DB 모델·마이그레이션·seed)다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
 | 환경 변수 읽기 (16절) | `app/core/config.py` |
 | DB 엔진·세션·오류 코드 (11.7) | `app/core/db.py` |
 | 비밀번호 해시 (13.4) | `app/core/security.py` |
+| 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
+| 화면 문구 (14.5) | `messages/ko.yaml` |
+| 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
+| `GET /api/v1/health` (15.9) | `app/api/routes/health.py` |
 | 테이블 9개 모델 (12.2) | `app/models/` |
 | 첫 마이그레이션 | `alembic/versions/0001_initial_tables.py` |
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-FastAPI 서버, 워커, 보고서 등은 다음 작업 단위에서 더한다.
+로그인, 반려견·회차 API, 워커, 보고서 등은 다음 작업 단위에서 더한다.
 
 ## 준비 (처음 한 번)
 
@@ -59,6 +63,17 @@ python -m scripts.seed --institution-code DEMO --institution-name "데모 병원
 
 비밀번호는 화면에서 두 번 묻는다. 8자 이상, UTF-8로 72바이트 이하(한글은 24자까지).
 같은 기관에 계정을 더할 때는 `--institution-name`을 빼도 된다.
+
+## 서버 띄우기
+
+```bash
+uvicorn app.main:app --no-access-log
+```
+
+- `.env`의 `JWT_SECRET`·`FILE_URL_SECRET`(32자 이상, 서로 다른 값)이 비어 있으면 켜지지 않고 어느 값이 문제인지 출력한다(16절). 값 만들기: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+- 접근 로그는 끈다(11.8). 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID를 한 줄로 남기고, 응답 헤더 `X-Request-ID`로도 돌려준다.
+- `http://localhost:8000/api/v1/health`가 `{"status": "ok", "db": "ok", "version": "1.0.0"}`이면 정상이다. DB에 못 붙으면 503이고 `status`·`db`가 `"error"`다. 저장소 검사(`storage`)는 작업 단위 5에서 더한다.
+- 모든 오류 응답은 `{"error": {"code", "message", "detail"}}` 한 모양이다(11.5). `message`는 `messages/ko.yaml`에서 `code`로 찾는다.
 
 ## 테스트
 
