@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["frontend", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501", "E731", "E741"]   # 줄 길이·lambda 대입·한 글자 변수명은 강제하지 않는다
+
+[tool.ruff.lint.per-file-ignores]
+"ai/data_prep/split_by_dog.py" = ["F841"]   # biggest: 의도적 미사용. 코드 정리 시 제거
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]   # tests/ 에서 engine 패키지 import
+addopts = "-ra"
