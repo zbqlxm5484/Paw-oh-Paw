@@ -46,7 +46,7 @@ class Dog(Base):
     breed: Mapped[str] = mapped_column(String(50))
     # 등록할 때 체중
     weight_kg: Mapped[Decimal] = mapped_column(Numeric(5, 2))
-    # 견종으로 분류, 견종표에 없으면 체중으로(12.5)
+    # 등록 체중으로 분류(12.5). 담당자가 직접 고치면 size_class_manual이 TRUE
     size_class: Mapped[str] = mapped_column(String(20))
     # 담당자가 직접 고쳤으면 TRUE
     size_class_manual: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
