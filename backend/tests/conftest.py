@@ -4,8 +4,9 @@
 - 시작할 때 테스트 DB의 public 스키마를 지우고 alembic upgrade head로 테이블을 새로 만든다.
   실수로 운영 DB를 지우지 않도록 DB 이름이 _test로 끝나야만 실행한다.
 - db 픽스처: 테스트 하나가 끝나면 그 안에서 한 일을 모두 되돌리는 DB 세션.
-- client 픽스처: FastAPI 앱에 요청을 보내는 클라이언트(Spring의 MockMvc).
-  오류 형식을 확인할 테스트 전용 라우트가 붙어 있다.
+- client 픽스처: FastAPI 앱에 요청을 보내는 클라이언트(Spring의 MockMvc). 앱의 get_db를 위 db 세션으로 바꿔 끼워서
+  API가 commit해도 테스트가 끝나면 전부 되돌아간다. 오류 형식을 확인할 테스트 전용 라우트가 붙어 있다.
+- staff·auth_headers 픽스처: 기관 하나와 활성 담당자 하나, 그 담당자의 Bearer 헤더.
 """
 
 import logging
@@ -13,6 +14,7 @@ import os
 import uuid
 from collections.abc import Iterator
 from decimal import Decimal
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -37,6 +39,7 @@ TABLES = (
     "report",
     "purge_log",
 )
+GOOD_PASSWORD = "pass1234"
 
 
 class _TestDbSettings(BaseSettings):
@@ -113,6 +116,51 @@ def clean_tables(engine: Engine) -> Iterator[None]:
         conn.execute(text(f"TRUNCATE {', '.join(TABLES)} CASCADE"))
 
 
+# ---- 계정 ----
+
+
+@lru_cache
+def password_hash_for(password: str) -> str:
+    """bcrypt는 0.2초쯤 걸려서 같은 비밀번호의 해시는 한 번만 만든다."""
+    from app.core.security import hash_password
+
+    return hash_password(password)
+
+
+@pytest.fixture
+def staff(db: Session):
+    """기관 T01과 활성 담당자 staff1(STAFF). 비밀번호는 GOOD_PASSWORD."""
+    from app.models import Institution, Staff
+
+    institution = Institution(code="T01", name="테스트 병원")
+    db.add(institution)
+    db.flush()
+    row = Staff(
+        institution_id=institution.id,
+        login_id="staff1",
+        password_hash=password_hash_for(GOOD_PASSWORD),
+        name="담당자",
+        role="STAFF",
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return row
+
+
+def bearer(staff) -> dict[str, str]:
+    """담당자의 Bearer 헤더."""
+    from app.core.security import create_access_token
+
+    token, _ = create_access_token(staff_id=staff.id, institution_id=staff.institution_id, role=staff.role)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def auth_headers(staff) -> dict[str, str]:
+    return bearer(staff)
+
+
 # ---- API 테스트 ----
 
 
@@ -124,7 +172,8 @@ class DogIn(BaseModel):
 
 
 def _test_router() -> APIRouter:
-    """오류 형식(11.5)을 확인하려고 일부러 오류를 내는 라우트들. 실제 API에는 없다."""
+    """오류 형식(11.5)과 의존성을 확인하려고 일부러 오류를 내는 라우트들. 실제 API에는 없다."""
+    from app.api.deps import AdminStaff, CurrentStaff
     from app.core.errors import AppError, ErrorCode
 
     router = APIRouter(prefix="/_test")
@@ -162,15 +211,35 @@ def _test_router() -> APIRouter:
         logging.getLogger("app.test").info("inside route")
         return {"ok": True}
 
+    @router.get("/whoami")
+    def whoami(staff: CurrentStaff) -> dict[str, str]:
+        return {"login_id": staff.login_id}
+
+    @router.get("/admin-only")
+    def admin_only(staff: AdminStaff) -> dict[str, str]:
+        return {"login_id": staff.login_id}
+
     return router
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    """앱 + 테스트 전용 라우트. 앱 import는 pytest_configure가 환경 변수를 채운 뒤여야 해서 여기서 한다."""
+def client(db: Session) -> Iterator[TestClient]:
+    """앱 + 테스트 전용 라우트. 앱의 get_db를 테스트의 db 세션으로 바꿔 끼운다(commit은 세이브포인트만 확정)."""
+    from app.api.deps import get_db
     from app.main import API_PREFIX, create_app
+
+    def test_db() -> Iterator[Session]:
+        # 요청마다 세이브포인트 하나. 요청이 실패해도 픽스처가 만든 행은 남고, 요청이 한 일만 되돌아간다.
+        request_tx = db.begin_nested()
+        try:
+            yield db
+            request_tx.commit()
+        except BaseException:
+            request_tx.rollback()
+            raise
 
     app = create_app()
     app.include_router(_test_router(), prefix=API_PREFIX)
+    app.dependency_overrides[get_db] = test_db
     with TestClient(app) as client:
         yield client
