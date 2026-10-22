@@ -213,14 +213,15 @@ _LOCATION_PREFIXES = ("body", "query", "path", "header", "cookie")
 
 
 def _field_name(loc: tuple[Any, ...]) -> str:
-    """11.5: Pydantic 오류 위치에서 첫 칸(body·query·path)을 빼고 나머지를 '.'로 잇는다."""
+    """11.5: Pydantic 오류 위치에서 첫 칸(body·query·path)을 빼고 나머지를 '.'로 잇는다.
+
+    요청 본문이 통째로 없으면 위치가 ("body",) 하나뿐이라 뺄 것이 없다. 이때는 첫 칸 이름 "body"를 그대로 쓴다(11.5).
+    """
     parts = [str(part) for part in loc]
     if parts and parts[0] in _LOCATION_PREFIXES:
         parts = parts[1:]
     if parts:
         return ".".join(parts)
-    # TODO(질문: 본문 전체가 빠진 경우처럼 남는 칸이 없으면 11.5 규칙대로는 빈 문자열이다.
-    #           지금은 첫 칸 이름("body")을 둔다)
     return str(loc[0]) if loc else ""
 
 

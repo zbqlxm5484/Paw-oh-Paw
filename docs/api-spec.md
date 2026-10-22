@@ -54,7 +54,7 @@
 }
 ```
 
-- **입력 오류(422 `VALIDATION_ERROR`)**: 어느 필드가 틀렸는지 `detail.fields`에 온다. `field`는 필드 이름, `type`은 틀린 종류다.
+- **입력 오류(422 `VALIDATION_ERROR`)**: 어느 필드가 틀렸는지 `detail.fields`에 온다. `field`는 필드 이름, `type`은 틀린 종류다. 요청 본문이 통째로 없으면 `field`가 `"body"`로 온다("요청 내용이 없습니다"로 보여 주면 된다).
 
 ```json
 {"error": {"code": "VALIDATION_ERROR", "message": "입력값을 확인해 주세요.",
@@ -101,7 +101,7 @@
 
 ### 1.8 개발 환경
 
-- 서버를 띄우면 `/docs`에 시험 화면(Swagger)이 생긴다. 서버가 없을 때는 `openapi.yaml`로 가짜 서버(mock)를 띄워 화면을 먼저 만들 수 있다(14절).
+- 개발 환경(`.env`의 `API_DOCS_ENABLED=true`)에서는 `/docs`에 시험 화면(Swagger)이 생긴다. 배포 서버에서는 꺼져 있고, 공식 명세는 이 문서와 `openapi.yaml`이다. 서버가 없을 때는 `openapi.yaml`로 가짜 서버(mock)를 띄워 화면을 먼저 만들 수 있다(14절).
 - 화면 개발 서버 주소는 서버의 `CORS_ORIGINS`에 들어 있어야 한다. 기본값은 Vite 개발 서버인 `http://localhost:5173`이다. 주소가 다르면 백엔드에 알려 준다.
 
 ---

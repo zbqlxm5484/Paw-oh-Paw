@@ -76,6 +76,7 @@ uvicorn app.main:app --no-access-log
 - 접근 로그는 끈다(11.8). 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID를 한 줄로 남기고, 응답 헤더 `X-Request-ID`로도 돌려준다.
 - `http://localhost:8000/api/v1/health`가 `{"status": "ok", "db": "ok", "version": "1.0.0"}`이면 정상이다. DB에 못 붙으면 503이고 `status`·`db`가 `"error"`다. 저장소 검사(`storage`)는 작업 단위 5에서 더한다.
 - 모든 오류 응답은 `{"error": {"code", "message", "detail"}}` 한 모양이다(11.5). `message`는 `messages/ko.yaml`에서 `code`로 찾는다.
+- `/docs`(Swagger)·`/redoc`·`/openapi.json`은 `.env`의 `API_DOCS_ENABLED=true`일 때만 열린다(`.env.example`은 true). 배포에서는 끄고, 화면·기업과 맞춘 공식 명세는 `docs/openapi.yaml`이다.
 
 ## 테스트
 
