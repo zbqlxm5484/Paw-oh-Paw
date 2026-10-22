@@ -1,0 +1,5 @@
+# smoke 전용. 배포 스택(8080)과 포트가 겹치지 않게 한다
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:18080:80"
