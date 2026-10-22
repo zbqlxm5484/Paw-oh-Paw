@@ -6,7 +6,7 @@
 pydantic==2.14.1
 pydantic-settings==2.16.1
 
-# DB (PostgreSQL 18)
+# DB (PostgreSQL 17)
 sqlalchemy==2.1.5
 pg8000==1.31.5
 alembic==1.20.0

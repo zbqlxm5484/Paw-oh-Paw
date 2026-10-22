@@ -12,7 +12,8 @@ name: creamoff
 
 services:
   db:
-    image: postgres:18
+    # 팀 서버 compose(허정원)와 같은 17. 18로 올릴 때는 아래 볼륨 경로를 /var/lib/postgresql로 바꿔야 한다(16절).
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       # .env의 DATABASE_URL(postgresql+pg8000://creamoff:creamoff@localhost:5432/creamoff)과 맞춘다
@@ -24,8 +25,9 @@ services:
       # DATABASE_URL·TEST_DATABASE_URL의 포트도 같이 바꾼다.
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      # postgres:18부터는 /var/lib/postgresql/data가 아니라 /var/lib/postgresql에 붙인다. 옛 경로면 안 켜진다(16절).
-      - pgdata:/var/lib/postgresql
+      # postgres:17까지는 /var/lib/postgresql/data에 붙인다(18부터는 /var/lib/postgresql, 16절).
+      # 18로 만들어 둔 볼륨은 17이 읽지 못하므로 이미지를 바꾼 뒤 한 번은 docker compose down -v로 지우고 다시 띄운다.
+      - pgdata:/var/lib/postgresql/data
       # 볼륨이 비어 있을 때(처음 띄울 때) 한 번만 실행된다. 테스트용 DB creamoff_test를 만든다.
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:

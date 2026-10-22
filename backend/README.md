@@ -16,7 +16,7 @@ FastAPI 서버, 워커, 보고서 등은 다음 작업 단위에서 더한다.
 
 ## 준비 (처음 한 번)
 
-필요한 것: Python 3.11, PostgreSQL 18. 모든 명령은 `backend` 폴더에서 실행한다.
+필요한 것: Python 3.11, PostgreSQL 17(팀 서버와 같은 버전. `docker compose up -d db`로 띄우면 된다). 모든 명령은 `backend` 폴더에서 실행한다.
 
 ```bash
 python -m venv .venv

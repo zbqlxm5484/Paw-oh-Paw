@@ -395,7 +395,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 | (FastAPI가 함께 설치) | Starlette | 1.9 | 0.49.1 이상이어야 한다(15.6) |
 | 서버 실행 | Uvicorn | 0.54 | 접근 로그는 끈다(11.8) |
 | 검증·설정 | Pydantic, pydantic-settings | 2.14, 2.16 | v2 문법만 |
-| DB | PostgreSQL | 18 | 인코딩 UTF8. 19는 아직 정식 출시 전이라 18로 간다 |
+| DB | PostgreSQL | 17 | 인코딩 UTF8. 팀 서버 compose(허정원)와 같은 버전으로 맞춘다(10-22 MR 리뷰). 18로 올릴 때는 Docker 볼륨 경로가 바뀐다(16절) |
 | ORM·드라이버 | SQLAlchemy, pg8000 | 2.1, 1.31 | SQLAlchemy 2.0 스타일만. 접속 주소는 postgresql+pg8000:// |
 | DB 변경 이력 | Alembic | 1.20 |  |
 | 인증 | PyJWT, bcrypt | 2.15, 5.0 | bcrypt 5.0은 72바이트를 넘는 비밀번호에서 오류를 낸다(13.4) |
@@ -893,7 +893,7 @@ CREATE TABLE purge_log (
   5. 견종표와 이 규칙은 박규원의 체급별 권장 통과 수 분석(D-14)과 같은 것을 쓴다. 분류는 `classify_size(breed, weight_kg)` 함수 하나로 두고 양쪽이 함께 쓴다(10절 Q15).
 - **기준 회차**: `baseline_session_id`가 비어 있으면 그 반려견의 가장 이른 DONE 회차를 기준으로 쓴다. 회차 순서는 언제나 (measured\_on, created\_at) 오름차순이고, 가장 이른·가장 최근·바로 앞 회차를 모두 이 순서로 정한다. 측정일을 직접 고를 수 있고 같은 날 회차가 둘일 수 있어서다.
 - **촬영 순번**: `seq_no`는 같은 회차의 가장 큰 값 + 1이다. 동시에 올려도 겹치지 않도록 업로드는 회차 행을 SELECT … FOR UPDATE로 잠근 뒤 순번을 매긴다(12.4). 그런데도 겹치면(`uq_shot_seq` 위반) 잠금이 빠진 버그이므로 500으로 끝내고 로그를 남긴다.
-- **도구**: PostgreSQL 18, SQLAlchemy 2(테이블을 Python 클래스로 정의), pg8000(Python에서 PostgreSQL에 접속하는 드라이버), Alembic(테이블 변경 이력을 파일로 남겨 팀원 누구나 같은 DB를 만든다. Spring의 Flyway와 같은 역할).
+- **도구**: PostgreSQL 17, SQLAlchemy 2(테이블을 Python 클래스로 정의), pg8000(Python에서 PostgreSQL에 접속하는 드라이버), Alembic(테이블 변경 이력을 파일로 남겨 팀원 누구나 같은 DB를 만든다. Spring의 Flyway와 같은 역할).
 - **상태·종류 값**: PostgreSQL의 ENUM 타입을 쓰지 않고 `VARCHAR(20)` + CHECK 제약으로 둔다. ENUM 타입은 값을 빼거나 이름을 바꾸기 어렵고 Alembic 마이그레이션도 번거롭다. 모델에서는 `String(20)` 컬럼에 `__table_args__`의 `CheckConstraint`로 DDL과 같은 이름(`ck_…`)을 준다. 값 목록은 Python `StrEnum` 하나에서 가져와 코드와 제약이 어긋나지 않게 한다.
 - **updated\_at**: PostgreSQL에는 MySQL의 `ON UPDATE CURRENT_TIMESTAMP`가 없다. 모델에 `onupdate=func.now()`를 두어 SQLAlchemy가 채우게 하고, 행을 바꾸는 UPDATE는 ORM이나 `update()`로만 쓴다. `text()`로 쓴 SQL로 바꾸면 `updated_at`이 그대로다. 보고서 작업 순서(12.4)가 이 값을 쓴다.
 - **PostgreSQL을 쓰는 이유**: 세부명세서 9절(개발 요소)이 데이터 저장으로 "PostgreSQL 등 규모에 맞춰 선정"을 권장하고, 팀도 이에 맞춰 PostgreSQL로 정했다(10-20). 드라이버는 BSD 라이선스인 pg8000을 쓴다. 더 널리 쓰는 psycopg 3는 LGPL-3.0이라, 세부명세서 7.1절(납품물에 소스 공개 의무를 만드는 라이선스 금지, 조건이 불명확하면 쓸 수 없음) 검토가 길어질 수 있어서다. Redis는 쓰지 않는다(3절).
@@ -1723,7 +1723,7 @@ stride_length: 2.0   # pct_body
 - **CORS**: 화면(React 개발 서버)과 API의 주소가 다르면 브라우저가 요청을 막는다. FastAPI `CORSMiddleware`에 `CORS_ORIGINS`만 허용하고, `*`는 쓰지 않는다. 기본값 5173은 Vite 개발 서버 포트이며, 장준환의 개발 서버 주소에 맞춘다. 서명 URL과 S3 주소로 여는 영상·PDF는 태그가 직접 부르므로 CORS와 상관없다.
 - **토큰 만료**: 토큰을 새로 받는 기능(refresh token)은 두지 않는다. 12시간이면 하루 근무가 끝날 때까지 끊기지 않고, 지나면 다시 로그인한다.
 - **상수로 두는 값**: 세부명세서가 정한 최저 사양(640×360, 30fps, 4 Mbps), 허용 코덱, 16:9 허용 범위(±2%)는 바뀔 일이 없어 환경 변수가 아니라 코드 상수로 둔다.
-- **Docker**: PostgreSQL 컨테이너(`postgres:18`)의 변수(`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`)와 볼륨 경로는 `docker-compose.yml`에서 허정원과 맞춘다. `postgres:18` 이미지부터는 볼륨을 `/var/lib/postgresql/data`가 아니라 `/var/lib/postgresql`에 붙인다. 예전 경로에 붙이면 컨테이너가 켜지지 않는다. db 서비스의 healthcheck는 `pg_isready`로 하고, api·worker는 db가 healthy가 된 뒤 켠다. api 컨테이너는 시작할 때 alembic upgrade head를 먼저 실행하고, `/docker-entrypoint-initdb.d/`의 초기화 스크립트로 테스트용 DB(creamoff\_test)도 만든다.
+- **Docker**: PostgreSQL 컨테이너(`postgres:17-alpine`, 팀 서버 compose와 같은 이미지)의 변수(`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`)와 볼륨 경로는 `docker-compose.yml`에서 허정원과 맞춘다. 17까지는 볼륨을 `/var/lib/postgresql/data`에 붙이고, 18로 올릴 때는 `/var/lib/postgresql`로 바꾼다(18부터 데이터 폴더 구조가 달라져 예전 경로에 붙이면 컨테이너가 켜지지 않는다). 메이저 버전을 바꾸면 기존 볼륨은 읽지 못하므로 `docker compose down -v`로 지우고 다시 띄운다. db 서비스의 healthcheck는 `pg_isready`로 하고, api·worker는 db가 healthy가 된 뒤 켠다. api 컨테이너는 시작할 때 alembic upgrade head를 먼저 실행하고, `/docker-entrypoint-initdb.d/`의 초기화 스크립트로 테스트용 DB(creamoff\_test)도 만든다.
 - **워커 CPU 상한**: `docker-compose.yml`의 worker 서비스에 `cpus`를 걸어 API가 쓸 코어를 남긴다. 값은 팀 서버 사양을 보고 정한다(10절 Q22). 예를 들어 4코어면 `cpus: "3"`이다.
 
 개발 환경에서 최소로 채울 `.env`:
@@ -1743,7 +1743,7 @@ ANALYSIS_API_MODE=mock
 1. 운영체제 패키지: ffmpeg(ffprobe 포함), WeasyPrint가 쓰는 Pango 등 시스템 라이브러리, 한글 OFL 글꼴. requirements.txt 밖의 전제라 가이드에 적는다(PR-C-07).
 2. Python 3.11 `.venv`를 만들고 `pip install -r requirements.txt`(버전 고정)로 설치한다. Docker 없이도 설치되어야 한다(PR-C-07).
 3. `STORAGE_ROOT`·`UPLOAD_TMP_DIR` 폴더를 같은 볼륨에 만들고, API와 워커를 띄우는 계정에 쓰기 권한을 준다.
-4. PostgreSQL 18을 준비하고 `.env`를 채운다. 꼭 채울 값은 `DATABASE_URL`, `JWT_SECRET`, `FILE_URL_SECRET`, `CORS_ORIGINS`(기업 화면 주소), `ANALYSIS_API_MODE`·`ANALYSIS_API_BASE_URL`·`ANALYSIS_API_KEY`다. 저장소는 기업이 고른 쪽으로 `STORAGE_BACKEND`와 그에 딸린 값을 넣는다(7절, 10절 Q19).
+4. PostgreSQL 17을 준비하고 `.env`를 채운다. 꼭 채울 값은 `DATABASE_URL`, `JWT_SECRET`, `FILE_URL_SECRET`, `CORS_ORIGINS`(기업 화면 주소), `ANALYSIS_API_MODE`·`ANALYSIS_API_BASE_URL`·`ANALYSIS_API_KEY`다. 저장소는 기업이 고른 쪽으로 `STORAGE_BACKEND`와 그에 딸린 값을 넣는다(7절, 10절 Q19).
 5. `alembic upgrade head`로 테이블을 만들고, `python -m scripts.seed`로 기관·관리자 계정을 만든다.
 6. API(`uvicorn app.main:app --no-access-log`)와 워커(`python -m app.worker.main`)를 따로 띄운다. 워커는 하나만 띄운다(12.4). Docker 없이 띄우면 `cpus` 상한이 없으므로, systemd의 `CPUQuota`로 워커의 CPU를 묶거나 `WORKER_RENDER_CONCURRENCY`를 코어 수보다 작게 둔다.
 7. `/api/v1/health`가 200인지, 17.7 시연 시나리오가 Mock 모드에서 도는지 확인한다.
