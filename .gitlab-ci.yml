@@ -65,30 +65,31 @@ pip-audit:
     - $RUN $PY_IMAGE sh -ec 'pip install -q pip-audit && pip-audit -r backend/requirements.txt'
 
 # ---------- build ----------
-build:
-  stage: build
-  allow_failure: true       # backend/·frontend/ 코드 들어오면 이 줄 삭제
-  script:
-    - cp .env.example .env
-    - docker compose build
+# backend/·frontend/ 코드(requirements.txt, package.json)가 들어오면 아래 주석을 해제하고 allow_failure 줄은 삭제
+# build:
+#   stage: build
+#   allow_failure: true       # backend/·frontend/ 코드 들어오면 이 줄 삭제
+#   script:
+#     - cp .env.example .env
+#     - docker compose build
 
 # ---------- smoke ----------
-smoke:
-  stage: smoke
-  allow_failure: true       # backend/·frontend/ 코드 들어오면 이 줄 삭제
-  variables:
-    COMPOSE: docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml
-  script:
-    - cp .env.example .env
-    - $COMPOSE up -d
-    - |
-      for i in $(seq 1 30); do
-        curl -fsS http://127.0.0.1:18080/api/v1/health && exit 0
-        sleep 2
-      done
-      echo "health check failed"; $COMPOSE logs --tail=50; exit 1
-  after_script:
-    - docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml down -v --remove-orphans
+# smoke:
+#   stage: smoke
+#   allow_failure: true       # backend/·frontend/ 코드 들어오면 이 줄 삭제
+#   variables:
+#     COMPOSE: docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml
+#   script:
+#     - cp .env.example .env
+#     - $COMPOSE up -d
+#     - |
+#       for i in $(seq 1 30); do
+#         curl -fsS http://127.0.0.1:18080/api/v1/health && exit 0
+#         sleep 2
+#       done
+#       echo "health check failed"; $COMPOSE logs --tail=50; exit 1
+#   after_script:
+#     - docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml down -v --remove-orphans
 
 # ---------- deploy ----------
 deploy:
