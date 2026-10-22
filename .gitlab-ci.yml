@@ -1,0 +1,9 @@
+# 4-3 테스트 파이프라인: 러너(EC2 shell executor) 배정·docker 권한 확인용
+# 통과 확인 후 deploy job으로 교체 예정 (etc/EC2_GITLAB_CICD_HANDOFF.md 4-4)
+test:
+  tags:
+    - docker
+  script:
+    - whoami
+    - docker --version
+    - docker compose version
