@@ -32,6 +32,7 @@ reproduce:                  # 기업 검수 절차(새 venv → 설치 → 실�
       python -m venv /tmp/venv && . /tmp/venv/bin/activate &&
       pip install -q -r requirements-dev.txt &&
       { [ -f backend/requirements.txt ] && pip install -q -r backend/requirements.txt || true; } &&
+      { [ -f analysis_api/requirements.txt ] && pip install -q -r analysis_api/requirements.txt || true; } &&
       pytest -q -p no:cacheprovider'
 
 ruff:
@@ -62,7 +63,10 @@ pip-audit:
   rules:
     - exists: [backend/requirements.txt]
   script:
-    - $RUN $PY_IMAGE sh -ec 'pip install -q pip-audit && pip-audit -r backend/requirements.txt'
+    - >
+      $RUN $PY_IMAGE sh -ec '
+      python -m venv /tmp/venv && . /tmp/venv/bin/activate &&
+      pip install -q pip-audit && pip-audit -r backend/requirements.txt'
 
 # ---------- build ----------
 # backend/·frontend/ 코드(requirements.txt, package.json)가 들어오면 아래 주석을 해제하고 allow_failure 줄은 삭제
