@@ -54,7 +54,7 @@ export function HomePage() {
       <div style={{ padding: '0 20px 14px' }}>
         <label className="search">
           <Icon name="search" size={20} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="반려견 이름 검색" aria-label="반려견 이름 검색" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="반려견 이름 검색" aria-label="반려견 이름 검색" maxLength={50} />
         </label>
       </div>
 

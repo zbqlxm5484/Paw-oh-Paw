@@ -139,7 +139,17 @@ function PetForm({ mode, dogId, initial }: { mode: 'new' | 'edit'; dogId?: strin
     }
     try {
       if (mode === 'edit') {
-        await update.mutateAsync(toBody(f))
+        // 바꾼 필드만 보낸다(api-spec 5절 PATCH). 체급은 직접 선택을 풀었을 때 null 을 보내 자동 분류로 돌린다
+        const before = toBody(initial)
+        const after = toBody(f)
+        const patch: Partial<DogCreate> = {}
+        for (const k of Object.keys(after) as (keyof DogCreate)[]) if (after[k] !== before[k]) (patch as Record<string, unknown>)[k] = after[k]
+        if (Object.keys(patch).length === 0) {
+          toast('바뀐 내용이 없어요')
+          nav(-1)
+          return
+        }
+        await update.mutateAsync(patch)
         toast('저장했어요')
         nav(-1)
       } else {
