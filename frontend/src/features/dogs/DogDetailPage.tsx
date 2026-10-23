@@ -112,6 +112,7 @@ export function DogDetailPage() {
               </b>
             </div>
             {histQ.isPending && <div className="skeleton" />}
+            {histQ.isError && <Empty>{histQ.error instanceof ApiError ? histQ.error.message : '측정 이력을 불러오지 못했어요'}</Empty>}
             {histQ.isSuccess && total === 0 && <Empty>아직 측정 기록이 없어요</Empty>}
             {total > 0 && (
               <Card className="hist-card">
