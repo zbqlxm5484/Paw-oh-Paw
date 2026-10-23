@@ -233,7 +233,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 
 ### 구조
 
-- `AnalysisClient`는 세 동작만 정한다: `submit(영상, 촬영 정보) → job_id`, `get_status(job_id) → 상태·실패 사유`, `get_result(job_id) → 결과 JSON`.
+- `AnalysisClient`는 네 동작만 정한다: `submit(영상, 촬영 정보) → job_id`, `get_status(job_id) → 상태·실패 사유`, `get_result(job_id) → 결과 JSON`, `get_keypoints(job_id) → 관절점 파일 JSON`(프레임별 22점·각도, 10-22 검토 답변 Q4).
 - `HttpAnalysisClient`: 개발 환경의 우리 분석 API와, 기업 GPU 서버에 올린 같은 API를 부른다. 같은 코드라 주소만 다르다. 현행 모델과 개선 모델의 전환은 분석 API 안에서 한다(PR-F07-04).
 - `MockAnalysisClient`: 견본 결과 JSON을 몇 초 뒤 돌려준다. 분석 API가 준비되기 전에 화면과 보고서를 먼저 만들 수 있고, 시연 날 분석 서버가 안 될 때의 대비도 된다.
 - 설정(.env): `ANALYSIS_API_MODE=http|mock`, `ANALYSIS_API_BASE_URL`, `ANALYSIS_API_KEY`

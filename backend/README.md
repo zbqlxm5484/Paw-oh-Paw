@@ -15,6 +15,7 @@
 | 회차 시작·상태·진행·촬영 목록·측정 취소, 회차 시점 체급 (12.5, 13.3, 15.6) | `app/api/routes/sessions.py`, `app/services/sessions.py`, `app/schemas/sessions.py` |
 | 영상 업로드 검사 9가지·저장 (13.1, 15.6) | `app/services/uploads.py`, `app/video/probe.py`(ffprobe) |
 | 파일 저장소 `StorageService`·`LocalStorage`·파일 키 (7절, 11.11) | `app/storage/` |
+| 분석 클라이언트 `MockAnalysisClient`·`HttpAnalysisClient`와 견본 JSON (6절, 16절 `ANALYSIS_API_MODE`) | `app/clients/analysis.py`, `app/clients/fixtures/` |
 | 실패한 요청이 만든 파일 정리 (12.4) | `app/api/deps.py`의 `delete_created_files` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
 | 화면 문구 (14.5) | `messages/ko.yaml` |
