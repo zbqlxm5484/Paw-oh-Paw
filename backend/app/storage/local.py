@@ -30,6 +30,9 @@ class LocalStorage:
         if not key or key.startswith(("/", "\\")) or ".." in Path(key).parts:
             raise StorageError(f"잘못된 파일 키입니다: {key!r}")
         path = (self.root / key).resolve()
+        if path == self.root:
+            # "."·"./"처럼 루트 자신을 가리키는 키. delete_prefix(".")가 저장소 전체를 지우는 일을 막는다
+            raise StorageError(f"저장소 루트 자체를 가리키는 키입니다: {key!r}")
         if not path.is_relative_to(self.root):
             raise StorageError(f"저장소 밖을 가리키는 키입니다: {key!r}")
         return path

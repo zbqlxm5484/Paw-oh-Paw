@@ -71,7 +71,7 @@ def test_delete_prefix_and_stat_prefix(storage: LocalStorage) -> None:
     assert storage.read_bytes(keys.dog_prefix(INST, DOG) + "other/keep.txt") == b"keep"
 
 
-@pytest.mark.parametrize("bad", ["../x", "/abs/x", "a/../../x", ""])
+@pytest.mark.parametrize("bad", ["../x", "/abs/x", "a/../../x", "", ".", "./", "a/.."])
 def test_keys_outside_root_are_rejected(storage: LocalStorage, bad: str) -> None:
     with pytest.raises(StorageError):
         storage.path(bad)
@@ -104,3 +104,12 @@ def test_get_storage_follows_settings() -> None:
     assert isinstance(storage, LocalStorage)
     assert storage.root == Path(get_settings().STORAGE_ROOT).resolve()
     assert get_storage() is storage
+
+
+def test_delete_prefix_never_removes_the_root(storage: LocalStorage) -> None:
+    # 69 MR 리뷰: "."은 루트 자신이라 delete_prefix(".")가 저장소 전체를 지울 수 있었다
+    storage.write_bytes("k/a.txt", b"x")
+    for prefix in (".", "./", ""):
+        with pytest.raises(StorageError):
+            storage.delete_prefix(prefix)
+    assert storage.root.is_dir() and storage.read_bytes("k/a.txt") == b"x"

@@ -871,10 +871,10 @@ CREATE TABLE purge_log (
 | `report.status` | PENDING → GENERATING → DONE 또는 FAILED. 워커가 켜질 때 GENERATING → PENDING | 워커, 다시 만들기 API(→ PENDING) | 워커는 회차를 DONE으로 바꾸는 같은 트랜잭션에서 판본마다 1행을 PENDING으로 만든다. 화면이 DONE인데 보고서 행이 없는 순간을 보지 않게 하기 위해서다 |
 
 - 상태는 조건을 건 UPDATE로만 바꾼다. 예: `UPDATE shot SET status='SUBMITTED' WHERE id=:id AND status='UPLOADED'`. 바뀐 행이 0개면 다른 처리가 먼저 가져간 것이므로 건너뛴다. 같은 일을 두 번 하지 않기 위해서다.
-- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 3번 실패하면 FAILED다.
+- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 그동안 촬영은 SUBMITTED에 머물고 `job_id`는 비어 있다(화면에는 대기로 보인다). 3번 실패하면 FAILED(`ANALYSIS_SUBMIT_FAILED`)다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
-* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다.
+* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
 * **API가 만든 파일**: 업로드처럼 요청 안에서 파일을 만들면 그 키를 `db.info["created_files"]`에 넣는다. commit이 실패하면 `get_db`가 그 파일을 지운다(11.7). 지울 때는 12.5 순서대로 파일을 먼저 지운다. 행 삭제가 실패해 파일 없는 행이 남는 것은 괜찮다(파기 때 함께 지워진다). 반대로 DB에 키가 없는 파일이 남으면 파기에서 빠진다.
 * **보고서 행 값**: `template_version`에는 보고서 모듈의 `report.TEMPLATE_VERSION` 상수를 넣는다.
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
@@ -973,6 +973,8 @@ CREATE TABLE purge_log (
 | 회차 비교 | 두 회차가 같은 반려견의 서로 다른 DONE 회차다 | 400 `COMPARE_INVALID`(`detail.reason`은 15.8) |
 | 자료 파기 | 대상에 SUBMITTED·ANALYZING 촬영이 없다 | 409 `SHOT_IN_PROGRESS` |
 | 보고서·결과 영상 파일 열기 | 서명 URL의 `exp`가 지나지 않았고 `sig`가 맞다 | 403 `FILE_LINK_EXPIRED` |
+
+- 측정 취소·촬영 삭제가 UPLOADED 촬영을 막지 않는 이유: 워커는 UPLOADED 촬영을 가져갈 때 회차 행을 잠그고 SUBMITTED로 바꾼 뒤에야 분석 API를 부른다(12.4 잠금). 두 동작이 같은 잠금을 잡으므로 지워진 촬영에 결과가 쓰이는 일은 없다.
 
 ### 13.4 로그인·목록
 
