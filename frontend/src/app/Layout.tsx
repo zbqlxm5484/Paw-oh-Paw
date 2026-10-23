@@ -1,10 +1,23 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { IconSprite } from '../components/Icon'
+import { useIsDesktop } from './useIsDesktop'
+import { WebShell } from './WebShell'
 import './layout.css'
 
-/** 폰 폭은 꽉, 넓은 화면은 가운데 기둥. 모든 화면의 바깥 틀. */
+/**
+ * 모든 화면의 바깥 틀. 1024px 이상이면 웹 v2 틀(WebShell), 아니면 앱 v5 폰 프레임.
+ * 폰 폭은 꽉 채우고, 데스크톱 브라우저에서 창이 좁을 때는 가운데 412×915 기둥으로 보인다.
+ */
 export function AppFrame() {
+  const desktop = useIsDesktop()
+  if (desktop)
+    return (
+      <>
+        <IconSprite />
+        <WebShell />
+      </>
+    )
   return (
     <div className="app-shell">
       <IconSprite />
@@ -15,9 +28,11 @@ export function AppFrame() {
   )
 }
 
-/** 하단 탭이 있는 화면들(홈 · 소개 · 분석 · 분석 결과 · 마이페이지). 디자인 showTabs. */
+/** 하단 탭이 있는 화면들(홈 · 소개 · 분석 · 분석 결과 · 마이페이지). 웹 틀에서는 상단 내비가 대신하므로 탭바를 그리지 않는다. */
 export function TabLayout() {
   const nav = useNavigate()
+  const desktop = useIsDesktop()
+  if (desktop) return <Outlet />
   return (
     <>
       <Outlet />

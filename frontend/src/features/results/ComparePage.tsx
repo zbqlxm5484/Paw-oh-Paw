@@ -10,7 +10,7 @@ import { Icon } from '../../components/Icon'
 import { Card, Empty, TopBar } from '../../components/ui'
 import './results.css'
 
-const TREND_CODES: [string, string][] = [
+export const TREND_CODES: [string, string][] = [
   ['rom_stifle', '무릎 가동'],
   ['rom_hip', '고관절 가동'],
   ['stride_length', '걸음 길이'],
@@ -18,7 +18,7 @@ const TREND_CODES: [string, string][] = [
   ['paw_lift', '발 높이'],
 ]
 
-const COMPARE_INVALID_MSG: Record<string, string> = {
+export const COMPARE_INVALID_MSG: Record<string, string> = {
   NO_DONE_SESSION: '완료된 회차가 없어요. 측정을 끝내면 비교할 수 있어요.',
   SAME_SESSION: '비교하려면 완료된 회차가 2개 이상 필요해요.',
   NO_PREVIOUS: '이 회차 앞에 완료된 회차가 없어요.',
@@ -139,7 +139,7 @@ export function ComparePage() {
   )
 }
 
-function CompareRow({ it, focus }: { it: CompareItem; focus: boolean }) {
+export function CompareRow({ it, focus }: { it: CompareItem; focus: boolean }) {
   const limbText = it.limb === 'NONE' ? '전체' : LIMB_LABEL[it.limb as keyof typeof LIMB_LABEL] + (focus ? ' · 관심 다리' : '')
   const moved = it.judgement === 'INCREASE' || it.judgement === 'DECREASE'
   const j =
@@ -176,7 +176,7 @@ function lineColor(limb: MetricLimb): string {
 }
 
 /** 추이 선 그래프. 측정 불가(value null)에서 선을 끊고 점을 비운다. 모델이 바뀐 지점은 세로 점선. */
-function TrendChart({ t }: { t: TrendsOut }) {
+export function TrendChart({ t }: { t: TrendsOut }) {
   const dates = useMemo(() => {
     const set = new Map<string, string>()
     for (const sr of t.series) for (const p of sr.points) set.set(p.session_id, p.measured_on)

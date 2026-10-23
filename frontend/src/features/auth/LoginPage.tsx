@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { useAuth } from '../../app/auth'
 import { useToast } from '../../app/toast'
+import { useIsDesktop } from '../../app/useIsDesktop'
 import { Button, Field, Input, TopBar } from '../../components/ui'
 
 /**
@@ -16,6 +17,7 @@ export function LoginPage() {
   const nav = useNavigate()
   const loc = useLocation()
   const from = (loc.state as { from?: string } | null)?.from ?? '/'
+  const desktop = useIsDesktop()
 
   const [code, setCode] = useState('')
   const [id, setId] = useState('')
@@ -45,8 +47,8 @@ export function LoginPage() {
   }
 
   return (
-    <form className="screen" onSubmit={submit}>
-      <TopBar onBack={() => nav('/welcome', { replace: true })} />
+    <form className={`screen${desktop ? ' as-card' : ''}`} onSubmit={submit}>
+      {!desktop && <TopBar onBack={() => nav('/welcome', { replace: true })} />}
       <div className="scroll screen-body" style={{ gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h1>로그인</h1>

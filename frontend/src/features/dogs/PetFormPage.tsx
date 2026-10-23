@@ -6,6 +6,7 @@ import { useCreateDog, useDog, useUpdateDog } from '../../api/dogs'
 import { BREEDS, LIMB_LABEL, SEX_LABEL, SIZE_LABEL, previewSizeClass } from '../../api/labels'
 import type { DogCreate, DogOut, Limb, Sex, SizeClass } from '../../api/types'
 import { useToast } from '../../app/toast'
+import { useIsDesktop } from '../../app/useIsDesktop'
 import { Icon } from '../../components/Icon'
 import { Button, Empty, Field, Input, Pick, PickGrid, Textarea, TopBar } from '../../components/ui'
 import './dogs.css'
@@ -101,6 +102,7 @@ function PetForm({ mode, dogId, initial }: { mode: 'new' | 'edit'; dogId?: strin
   const toast = useToast()
   const create = useCreateDog()
   const update = useUpdateDog(dogId ?? '')
+  const desktop = useIsDesktop()
 
   const [f, setF] = useState<FormState>(initial)
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({})
@@ -172,7 +174,7 @@ function PetForm({ mode, dogId, initial }: { mode: 'new' | 'edit'; dogId?: strin
   const title = mode === 'edit' ? '반려견 정보 수정' : '반려견 등록'
 
   return (
-    <form className="screen" onSubmit={submit}>
+    <form className={`screen${desktop ? ' as-card' : ''}`} onSubmit={submit}>
       <TopBar title={title} />
       <div className="scroll screen-body">
         <div className="photo-slot" aria-hidden="true">

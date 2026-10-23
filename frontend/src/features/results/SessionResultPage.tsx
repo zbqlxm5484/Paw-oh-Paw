@@ -14,14 +14,14 @@ import './results.css'
 const HIND_CODES = ['rom_stifle', 'rom_hip', 'rom_tarsus', 'stride_length', 'stance_ratio', 'paw_lift', 'paw_excursion', 'stifle_cv']
 const FORE_CODES = ['rom_elbow', 'rom_shoulder', 'rom_carpus', 'stride_length', 'stance_ratio', 'paw_lift', 'paw_excursion']
 
-interface Row {
+export interface Row {
   code: string
   pair: 'FORE' | 'HIND'
   left: MetricOut | undefined
   right: MetricOut | undefined
 }
 
-function rowsOf(g: GaitResultOut): Row[] {
+export function rowsOf(g: GaitResultOut): Row[] {
   const find = (code: string, limb: string) => g.metrics.find((m) => m.metric_code === code && m.limb === limb)
   const out: Row[] = []
   for (const code of HIND_CODES) {
@@ -253,7 +253,7 @@ export function SessionResultPage() {
   )
 }
 
-function Kpis({ res, G }: { res: SessionResultOut; G: GaitResultOut }) {
+export function Kpis({ res, G }: { res: SessionResultOut; G: GaitResultOut }) {
   const top = G.limb_compare.find((c) => c.comparable)
   const stifle = G.limb_compare.find((c) => c.metric_code === 'rom_stifle')
   const stride = G.limb_compare.find((c) => c.metric_code === 'stride_length' && c.pair === 'HIND') ?? G.limb_compare.find((c) => c.metric_code === 'stride_length')
@@ -293,7 +293,7 @@ function Kpis({ res, G }: { res: SessionResultOut; G: GaitResultOut }) {
   )
 }
 
-function RankRow({ c }: { c: LimbCompareOut }) {
+export function RankRow({ c }: { c: LimbCompareOut }) {
   return (
     <div className="rank tabular">
       <span className="n">
@@ -305,7 +305,7 @@ function RankRow({ c }: { c: LimbCompareOut }) {
 }
 
 /** 다리 구분이 없는 수치(보행 속도, 보행 주기 수) */
-function WholeBody({ G }: { G: GaitResultOut }) {
+export function WholeBody({ G }: { G: GaitResultOut }) {
   const whole = G.metrics.filter((m) => m.limb === 'NONE')
   if (!whole.length) return null
   return (
