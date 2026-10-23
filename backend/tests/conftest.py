@@ -11,6 +11,7 @@
 
 import logging
 import os
+import tempfile
 import uuid
 from collections.abc import Iterator
 from decimal import Decimal
@@ -20,7 +21,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from fastapi import APIRouter
+from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -62,6 +63,10 @@ def pytest_configure(config: pytest.Config) -> None:
     # API 서버 설정의 필수 값(16절). 테스트에서만 쓰는 값이고, 셸에 이미 있으면 그 값을 쓴다.
     os.environ.setdefault("JWT_SECRET", "test-jwt-secret-" + "0" * 24)
     os.environ.setdefault("FILE_URL_SECRET", "test-file-url-secret-" + "1" * 24)
+    # 파일 저장소·임시 폴더는 실행마다 새 임시 폴더를 쓴다. 개발용 ./data는 건드리지 않는다.
+    os.environ["STORAGE_BACKEND"] = "local"
+    os.environ["STORAGE_ROOT"] = tempfile.mkdtemp(prefix="creamoff-test-files-")
+    os.environ["UPLOAD_TMP_DIR"] = tempfile.mkdtemp(prefix="creamoff-test-tmp-")
 
     from app.core.config import get_db_settings, get_settings
     from app.core.db import get_engine
@@ -169,6 +174,24 @@ def other_staff(db: Session):
     return row
 
 
+@pytest.fixture
+def dog(db: Session, staff):
+    """staff 기관의 반려견 보리(골든 리트리버, LARGE)."""
+    from app.models import Dog
+
+    row = Dog(
+        institution_id=staff.institution_id,
+        name="보리",
+        breed="골든 리트리버",
+        weight_kg=Decimal("28.40"),
+        size_class="LARGE",
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return row
+
+
 def bearer(staff) -> dict[str, str]:
     """담당자의 Bearer 헤더."""
     from app.core.security import create_access_token
@@ -243,11 +266,28 @@ def _test_router() -> APIRouter:
     return router
 
 
-@pytest.fixture
-def client(db: Session) -> Iterator[TestClient]:
-    """앱 + 테스트 전용 라우트. 앱의 get_db를 테스트의 db 세션으로 바꿔 끼운다(commit은 세이브포인트만 확정)."""
-    from app.api.deps import get_db
+@pytest.fixture(scope="session")
+def api_app() -> FastAPI:
+    """앱 + 테스트 전용 라우트. 세션에 하나만 만든다."""
     from app.main import API_PREFIX, create_app
+
+    app = create_app()
+    app.include_router(_test_router(), prefix=API_PREFIX)
+    return app
+
+
+@pytest.fixture(scope="session")
+def api_client(api_app: FastAPI) -> Iterator[TestClient]:
+    # TestClient 하나가 이벤트 루프 스레드와 loopback 소켓 쌍을 만든다. 테스트마다 새로 만들면 Windows에서
+    # 소켓 쌍 생성이 간헐적으로 실패해(WinError 10014) 세션에 하나만 두고, 테스트마다 get_db만 바꿔 끼운다.
+    with TestClient(api_app) as client:
+        yield client
+
+
+@pytest.fixture
+def client(db: Session, api_app: FastAPI, api_client: TestClient) -> Iterator[TestClient]:
+    """앱의 get_db를 테스트의 db 세션으로 바꿔 끼운 클라이언트(commit은 세이브포인트만 확정)."""
+    from app.api.deps import get_db
 
     def test_db() -> Iterator[Session]:
         # 요청마다 세이브포인트 하나. 요청이 실패해도 픽스처가 만든 행은 남고, 요청이 한 일만 되돌아간다.
@@ -259,8 +299,8 @@ def client(db: Session) -> Iterator[TestClient]:
             request_tx.rollback()
             raise
 
-    app = create_app()
-    app.include_router(_test_router(), prefix=API_PREFIX)
-    app.dependency_overrides[get_db] = test_db
-    with TestClient(app) as client:
-        yield client
+    api_app.dependency_overrides[get_db] = test_db
+    try:
+        yield api_client
+    finally:
+        api_app.dependency_overrides.pop(get_db, None)

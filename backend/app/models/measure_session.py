@@ -14,7 +14,7 @@ from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String, Uuid,
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
-from app.models.enums import SessionStatus, check_in
+from app.models.enums import SessionStatus, SizeClass, check_in
 
 if TYPE_CHECKING:
     from app.models.dog import Dog
@@ -28,6 +28,7 @@ class MeasureSession(Base):
     __tablename__ = "measure_session"
     __table_args__ = (
         check_in("status", SessionStatus, name="ck_session_status"),
+        check_in("size_class", SizeClass, name="ck_session_size_class"),
         Index("ix_session_dog_date", "dog_id", "measured_on"),
     )
 
@@ -38,6 +39,8 @@ class MeasureSession(Base):
     measured_on: Mapped[date] = mapped_column(Date)
     # 측정한 날 체중
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    # 회차 시점 체급(12.5): 시작할 때 그날 체중(없으면 등록 체중)으로 정하고, 반려견 체급이 바뀌어도 그대로다
+    size_class: Mapped[str] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(
         String(20), default=SessionStatus.MEASURING, server_default=SessionStatus.MEASURING.value
     )

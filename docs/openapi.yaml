@@ -1048,7 +1048,7 @@ components:
         weight_kg: {type: [number, 'null'], minimum: 0.5, maximum: 100.0, description: 그날 체중, example: 28.1}
     SessionOut:
       type: object
-      required: [id, dog_id, staff, measured_on, weight_kg, status, fail_reason, model_name, model_version,
+      required: [id, dog_id, staff, measured_on, weight_kg, size_class, status, fail_reason, model_name, model_version,
                  completed_at, aggregated_at, created_at]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
@@ -1061,6 +1061,9 @@ components:
             name: {type: string, example: 김담당}
         measured_on: {type: string, format: date, example: '2026-10-20'}
         weight_kg: {type: [number, 'null'], example: 28.1}
+        size_class:
+          allOf: [{$ref: '#/components/schemas/SizeClass'}]
+          description: 회차를 시작한 시점의 체급. 그날 체중(없으면 등록 체중)으로 정하며 반려견의 지금 체급과 다를 수 있다
         status: {$ref: '#/components/schemas/SessionStatus'}
         fail_reason: {$ref: '#/components/schemas/NullableReason'}
         model_name: {type: [string, 'null'], example: null}

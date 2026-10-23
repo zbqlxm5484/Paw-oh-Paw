@@ -1,4 +1,4 @@
-"""GET /api/v1/health(15.9, BE-20). 지금은 DB만 검사한다. 저장소 검사는 작업 단위 5에서 더한다."""
+"""GET /api/v1/health(15.9, BE-20): DB 접속과 저장소 쓰기 검사."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +8,11 @@ import app.api.routes.health as health_route
 from app import __version__
 
 
+class _BrokenStorage:
+    def check_writable(self) -> None:
+        raise PermissionError("disk is read-only")
+
+
 def test_version_matches_api_document() -> None:
     assert __version__ == "1.0.0"
 
@@ -15,7 +20,7 @@ def test_version_matches_api_document() -> None:
 def test_health_ok_without_token(client: TestClient) -> None:
     response = client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "db": "ok", "version": "1.0.0"}
+    assert response.json() == {"status": "ok", "db": "ok", "storage": "ok", "version": "1.0.0"}
 
 
 def test_health_is_503_with_error_status_when_db_is_down(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -23,4 +28,11 @@ def test_health_is_503_with_error_status_when_db_is_down(client: TestClient, mon
     monkeypatch.setattr(health_route, "get_engine", lambda: dead)
     response = client.get("/api/v1/health")
     assert response.status_code == 503
-    assert response.json() == {"status": "error", "db": "error", "version": "1.0.0"}
+    assert response.json() == {"status": "error", "db": "error", "storage": "ok", "version": "1.0.0"}
+
+
+def test_health_is_503_when_storage_is_not_writable(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(health_route, "get_storage", lambda: _BrokenStorage())
+    response = client.get("/api/v1/health")
+    assert response.status_code == 503
+    assert response.json() == {"status": "error", "db": "ok", "storage": "error", "version": "1.0.0"}
