@@ -42,6 +42,22 @@ src/
   styles/     tokens.css(디자인 토큰), global.css
 ```
 
+## 안드로이드 앱 (Capacitor)
+
+같은 React 빌드를 WebView 에 넣은 앱이다. 코틀린 코드는 Capacitor 가 만든 껍데기(`android/`)뿐이다.
+
+```bash
+cp .env.android.example .env.android   # VITE_API_BASE 에 서버 주소
+npm run build:android                  # 서비스 워커 없이 빌드 → android/ 로 복사
+npm run android:apk                    # android/gradlew assembleDebug → android/app/build/outputs/apk/debug/app-debug.apk
+npm run android:open                   # Android Studio 로 열기
+```
+
+- APK 를 만들려면 JDK 17 과 Android SDK(platform 35, build-tools)가 필요하다. 없으면 Android Studio 를 깔거나 command-line tools 로 `sdkmanager "platforms;android-35" "build-tools;35.0.0"` 를 받는다.
+- 앱 안의 origin 은 `https://localhost` 라 백엔드 `CORS_ORIGINS` 에 `https://localhost` 를 더해야 한다. 에뮬레이터에서 호스트 PC 의 백엔드는 `http://10.0.2.2:8000`.
+- 촬영하기는 WebView 의 파일 선택기가 기기 카메라를 여는 방식이다(`CAMERA` 권한 포함). 갤러리는 `READ_MEDIA_VIDEO`.
+- 세로 고정이고, 런처 아이콘·스플래시는 디자인 로고로 만들어 두었다(`android/app/src/main/res`).
+
 ## 확인
 
 ```bash
