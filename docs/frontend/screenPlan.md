@@ -257,7 +257,7 @@ frontend/src/
 | 날짜 | 내용 |
 | --- | --- |
 | 10-22 | 0~3단계 구현(뼈대·토큰·로그인·반려견 화면), MSW 가짜 서버 |
-| 10-23 | Capacitor 안드로이드 포장(`frontend/android/`, `capacitor.config.ts`, `npm run build:android`·`android:apk`). 서비스 워커는 빼고 `VITE_API_BASE` 로 서버 주소를 넣는다. 카메라·영상 권한, 세로 고정, 로고 아이콘·스플래시. 이 PC 에 Android SDK 가 없어 APK 빌드는 SDK 설치 뒤에 |
+| 10-23 | Capacitor 안드로이드 포장(`frontend/android/`, `capacitor.config.ts`, `npm run build:android`·`android:apk`). 서비스 워커는 빼고 `VITE_API_BASE` 로 서버 주소를 넣는다. 카메라·영상 권한, 세로 고정, 로고 아이콘·스플래시. Android SDK(command-line tools, platform 36, build-tools 36)를 설치하고 JDK 21 로 `app-debug.apk`(11MB) 빌드 확인. 백엔드 `CORS_ORIGINS` 에 `https://localhost` 추가 필요 |
 | 10-23 | 웹 v2 데스크톱 레이아웃(`src/features/web/`, `app/WebShell.tsx`, `app/useIsDesktop.ts`): 랜딩(영상 히어로·Main Service 세 블록·서비스 소개 스크롤 스테이지·푸터), 홈(반려견 띠·요약 카드·최근 회차 KPI·이력 표·최근 분석), 영상 올리기(드래그앤드롭), 분석 결과 표, 회차 결과, 경과 비교 2단, 마이페이지·기본 정보. 디자인 자산은 내보내기 HTML 묶음에서 풀어 넣고 사진은 WebP(17MB→5MB), 글꼴은 자체 호스팅. 폰 프레임은 412×915 |
 | 10-23 | 6~11단계 구현: 촬영 상세(영상·유효 구간·각도 곡선), 회차 결과, 보고서(PDF 미리보기·재생성), 경과 비교·추이, 분석 결과 목록, 랜딩·스플래시·서비스 소개, PWA(manifest·서비스 워커, `/api` 는 캐시 안 함). 디자인 자산(logo·story PNG, landing.mp4)은 Claude Design 에서 256KB 넘는 파일을 못 받아 글자 로고·SVG 로 대신했다. PNG 를 넣을 때는 `frontend/public/` 에 두면 된다(.gitignore 예외 추가) |
 | 10-23 | 4~5단계 구현(회차 시작·영상 업로드·측정 종료·집계 중). 백엔드 브랜치 S15P31A404-70(작업 단위 5)을 Docker로 띄워 실제 연결 확인: 로그인, 반려견 등록, 회차 시작, 영상 업로드(201), 세로 영상 거부(400 VIDEO_PORTRAIT) 통과. 그 브랜치에 아직 없는 API: `GET /dogs/{id}/sessions`(405), `POST /sessions/{id}/complete`(404), `DELETE /shots/{id}`(404), `POST /shots/{id}/retry`, 촬영 분석 워커(촬영이 UPLOADED 에 머묾). 화면은 서버 오류 문구를 그대로 보여 주고 다음 작업 단위에서 붙는다 |
