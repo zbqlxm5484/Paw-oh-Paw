@@ -88,14 +88,18 @@ export function Pick({ on, children, onClick }: { on: boolean; children: ReactNo
 }
 
 /* ---------- 카드·배지·아바타 ---------- */
-export function Card({ className = '', children, onClick }: { className?: string; children: ReactNode; onClick?: () => void }) {
+export function Card({ className = '', children, onClick, style }: { className?: string; children: ReactNode; onClick?: () => void; style?: React.CSSProperties }) {
   if (onClick)
     return (
-      <button type="button" className={`card card-btn ${className}`} onClick={onClick}>
+      <button type="button" className={`card card-btn ${className}`} onClick={onClick} style={style}>
         {children}
       </button>
     )
-  return <div className={`card ${className}`}>{children}</div>
+  return (
+    <div className={`card ${className}`} style={style}>
+      {children}
+    </div>
+  )
 }
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {

@@ -1,14 +1,15 @@
 /**
- * MSW 핸들러. api-spec v1.0 의 로그인·반려견·이력 API 만 흉내 낸다(이식 0~3단계).
+ * MSW 핸들러. api-spec v1.0(명세 v1.5) 의 로그인·반려견·이력·회차 측정 API 를 흉내 낸다(이식 0~5단계).
  * 오류 모양 `{error: {code, message, detail}}` 과 상태 코드는 명세와 같게 둔다.
  */
 import { HttpResponse, delay, http } from 'msw'
 
-import type { DogCreate, DogUpdate, LoginIn } from '../api/types'
-import { MOCK_STAFF, classifySize, dogs, historyOf, newId, sessions, toDogOut } from './db'
+import type { DogCreate, DogUpdate, LoginIn, SessionCreate } from '../api/types'
+import { MOCK_STAFF, classifySize, dogs, findDog, historyOf, newId, reason, sessions, simulateAggregation, simulateAnalysis, toDogOut, toSessionDetail, toSessionOut, type MockShot } from './db'
 
 const BASE = '/api/v1'
 const TOKEN = 'mock-token'
+const TODAY = () => new Date().toISOString().slice(0, 10)
 
 function err(status: number, code: string, message: string, detail: Record<string, unknown> | null = null) {
   return HttpResponse.json({ error: { code, message, detail } }, { status })
@@ -19,6 +20,7 @@ function authed(req: Request) {
 }
 
 const unauthorized = () => err(401, 'AUTH_REQUIRED', '로그인이 필요합니다.')
+const notFound = () => err(404, 'NOT_FOUND', '요청한 정보를 찾을 수 없습니다.')
 
 /** 422 VALIDATION_ERROR 를 명세 모양으로 */
 function validate(body: Partial<DogCreate>, partial: boolean) {
@@ -41,9 +43,21 @@ function validate(body: Partial<DogCreate>, partial: boolean) {
     const y = Number(body.birth_year)
     if (!Number.isInteger(y) || y < 1990 || y > 2026) fields.push({ field: 'birth_year', type: 'value_error' })
   }
-  if (body.rehab_start_date && body.rehab_start_date > '2026-10-22') fields.push({ field: 'rehab_start_date', type: 'value_error' })
+  if (body.rehab_start_date && body.rehab_start_date > TODAY()) fields.push({ field: 'rehab_start_date', type: 'value_error' })
   return fields
 }
+
+function findSession(id: string | readonly string[] | undefined) {
+  return sessions.find((s) => s.id === id)
+}
+function findShot(id: string | readonly string[] | undefined) {
+  for (const s of sessions) {
+    const sh = s.shots.find((x) => x.id === id)
+    if (sh) return { session: s, shot: sh }
+  }
+  return null
+}
+const inProgress = (st: MockShot['status']) => st === 'SUBMITTED' || st === 'ANALYZING'
 
 export const handlers = [
   http.get(`${BASE}/health`, () => HttpResponse.json({ status: 'ok', db: 'ok', storage: 'ok', version: 'mock' })),
@@ -126,16 +140,16 @@ export const handlers = [
 
   http.get(`${BASE}/dogs/:dogId`, ({ request, params }) => {
     if (!authed(request)) return unauthorized()
-    const row = dogs.find((d) => d.id === params.dogId)
-    if (!row) return err(404, 'NOT_FOUND', '요청한 정보를 찾을 수 없습니다.')
+    const row = findDog(params.dogId)
+    if (!row) return notFound()
     return HttpResponse.json(toDogOut(row))
   }),
 
   http.patch(`${BASE}/dogs/:dogId`, async ({ request, params }) => {
     if (!authed(request)) return unauthorized()
     await delay(300)
-    const row = dogs.find((d) => d.id === params.dogId)
-    if (!row) return err(404, 'NOT_FOUND', '요청한 정보를 찾을 수 없습니다.')
+    const row = findDog(params.dogId)
+    if (!row) return notFound()
     const body = (await request.json()) as DogUpdate
     const fields = validate(body, true)
     if (fields.length) return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', { fields })
@@ -173,9 +187,122 @@ export const handlers = [
   http.get(`${BASE}/dogs/:dogId/sessions`, async ({ request, params }) => {
     if (!authed(request)) return unauthorized()
     await delay(250)
-    const row = dogs.find((d) => d.id === params.dogId)
-    if (!row) return err(404, 'NOT_FOUND', '요청한 정보를 찾을 수 없습니다.')
+    const row = findDog(params.dogId)
+    if (!row) return notFound()
     const items = historyOf(row.id)
     return HttpResponse.json({ items, total: items.length, page: 1, size: 100 })
+  }),
+
+  // ---------- 회차 측정 (api-spec 6절) ----------
+  http.post(`${BASE}/dogs/:dogId/sessions`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(350)
+    const dog = findDog(params.dogId)
+    if (!dog) return notFound()
+    const body = ((await request.text()) ? JSON.parse(await Promise.resolve('{}')) : {}) as SessionCreate
+    // request.text() 는 한 번만 읽힌다. 위에서 읽었으므로 다시 파싱한다
+    void body
+    const raw = await request.clone().text().catch(() => '')
+    const data = (raw ? (JSON.parse(raw) as SessionCreate) : {}) ?? {}
+    const open = sessions.find((s) => s.dog_id === dog.id && s.status === 'MEASURING')
+    if (open) return err(409, 'SESSION_ALREADY_OPEN', '이 반려견은 이미 측정 중인 회차가 있습니다.', { session_id: open.id })
+    const measured_on = data.measured_on ?? TODAY()
+    if (measured_on > TODAY()) return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', { fields: [{ field: 'measured_on', type: 'value_error' }] })
+    const w = data.weight_kg == null ? null : Number(data.weight_kg)
+    if (w != null && (!Number.isFinite(w) || w < 0.5 || w > 100)) return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', { fields: [{ field: 'weight_kg', type: 'value_error' }] })
+    const s = {
+      id: newId(), dog_id: dog.id, staff: { id: MOCK_STAFF.id, name: MOCK_STAFF.name }, measured_on, weight_kg: w,
+      // 회차 체급: 그날 체중(없으면 등록 체중), 직접 지정한 체급이 있으면 그 값(명세 v1.5)
+      size_class: dog.size_class_manual ? dog.size_class : classifySize(w ?? dog.weight_kg),
+      status: 'MEASURING' as const, fail_reason: null, model_name: null, model_version: null, completed_at: null, aggregated_at: null,
+      created_at: new Date().toISOString(), shots: [] as MockShot[], reports: null,
+    }
+    sessions.push(s)
+    return HttpResponse.json(toSessionOut(s), { status: 201 })
+  }),
+
+  http.get(`${BASE}/sessions/:sessionId`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(150)
+    const s = findSession(params.sessionId)
+    if (!s) return notFound()
+    return HttpResponse.json(toSessionDetail(s))
+  }),
+
+  http.delete(`${BASE}/sessions/:sessionId`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(300)
+    const s = findSession(params.sessionId)
+    if (!s) return notFound()
+    if (s.status !== 'MEASURING') return err(409, 'SESSION_CLOSED', '측정이 끝난 회차입니다.')
+    if (s.shots.some((sh) => inProgress(sh.status))) return err(409, 'SHOT_IN_PROGRESS', '분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.')
+    sessions.splice(sessions.indexOf(s), 1)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post(`${BASE}/sessions/:sessionId/shots`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    const s = findSession(params.sessionId)
+    if (!s) return notFound()
+    if (s.status !== 'MEASURING') return err(409, 'SESSION_CLOSED', '측정이 끝난 회차입니다.')
+    const form = await request.formData().catch(() => null)
+    const file = form?.get('file')
+    if (!(file instanceof File)) return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', { fields: [{ field: 'file', type: 'missing' }] })
+    const name = file.name.toLowerCase()
+    // 13.1 검사 흉내: 확장자, 크기, 이름에 portrait 가 들어 있으면 세로 영상
+    if (!/\.(mp4|mov)$/.test(name) && !file.type.startsWith('video/')) return err(400, 'VIDEO_FORMAT', 'MP4 또는 MOV 영상만 올릴 수 있습니다.')
+    if (file.size > 100 * 1024 * 1024) return err(413, 'VIDEO_TOO_LARGE', '영상 파일이 너무 큽니다. 최대 100 MB까지 올릴 수 있습니다.', { max_mb: 100 })
+    if (name.includes('portrait')) return err(400, 'VIDEO_PORTRAIT', '가로로 촬영한 영상만 올릴 수 있습니다.', { width: 1080, height: 1920 })
+    await delay(900)
+    const seq = (s.shots.reduce((m, x) => Math.max(m, x.seq_no), 0) || 0) + 1
+    const below = name.includes('low')
+    const shot: MockShot = {
+      session_id: s.id, id: newId(), seq_no: seq, status: 'UPLOADED', fail_reason: null, validity: null, validity_reason: null,
+      video_status: 'PENDING', below_min_spec: below, passes: [], uploaded_at: new Date().toISOString(), analyzed_at: null,
+    }
+    s.shots.push(shot)
+    simulateAnalysis(shot, file.name)
+    const { session_id: _sid, ...out } = shot
+    return HttpResponse.json({ ...out, warnings: below ? [reason('BELOW_MIN_SPEC')] : [] }, { status: 201 })
+  }),
+
+  http.post(`${BASE}/sessions/:sessionId/complete`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(300)
+    const s = findSession(params.sessionId)
+    if (!s) return notFound()
+    if (s.status !== 'MEASURING') return err(409, 'SESSION_CLOSED', '측정이 끝난 회차입니다.')
+    if (!s.shots.length) return err(409, 'SESSION_EMPTY', '촬영이 1건 이상 있어야 측정을 끝낼 수 있습니다.')
+    s.status = 'AGGREGATING'
+    s.completed_at = new Date().toISOString()
+    simulateAggregation(s)
+    return HttpResponse.json(toSessionOut(s))
+  }),
+
+  http.post(`${BASE}/shots/:shotId/retry`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(300)
+    const found = findShot(params.shotId)
+    if (!found) return notFound()
+    const { session, shot } = found
+    if (shot.status !== 'FAILED') return err(409, 'SHOT_NOT_FAILED', '실패한 촬영만 다시 분석할 수 있습니다.')
+    if (session.status !== 'MEASURING') return err(409, 'SESSION_CLOSED', '측정이 끝난 회차입니다.')
+    shot.status = 'UPLOADED'
+    shot.fail_reason = null
+    simulateAnalysis(shot, 'retry.mp4')
+    const { session_id: _sid, ...out } = shot
+    return HttpResponse.json(out)
+  }),
+
+  http.delete(`${BASE}/shots/:shotId`, async ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(300)
+    const found = findShot(params.shotId)
+    if (!found) return notFound()
+    const { session, shot } = found
+    if (session.status !== 'MEASURING') return err(409, 'SESSION_CLOSED', '측정이 끝난 회차입니다.')
+    if (inProgress(shot.status)) return err(409, 'SHOT_IN_PROGRESS', '분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.')
+    session.shots.splice(session.shots.indexOf(shot), 1)
+    return new HttpResponse(null, { status: 204 })
   }),
 ]

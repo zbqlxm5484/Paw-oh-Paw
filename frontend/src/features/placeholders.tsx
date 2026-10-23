@@ -1,10 +1,10 @@
 /** 아직 이식하지 않은 화면의 자리. screenPlan 4~11단계에서 채운다. */
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../app/auth'
 import { Icon } from '../components/Icon'
-import { Button, Card, Empty, Sheet, TopBar } from '../components/ui'
+import { Button, Card, Empty, Sheet } from '../components/ui'
 
 function Placeholder({ title, step, children }: { title: string; step: string; children?: React.ReactNode }) {
   return (
@@ -30,33 +30,6 @@ export function StoryPlaceholder() {
 
 export function ResultsPlaceholder() {
   return <Placeholder title="분석 결과" step="7단계" />
-}
-
-export function CapturePlaceholder() {
-  const nav = useNavigate()
-  const loc = useLocation()
-  const st = loc.state as { dogId?: string; sessionId?: string | null } | null
-  return (
-    <div className="screen">
-      <TopBar title="보행 분석" />
-      <div className="scroll screen-body">
-        <Empty>
-          측정 화면은 다음 단계(4~5단계)에서 붙어요.
-          {st?.dogId && (
-            <>
-              <br />
-              <span className="small">반려견 {st.dogId.slice(0, 8)}… {st.sessionId ? '· 진행 중 회차 있음' : ''}</span>
-            </>
-          )}
-        </Empty>
-      </div>
-      <div className="sticky-footer">
-        <Button variant="secondary" onClick={() => nav(-1)}>
-          돌아가기
-        </Button>
-      </div>
-    </div>
-  )
 }
 
 /** 마이페이지 최소판: 담당자·기관 표시와 로그아웃. 나머지는 10단계. */

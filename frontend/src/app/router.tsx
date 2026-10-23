@@ -4,7 +4,10 @@ import { LoginPage } from '../features/auth/LoginPage'
 import { DogDetailPage } from '../features/dogs/DogDetailPage'
 import { HomePage } from '../features/dogs/HomePage'
 import { PetFormPage } from '../features/dogs/PetFormPage'
-import { CapturePlaceholder, MyPage, ResultsPlaceholder, StoryPlaceholder } from '../features/placeholders'
+import { MyPage, ResultsPlaceholder, StoryPlaceholder } from '../features/placeholders'
+import { CaptureSelectPage } from '../features/sessions/CaptureSelectPage'
+import { SessionPage } from '../features/sessions/SessionPage'
+import { SessionResultPlaceholder } from '../features/sessions/SessionResultPlaceholder'
 import { useAuth } from './auth'
 import { AppFrame, TabLayout } from './Layout'
 
@@ -48,7 +51,9 @@ export const router = createBrowserRouter([
           { path: '/dogs/new', element: <PetFormPage mode="new" /> },
           { path: '/dogs/:dogId', element: <DogDetailPage /> },
           { path: '/dogs/:dogId/edit', element: <PetFormPage mode="edit" /> },
-          { path: '/capture', element: <CapturePlaceholder /> },
+          { path: '/capture', element: <CaptureSelectPage /> },
+          { path: '/sessions/:sessionId', element: <SessionPage /> },
+          { path: '/sessions/:sessionId/result', element: <SessionResultPlaceholder /> },
         ],
       },
       { path: '*', element: <Navigate to="/" replace /> },

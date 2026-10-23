@@ -72,13 +72,13 @@ export function HomePage() {
 
         <Card className="card-rows" >
           {measuring && (
-            <button type="button" className="row-item" onClick={() => nav(`/dogs/${measuring.id}`)}>
+            <button type="button" className="row-item" onClick={() => nav(`/sessions/${measuring.open_session_id}`)}>
               <div className="row-icon" style={{ background: '#141B22' }}>
                 <span className="live-dot" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row-title">{measuring.name} 측정 중</div>
-                <div className="row-sub">진행 중인 회차가 있어요. 눌러서 이어서 측정해요.</div>
+                <div className="row-sub">진행 중인 회차가 있어요. 눌러서 이어서 측정하거나 분석 상태를 봐요.</div>
               </div>
               <Icon name="chev" size={18} style={{ color: 'var(--dim)' }} />
             </button>

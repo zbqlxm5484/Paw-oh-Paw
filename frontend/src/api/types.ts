@@ -103,3 +103,74 @@ export interface SessionHistoryItem {
   model_version: string | null
   reports: { OWNER: ReportStatus; VET: ReportStatus } | null
 }
+
+/* ---------- 회차 측정 (api-spec 6절, 명세 v1.5: SessionOut.size_class) ---------- */
+
+export type ShotStatus = 'UPLOADED' | 'SUBMITTED' | 'ANALYZING' | 'DONE' | 'FAILED'
+export type Validity = 'VALID' | 'PARTIAL' | 'INVALID'
+export type VideoStatus = 'PENDING' | 'READY' | 'FAILED'
+export type CameraSide = 'LEFT' | 'RIGHT'
+export type GaitType = 'WALK' | 'TROT' | 'PACE' | 'OTHER'
+
+export interface SessionCreate {
+  measured_on?: string
+  weight_kg?: number | null
+}
+
+export interface SessionOut {
+  id: string
+  dog_id: string
+  staff: { id: string; name: string }
+  measured_on: string
+  weight_kg: number | null
+  /** 회차를 시작한 시점의 체급. 반려견의 지금 체급과 다를 수 있다 */
+  size_class: SizeClass
+  status: SessionStatus
+  fail_reason: Reason | null
+  model_name: string | null
+  model_version: string | null
+  completed_at: string | null
+  aggregated_at: string | null
+  created_at: string
+}
+
+export interface PassOut {
+  pass_no: number
+  camera_side: CameraSide
+  gait_type: GaitType
+  is_valid: boolean
+  exclude_reason: Reason | null
+  start_frame: number
+  end_frame: number
+}
+
+export interface ShotOut {
+  id: string
+  seq_no: number
+  status: ShotStatus
+  fail_reason: Reason | null
+  validity: Validity | null
+  validity_reason: Reason | null
+  video_status: VideoStatus
+  below_min_spec: boolean
+  passes: PassOut[]
+  uploaded_at: string
+  analyzed_at: string | null
+}
+
+export interface ShotUploadOut extends ShotOut {
+  warnings: Reason[]
+}
+
+export interface SideProgress {
+  valid_passes: number
+  recommended: number
+}
+
+export interface SessionDetailOut extends SessionOut {
+  dog: { id: string; name: string; breed: string; weight_kg: number; size_class: SizeClass }
+  progress: { LEFT: SideProgress; RIGHT: SideProgress }
+  notices: Reason[]
+  /** 최신이 위(seq_no 내림차순) */
+  shots: ShotOut[]
+}

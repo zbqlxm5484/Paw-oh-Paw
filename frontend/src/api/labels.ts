@@ -1,5 +1,5 @@
 /** API 값 → 화면 문구. api-spec 10절. 한 곳에서만 바꾼다. */
-import type { Limb, ReportStatus, SessionStatus, Sex, SizeClass } from './types'
+import type { CameraSide, GaitType, Limb, ReportStatus, SessionStatus, Sex, ShotStatus, SizeClass, Validity } from './types'
 
 export const SEX_LABEL: Record<Sex, string> = {
   MALE: '수컷',
@@ -82,4 +82,30 @@ export function dogDesc(d: { breed: string; birth_year: number | null; weight_kg
   return [d.breed || '견종 미입력', d.birth_year ? `${d.birth_year}년생` : null, d.weight_kg ? `${d.weight_kg}kg` : null]
     .filter(Boolean)
     .join(' · ')
+}
+
+export const SHOT_STATUS_LABEL: Record<ShotStatus, string> = {
+  UPLOADED: '분석 대기',
+  SUBMITTED: '분석 요청',
+  ANALYZING: '분석 중',
+  DONE: '분석 완료',
+  FAILED: '실패',
+}
+export const SHOT_STATUS_TONE: Record<ShotStatus, Tone> = {
+  UPLOADED: 'neutral',
+  SUBMITTED: 'warn',
+  ANALYZING: 'warn',
+  DONE: 'ok',
+  FAILED: 'bad',
+}
+
+export const VALIDITY_LABEL: Record<Validity, string> = { VALID: '유효', PARTIAL: '일부 유효', INVALID: '무효' }
+export const VALIDITY_TONE: Record<Validity, Tone> = { VALID: 'ok', PARTIAL: 'warn', INVALID: 'bad' }
+
+export const CAMERA_SIDE_LABEL: Record<CameraSide, string> = { LEFT: '왼쪽', RIGHT: '오른쪽' }
+export const GAIT_LABEL: Record<GaitType, string> = { WALK: '평보', TROT: '속보', PACE: '측대보', OTHER: '기타' }
+
+/** 분석 중 촬영(SUBMITTED·ANALYZING)이 있으면 삭제·취소를 막는다(api-spec 10.2) */
+export function isShotInProgress(status: ShotStatus): boolean {
+  return status === 'SUBMITTED' || status === 'ANALYZING'
 }

@@ -50,8 +50,10 @@ export function DogDetailPage() {
     if (!dog) return
     if (dog.open_session_id) {
       toast('진행 중인 회차로 이어서 측정해요')
+      nav(`/sessions/${dog.open_session_id}`)
+      return
     }
-    nav('/capture', { state: { dogId: dog.id, sessionId: dog.open_session_id } })
+    nav(`/capture?dog=${dog.id}`)
   }
 
   function compare() {
@@ -114,7 +116,7 @@ export function DogDetailPage() {
             {total > 0 && (
               <Card className="hist-card">
                 {hist.map((h) => (
-                  <HistItem key={h.id} h={h} no={sessionNo(hist, h)} onOpen={() => toast('회차 결과는 다음 단계에서 붙어요')} onSetBase={() => setBaseline(h)} busy={update.isPending} />
+                  <HistItem key={h.id} h={h} no={sessionNo(hist, h)} onOpen={() => nav(h.status === 'DONE' ? `/sessions/${h.id}/result` : h.status === 'FAILED' || h.status === 'MEASURING' || h.status === 'AGGREGATING' ? `/sessions/${h.id}` : `/sessions/${h.id}`)} onSetBase={() => setBaseline(h)} busy={update.isPending} />
                 ))}
               </Card>
             )}
