@@ -1,0 +1,229 @@
+/* 홈 */
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 12px 20px;
+}
+.home-kind {
+  font-size: 12px;
+  color: var(--sub);
+  font-weight: 600;
+}
+.home-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.search {
+  height: 48px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: var(--dim2);
+}
+.search:focus-within {
+  border-color: var(--pri);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 15.5px;
+  color: var(--ink);
+}
+
+.first-dog {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.dog-row {
+  padding: 14px 12px 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--pri);
+  box-shadow: 0 0 0 4px rgba(210, 96, 26, 0.35);
+}
+
+.skeleton {
+  height: 84px;
+  border-radius: var(--r-card);
+  background: linear-gradient(90deg, #f2efea 25%, #faf8f4 50%, #f2efea 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* 반려견 상세 */
+.dog-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dog-hero-name {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+.dog-hero-desc {
+  font-size: 14px;
+  color: var(--sub);
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.info-card {
+  padding: 4px 18px;
+}
+.info-card > b {
+  display: block;
+  font-size: 15px;
+  padding: 12px 0 8px;
+}
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line2);
+}
+.info-row .k {
+  font-size: 14px;
+  color: var(--sub);
+  flex: none;
+}
+.info-row .v {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+.info-row .v > span:first-child {
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: right;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.info-row .v .sub {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.hist-card {
+  padding: 0 16px;
+}
+.hist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line2);
+  width: 100%;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.hist-item:first-child {
+  border-top: 0;
+}
+.hist-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hist-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hist-title b {
+  font-size: 15px;
+}
+.hist-sub {
+  font-size: 12.5px;
+  color: var(--sub);
+}
+.hist-base-btn {
+  align-self: flex-start;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--pri-d);
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.footer-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 10px;
+}
+
+/* 등록·수정 */
+.photo-slot {
+  align-self: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1.5px dashed #d9d2c7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 600;
+}
+.divider {
+  height: 1px;
+  background: var(--line);
+  margin-top: 6px;
+}
+.optional {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dim);
+}
