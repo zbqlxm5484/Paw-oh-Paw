@@ -61,7 +61,7 @@ export function DogDetailPage() {
       toast('완료된 회차가 2개 이상 있어야 비교할 수 있어요')
       return
     }
-    toast('경과 비교는 다음 단계에서 붙어요')
+    nav(`/dogs/${dogId}/compare`)
   }
 
   const baseline = hist.find((h) => h.is_baseline)

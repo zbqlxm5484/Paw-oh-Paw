@@ -28,10 +28,6 @@ export function StoryPlaceholder() {
   return <Placeholder title="서비스 소개" step="10단계" />
 }
 
-export function ResultsPlaceholder() {
-  return <Placeholder title="분석 결과" step="7단계" />
-}
-
 /** 마이페이지 최소판: 담당자·기관 표시와 로그아웃. 나머지는 10단계. */
 export function MyPage() {
   const { staff, logout } = useAuth()

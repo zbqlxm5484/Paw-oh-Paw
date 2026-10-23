@@ -1,5 +1,5 @@
 /** API 값 → 화면 문구. api-spec 10절. 한 곳에서만 바꾼다. */
-import type { CameraSide, GaitType, Limb, ReportStatus, SessionStatus, Sex, ShotStatus, SizeClass, Validity } from './types'
+import type { CameraSide, Edition, GaitType, JointCode, Judgement, Limb, MetricLimb, Pair, ReportStatus, SessionStatus, Sex, ShotStatus, SizeClass, Unit, Validity } from './types'
 
 export const SEX_LABEL: Record<Sex, string> = {
   MALE: '수컷',
@@ -108,4 +108,70 @@ export const GAIT_LABEL: Record<GaitType, string> = { WALK: '평보', TROT: '속
 /** 분석 중 촬영(SUBMITTED·ANALYZING)이 있으면 삭제·취소를 막는다(api-spec 10.2) */
 export function isShotInProgress(status: ShotStatus): boolean {
   return status === 'SUBMITTED' || status === 'ANALYZING'
+}
+
+/* ---------- 회차 결과·비교 (api-spec 10.3, 10.4) ---------- */
+
+export const METRIC_LABEL: Record<string, string> = {
+  rom_shoulder: '어깨 가동 범위',
+  rom_elbow: '팔꿈치 가동 범위',
+  rom_carpus: '앞발목 가동 범위',
+  rom_hip: '고관절 가동 범위',
+  rom_stifle: '무릎 가동 범위',
+  rom_tarsus: '뒷발목 가동 범위',
+  stifle_cv: '무릎 움직임 일관성',
+  paw_lift: '발 높이',
+  paw_excursion: '발 움직임 범위',
+  stride_length: '걸음 길이',
+  stance_ratio: '입각기 비율',
+  walk_speed: '보행 속도',
+  gait_cycles: '보행 주기 수',
+}
+export function metricLabel(code: string): string {
+  if (METRIC_LABEL[code]) return METRIC_LABEL[code]
+  if (code.startsWith('angle_median_')) return `${JOINT_LABEL[code.slice(13) as JointCode] ?? code.slice(13)} 각도 중앙값`
+  return code
+}
+
+export const JOINT_LABEL: Record<JointCode, string> = {
+  shoulder: '어깨',
+  elbow: '팔꿈치',
+  carpus: '앞발목',
+  hip: '고관절',
+  stifle: '무릎',
+  tarsus: '뒷발목',
+}
+
+export const UNIT_LABEL: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '몸통/초', count: '회' }
+
+export const PAIR_LABEL: Record<Pair, string> = { FORE: '앞다리', HIND: '뒷다리' }
+export const EDITION_LABEL: Record<Edition, string> = { OWNER: '보호자용', VET: '수의사용' }
+
+export const JUDGEMENT_LABEL: Record<Judgement, string> = {
+  INCREASE: '증가',
+  DECREASE: '감소',
+  WITHIN_RANGE: '범위 안',
+  UNKNOWN: '판단 보류',
+  NOT_COMPARABLE: '비교 불가',
+}
+
+/** 수치 표시 자릿수(screenPlan 5절): 각도 1자리, 비율 정수, 그 밖 1자리 */
+export function fmtMetric(value: number | null | undefined, unit: Unit): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const digits = unit === 'deg' ? 1 : unit === 'pct' || unit === 'pct_body' ? 0 : unit === 'count' ? 0 : 2
+  return `${value.toFixed(digits)}${UNIT_LABEL[unit]}`
+}
+
+/** 앞다리(LF·RF) / 뒷다리(LH·RH) 묶음 */
+export function pairOf(limb: MetricLimb): Pair | null {
+  if (limb === 'LF' || limb === 'RF') return 'FORE'
+  if (limb === 'LH' || limb === 'RH') return 'HIND'
+  return null
+}
+
+/** 서명 주소 처리(api-spec 1.6): /api/v1 로 시작하면 서버 주소를 붙이고, http 면 그대로 */
+export function fileUrl(u: string | null | undefined): string | null {
+  if (!u) return null
+  if (u.startsWith('/api/v1')) return `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ''}${u}`
+  return u
 }
