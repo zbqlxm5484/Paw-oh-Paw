@@ -1,0 +1,121 @@
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font);
+  letter-spacing: -0.2px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--pri-d);
+}
+
+input,
+textarea,
+button {
+  font-family: inherit;
+  letter-spacing: -0.2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--dim);
+}
+
+/* 폰 폭에서는 꽉 채우고, 넓은 화면에서는 가운데 480px 기둥으로 보여 준다 */
+.app-shell {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  background: var(--canvas);
+}
+
+.app-frame {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 640px) {
+  .app-frame {
+    min-height: 100dvh;
+    box-shadow: 0 30px 80px rgba(27, 36, 51, 0.16);
+  }
+}
+
+/* 세로 스크롤 영역. 스크롤바는 숨긴다(디자인 .pp-s) */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 화면 공통 레이아웃 */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+}
+
+.screen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 8px 20px 24px;
+}
+
+/* 탭이 있는 화면은 탭바 높이만큼 아래 여백 */
+.with-tabs {
+  padding-bottom: 110px;
+}
+
+.sticky-footer {
+  flex: none;
+  padding: 12px 20px calc(28px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+p {
+  margin: 0;
+}

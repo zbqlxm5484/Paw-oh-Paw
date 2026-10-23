@@ -1,0 +1,42 @@
+/* 디자인 토큰. docs/frontend/screenPlan.md 3절. 값은 Paw oh Paw 앱 v5 디자인에서 뽑았다. */
+:root {
+  --bg: #faf9f6;
+  --canvas: #e9e6e1;
+  --card: #ffffff;
+  --line: #ece8e2;
+  --line2: #f2efea;
+  --fill: #f2eee8;
+  --fill2: #f1eee9;
+
+  --ink: #1b2433;
+  --ink2: #3a4250;
+  --sub: #5b6472;
+  --dim: #a0a7b2;
+  --dim2: #8e949c;
+  --disabled: #c3c8cf;
+
+  --pri: #d2601a;
+  --pri-d: #b4501a;
+  --pri-l: #fceee3;
+  --pri-ink: #a8481a;
+
+  --ok: #2e8b57;
+  --ok-l: #e8f3ec;
+  --warn: #9a6a12;
+  --warn-l: #faf1df;
+  --bad: #c2412d;
+  --bad-l: #f8e7e3;
+
+  --left: #3b6fe0;
+  --right: #e5604d;
+  --kp: #f2b705;
+
+  --r-card: 16px;
+  --r-btn: 16px;
+  --r-input: 12px;
+  --h-btn: 56px;
+  --h-input: 52px;
+
+  --font: 'Pretendard Variable', Pretendard, system-ui, -apple-system, sans-serif;
+  --shadow-sheet: 0 2px 6px rgba(27, 36, 51, 0.04), 0 10px 30px rgba(27, 36, 51, 0.08);
+}
