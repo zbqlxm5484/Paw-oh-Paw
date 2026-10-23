@@ -10,6 +10,8 @@ data/
 *.avi
 *.jpg
 *.png
+# frontend assets (logo, intro images) are allowed; videos are still ignored
+!frontend/public/**/*.png
 *.pth
 *.pt
 *.onnx

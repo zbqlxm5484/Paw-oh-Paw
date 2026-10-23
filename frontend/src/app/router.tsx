@@ -4,7 +4,9 @@ import { LoginPage } from '../features/auth/LoginPage'
 import { DogDetailPage } from '../features/dogs/DogDetailPage'
 import { HomePage } from '../features/dogs/HomePage'
 import { PetFormPage } from '../features/dogs/PetFormPage'
-import { MyPage, StoryPlaceholder } from '../features/placeholders'
+import { MyPage } from '../features/placeholders'
+import { IntroPage } from '../features/intro/IntroPage'
+import { WelcomePage } from '../features/intro/WelcomePage'
 import { ComparePage } from '../features/results/ComparePage'
 import { ReportPage } from '../features/results/ReportPage'
 import { ResultsPage } from '../features/results/ResultsPage'
@@ -20,7 +22,8 @@ function RequireAuth() {
   const { loggedIn, checking } = useAuth()
   const loc = useLocation()
   if (checking) return <div className="screen" />
-  if (!loggedIn) return <Navigate to="/login" replace state={{ from: loc.pathname }} />
+  // 로그인 전 첫 진입은 랜딩으로, 깊은 주소로 들어왔으면 로그인 뒤 그 주소로 돌려보낸다
+  if (!loggedIn) return loc.pathname === '/' ? <Navigate to="/welcome" replace /> : <Navigate to="/login" replace state={{ from: loc.pathname }} />
   return <Outlet />
 }
 
@@ -38,7 +41,14 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <GuestOnly />,
-        children: [{ path: '/login', element: <LoginPage /> }],
+        children: [
+          { path: '/welcome', element: <WelcomePage /> },
+          { path: '/login', element: <LoginPage /> },
+        ],
+      },
+      // 로그인 여부와 상관없이 볼 수 있는 화면
+      {
+        children: [{ path: '/intro', element: <IntroPage /> }],
       },
       {
         element: <RequireAuth />,
@@ -47,7 +57,7 @@ export const router = createBrowserRouter([
             element: <TabLayout />,
             children: [
               { path: '/', element: <HomePage /> },
-              { path: '/story', element: <StoryPlaceholder /> },
+              { path: '/story', element: <IntroPage /> },
               { path: '/results', element: <ResultsPage /> },
               { path: '/my', element: <MyPage /> },
             ],

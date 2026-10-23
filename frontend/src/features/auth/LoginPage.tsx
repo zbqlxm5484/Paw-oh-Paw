@@ -46,7 +46,7 @@ export function LoginPage() {
 
   return (
     <form className="screen" onSubmit={submit}>
-      <TopBar onBack={() => nav('/login', { replace: true })} />
+      <TopBar onBack={() => nav('/welcome', { replace: true })} />
       <div className="scroll screen-body" style={{ gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h1>로그인</h1>

@@ -1,32 +1,10 @@
-/** 아직 이식하지 않은 화면의 자리. screenPlan 4~11단계에서 채운다. */
+/** 마이페이지. 계정 수정·탈퇴·알림 설정은 API 가 없어 두지 않는다(screenPlan 6절 #8). */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../app/auth'
 import { Icon } from '../components/Icon'
-import { Button, Card, Empty, Sheet } from '../components/ui'
-
-function Placeholder({ title, step, children }: { title: string; step: string; children?: React.ReactNode }) {
-  return (
-    <div className="screen">
-      <div className="topbar" style={{ padding: '0 20px' }}>
-        <b className="topbar-title">{title}</b>
-      </div>
-      <div className="scroll screen-body with-tabs">
-        <Empty>
-          아직 만들지 않은 화면이에요.
-          <br />
-          <span className="small">docs/frontend/screenPlan.md {step}</span>
-        </Empty>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-export function StoryPlaceholder() {
-  return <Placeholder title="서비스 소개" step="10단계" />
-}
+import { Button, Card, Sheet } from '../components/ui'
 
 /** 마이페이지 최소판: 담당자·기관 표시와 로그아웃. 나머지는 10단계. */
 export function MyPage() {
