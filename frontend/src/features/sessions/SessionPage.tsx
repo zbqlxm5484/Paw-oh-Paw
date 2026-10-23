@@ -340,7 +340,7 @@ function AggregatingView({ s }: { s: SessionDetailOut }) {
         </span>
         <div className="paw-walk" aria-hidden="true">
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <span key={i} style={{ left: i % 2 ? 90 : 40, top: 100 - i * 18, animationDelay: `${i * 0.35}s` }} />
+            <img key={i} src="/assets/paw-print.png" alt="" style={{ left: i % 2 ? 96 : 30, top: 110 - i * 22, transform: `rotate(${-23 + (i % 2 ? 10 : -6)}deg)`, animationDelay: `${i * 0.35}s` }} />
           ))}
         </div>
       </div>

@@ -1,5 +1,14 @@
 @import './tokens.css';
 
+/* 디자인 폰트(Pretendard Variable). 디자인 내보내기에 들어 있던 파일을 그대로 쓴다. 오프라인·PWA 에서도 같은 글꼴 */
+@font-face {
+  font-family: 'Pretendard Variable';
+  src: url('/pretendard-variable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -35,7 +44,7 @@ textarea::placeholder {
   color: var(--dim);
 }
 
-/* 폰 폭에서는 꽉 채우고, 넓은 화면에서는 가운데 480px 기둥으로 보여 준다 */
+/* 폰 폭에서는 꽉 채우고, 넓은 화면에서는 디자인 기준 기기(Galaxy S24 Ultra, 412×915)와 같은 폭의 기둥으로 보여 준다 */
 .app-shell {
   min-height: 100%;
   display: flex;
@@ -46,17 +55,32 @@ textarea::placeholder {
 .app-frame {
   position: relative;
   width: 100%;
-  max-width: 480px;
+  max-width: 412px;
   min-height: 100dvh;
   background: var(--bg);
   display: flex;
   flex-direction: column;
 }
 
-@media (min-width: 640px) {
+/* 데스크톱 브라우저에서 볼 때: 폰 프레임처럼 412×915 로 띄운다 */
+@media (min-width: 640px) and (min-height: 700px) {
+  .app-shell {
+    align-items: center;
+    padding: 24px 0;
+  }
   .app-frame {
-    min-height: 100dvh;
+    height: 915px;
+    min-height: 0;
+    max-height: calc(100dvh - 48px);
+    border-radius: 28px;
+    overflow: hidden;
     box-shadow: 0 30px 80px rgba(27, 36, 51, 0.16);
+  }
+  .tabbar,
+  .sheet,
+  .sheet-dim,
+  .toast {
+    position: absolute;
   }
 }
 

@@ -115,6 +115,7 @@ export function ReportPage() {
           ))}
         </div>
         <div className="report-status tabular">
+          <img src="/assets/logo-joint.png" alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
           <i style={{ background: statusTone }} />
           {statusText}
           {s && (

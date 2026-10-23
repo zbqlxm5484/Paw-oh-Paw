@@ -285,34 +285,16 @@
 }
 .paw-walk {
   position: relative;
-  width: 160px;
-  height: 120px;
+  width: 180px;
+  height: 170px;
   margin: 10px 0 6px;
 }
-.paw-walk span {
+.paw-walk img {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--pri);
+  width: 46px;
+  height: 46px;
   opacity: 0;
   animation: paw 2.4s infinite;
-}
-.paw-walk span::before,
-.paw-walk span::after {
-  content: '';
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pri);
-  top: -8px;
-}
-.paw-walk span::before {
-  left: -2px;
-}
-.paw-walk span::after {
-  right: -2px;
 }
 @keyframes paw {
   0%,

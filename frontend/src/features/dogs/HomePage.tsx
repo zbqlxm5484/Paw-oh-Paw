@@ -37,9 +37,12 @@ export function HomePage() {
   return (
     <div className="screen">
       <div className="home-head">
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="/assets/logo-joint.png" alt="Paw oh Paw" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          <div>
           <div className="home-kind">{staff?.institution.name ?? '기관'}</div>
           <div className="home-name">{staff ? `${staff.name} 담당자` : ''}</div>
+          </div>
         </div>
         <div style={{ display: 'flex' }}>
           <button type="button" className="icon-btn" aria-label="알림" onClick={() => toast('알림은 다음 단계에서 붙어요')}>

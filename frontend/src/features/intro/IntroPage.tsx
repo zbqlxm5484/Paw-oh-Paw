@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../app/auth'
-import { DogSkeleton } from '../../components/DogSkeleton'
 import { Icon } from '../../components/Icon'
 import './intro.css'
 
@@ -80,84 +79,72 @@ export function IntroPage() {
 }
 
 function Illustration({ i }: { i: number }) {
-  if (i === 0)
-    return (
-      <svg viewBox="0 0 320 240" className="ill">
-        <rect x="20" y="150" width="280" height="40" rx="6" fill="#E7DED0" />
-        <rect x="36" y="158" width="248" height="24" rx="4" fill="#D9CDB9" />
-        <g transform="translate(70 60) scale(0.55)">
-          <DogBody />
-        </g>
-        <g fill="var(--pri)" opacity=".7">
-          <circle cx="60" cy="205" r="4" />
-          <circle cx="110" cy="212" r="4" />
-          <circle cx="160" cy="205" r="4" />
-          <circle cx="210" cy="212" r="4" />
-          <circle cx="260" cy="205" r="4" />
-        </g>
-      </svg>
-    )
-  if (i === 1)
-    return (
-      <svg viewBox="0 0 320 240" className="ill">
-        <rect x="24" y="36" width="272" height="168" rx="16" fill="#141B22" />
-        <rect x="40" y="52" width="240" height="136" rx="8" fill="#1F2A36" />
-        <g transform="translate(78 78) scale(0.5)">
-          <DogBody light />
-        </g>
-        <rect x="40" y="52" width="240" height="136" rx="8" fill="none" stroke="var(--pri)" strokeWidth="2" strokeDasharray="8 6" />
-        <circle cx="268" cy="64" r="5" fill="#E5604D" />
-        <text x="246" y="68" fontSize="10" fill="#fff" fontWeight="700" textAnchor="end">REC</text>
-        <text x="160" y="222" fontSize="12" fill="var(--sub)" textAnchor="middle">가로로 · 옆모습 · 몸 전체</text>
-      </svg>
-    )
-  if (i === 2)
-    return (
-      <svg viewBox="0 0 320 240" className="ill">
-        <rect x="24" y="36" width="272" height="168" rx="16" fill="#141B22" />
-        <g transform="translate(44 44)">
-          <DogSkeleton width={232} height={152} />
-        </g>
-        <text x="160" y="222" fontSize="12" fill="var(--sub)" textAnchor="middle">관절점 22곳 · 가동 범위 · 걸음 길이</text>
-      </svg>
-    )
+  // 디자인 v5 story 네 장: 그림 1·2·3 은 디자인 자산, 4 는 보고서 견본 카드
+  if (i === 0) return <img src="/assets/story-1.png" alt="반려견이 매트 위를 걷는 모습" />
+  if (i === 1) return <img src="/assets/story-2.png" alt="휴대폰을 가로로 들고 촬영하는 모습" />
+  if (i === 2) return <img src="/assets/story-3.png" alt="관절점이 표시된 반려견" />
+  return <ReportMock />
+}
+
+/** 디자인 4번째 장의 보고서 견본 카드 */
+function ReportMock() {
+  const rows: [string, string, string, string][] = [
+    ['무릎 ROM', '66°', '58°', '8°'],
+    ['고관절 ROM', '44°', '41°', '3°'],
+    ['팔꿈치 ROM', '52°', '50°', '2°'],
+    ['걸음 길이', '41%', '38%', '3%p'],
+  ]
   return (
-    <svg viewBox="0 0 320 240" className="ill">
-      <rect x="70" y="20" width="180" height="210" rx="6" fill="#fff" stroke="var(--line)" />
-      <rect x="86" y="40" width="30" height="3" fill="var(--pri)" />
-      <rect x="86" y="54" width="110" height="10" rx="2" fill="#1B2433" />
-      <rect x="86" y="70" width="80" height="6" rx="2" fill="#C9C4BC" />
-      <rect x="86" y="90" width="148" height="14" rx="2" fill="#1B2433" />
-      {[0, 1, 2, 3].map((r) => (
-        <g key={r}>
-          <rect x="86" y={108 + r * 16} width="148" height="12" rx="2" fill={r % 2 ? '#fff' : '#FAF8F5'} />
-          <rect x="92" y={112 + r * 16} width="50" height="4" rx="1" fill="#5B6472" />
-          <rect x="160" y={112 + r * 16} width="22" height="4" rx="1" fill="#3B6FE0" />
-          <rect x="196" y={112 + r * 16} width="22" height="4" rx="1" fill="#E5604D" />
+    <div className="report-mock">
+      <div className="rm-head">
+        <span className="rm-brand">
+          <img src="/assets/logo-joint.png" alt="" />
+          Paw oh Paw
+        </span>
+        <span className="rm-kind">보행 분석 리포트</span>
+      </div>
+      <div className="rm-bar" />
+      <div>
+        <div className="rm-title">보리의 걸음 리포트</div>
+        <div className="rm-sub">10월 14일 측정 · 골든 리트리버 · 7살</div>
+      </div>
+      <div className="rm-table">
+        <div className="rm-tr head">
+          <span>지표</span>
+          <span>왼쪽</span>
+          <span>오른쪽</span>
+          <span>차이</span>
+        </div>
+        {rows.map((r, idx) => (
+          <div className={`rm-tr${idx % 2 ? '' : ' alt'}`} key={r[0]}>
+            {r.map((c, j) => (
+              <span key={j}>{c}</span>
+            ))}
+          </div>
+        ))}
+      </div>
+      <svg viewBox="0 0 320 150" className="rm-chart" aria-hidden="true">
+        <g stroke="#ECE8E2" strokeDasharray="3 4">
+          <line x1="24" y1="20" x2="310" y2="20" />
+          <line x1="24" y1="75" x2="310" y2="75" />
+          <line x1="24" y1="130" x2="310" y2="130" />
         </g>
-      ))}
-      <polyline points="90,200 110,186 130,196 150,180 170,192 190,178 210,190 230,182" fill="none" stroke="#3B6FE0" strokeWidth="2" />
-      <polyline points="90,204 110,194 130,200 150,188 170,198 190,186 210,196 230,190" fill="none" stroke="#E5604D" strokeWidth="2" strokeDasharray="4 3" />
-      <text x="160" y="226" fontSize="10" fill="var(--dim)" textAnchor="middle">보행 평가 보조 자료이며 진단을 대신하지 않습니다.</text>
-    </svg>
+        <polyline points={knee(53)} fill="none" stroke="#3B6FE0" strokeWidth="3" />
+        <polyline points={knee(46)} fill="none" stroke="#E5604D" strokeWidth="3" strokeDasharray="6 5" />
+      </svg>
+      <span className="rm-foot">보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
+    </div>
   )
 }
 
-/** 단순한 개 옆모습. 디자인의 비글 일러스트 대신 쓴다. */
-function DogBody({ light = false }: { light?: boolean }) {
-  const c = light ? '#F2A65A' : '#D2601A'
-  const d = light ? '#FCEEE3' : '#B4501A'
-  return (
-    <g>
-      <ellipse cx="160" cy="110" rx="90" ry="46" fill={c} />
-      <circle cx="248" cy="78" r="34" fill={c} />
-      <ellipse cx="262" cy="92" rx="22" ry="14" fill={d} />
-      <path d="M232 52 q-10 -34 14 -40 q6 20 2 40z" fill={d} />
-      <circle cx="256" cy="72" r="4" fill="#1B2433" />
-      <path d="M70 100 q-30 -24 -22 -52" stroke={c} strokeWidth="14" fill="none" strokeLinecap="round" />
-      {[96, 126, 200, 228].map((x, i) => (
-        <rect key={i} x={x} y="140" width="18" height="60" rx="8" fill={i % 2 ? d : c} />
-      ))}
-    </g>
-  )
+/** 디자인의 무릎 각도 곡선(knee()) */
+function knee(depth: number): string {
+  const gs = (p: number, c: number, w: number) => Math.exp(-(((p - c) / w) ** 2))
+  const pts: string[] = []
+  for (let i = 0; i <= 40; i++) {
+    const p = i / 40
+    const a = 150 - 16 * gs(p, 0.12, 0.07) - depth * gs(p, 0.7, 0.11)
+    pts.push(`${(24 + p * 286).toFixed(1)},${(130 - ((a - 90) / 60) * 110).toFixed(1)}`)
+  }
+  return pts.join(' ')
 }

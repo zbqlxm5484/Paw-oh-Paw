@@ -5,7 +5,7 @@
   bottom: 0;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 480px;
+  max-width: 412px;
   padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, rgba(250, 249, 246, 0), var(--bg) 30%);
   z-index: 4;
@@ -75,7 +75,7 @@
   transform: translateX(-50%);
   bottom: 120px;
   width: calc(100% - 40px);
-  max-width: 440px;
+  max-width: 372px;
   z-index: 10;
   display: flex;
   justify-content: center;
