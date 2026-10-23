@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 안드로이드 빌드용 서버 주소. 각자 만든다 (.env.android.example 참고)
+.env.android
