@@ -8,17 +8,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, StringConstraints, field_validator
 
 from app.core.dates import today_local
 from app.models.enums import FocusLimb, Sex, SizeClass
-from app.schemas.common import OutModel, UtcDateTime
+from app.schemas.common import OutModel, UtcDateTime, Weight
 
 Name50 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
-Weight = Annotated[Decimal, Field(ge=Decimal("0.5"), le=Decimal("100.0"), decimal_places=2)]
 Memo = Annotated[str, StringConstraints(max_length=1000)]
 BIRTH_YEAR_MIN = 1990
 

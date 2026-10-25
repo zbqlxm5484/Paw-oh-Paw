@@ -6,6 +6,7 @@ Oct 19, 2026 · @조영운
 
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
+| v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
 | v1.4 | 2026-10-22 | 체급 분류를 견종 기준에서 등록 체중 기준으로 바꿈(박규원의 체급 기준 자료 반영, 10절 Q15 결정): 4절 BE-02, 12.2 주석, 12.5 규칙·classify\_size, 13.2, 15.5, 16 설정 설명, 17.2 BE-02. 10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 견종표는 화면 자동완성용 이름 목록으로만 남김 |
 | v1.3 | 2026-10-20 | DB를 MySQL에서 PostgreSQL로 바꿈(10-20 팀 결정): 11.1 PostgreSQL 18·pg8000(cryptography 삭제), 11.3, 11.4 ID·시각 타입, 11.7 오류 뒤 처리·격리 수준·잠금 조회·오류 종류, 11.9, 12.2 DDL(UUID·TIMESTAMPTZ·CHECK), 12.5 상태 값·updated\_at·도구·이유, 13.4 대소문자, 15.1 ID 형식·NUMERIC, 15.5 검색·정렬, 16절 접속 주소·Docker·설치 절차, 3절 구성 그림·확장 표, 10절 Q12·Q13, 12.1 그림 오타. PostgreSQL 18.4에서 DDL과 규칙을 시험해 확인 |
 | v1.2 | 2026-10-19 | 기업 납품(D-06)과 큰 규모를 전제로 고침: 1절 위치(발표 + D-06 서버), 7절·11.11 파일 저장소(서버 디스크·AWS S3 교체, MinIO 삭제, 키 형식), 15.1 파일 주소, 3절 몰릴 때와 확장 계획, 12.4 워커(렌더 프로세스, 보고서 전용 자리, 재시작, 기관별 상한, 보고서 키 덮어쓰기), 16절 S3·워커 변수와 설치 절차, 11.1 boto3·moto 추가, 17·18절, 10절 Q19\~Q23, Q3·Q20 팀 결정(기업에 따로 묻지 않음), 오타 수정 |
@@ -142,7 +143,7 @@ Oct 19, 2026 · @조영운
 
 | ID | 기능 | 하는 일 | 왜 필요한가 | 근거 |
 | --- | --- | --- | --- | --- |
-| BE-04 | 회차 시작 (필수) | 반려견마다 회차를 만들고 그날 체중을 기록한다 | 재활 중 체중이 바뀌므로 회차마다 남겨야 그 시점 기준으로 비교한다 | 1.4 회차 정의 |
+| BE-04 | 회차 시작 (필수) | 반려견마다 회차를 만들고 그날 체중과 그 시점의 체급을 기록한다 | 재활 중 체중이 바뀌므로 회차마다 남겨야 그 시점 기준으로 비교한다 | 1.4 회차 정의 |
 | BE-05 | 영상 업로드·검사 (필수) | 반려견 프로필에서 파일을 올리거나 바로 찍은 영상을 같은 방식으로 받는다. 형식·코덱·길이·가로 여부를 검사하고 해상도·fps·비트레이트·코덱을 기록한다. 세로 영상은 사유와 함께 거부, 최저 사양(640×360·30fps·4 Mbps) 미만은 경고 | 입력 오류는 서버 오류가 아니라 사유로 알려야 하고, 결과마다 입력 사양을 남겨야 한다 | PR-F07-05·06, 6.5.4 |
 | BE-06 | 등록 즉시 분석 (필수) | 저장이 끝나면 워커가 분석 API에 보낸다. 담당자가 누를 버튼은 없다 | 등록만 하면 분석이 시작되어야 한다 | REQ-OP-014 |
 | BE-07 | 분석 상태 표시 (필수) | 대기·분석 중·완료·실패와 실패 사유. 화면은 2\~3초마다 다시 조회한다 | 측정 5분 내내 띄워 두는 화면이라 진행이 보여야 한다 | PR-F07-02, PR-F09-01 |
@@ -699,6 +700,7 @@ CREATE TABLE measure_session (
   staff_id       UUID          NOT NULL,  -- 측정한 담당자
   measured_on    DATE          NOT NULL,
   weight_kg      NUMERIC(5,2)  NULL,  -- 측정한 날 체중
+  size_class     VARCHAR(20)   NOT NULL,  -- 회차 시점 체급(12.5 6번). 뒤에 반려견 체급이 바뀌어도 그대로
   status         VARCHAR(20)   NOT NULL DEFAULT 'MEASURING',
   fail_reason    VARCHAR(50)   NULL,  -- 오류 코드(14절)
   model_name     VARCHAR(50)   NULL,
@@ -709,6 +711,7 @@ CREATE TABLE measure_session (
   updated_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
   CONSTRAINT ck_session_status CHECK (status IN ('MEASURING', 'AGGREGATING', 'DONE', 'FAILED')),
+  CONSTRAINT ck_session_size_class CHECK (size_class IN ('SMALL', 'MEDIUM', 'LARGE')),
   CONSTRAINT fk_session_dog FOREIGN KEY (dog_id) REFERENCES dog (id),
   CONSTRAINT fk_session_staff FOREIGN KEY (staff_id) REFERENCES staff (id)
 );
@@ -868,10 +871,10 @@ CREATE TABLE purge_log (
 | `report.status` | PENDING → GENERATING → DONE 또는 FAILED. 워커가 켜질 때 GENERATING → PENDING | 워커, 다시 만들기 API(→ PENDING) | 워커는 회차를 DONE으로 바꾸는 같은 트랜잭션에서 판본마다 1행을 PENDING으로 만든다. 화면이 DONE인데 보고서 행이 없는 순간을 보지 않게 하기 위해서다 |
 
 - 상태는 조건을 건 UPDATE로만 바꾼다. 예: `UPDATE shot SET status='SUBMITTED' WHERE id=:id AND status='UPLOADED'`. 바뀐 행이 0개면 다른 처리가 먼저 가져간 것이므로 건너뛴다. 같은 일을 두 번 하지 않기 위해서다.
-- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 3번 실패하면 FAILED다.
+- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 그동안 촬영은 SUBMITTED에 머물고 `job_id`는 비어 있다(화면에는 대기로 보인다). 3번 실패하면 FAILED(`ANALYSIS_SUBMIT_FAILED`)다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
-* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다.
+* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
 * **API가 만든 파일**: 업로드처럼 요청 안에서 파일을 만들면 그 키를 `db.info["created_files"]`에 넣는다. commit이 실패하면 `get_db`가 그 파일을 지운다(11.7). 지울 때는 12.5 순서대로 파일을 먼저 지운다. 행 삭제가 실패해 파일 없는 행이 남는 것은 괜찮다(파기 때 함께 지워진다). 반대로 DB에 키가 없는 파일이 남으면 파기에서 빠진다.
 * **보고서 행 값**: `template_version`에는 보고서 모듈의 `report.TEMPLATE_VERSION` 상수를 넣는다.
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
@@ -893,6 +896,7 @@ CREATE TABLE purge_log (
   3. 담당자가 체급을 고치면 `size_class_manual`을 TRUE로 하고, 이후 자동으로 바꾸지 않는다. `size_class`에 `null`을 보내면 FALSE로 돌아가 저장된 체중으로 다시 정한다.
   4. 체중을 고치면 `size_class_manual`이 FALSE일 때만 새 체중으로 다시 정한다. 견종을 고쳐도 체급은 바뀌지 않는다.
   5. 이 규칙은 박규원의 체급별 권장 통과 수 분석(D-14)·KPI 집계와 같은 것이다. 분류는 `classify_size(weight_kg)` 함수 하나로 두고 양쪽이 함께 쓴다(10절 Q15).
+  6. 회차에는 시작 시점의 체급을 따로 저장한다(`measure_session.size_class`, 팀 회의 10-22). 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(`weight_kg`, 없으면 등록 체중)으로 계산한다. 그 뒤 반려견 체중·체급이 바뀌어도 지난 회차의 체급은 그대로이고, 집계·보고서는 회차의 체급을 쓴다. 대형견도 새끼일 때는 소형 구간에 들고, 감량한 개는 그 뒤 회차부터 중형이 된다. 측정 수치는 체급과 상관없이 그대로이고 체급별 기준 문장만 회차의 체급을 따른다.
 - **기준 회차**: `baseline_session_id`가 비어 있으면 그 반려견의 가장 이른 DONE 회차를 기준으로 쓴다. 회차 순서는 언제나 (measured\_on, created\_at) 오름차순이고, 가장 이른·가장 최근·바로 앞 회차를 모두 이 순서로 정한다. 측정일을 직접 고를 수 있고 같은 날 회차가 둘일 수 있어서다.
 - **촬영 순번**: `seq_no`는 같은 회차의 가장 큰 값 + 1이다. 동시에 올려도 겹치지 않도록 업로드는 회차 행을 SELECT … FOR UPDATE로 잠근 뒤 순번을 매긴다(12.4). 그런데도 겹치면(`uq_shot_seq` 위반) 잠금이 빠진 버그이므로 500으로 끝내고 로그를 남긴다.
 - **도구**: PostgreSQL 17, SQLAlchemy 2(테이블을 Python 클래스로 정의), pg8000(Python에서 PostgreSQL에 접속하는 드라이버), Alembic(테이블 변경 이력을 파일로 남겨 팀원 누구나 같은 DB를 만든다. Spring의 Flyway와 같은 역할).
@@ -960,7 +964,7 @@ CREATE TABLE purge_log (
 
 | 동작 | 조건 | 어기면 |
 | --- | --- | --- |
-| 회차 시작 | 같은 반려견에 MEASURING 회차가 없다. `measured_on`은 선택(기본 오늘), 미래 날짜 불가. `weight_kg`은 선택, 0.5\~100.0 | 409 `SESSION_ALREADY_OPEN`(`detail.session_id`에 열려 있는 회차) |
+| 회차 시작 | 같은 반려견에 MEASURING 회차가 없다. `measured_on`은 선택(기본 오늘), 미래 날짜 불가. `weight_kg`은 선택, 0.5\~100.0. 회차 체급은 서버가 정한다(12.5 6번) | 409 `SESSION_ALREADY_OPEN`(`detail.session_id`에 열려 있는 회차) |
 | 측정 종료 | 회차가 MEASURING이고 촬영이 1건 이상 있다 | 409 `SESSION_CLOSED` 또는 `SESSION_EMPTY` |
 | 측정 취소 | 회차가 MEASURING이고 SUBMITTED·ANALYZING 촬영이 없다 | 409 `SESSION_CLOSED` 또는 `SHOT_IN_PROGRESS` |
 | 촬영 다시 분석 | 촬영이 FAILED이고 회차가 MEASURING이다 | 409 `SHOT_NOT_FAILED` 또는 `SESSION_CLOSED` |
@@ -969,6 +973,8 @@ CREATE TABLE purge_log (
 | 회차 비교 | 두 회차가 같은 반려견의 서로 다른 DONE 회차다 | 400 `COMPARE_INVALID`(`detail.reason`은 15.8) |
 | 자료 파기 | 대상에 SUBMITTED·ANALYZING 촬영이 없다 | 409 `SHOT_IN_PROGRESS` |
 | 보고서·결과 영상 파일 열기 | 서명 URL의 `exp`가 지나지 않았고 `sig`가 맞다 | 403 `FILE_LINK_EXPIRED` |
+
+- 측정 취소·촬영 삭제가 UPLOADED 촬영을 막지 않는 이유: 워커는 UPLOADED 촬영을 가져갈 때 회차 행을 잠그고 SUBMITTED로 바꾼 뒤에야 분석 API를 부른다(12.4 잠금). 두 동작이 같은 잠금을 잡으므로 지워진 촬영에 결과가 쓰이는 일은 없다.
 
 ### 13.4 로그인·목록
 
@@ -1189,6 +1195,7 @@ STOPPED: "중간에 멈췄습니다."
   "staff": {"id": "…", "name": "김담당"},
   "measured_on": "2026-10-20",
   "weight_kg": 28.1,
+  "size_class": "LARGE",
   "status": "MEASURING",
   "fail_reason": null,
   "model_name": null,
@@ -1198,6 +1205,8 @@ STOPPED: "중간에 멈췄습니다."
   "created_at": "2026-10-20T00:10:00Z"
 }
 ```
+
+- `size_class`: 회차를 시작한 시점의 체급(12.5 6번). 반려견의 지금 체급(DogOut)과 다를 수 있다.
 
 **ShotOut** — 촬영 1건. 통과 목록(**PassOut**)을 품는다.
 
@@ -1345,6 +1354,7 @@ STOPPED: "중간에 멈췄습니다."
 
 - 응답 201 **SessionOut**(`status`는 MEASURING).
 - `measured_on`을 빼면 오늘(한국 날짜)이다. `weight_kg`를 빼면 `null`로 두고, 보고서는 반려견의 등록 체중을 쓴다.
+- `size_class`는 회차 시점 체급이다(12.5 6번): 담당자가 직접 지정한 반려견 체급이 있으면 그 값, 아니면 `weight_kg`(없으면 등록 체중)으로 계산해 저장한다. 이후 반려견 체급이 바뀌어도 회차의 값은 그대로다.
 - 이미 MEASURING 회차가 있으면 409 `SESSION_ALREADY_OPEN`이고, `detail.session_id`에 그 회차를 넣는다. 화면은 그 회차로 이동한다.
 
 **`GET /sessions/{session_id}`** — 회차 상태·진행·촬영 목록 (BE-07·09)
@@ -1777,6 +1787,7 @@ ANALYSIS_API_MODE=mock
 ### 17.3 회차 측정
 
 - [ ] BE-04: MEASURING 회차가 있는 반려견에 회차를 또 만들면 409 `SESSION_ALREADY_OPEN`이고 `detail.session_id`가 열린 회차다.
+- [ ] BE-04: 회차의 `size_class`는 시작 시점 체중으로 정한다. 등록 체중 28.4 kg(LARGE)인 반려견이 그날 체중 23.0 kg으로 시작하면 회차는 MEDIUM이고 반려견은 LARGE 그대로다. 체중을 빼면 등록 체중으로 정하고, 체급을 직접 지정한 반려견은 체중과 상관없이 그 값이다.
 - [ ] BE-05: 13.1의 검사 9가지가 표의 순서대로 걸리고 각각 표의 코드가 나온다. 검사에 걸리면 DB 행과 임시 파일이 남지 않는다.
 - [ ] BE-05: 세로로 찍은 휴대폰 영상(저장은 가로, 회전 값 90°)은 `VIDEO_PORTRAIT`로 거부되고, 회전 값이 없는 가로 영상은 통과한다.
 - [ ] BE-05: 최저 사양 미만 영상은 201로 받고, `warnings`에 `BELOW_MIN_SPEC`이 있으며 `below_min_spec`이 TRUE다.

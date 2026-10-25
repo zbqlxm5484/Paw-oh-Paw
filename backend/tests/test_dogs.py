@@ -57,7 +57,9 @@ def _fields(response) -> list[str]:
 
 
 def _session(db: Session, dog: Dog, staff, measured_on: date, status: str = "DONE") -> MeasureSession:
-    row = MeasureSession(dog_id=dog.id, staff_id=staff.id, measured_on=measured_on, status=status)
+    row = MeasureSession(
+        dog_id=dog.id, staff_id=staff.id, measured_on=measured_on, size_class=dog.size_class, status=status
+    )
     db.add(row)
     db.flush()
     return row

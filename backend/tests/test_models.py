@@ -36,7 +36,9 @@ def _dog(db: Session, institution: Institution) -> Dog:
 
 
 def _session(db: Session, dog: Dog, staff: Staff) -> MeasureSession:
-    measure = MeasureSession(dog_id=dog.id, staff_id=staff.id, measured_on=date(2026, 10, 21))
+    measure = MeasureSession(
+        dog_id=dog.id, staff_id=staff.id, measured_on=date(2026, 10, 21), size_class=dog.size_class
+    )
     db.add(measure)
     db.flush()
     return measure
