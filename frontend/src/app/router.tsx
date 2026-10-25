@@ -25,6 +25,8 @@ import { WebSession, WebUpload } from '../features/web/WebUpload'
 import { useAuth } from './auth'
 import { AppFrame, TabLayout } from './Layout'
 import { Responsive } from './Responsive'
+import { AppProto } from '../design/app/AppProto'
+import { WebProto } from '../design/web/WebProto'
 
 /** 로그인이 필요한 화면. 토큰 확인 중이면 빈 화면, 없으면 랜딩(첫 진입) 또는 로그인으로. */
 function RequireAuth() {
@@ -69,6 +71,9 @@ function DogRedirect() {
 }
 
 export const router = createBrowserRouter([
+  // 디자인 원본 그대로 옮긴 화면(이식 중 비교용)
+  { path: '/design-web', element: <WebProto /> },
+  { path: '/design-app', element: <div style={{ display: 'flex', gap: 56, padding: '48px 56px', alignItems: 'flex-start', background: '#E9E6E1', minHeight: '100vh' }}><AppProto /></div> },
   {
     element: <AppFrame />,
     children: [

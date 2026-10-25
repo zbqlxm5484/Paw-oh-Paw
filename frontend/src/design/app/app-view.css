@@ -1,0 +1,5 @@
+/* 자동 생성. AppView 의 style-hover / style-focus. 인라인 스타일을 이기려고 !important 를 쓴다 */
+.appview-h0:hover{background:#fff !important}
+.appview-f0:focus{border-color:#D2601A !important;box-shadow:0 0 0 4px #FCEEE3 !important}
+.appview-h1:hover{background:#B4501A !important}
+.appview-h2:hover{background:#FAF6F0 !important}

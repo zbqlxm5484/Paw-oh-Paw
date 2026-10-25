@@ -1,0 +1,7 @@
+/* 자동 생성. WebView 의 style-hover / style-focus. 인라인 스타일을 이기려고 !important 를 쓴다 */
+.webview-h0:hover{background:#B4501A !important}
+.webview-h1:hover{color:#1B2433 !important}
+.webview-h2:hover{border-color:#D2601A !important}
+.webview-h3:hover{background:#FAF6F0 !important}
+.webview-f0:focus{border-color:#D2601A !important;box-shadow:0 0 0 4px #FCEEE3 !important}
+.webview-h4:hover{background:#FFFCF8 !important}
