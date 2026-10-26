@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% import "_modals.html" as m %}
+{% block title %}홈 · Paw oh Paw{% endblock %}
+{% block content %}
+<main style="max-width:none;margin:0;padding:28px 80px 96px;display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:14px;font-weight:600;color:#5B6472">기관</span><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px">{{ acct.name }}</h1></div>
+    <label style="width:320px;max-width:100%;height:48px;border-radius:12px;background:#fff;border:1px solid #ECE8E2;display:flex;align-items:center;gap:10px;padding:0 14px;color:#8E949C"><svg width="20" height="20" viewBox="0 0 24 24" style="flex:none"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><input id="dogSearch" value="{{ q }}" placeholder="반려견 이름 검색" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-size:15.5px;color:#1B2433"></label>
+  </div>
+  <div style="display:flex;gap:24px;align-items:stretch;flex-wrap:wrap">
+    <aside style="order:2;flex:none;width:280px;max-width:100%;background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:8px 18px;display:flex;flex-direction:column;align-self:stretch">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0 8px"><b style="font-size:16px">최근 분석</b><a class="lk" href="/results" style="font-size:13.5px;color:#5B6472">전체 보기 ›</a></div>
+      {% for r in recent %}
+      <a class="lk" href="/results/{{ r.id }}" style="display:flex;align-items:center;gap:12px;padding:13px 0;border-top:{{ r.bt }}">
+        <div style="width:36px;height:36px;border-radius:50%;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex:none">{{ r.init }}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700">{{ r.name }}</div><div style="font-size:12.5px;color:#5B6472;font-variant-numeric:tabular-nums">{{ r.when }}</div></div>
+        <span style="height:24px;padding:0 8px;border-radius:7px;font-size:12px;font-weight:700;background:{{ r.bg }};color:{{ r.c }};display:flex;align-items:center;flex:none">{{ r.st }}</span>
+      </a>
+      {% endfor %}
+      {% if not recent %}<div style="font-size:14px;color:#5B6472;padding:4px 0 14px">아직 분석 기록이 없어요.</div>{% endif %}
+    </aside>
+    <div style="flex:1 1 560px;min-width:0;display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;gap:28px;overflow-x:auto;padding:8px 6px 6px;align-items:flex-start">
+        {% for d in strip %}
+        <a class="lk dog-chip" data-name="{{ d.name }}" href="/home?dog={{ d.id }}" style="flex:none;width:104px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+          <div style="position:relative;width:80px;height:80px;border-radius:50%;background:{{ d.av }};color:{{ d.avc }};display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;box-shadow:{{ d.ring }};transition:box-shadow .2s">{{ d.init }}{% if d.id in live_dogs %}<span class="live-badge" style="position:absolute;right:-6px;top:-4px;height:22px;padding:0 7px;border-radius:11px;background:#D2601A;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;white-space:nowrap">측정 중</span>{% endif %}</div>
+          <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;color:{{ d.nc }};font-weight:{{ d.nw }}">{{ d.name }}</span><span style="font-size:12.5px;color:#7A808A">({{ d.breed }})</span><span style="font-size:12px;color:#A0A7B2;font-variant-numeric:tabular-nums">{{ d.meta }}</span></div>
+        </a>
+        {% endfor %}
+        <div data-pet="new" style="flex:none;width:96px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;text-align:center">
+          <div style="width:80px;height:80px;border-radius:50%;background:#fff;border:2px dashed #D9D2C7;color:#D2601A;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:500">+</div>
+          <span style="font-size:15px;font-weight:700;color:#D2601A">등록</span>
+        </div>
+      </div>
+      <div id="noMatch" style="font-size:15px;color:#5B6472;padding:0 6px;display:none"></div>
+      {% if not cur %}
+      <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:40px 32px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
+        <b style="font-size:22px;letter-spacing:-0.5px">첫 반려견을 등록해 주세요</b>
+        <span style="font-size:15px;color:#5B6472">이름·견종·체중만 있으면 바로 보행 측정을 시작할 수 있어요.</span>
+        <div data-pet="new" style="margin-top:6px;height:48px;padding:0 20px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700;cursor:pointer">반려견 등록하기</div>
+      </div>
+      {% else %}
+      <section style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div style="flex:1 1 280px;min-width:0"><div style="font-size:30px;line-height:1.3;font-weight:800;letter-spacing:-0.7px">{{ dd.name }}</div><div style="font-size:14.5px;color:#5B6472;margin-top:4px">{{ dd.desc }}</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><span data-pet="{{ cur.id }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600;cursor:pointer">정보 수정</span><a class="lk" href="/compare/{{ cur.id }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600">경과 비교</a><a class="lk" href="/upload?dog={{ cur.id }}" style="height:40px;padding:0 16px;border-radius:10px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a></div>
+        </div>
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px 20px">
+            {% for a in dd.cells %}<div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:13px;color:#5B6472;font-weight:600">{{ a.k }}</span><b style="font-size:16px;font-variant-numeric:tabular-nums">{{ a.v }}</b>{% if a.sub %}<span style="font-size:12px;color:#A0A7B2">{{ a.sub }}</span>{% endif %}</div>{% endfor %}
+          </div>
+          <div style="border-top:1px solid #F2EFEA;padding-top:14px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><span style="font-size:13px;color:#5B6472;font-weight:600;flex:none">내부 메모</span><span style="flex:1 1 240px;font-size:14.5px;line-height:1.55">{{ dd.memo }}</span><span style="font-size:12px;color:#A0A7B2">보고서에는 넣지 않아요</span></div>
+        </div>
+        {% if latest and latest.fail %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px"><b style="font-size:18px">최근 회차를 분석하지 못했어요</b><span style="height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:{{ latest.bg }};color:{{ latest.c }};display:flex;align-items:center">{{ latest.st }}</span></div>
+          <span style="font-size:15px;line-height:1.6;color:#5B6472">쓸 수 있는 통과가 없었어요. 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 올려 주세요.</span>
+          <a class="lk" href="/upload?dog={{ cur.id }}" style="align-self:flex-start;margin-top:4px;height:46px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700">다시 올리기</a>
+        </div>
+        {% elif latest %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b style="font-size:16px">최근 회차</b><span style="font-size:14px;color:#5B6472;margin-left:8px;font-variant-numeric:tabular-nums">{{ latest.when }}</span></div><span style="height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:{{ latest.bg }};color:{{ latest.c }};display:flex;align-items:center">{{ latest.st }}</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+            <div style="background:#FAF6F0;border-radius:14px;padding:18px"><div style="font-size:13px;color:#5B6472;font-weight:600">대칭 지수</div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px;margin-top:6px;font-variant-numeric:tabular-nums">{{ latest.sym }}<span style="font-size:15px;font-weight:700;color:#5B6472;margin-left:2px">%</span></div><div style="font-size:12.5px;color:#5B6472;margin-top:2px">{{ latest.symD }}</div></div>
+            <div style="background:#FAF6F0;border-radius:14px;padding:18px"><div style="font-size:13px;color:#5B6472;font-weight:600">뒷무릎 가동 범위</div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px;margin-top:6px;font-variant-numeric:tabular-nums">{{ latest.rom }}<span style="font-size:15px;font-weight:700;color:#5B6472;margin-left:2px">°</span></div><div style="font-size:12.5px;color:#5B6472;margin-top:2px">{{ latest.romD }}</div></div>
+            <div style="background:#FAF6F0;border-radius:14px;padding:18px"><div style="font-size:13px;color:#5B6472;font-weight:600">걸음 길이 왼 / 오 (몸통 대비)</div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px;margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap">{{ latest.sL }}<span style="color:#A0A7B2;font-weight:500"> / </span>{{ latest.sR }}<span style="font-size:15px;font-weight:700;color:#5B6472;margin-left:2px">%</span></div><div style="font-size:12.5px;color:#5B6472;margin-top:2px">{{ latest.stD }}</div></div>
+          </div>
+          <div style="background:#1B2433;color:#fff;border-radius:14px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font-size:12.5px;font-weight:700;color:#F5B38A">다리 비교 요약 · 속보</span><b style="font-size:18px;letter-spacing:-0.4px">{{ latest.topTitle }}</b><span style="font-size:13.5px;color:rgba(255,255,255,.78);font-variant-numeric:tabular-nums">{{ latest.topSub }}</span></div>
+            <div style="display:flex;gap:8px"><a class="lk" href="/results/{{ latest.id }}" style="height:44px;padding:0 16px;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;font-size:14.5px;font-weight:600">회차 결과 보기</a><a class="lk" href="/results/{{ latest.id }}/report" style="height:44px;padding:0 16px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-doc"></use></svg>보고서</a></div>
+          </div>
+        </div>
+        {% endif %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow-x:auto">
+          <div style="min-width:720px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px 10px"><b style="font-size:17px">측정 이력 <span style="color:#A0A7B2;font-weight:600;font-size:15px">{{ dd.count }}</span></b></div>
+            <div style="display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;padding:10px 24px;border-top:1px solid #ECE8E2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472"><span>회차</span><span>측정일</span><span>체중</span><span>유효 통과</span><span>모델</span><span>보고서</span><span>상태</span><span></span></div>
+            {% for h in dd.hist %}
+            <div class="hv-row" data-href="/results/{{ h.id }}" style="display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 24px;border-top:{{ h.bt }};cursor:pointer;font-size:15px;font-variant-numeric:tabular-nums">
+              <span style="display:flex;align-items:center;gap:6px"><b>{{ h.no }}</b>{% if h.base %}<span style="height:20px;padding:0 7px;border-radius:5px;background:#1B2433;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center">기준</span>{% endif %}</span>
+              <span style="color:#5B6472">{{ h.date }}</span><span>{{ h.w }}</span><span>{{ h.pass }}</span><span>{{ h.model }}</span><span>{{ h.rep }}</span>
+              <span><span style="height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:{{ h.bg }};color:{{ h.c }};display:inline-flex;align-items:center">{{ h.st }}</span></span>
+              <span style="text-align:right">{% if h.canBase %}<form method="post" action="/dogs/{{ cur.id }}/base" style="display:inline;margin:0"><input type="hidden" name="rid" value="{{ h.id }}"><button class="bt" type="submit" style="background:none;font-size:13px;font-weight:700;color:#B4501A;padding:6px 0">기준 회차로 지정</button></form>{% endif %}</span>
+            </div>
+            {% endfor %}
+            {% if not dd.hist %}<div style="padding:28px 24px;font-size:15px;color:#5B6472">아직 측정 기록이 없어요.</div>{% endif %}
+          </div>
+        </div>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}
+{% block modals %}{{ m.pet_modal('/home') }}{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', path='pet.js') }}"></script>
+<script>
+(function () {
+  var s = document.getElementById('dogSearch'), none = document.getElementById('noMatch');
+  function filter() {
+    var q = s.value.trim(), any = false;
+    document.querySelectorAll('.dog-chip').forEach(function (c) { var on = !q || c.dataset.name.indexOf(q) >= 0; c.style.display = on ? 'flex' : 'none'; any = any || on; });
+    none.style.display = q && !any ? 'block' : 'none';
+    none.textContent = '‘' + q + '’ 이름의 반려견이 없어요.';
+  }
+  s.addEventListener('input', filter); filter();
+})();
+</script>
+{% endblock %}
