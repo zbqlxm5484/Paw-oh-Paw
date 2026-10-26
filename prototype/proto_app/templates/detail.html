@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ rd.name }} 회차 결과 · Paw oh Paw{% endblock %}
+{% block content %}
+<main style="max-width:none;margin:0;padding:24px 80px 96px;display:flex;flex-direction:column;gap:20px">
+  <a class="lk" href="/results" style="align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>분석 결과</a>
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px">{{ rd.name }} · 회차 결과</h1><div style="font-size:15px;color:#5B6472;margin-top:4px;font-variant-numeric:tabular-nums">{{ rd.when }} · {{ rd.desc }}</div></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="height:30px;padding:0 12px;border-radius:8px;font-size:13.5px;font-weight:700;background:{{ rd.bg }};color:{{ rd.c }};display:flex;align-items:center">{{ rd.st }}</span>
+      {% if rd.ok %}<a class="lk" href="/compare/{{ rd.dog }}" style="height:44px;padding:0 18px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;font-size:15px;font-weight:600">경과 비교</a><a class="lk hv-orange" href="/results/{{ rd.id }}/report" style="height:44px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-doc"></use></svg>보고서 보기</a>{% endif %}
+    </div>
+  </div>
+  {% if rd.fail %}
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:32px;display:flex;flex-direction:column;gap:12px;max-width:640px">
+    <b style="font-size:20px">분석하지 못했어요</b>
+    <span style="font-size:15px;line-height:1.65;color:#5B6472">쓸 수 있는 통과가 없었어요. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.</span>
+    <a class="lk" href="/upload?dog={{ rd.dog }}" style="align-self:flex-start;margin-top:6px;height:48px;padding:0 20px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>다시 올리기</a>
+  </div>
+  {% else %}
+  {% if rd.part %}<div style="background:#FAF1DF;border-radius:12px;padding:14px 18px;font-size:14.5px;color:#7A5410">일부 통과에서 다리가 가려지거나 뛰어서 해당 통과를 제외하고 계산했습니다.</div>{% endif %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px"><div style="font-size:13.5px;color:#5B6472;font-weight:600">대칭 지수</div><div style="font-size:36px;font-weight:800;letter-spacing:-1px;margin-top:6px;font-variant-numeric:tabular-nums">{{ rd.sym }}<span style="font-size:17px;font-weight:700;color:#5B6472;margin-left:2px">%</span></div><div style="font-size:13px;color:#5B6472;margin-top:4px">{{ rd.symD }}</div></div>
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px"><div style="font-size:13.5px;color:#5B6472;font-weight:600">뒷무릎 가동 범위</div><div style="font-size:36px;font-weight:800;letter-spacing:-1px;margin-top:6px;font-variant-numeric:tabular-nums">{{ rd.rom }}<span style="font-size:17px;font-weight:700;color:#5B6472;margin-left:2px">°</span></div><div style="font-size:13px;color:#5B6472;margin-top:4px">{{ rd.romD }}</div></div>
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px"><div style="font-size:13.5px;color:#5B6472;font-weight:600">걸음 길이 왼 / 오 (몸통 대비)</div><div style="font-size:36px;font-weight:800;letter-spacing:-1px;margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap">{{ rd.sL }}<span style="color:#A0A7B2;font-weight:500"> / </span>{{ rd.sR }}<span style="font-size:17px;font-weight:700;color:#5B6472;margin-left:2px">%</span></div><div style="font-size:13px;color:#5B6472;margin-top:4px">{{ rd.stD }}</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+    <div style="background:#1B2433;color:#fff;border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:10px">
+      <span style="font-size:13px;font-weight:700;color:#F5B38A">다리 비교 요약 · {{ '평보' if gait == 'walk' else '속보' }}</span>
+      <b style="font-size:21px;line-height:1.4;letter-spacing:-0.5px;text-wrap:pretty">{{ rd.topTitle }}</b>
+      <span style="font-size:14px;color:rgba(255,255,255,.78);font-variant-numeric:tabular-nums">{{ rd.topSub }}</span>
+      <div style="height:1px;background:rgba(255,255,255,.14);margin:6px 0"></div>
+      {% for k in rd.rank %}<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14.5px;min-height:28px"><span style="color:rgba(255,255,255,.85)">{{ k.n }}</span><span style="font-weight:700;font-variant-numeric:tabular-nums;color:{{ k.c }}">{{ k.v }}</span></div>{% endfor %}
+      <span style="font-size:12.5px;color:rgba(255,255,255,.55);margin-top:4px">진단이 아닌 좌우 차이 비교예요. 차이가 큰 다리만 알려 드려요.</span>
+    </div>
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:16px">
+      <b style="font-size:16px">통과 집계</b>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        <div><div style="font-size:13px;color:#5B6472;font-weight:600">측정한 통과</div><div style="font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px">{{ rd.pm }}</div></div>
+        <div><div style="font-size:13px;color:#5B6472;font-weight:600">사용</div><div style="font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px">{{ rd.pu }}</div></div>
+        <div><div style="font-size:13px;color:#5B6472;font-weight:600">제외</div><div style="font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:4px">{{ rd.px }}</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;color:#5B6472;font-weight:600">제외 사유</span><div style="display:flex;flex-wrap:wrap;gap:6px">{% for n, c in rd.ex %}<span style="height:30px;padding:0 12px;border-radius:8px;background:#F2EEE8;color:#3A4250;font-size:13.5px;font-weight:600;display:flex;align-items:center;font-variant-numeric:tabular-nums">{{ n }} {{ c }}회</span>{% endfor %}</div></div>
+      <span style="font-size:13px;color:#8E949C;margin-top:auto">영상 {{ rd.n_videos }}개 · 분석 모델 {{ rd.model }}</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:360px;max-width:100%">
+    {% for g in gait_segs %}<a class="lk" href="?gait={{ g.key }}" style="height:42px;border-radius:9px;background:{{ g.bg }};color:{{ g.c }};box-shadow:{{ g.sh }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s">{{ g.label }}</a>{% endfor %}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));background:#F6F3EE;font-size:13px;font-weight:700;color:#5B6472"><span style="padding:13px 0 13px 20px">지표</span><span style="padding:13px 6px">왼쪽</span><span style="padding:13px 6px">오른쪽</span><span style="padding:13px 6px">차이</span></div>
+      {% for w in rd.rows %}
+      {% if w.sec %}<div style="padding:14px 20px 2px;font-size:12.5px;font-weight:700;color:#B4501A">{{ w.sec }}</div>{% endif %}
+      {% if w.na %}
+      <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,3fr);font-size:15px;align-items:center"><span style="padding:11px 0 11px 20px;font-weight:600">{{ w.n }}</span><span style="padding:11px 20px 11px 6px;font-size:13.5px;color:#8E949C">측정 불가 · {{ w.reason }}</span></div>
+      {% else %}
+      <div style="display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));font-size:15px;font-variant-numeric:tabular-nums;align-items:center"><span style="padding:11px 0 11px 20px;font-weight:600">{{ w.n }}</span><span style="padding:11px 6px">{{ w.lv }}</span><span style="padding:11px 6px">{{ w.rv }}</span><span style="padding:11px 6px;font-weight:700">{{ w.dv }}</span></div>
+      {% endif %}
+      {% endfor %}
+      <div style="padding:12px 20px 14px;font-size:12.5px;color:#8E949C;border-top:1px solid #F2EFEA">거리 수치는 몸통 길이 대비 %예요.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px 24px 16px">
+      <b style="font-size:16px">뒷무릎 각도 · 보행 주기</b>
+      <svg viewBox="0 0 320 150" style="width:100%;display:block;margin-top:10px">
+        <g stroke="#ECE8E2" stroke-dasharray="3 4"><line x1="24" y1="20" x2="310" y2="20"></line><line x1="24" y1="75" x2="310" y2="75"></line><line x1="24" y1="130" x2="310" y2="130"></line></g>
+        <g font-size="9" fill="#A0A7B2" font-family="Pretendard Variable"><text x="0" y="23">150°</text><text x="0" y="78">120°</text><text x="0" y="133">90°</text></g>
+        <polyline points="{{ rd.kL }}" fill="none" stroke="#3B6FE0" stroke-width="2"></polyline>
+        <polyline points="{{ rd.kR }}" fill="none" stroke="#E5604D" stroke-width="2" stroke-dasharray="5 4"></polyline>
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#A0A7B2;padding-left:24px"><span>디딤</span><span>들기</span><span>다음 디딤</span></div>
+    </div>
+  </div>
+  <span style="font-size:12.5px;color:#5B6472">보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
+  {% endif %}
+</main>
+{% endblock %}
