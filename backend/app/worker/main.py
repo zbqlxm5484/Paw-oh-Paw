@@ -10,6 +10,7 @@
    삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). WORKER_MAX_IN_FLIGHT까지만 가져온다.
 3. 가져온 촬영(SUBMITTED인데 job_id가 없는 것)을 분석 API에 보낸다. 되면 job_id를 적고, 못 보내면 SUBMITTED에 둔 채
    attempt_count를 올려 다음 바퀴에 다시 보내며, ANALYSIS_SUBMIT_MAX_ATTEMPTS번 실패하면 FAILED(ANALYSIS_SUBMIT_FAILED).
+   분석 API가 요청 자체를 거부하면(400·401·413·415 같은 4xx) 다시 보내지 않고 바로 FAILED다.
 
 상태는 조건을 건 UPDATE로만 바꾼다(12.4). 바뀐 행이 0개면 그사이 상태가 달라진 것이므로 건너뛴다. 작업 큐는
 DB(shot.status)이고 워커는 한 대다. 메모리에 상태를 두지 않으므로 껐다 켜도 하던 일이 이어진다.
@@ -241,7 +242,9 @@ def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
 
 def _submit_attempt_failed(db: Session, shot: Shot, settings: Settings, error: Exception, stats: WorkerStats) -> None:
     attempts = shot.attempt_count + 1
-    final = attempts >= settings.ANALYSIS_SUBMIT_MAX_ATTEMPTS
+    # 분석 API가 요청 자체를 거부했으면(4xx) 몇 번을 보내도 같다. 바로 포기한다(87 MR 리뷰 제안 A)
+    rejected = isinstance(error, AnalysisClientError) and not error.retryable
+    final = rejected or attempts >= settings.ANALYSIS_SUBMIT_MAX_ATTEMPTS
     values: dict[str, Any] = {"attempt_count": attempts}
     if final:
         values.update(status=FAILED, fail_reason=FailReason.ANALYSIS_SUBMIT_FAILED.value)
@@ -251,7 +254,10 @@ def _submit_attempt_failed(db: Session, shot: Shot, settings: Settings, error: E
     db.commit()
     if not changed:
         return
-    if final:
+    if rejected:
+        stats.failed += 1
+        logger.error("submit rejected by analysis API shot=%s (not retried): %s", shot.id, error)
+    elif final:
         stats.failed += 1
         logger.error("submit gave up shot=%s after %d attempts: %s", shot.id, attempts, error)
     else:

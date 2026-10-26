@@ -46,8 +46,15 @@ JOB_STATES: tuple[JobState, ...] = ("queued", "running", "done", "failed")
 class AnalysisClientError(Exception):
     """분석 API를 부르지 못했거나(연결·시간 초과) 예상 밖 응답을 받았을 때.
 
-    워커는 제출 중에 이것을 받으면 attempt_count를 올린다(12.4).
+    retryable이 True면 다시 보내면 될 수 있는 실패(연결 실패, 시간 초과, 5xx, 깨진 응답)라 워커가 attempt_count를
+    올리고 다음 바퀴에 다시 보낸다(12.4). False면 분석 API가 요청 자체를 거부한 것(400·401·413·415 같은 4xx)이라
+    몇 번을 보내도 같으므로 워커는 바로 FAILED로 둔다(87 MR 리뷰 제안 A). status_code는 HTTP 응답일 때만 있다.
     """
+
+    def __init__(self, message: str, *, retryable: bool = True, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -187,7 +194,10 @@ class MockAnalysisClient:
 
 
 class HttpAnalysisClient:
-    """조유진 분석 API. 모든 오류는 AnalysisClientError 하나로 낸다(연결 실패, 시간 초과, 4xx·5xx, 깨진 JSON)."""
+    """조유진 분석 API. 모든 오류는 AnalysisClientError 하나로 낸다(연결 실패, 시간 초과, 4xx·5xx, 깨진 JSON).
+
+    4xx(408·429 제외)는 retryable=False다. 요청 자체가 잘못된 것이라 다시 보내도 같기 때문이다.
+    """
 
     def __init__(
         self,
@@ -196,7 +206,8 @@ class HttpAnalysisClient:
         timeout_sec: float = 30,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        # TODO(질문: 인증 키를 어느 헤더로 보낼지 조유진과 합의 전. 16절 ANALYSIS_API_KEY. 지금은 X-API-Key)
+        # 인증 헤더는 X-API-Key로 확정(조유진, 87 MR 리뷰 10-26).
+        # 키가 비어 있으면 헤더를 보내지 않고, 분석 API도 그때는 인증을 끈다
         headers = {"X-API-Key": api_key} if api_key else {}
         self._client = httpx.Client(base_url=base_url, headers=headers, timeout=timeout_sec, transport=transport)
 
@@ -211,9 +222,14 @@ class HttpAnalysisClient:
 
     @staticmethod
     def _json(response: httpx.Response, *, expected: int) -> dict[str, Any]:
-        if response.status_code != expected:
+        status = response.status_code
+        if status != expected:
+            # 4xx는 요청이 잘못된 것이라 다시 보내도 같다. 408(시간 초과)·429(너무 잦음)만 다시 보낼 수 있다
+            rejected = 400 <= status < 500 and status not in (408, 429)
             raise AnalysisClientError(
-                f"분석 API 응답 {response.status_code} (기대 {expected}): {_error_summary(response)}"
+                f"분석 API 응답 {status} (기대 {expected}): {_error_summary(response)}",
+                retryable=not rejected,
+                status_code=status,
             )
         try:
             body = response.json()

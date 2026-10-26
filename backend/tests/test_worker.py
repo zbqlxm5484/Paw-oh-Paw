@@ -184,6 +184,20 @@ def test_submit_failures_keep_the_shot_claimed_then_give_up(db: Session, dog, st
     assert len(client.submits) == 3
 
 
+def test_rejected_submit_fails_without_retry(db: Session, dog, staff) -> None:
+    # 87 MR 리뷰 제안 A: 분석 API가 요청 자체를 거부하면(415 등 4xx) 다시 보내지 않고 바로 FAILED
+    session = _session(db, dog, staff)
+    shot = _shot(db, session, 1)
+    client = FakeClient(submit_error=AnalysisClientError("415 UNSUPPORTED_MEDIA", retryable=False))
+
+    stats = run_once(db, client, _settings(ANALYSIS_SUBMIT_MAX_ATTEMPTS=3), get_storage())
+
+    row = _fresh(db, shot)
+    assert stats.failed == 1 and stats.submit_attempt_failed == 0
+    assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_SUBMIT_FAILED" and row.attempt_count == 1
+    assert len(client.submits) == 1
+
+
 def test_missing_original_file_is_a_failed_attempt(db: Session, dog, staff) -> None:
     session = _session(db, dog, staff)
     shot = _shot(db, session, 1)

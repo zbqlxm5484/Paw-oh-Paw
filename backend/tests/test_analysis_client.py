@@ -175,33 +175,39 @@ def test_http_submit_uses_quicktime_for_mov(tmp_path: Path) -> None:
     assert seen["quicktime"]
 
 
+def _rejection(status: int, code: str) -> httpx.Response:
+    return httpx.Response(status, json={"error": {"code": code, "message": "거부", "detail": None}})
+
+
 @pytest.mark.parametrize(
-    ("response", "message_part"),
+    ("response", "message_part", "retryable"),
     [
-        (
-            httpx.Response(
-                415, json={"error": {"code": "UNSUPPORTED_MEDIA", "message": "영상 파일만 받습니다", "detail": None}}
-            ),
-            "UNSUPPORTED_MEDIA",
-        ),
-        (httpx.Response(500, text="boom"), "500"),
-        (httpx.Response(202, text="not json"), "JSON"),
-        (httpx.Response(202, json={"status": "queued"}), "작업 ID"),
+        (_rejection(415, "UNSUPPORTED_MEDIA"), "UNSUPPORTED_MEDIA", False),
+        (_rejection(413, "TOO_LARGE"), "TOO_LARGE", False),
+        (_rejection(401, "AUTH_REQUIRED"), "AUTH_REQUIRED", False),
+        (_rejection(400, "INVALID_META"), "INVALID_META", False),
+        (httpx.Response(429, text="slow down"), "429", True),
+        (httpx.Response(500, text="boom"), "500", True),
+        (httpx.Response(202, text="not json"), "JSON", True),
+        (httpx.Response(202, json={"status": "queued"}), "작업 ID", True),
     ],
 )
 def test_http_submit_turns_bad_responses_into_client_errors(
-    video: Path, response: httpx.Response, message_part: str
+    video: Path, response: httpx.Response, message_part: str, retryable: bool
 ) -> None:
-    with pytest.raises(AnalysisClientError, match=message_part):
+    with pytest.raises(AnalysisClientError, match=message_part) as caught:
         _http(lambda request: response).submit(video, INFO)
+    # 4xx는 다시 보내도 같으므로 retryable=False, 나머지는 다시 보낼 수 있다(87 MR 리뷰 제안 A)
+    assert caught.value.retryable is retryable
 
 
 def test_http_connection_failure_is_a_client_error(video: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")
 
-    with pytest.raises(AnalysisClientError, match="ConnectError"):
+    with pytest.raises(AnalysisClientError, match="ConnectError") as caught:
         _http(handler).submit(video, INFO)
+    assert caught.value.retryable and caught.value.status_code is None
     with pytest.raises(AnalysisClientError):
         _http(handler).get_status("job-1")
 
