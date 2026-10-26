@@ -1,0 +1,79 @@
+{# 모달들. 각 화면에서 필요한 것만 include 한다. #}
+{% macro open_modal(id) -%}
+<div id="{{ id }}" class="pp-modal no-print" style="position:fixed;inset:0;background:rgba(14,18,23,.5);z-index:50;display:none;align-items:center;justify-content:center;padding:24px">
+  <div style="width:100%;max-width:460px;max-height:calc(100vh - 48px);overflow:auto;background:#fff;border-radius:22px;padding:28px;display:flex;flex-direction:column;gap:20px;position:relative">
+    <div data-close style="position:absolute;right:14px;top:14px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#5B6472"><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-x"></use></svg></div>
+{%- endmacro %}
+{% macro close_modal() -%}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro pet_modal(next_url) -%}
+{% set fi = "height:50px;border-radius:12px;border:1px solid #ECE8E2;padding:0 16px;font-size:16px;color:#1B2433;outline:none" %}
+{{ open_modal('petModal') }}
+  <form method="post" action="/dogs" id="petForm" style="display:contents">
+    <input type="hidden" name="dog_id" value="">
+    <input type="hidden" name="next_url" value="{{ next_url }}">
+    <input type="hidden" name="sex" value="m"><input type="hidden" name="size" value=""><input type="hidden" name="focus" value="">
+    <b id="petTitle" style="font-size:22px;letter-spacing:-0.5px">반려견 등록</b>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">이름</span><input class="inp" name="name" placeholder="예) 보리" autocomplete="off" style="{{ fi }}"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">견종</span><input class="inp" name="breed" placeholder="견종을 입력하면 목록이 떠요" autocomplete="off" style="{{ fi }}">
+      <div id="breedSug" style="border:1px solid #ECE8E2;border-radius:12px;box-shadow:0 10px 24px rgba(27,36,51,.1);overflow:hidden;display:none;flex-direction:column"></div>
+    </label>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <label style="display:flex;flex-direction:column;gap:8px;min-width:0"><span style="font-size:14px;font-weight:600">체중 (kg)</span><input class="inp" name="kg" inputmode="decimal" placeholder="예) 28.4" style="{{ fi }};min-width:0"></label>
+      <label style="display:flex;flex-direction:column;gap:8px;min-width:0"><span style="font-size:14px;font-weight:600">출생연도 <span style="color:#A0A7B2;font-weight:500">선택</span></span><input class="inp" name="birth" inputmode="numeric" placeholder="예) 2019" style="{{ fi }};min-width:0"></label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">성별</span>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">{% for k, label in SEX.items() %}<div class="pick" data-field="sex" data-val="{{ k }}" style="height:46px;border-radius:12px;border:1.5px solid #ECE8E2;background:#fff;color:#3A4250;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">{{ label }}</div>{% endfor %}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><span style="font-size:14px;font-weight:600">체급</span><span id="sizeNote" style="font-size:12.5px;color:#5B6472">견종·체중으로 자동 분류돼요</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">{% for k, label in SIZE.items() %}<div class="pick" data-field="size" data-val="{{ k }}" data-toggle="1" style="height:46px;border-radius:12px;border:1.5px solid #ECE8E2;background:#fff;color:#3A4250;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">{{ label }}</div>{% endfor %}</div>
+    </div>
+    <div style="height:1px;background:#ECE8E2"></div>
+    <b style="font-size:16px">재활 정보 <span style="font-size:14px;font-weight:500;color:#A0A7B2">선택</span></b>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">재활 시작일</span><input class="inp" type="date" name="rehab" style="{{ fi }};font-family:inherit"></label>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><span style="font-size:14px;font-weight:600">관심 다리</span><span style="font-size:12.5px;color:#5B6472">다시 누르면 선택이 풀려요</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">{% for k, label in LIMB.items() %}<div class="pick" data-field="focus" data-val="{{ k }}" data-toggle="1" style="height:46px;border-radius:12px;border:1.5px solid #ECE8E2;background:#fff;color:#3A4250;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;cursor:pointer">{{ label }}</div>{% endfor %}</div>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">내부 메모</span><textarea class="inp" name="memo" placeholder="예) 수술 후 6주차, 오른뒤 체중 부하 관찰" style="min-height:88px;border-radius:12px;border:1px solid #ECE8E2;padding:12px 16px;font-size:15px;line-height:1.5;color:#1B2433;outline:none;resize:vertical;font-family:inherit"></textarea><span style="font-size:13px;color:#5B6472">담당자 화면에만 보이고 보고서에는 넣지 않아요.</span></label>
+    <button class="bt" type="submit" id="petCta" style="height:54px;border-radius:14px;background:#C3C8CF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none">등록하기</button>
+  </form>
+{{ close_modal() }}
+{%- endmacro %}
+
+{% macro guide_modal() -%}
+{{ open_modal('guideModal') }}
+  <b style="font-size:22px;letter-spacing:-0.5px">영상 촬영 방법</b>
+  <div style="display:flex;flex-direction:column;gap:16px">
+    {% for t, d in [('휴대폰은 가로로', '세로 영상은 분석할 수 없어요. 화면을 가로로 돌려 찍어 주세요.'), ('옆에서, 걷는 방향과 직각으로', '반려견의 옆모습 전체가 보이도록 2~3m 떨어져서 찍어 주세요.'), ('몸 전체가 화면 안에', '머리부터 꼬리, 네 발까지 화면 밖으로 나가지 않게 해 주세요.'), ('한 번에 4초, 16개까지', '평평한 바닥에서 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷는 모습을 4초씩 차례대로 찍어 주세요.')] %}
+    <div style="display:flex;gap:14px"><span style="width:28px;height:28px;border-radius:50%;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none">{{ loop.index }}</span><div style="display:flex;flex-direction:column;gap:3px;padding-top:3px"><b style="font-size:15.5px">{{ t }}</b><span style="font-size:14px;line-height:1.55;color:#5B6472">{{ d }}</span></div></div>
+    {% endfor %}
+  </div>
+  <div data-close style="height:52px;border-radius:14px;background:#D2601A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;cursor:pointer">확인</div>
+{{ close_modal() }}
+{%- endmacro %}
+
+{% macro logout_modal() -%}
+{{ open_modal('logoutModal') }}
+  <b style="font-size:22px;letter-spacing:-0.5px">로그아웃할까요?</b>
+  <form method="post" action="/logout" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0">
+    <div data-close style="height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">취소</div>
+    <button class="bt" type="submit" style="height:52px;border-radius:14px;background:#1B2433;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700">로그아웃</button>
+  </form>
+{{ close_modal() }}
+{%- endmacro %}
+
+{% macro delete_modal() -%}
+{{ open_modal('delModal') }}
+  <b style="font-size:22px;letter-spacing:-0.5px"><span id="delName"></span> 정보를 삭제할까요?</b>
+  <span style="font-size:15px;line-height:1.6;color:#5B6472">측정 이력과 보고서도 함께 삭제되고 되돌릴 수 없어요.</span>
+  <form method="post" id="delForm" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0">
+    <div data-close style="height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">취소</div>
+    <button class="bt" type="submit" style="height:52px;border-radius:14px;background:#C2412D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700">삭제</button>
+  </form>
+{{ close_modal() }}
+{%- endmacro %}
