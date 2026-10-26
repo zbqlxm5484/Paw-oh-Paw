@@ -35,3 +35,9 @@ class ShotOut(BaseModel):
     passes: list[PassOut]
     uploaded_at: UtcDateTime
     analyzed_at: UtcDateTime | None
+
+
+class ShotUploadOut(ShotOut):
+    """POST /sessions/{id}/shots 응답(15.6): ShotOut + warnings(14.4 BELOW_MIN_SPEC, ASPECT_NOT_16_9)."""
+
+    warnings: list[ReasonOut]

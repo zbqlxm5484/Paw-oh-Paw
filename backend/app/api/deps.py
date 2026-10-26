@@ -21,12 +21,22 @@ logger = logging.getLogger(__name__)
 
 
 def delete_created_files(db: Session) -> None:
-    """이 요청이 만든 파일(db.info["created_files"])을 지운다(12.4). 요청이 실패했을 때 get_db가 부른다."""
+    """이 요청이 만든 파일(db.info["created_files"])을 지운다(12.4). 요청이 실패했을 때 get_db가 부른다.
+
+    DB에 키가 없는 파일이 남으면 파기에서 빠지므로(REQ-CM-002) 하나가 실패해도 나머지는 계속 지운다.
+    """
     keys = list(db.info.get("created_files") or [])
     if not keys:
         return
-    # TODO(작업 단위 5): StorageService.delete(key)로 지운다. 지금은 요청 안에서 파일을 만드는 API가 없다.
-    logger.error("files created by a failed request were not deleted: %d", len(keys))
+    from app.storage.base import get_storage
+
+    storage = get_storage()
+    for key in keys:
+        try:
+            storage.delete(key)
+        except Exception:
+            logger.exception("failed to delete file created by a failed request: %s", key)
+    db.info["created_files"] = []
 
 
 def get_db() -> Iterator[Session]:

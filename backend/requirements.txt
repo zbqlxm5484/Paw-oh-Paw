@@ -1,6 +1,6 @@
 # 명세 11.1 기술 스택. 정확한 버전으로 고정한다(PR-C-07).
-# 지금은 작업 단위 1(서버 뼈대)과 2(DB 모델·마이그레이션·seed)에 필요한 것만 있다.
-# 결과 영상·보고서·S3 라이브러리는 그 작업을 시작할 때 11.1 표의 버전으로 더한다.
+# 지금은 작업 단위 1~5(서버 뼈대, DB, 로그인, 반려견, 회차·업로드)에 필요한 것만 있다.
+# 결과 영상·보고서·S3 라이브러리는 그 작업을 시작할 때 11.1 표의 버전으로 더한다. ffmpeg·ffprobe는 라이브러리가 아니라 실행 파일이다(16절 FFPROBE_PATH).
 
 # 설정
 pydantic==2.14.1
@@ -10,6 +10,8 @@ pydantic-settings==2.16.1
 fastapi==0.146.0
 starlette==1.9.0
 uvicorn==0.54.0
+# 파일 업로드(13.1 multipart). FastAPI의 UploadFile이 이것을 쓴다
+python-multipart==0.0.32
 
 # HTTP 클라이언트: 분석 API 호출(6절). FastAPI TestClient도 이것을 쓴다
 httpx==0.28.1
