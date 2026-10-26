@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ rp.title }} · Paw oh Paw{% endblock %}
+{% block content %}
+<main class="print-main" style="max-width:880px;margin:0 auto;padding:24px 32px 96px;display:flex;flex-direction:column;gap:20px">
+  <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <a class="lk" href="/results/{{ rd.id }}" style="display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>회차 결과</a>
+    <div style="display:flex;gap:10px"><div data-toast="보고서를 다시 만들고 있어요" style="height:44px;padding:0 18px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;font-size:15px;font-weight:600;cursor:pointer">다시 만들기</div><div class="hv-orange" onclick="window.print()" style="height:44px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700;cursor:pointer">PDF 내려받기</div></div>
+  </div>
+  <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:320px;max-width:100%">
+      {% for g in segs %}<a class="lk" href="?type={{ g.key }}" style="height:42px;border-radius:9px;background:{{ g.bg }};color:{{ g.c }};box-shadow:{{ g.sh }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s">{{ g.label }}</a>{% endfor %}
+    </div>
+    <span style="display:flex;align-items:center;gap:6px;font-size:13.5px;color:#5B6472;font-variant-numeric:tabular-nums"><span style="width:7px;height:7px;border-radius:4px;background:#2E8B57"></span>{{ status }}</span>
+  </div>
+  <div class="print-paper" style="background:#fff;border-radius:6px;box-shadow:0 18px 50px rgba(27,36,51,.1);padding:56px 60px;display:flex;flex-direction:column;gap:22px;min-height:960px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800"><img src="{{ url_for('static', path='assets/logo.png') }}" alt="" style="width:28px;height:28px;object-fit:contain">Paw oh Paw</div><span style="font-size:13px;color:#5B6472">{{ '보행 분석 보고서 · 수의사용' if kind == 'v' else '보행 분석 보고서 · 보호자용' }}</span></div>
+    <div style="height:3px;background:#D2601A;width:56px"></div>
+    <div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px">{{ rp.title }}</div><div style="font-size:14px;color:#5B6472;margin-top:6px">{{ rp.when }}</div></div>
+    {% if kind == 'g' %}
+    <div style="background:#FAF9F6;border-radius:12px;padding:20px 22px;font-size:17px;line-height:1.65;font-weight:600">{{ rp.summary }}</div>
+    <div style="display:flex;flex-direction:column">
+      {% for it in rp['items'] %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 0;border-bottom:1px solid #F2EFEA"><span style="font-size:16px;color:#3A4250">{{ it.k }}</span><span style="display:flex;align-items:center;gap:10px"><b style="font-size:19px;font-variant-numeric:tabular-nums">{{ it.v }}</b><span style="height:26px;padding:0 10px;border-radius:7px;background:#F2EEE8;color:#3A4250;font-size:13px;font-weight:700;display:flex;align-items:center">{{ it.d }}</span></span></div>
+      {% endfor %}
+    </div>
+    <div style="font-size:15px;line-height:1.65;color:#3A4250"><b>다음 측정</b> · 2주 뒤 같은 장소에서 다시 찍으면 변화를 같은 기준으로 비교할 수 있어요.</div>
+    {% else %}
+    <div style="border:1px solid #ECE8E2;border-radius:10px;overflow:hidden;font-size:15px">
+      <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;background:#1B2433;color:#fff;font-weight:700"><span style="padding:13px 16px">지표 · 속보</span><span style="padding:13px 12px">왼쪽</span><span style="padding:13px 12px">오른쪽</span><span style="padding:13px 12px">차이</span></div>
+      {% for w in rp.rows %}
+      <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;background:{{ w.bg }};font-variant-numeric:tabular-nums"><span style="padding:13px 16px;font-weight:600">{{ w.n }}</span><span style="padding:13px 12px">{{ w.l }}</span><span style="padding:13px 12px">{{ w.r }}</span><span style="padding:13px 12px;font-weight:700">{{ w.d }}</span></div>
+      {% endfor %}
+    </div>
+    <div>
+      <b style="font-size:15px">뒷무릎 각도 · 보행 주기</b>
+      <svg viewBox="0 0 320 150" style="width:100%;max-width:560px;display:block;margin-top:8px"><g stroke="#ECE8E2" stroke-dasharray="3 4"><line x1="24" y1="20" x2="310" y2="20"></line><line x1="24" y1="75" x2="310" y2="75"></line><line x1="24" y1="130" x2="310" y2="130"></line></g><polyline points="{{ rd.kL }}" fill="none" stroke="#3B6FE0" stroke-width="2"></polyline><polyline points="{{ rd.kR }}" fill="none" stroke="#E5604D" stroke-width="2" stroke-dasharray="5 4"></polyline></svg>
+    </div>
+    <div style="font-size:13.5px;line-height:1.65;color:#5B6472">{{ rp.cond }}</div>
+    {% endif %}
+    <div style="flex:1"></div>
+    <span style="font-size:12px;color:#A0A7B2">보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
+  </div>
+</main>
+{% endblock %}
