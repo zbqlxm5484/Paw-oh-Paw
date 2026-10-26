@@ -1,0 +1,6 @@
+uploads/
+.venv/
+__pycache__/
+# 저장소 루트 .gitignore가 *.png · *.jpg · *.mp4를 막는데, 화면 디자인 자산은 올린다
+!proto_app/static/assets/
+!proto_app/static/assets/*
