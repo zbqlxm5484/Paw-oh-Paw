@@ -3,8 +3,9 @@
 주 반복(WORKER_POLL_INTERVAL_SEC, 기본 2초)마다 가벼운 일만 한다(12.4 "무거운 일 나누기").
 
 1. 제출한 촬영의 상태 조회(BE-07): running이면 ANALYZING, failed면 FAILED(ANALYSIS_FAILED. 분석 API의 원래 사유는
-   로그에만), 제출 뒤 ANALYSIS_TIMEOUT_SEC가 지나면 FAILED(ANALYSIS_TIMEOUT). done이면 결과를 저장할 차례인데 그 일은
-   다음 작업(2/2 결과 저장)이 한다. 여기서는 ANALYZING으로만 둔다.
+   로그에만), 제출 뒤 ANALYSIS_TIMEOUT_SEC가 지나면 FAILED(ANALYSIS_TIMEOUT). done이면 결과 JSON을 받아
+   analysis.json으로 보관하고 촬영 판정·사유·통과 행을 넣은 뒤 DONE(BE-07·08, services/analysis_results.py). 결과
+   JSON을 읽을 수 없으면 FAILED(ANALYSIS_FAILED). 결과 영상·회차 집계는 다음 작업이다.
 2. UPLOADED 촬영 가져오기(BE-06): 그 회차 행을 잠근 채 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한다. 측정 취소·촬영
    삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). WORKER_MAX_IN_FLIGHT까지만 가져온다.
 3. 가져온 촬영(SUBMITTED인데 job_id가 없는 것)을 분석 API에 보낸다. 되면 job_id를 적고, 못 보내면 SUBMITTED에 둔 채
@@ -18,11 +19,13 @@ Spring에 빗대면 @Scheduled(fixedDelay = 2000) 메서드 하나를 가진 별
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import signal
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -36,9 +39,11 @@ from app.core.config import Settings, get_settings
 from app.core.db import SessionLocal
 from app.core.errors import FailReason
 from app.main import configure_logging
-from app.models import MeasureSession, Shot
+from app.models import Dog, MeasureSession, Shot
 from app.models.enums import ShotStatus
+from app.services.analysis_results import ResultFormatError, apply_result, parse_result
 from app.storage.base import StorageError, StorageService, get_storage
+from app.storage.keys import analysis_key
 
 logger = logging.getLogger("app.worker")
 
@@ -59,7 +64,7 @@ class WorkerStats:
     submit_attempt_failed: int = 0  # 제출 실패했지만 아직 다시 보낼 차례가 남음
     polled: int = 0  # 상태를 조회한 수
     analyzing: int = 0  # SUBMITTED → ANALYZING
-    done: int = 0  # 분석 API가 done이라고 답한 수(결과 저장은 2/2)
+    done: int = 0  # 결과를 저장해 DONE이 된 수
     failed: int = 0  # → FAILED (제출 포기, 분석 실패)
     timed_out: int = 0  # → FAILED (ANALYSIS_TIMEOUT)
 
@@ -78,33 +83,41 @@ def count_in_flight(db: Session) -> int:
     return db.scalar(select(func.count()).select_from(Shot).where(Shot.status.in_(IN_FLIGHT))) or 0
 
 
-def _fail(db: Session, shot: Shot, reason: FailReason) -> bool:
+def _fail(db: Session, shot_id: uuid.UUID, reason: FailReason) -> bool:
     """맡겨 둔 촬영을 FAILED로. 그사이 상태가 바뀌었으면(삭제·다시 분석) 건드리지 않는다."""
     changed = db.execute(
         update(Shot)
-        .where(Shot.id == shot.id, Shot.status.in_(IN_FLIGHT))
+        .where(Shot.id == shot_id, Shot.status.in_(IN_FLIGHT))
         .values(status=FAILED, fail_reason=reason.value)
     ).rowcount
     db.commit()
     return bool(changed)
 
 
-def _set_analyzing(db: Session, shot: Shot) -> bool:
+def _set_analyzing(db: Session, shot_id: uuid.UUID) -> bool:
     changed = db.execute(
-        update(Shot).where(Shot.id == shot.id, Shot.status == SUBMITTED).values(status=ANALYZING)
+        update(Shot).where(Shot.id == shot_id, Shot.status == SUBMITTED).values(status=ANALYZING)
     ).rowcount
     db.commit()
     return bool(changed)
 
 
-def poll_in_flight(db: Session, client: AnalysisClient, settings: Settings, stats: WorkerStats) -> None:
+def poll_in_flight(
+    db: Session, client: AnalysisClient, settings: Settings, storage: StorageService, stats: WorkerStats
+) -> None:
     """SUBMITTED·ANALYZING 촬영의 상태를 분석 API에 묻는다. 시간 초과가 먼저다(분석 API가 안 답해도 끝나게)."""
-    shots = db.scalars(select(Shot).where(Shot.status.in_(IN_FLIGHT)).order_by(Shot.submitted_at, Shot.id)).all()
+    rows = db.execute(
+        select(Shot, MeasureSession.dog_id, Dog.institution_id)
+        .join(MeasureSession, Shot.session_id == MeasureSession.id)
+        .join(Dog, MeasureSession.dog_id == Dog.id)
+        .where(Shot.status.in_(IN_FLIGHT))
+        .order_by(Shot.submitted_at, Shot.id)
+    ).all()
     deadline = _now() - timedelta(seconds=settings.ANALYSIS_TIMEOUT_SEC)
-    for shot in shots:
+    for shot, dog_id, institution_id in rows:
         started = shot.submitted_at or shot.uploaded_at
         if started <= deadline:
-            if _fail(db, shot, FailReason.ANALYSIS_TIMEOUT):
+            if _fail(db, shot.id, FailReason.ANALYSIS_TIMEOUT):
                 stats.timed_out += 1
                 logger.error(
                     "analysis timeout shot=%s job=%s after %ss", shot.id, shot.job_id, settings.ANALYSIS_TIMEOUT_SEC
@@ -119,11 +132,10 @@ def poll_in_flight(db: Session, client: AnalysisClient, settings: Settings, stat
             continue
         stats.polled += 1
         if status.state in ("running", "done"):
-            if _set_analyzing(db, shot):
+            if _set_analyzing(db, shot.id):
                 stats.analyzing += 1
             if status.state == "done":
-                # 결과 저장(analysis.json, 통과·판정 행, DONE)은 다음 작업(2/2 결과 저장)에서 한다
-                stats.done += 1
+                _save_result(db, client, storage, shot, dog_id, institution_id, stats)
         elif status.state == "failed":
             # 14.2: 화면에는 ANALYSIS_FAILED만, 분석 API의 원래 사유는 로그에
             logger.error(
@@ -133,9 +145,64 @@ def poll_in_flight(db: Session, client: AnalysisClient, settings: Settings, stat
                 status.error_code,
                 status.error_message,
             )
-            if _fail(db, shot, FailReason.ANALYSIS_FAILED):
+            if _fail(db, shot.id, FailReason.ANALYSIS_FAILED):
                 stats.failed += 1
         # queued: 아직 대기 중. 그대로 둔다
+
+
+# ---- 결과 저장 ----
+
+
+def _save_result(
+    db: Session,
+    client: AnalysisClient,
+    storage: StorageService,
+    shot: Shot,
+    dog_id: uuid.UUID,
+    institution_id: uuid.UUID,
+    stats: WorkerStats,
+) -> None:
+    """done인 촬영의 결과를 받아 analysis.json으로 보관하고 DB에 넣는다(6절 결과 저장 원칙, BE-07·08).
+
+    12.4 순서: 파일을 먼저 쓰고, 조건을 건 UPDATE로 키를 붙인다. 바뀐 행이 0개면(그사이 지워졌거나 실패 처리됨) 방금 쓴
+    파일을 지운다. 결과를 못 받으면 다음 바퀴에 다시 받고(시간 초과가 끝을 낸다), 결과 JSON을 읽을 수 없으면
+    FAILED(ANALYSIS_FAILED)다. 통과별 수치는 JSON에만 남고 회차 집계(작업 단위 8)가 거기서 읽는다.
+    """
+    shot_id, job_id, session_id = shot.id, shot.job_id, shot.session_id
+    try:
+        result = client.get_result(job_id)
+    except AnalysisClientError as e:
+        logger.warning("result fetch failed shot=%s job=%s: %s", shot_id, job_id, e)
+        return
+    try:
+        parsed = parse_result(result, shot_id=shot_id)
+    except ResultFormatError as e:
+        logger.error("analysis result unreadable shot=%s job=%s: %s", shot_id, job_id, e)
+        if _fail(db, shot_id, FailReason.ANALYSIS_FAILED):
+            stats.failed += 1
+        return
+    key = analysis_key(institution_id, dog_id, session_id, shot_id)
+    try:
+        storage.write_bytes(key, json.dumps(result, ensure_ascii=False).encode("utf-8"))
+    except (StorageError, OSError) as e:
+        logger.error("analysis.json write failed shot=%s: %s", shot_id, e)
+        return
+    try:
+        saved = apply_result(db, shot_id, parsed, analysis_key=key, analyzed_at=_now())
+        if saved:
+            db.commit()
+        else:
+            db.rollback()
+    except Exception:
+        db.rollback()
+        storage.delete(key)
+        raise
+    if saved:
+        stats.done += 1
+        logger.info("analysis saved shot=%s validity=%s passes=%d", shot_id, parsed.validity, len(parsed.passes))
+    else:
+        storage.delete(key)  # DB에 키가 없는 파일을 남기지 않는다(12.4)
+        logger.warning("shot %s changed before its result was saved; analysis.json discarded", shot_id)
 
 
 # ---- 가져오기 ----
@@ -231,7 +298,7 @@ def send_claimed(
 def run_once(db: Session, client: AnalysisClient, settings: Settings, storage: StorageService) -> WorkerStats:
     """한 바퀴. 상태를 조회해 자리를 비우고 → 새 촬영을 가져오고 → 가져온 것을 보낸다."""
     stats = WorkerStats()
-    poll_in_flight(db, client, settings, stats)
+    poll_in_flight(db, client, settings, storage, stats)
     claim_uploaded(db, settings, stats)
     send_claimed(db, client, settings, storage, stats)
     return stats

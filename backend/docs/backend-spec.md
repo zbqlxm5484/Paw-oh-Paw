@@ -6,6 +6,7 @@ Oct 19, 2026 · @조영운
 
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
+| v1.8 | 2026-10-26 | 분석 결과 저장(작업 단위 6 뒷부분, S15P31A404-124): 6절 결과 저장 원칙에 파일·DB에 넣는 값과 대응표 위치, 14.2 `ANALYSIS_FAILED`에 결과 JSON을 읽을 수 없는 경우, 14.3에 비어 있는 판정 사유 규칙(PARTIAL은 null 그대로, INVALID은 `NO_VALID_PASS`)·`NO_DOG` 촬영 단위·제외된 통과의 보행 유형 규칙 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -246,6 +247,9 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 ### 결과 저장 원칙
 
 분석 결과 JSON은 받은 그대로 파일로 보관하고, DB에는 화면과 비교에 쓰는 값만 뽑아 넣는다. 규격서 필드가 바뀌어도 원본에서 다시 뽑을 수 있고, 보고서 수치 대조(PR-F08-12)의 기준이 된다.
+
+- 파일은 촬영 키의 `analysis.json`(7절)이다. DB에는 촬영 판정·사유·모델 이름·버전(`shot`)과 통과별 행(`walk_pass`: 순번, 카메라 쪽, 보행 유형, 유효 여부·제외 사유, 시작·끝 프레임)만 넣는다. 통과별 수치는 JSON에만 있고 회차 집계(작업 단위 8)가 거기서 읽는다.
+- 분석 API의 소문자 값(판정, 보행 유형, 카메라 쪽, 사유 코드)은 `clients/analysis.py`의 대응표(`map_*`)로 우리 코드(12.2, 14.3)로 바꾸고, 바꾸는 일과 DB 쓰기는 `services/analysis_results.py`가 한다. 파일 쓰기와 조건을 건 UPDATE의 순서는 12.4를 따른다.
 
 ### 조유진과 맞출 계약
 
@@ -1033,7 +1037,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | 코드 | 어디에 | 기본 문구 | 언제 |
 | --- | --- | --- | --- |
 | `ANALYSIS_SUBMIT_FAILED` | `shot.fail_reason` | 분석 서버에 보내지 못했습니다. 다시 분석을 눌러 주세요. | 제출 3번 실패 |
-| `ANALYSIS_FAILED` | `shot.fail_reason` | 분석에 실패했습니다. | 분석 API가 실패로 답함. 분석 API의 원래 사유는 로그에 남긴다 |
+| `ANALYSIS_FAILED` | `shot.fail_reason` | 분석에 실패했습니다. | 분석 API가 실패로 답함(원래 사유는 로그에), 또는 결과 JSON이 6절 계약과 달라 읽을 수 없음(어느 필드인지 로그에) |
 | `ANALYSIS_TIMEOUT` | `shot.fail_reason` | 분석이 너무 오래 걸려 중단했습니다. | 시간 초과(기본 600초) |
 | `VIDEO_RENDER_FAILED` | `shot.video_status`=FAILED | 결과 영상을 만들지 못했습니다. 판정 결과는 그대로 볼 수 있습니다. | 골격 그리기·얼굴 가리기·인코딩 실패 |
 | `AGGREGATION_FAILED` | `measure_session.fail_reason` | 회차 수치를 계산하지 못했습니다. | 회차 집계 오류 |
@@ -1059,7 +1063,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `NOT_SIDE_VIEW` | 통과 | 옆모습이 찍히지 않았습니다. | PR-F03-02 |
 | `OCCLUDED` | 통과 | 몸이 가려졌습니다. | PR-F03-02 |
 | `OVERLAP` | 통과 | 다른 동물이나 사람과 겹쳤습니다. | PR-F03-02 |
-| `NO_DOG` | 통과 | 반려견이 화면에 없습니다. | PR-F03-02 |
+| `NO_DOG` | 촬영·통과 | 반려견이 화면에 없습니다. | PR-F03-02 |
 | `GAIT_PACE` | 통과 | 측대보라 수치 계산에서 뺐습니다. | PR-F03-09 |
 | `GAIT_OTHER` | 통과 | 평보·속보가 아니라 수치 계산에서 뺐습니다. | PR-F03-09 |
 | `NO_PASS_FOR_LIMB` | 수치 | 이 다리를 잴 유효 통과가 없습니다. 반대 방향으로도 걷게 해 주세요. | PR-F02-04·05 |
@@ -1069,6 +1073,8 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 
 - 분석 API가 보내는 사유는 `clients/analysis.py`의 대응표로 위 코드로 바꿔 저장한다. 대응표에 없는 코드는 `UNKNOWN_REASON`으로 저장하고 원래 코드를 로그에 남긴다.
 - 통과 하나에 사유가 여러 개면 분석 API가 처음에 낸 하나만 저장한다.
+- 분석 API가 촬영 판정 사유(`validity_reason`)를 비워 보내면: PARTIAL은 "유효 통과는 기준 수 이상인데 제외된 통과가 있다"는 뜻이라 null 그대로 저장하고(조유진 유효 판별 규칙 초안 4.2, MR !30), INVALID은 `NO_VALID_PASS`로 저장한다. VALID는 사유가 없다. 어느 통과가 왜 빠졌는지는 통과별 `exclude_reason`에 있다. 제외된 통과의 `reason_code`가 비어 있으면 `UNKNOWN_REASON`이다.
+- 제외된 통과는 분석 API가 `gait`를 비워 보내므로 `walk_pass.gait_type`은 `OTHER`로 저장한다.
 - 사유 코드 목록은 조유진의 판별 결과가 정해지면 그에 맞춰 더하거나 뺀다(10절 Q6).
 
 ### 14.4 경고·안내

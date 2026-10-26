@@ -8,8 +8,9 @@
   화면·워커·보고서를 먼저 만들고, 시연 날 분석 서버가 안 될 때의 대비다.
 
 Spring에 빗대면 AnalysisClient는 인터페이스이고 두 클래스는 @Profile("mock"/"http")로 갈아 끼우는 구현체다.
-분석 API가 주는 값(소문자 상태값, 사유 코드)을 우리 코드(14절)로 바꾸는 일은 여기서 하지 않고
-결과를 저장하는 서비스가 한다.
+클라이언트 두 클래스는 분석 API가 준 값을 그대로 돌려준다. 그 값(소문자 판정·보행·카메라 쪽, 사유 코드)을 우리
+코드(14절)로 바꾸는 대응표는 이 모듈 끝의 map_* 함수이고(14.3), 결과를 DB에 넣는 services/analysis_results.py가
+쓴다.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from typing import Any, Literal, Protocol
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.core.errors import JudgeReason
+from app.models.enums import CameraSide, GaitType, Validity
 
 logger = logging.getLogger(__name__)
 
@@ -273,3 +276,48 @@ def build_analysis_client(settings: Settings | None = None) -> AnalysisClient:
         settings.ANALYSIS_API_KEY.get_secret_value(),
         settings.ANALYSIS_HTTP_TIMEOUT_SEC,
     )
+
+
+# ---- 14절 대응표 (14.3) ----
+#
+# 분석 API의 소문자 값을 우리 코드로 바꾼다. 클라이언트는 받은 그대로 돌려주고, 결과를 저장하는 쪽
+# (services/analysis_results.py)이 이 함수들로 바꾼다. 모르는 사유 코드는 UNKNOWN_REASON으로 두고 원래 코드를 로그에
+# 남긴다(17.3 BE-08).
+
+VALIDITY_MAP = {"valid": Validity.VALID.value, "partial": Validity.PARTIAL.value, "invalid": Validity.INVALID.value}
+GAIT_MAP = {
+    "walk": GaitType.WALK.value,
+    "trot": GaitType.TROT.value,
+    "pace": GaitType.PACE.value,
+    "other": GaitType.OTHER.value,
+}
+CAMERA_SIDE_MAP = {"left": CameraSide.LEFT.value, "right": CameraSide.RIGHT.value}
+# 촬영 판정 사유가 비어 있을 때. PARTIAL의 null은 "유효 통과는 기준 수 이상인데 제외된 통과가 있다"는 뜻이라 그대로
+# 두고(조유진 유효 판별 규칙 초안 4.2, MR !30), INVALID만 NO_VALID_PASS로 채운다. VALID는 사유가 없다
+DEFAULT_VALIDITY_REASON = {Validity.INVALID.value: JudgeReason.NO_VALID_PASS.value}
+KNOWN_REASONS = frozenset(member.value for member in JudgeReason)
+
+
+def map_validity(value: Any) -> str | None:
+    """valid·partial·invalid → VALID·PARTIAL·INVALID. 모르는 값이면 None(부르는 쪽이 형식 오류로 처리한다)."""
+    return VALIDITY_MAP.get(value.lower()) if isinstance(value, str) else None
+
+
+def map_camera_side(value: Any) -> str | None:
+    """left·right → LEFT·RIGHT. 모르는 값이면 None."""
+    return CAMERA_SIDE_MAP.get(value.lower()) if isinstance(value, str) else None
+
+
+def map_gait(value: Any) -> str:
+    """walk·trot·pace → WALK·TROT·PACE. 비어 있거나(제외된 통과) 모르는 값이면 OTHER(walk_pass.gait_type은 NOT NULL)."""
+    if isinstance(value, str):
+        return GAIT_MAP.get(value.lower(), GaitType.OTHER.value)
+    return GaitType.OTHER.value
+
+
+def map_reason(code: Any, *, shot_id: uuid.UUID, where: str) -> str:
+    """14.3 사유 코드. 목록에 없으면 UNKNOWN_REASON으로 두고 원래 코드를 로그에 남긴다."""
+    if isinstance(code, str) and code.upper() in KNOWN_REASONS:
+        return code.upper()
+    logger.warning("unknown reason code %r in %s shot=%s; stored as UNKNOWN_REASON", code, where, shot_id)
+    return JudgeReason.UNKNOWN_REASON.value
