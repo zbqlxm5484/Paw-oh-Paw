@@ -4,6 +4,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+
+import { dogKeys } from '../api/dogs'
 
 import { fileUrl } from '../api/labels'
 import { useSession } from '../api/sessions'
@@ -95,7 +98,7 @@ export function DesignRoot() {
     }
   }, [checking, loggedIn, route.screen, loc.pathname, loc.search, navigate, query])
 
-  const data = useDesignData()
+  const data = useDesignData(route.screen === 'detail' || route.screen === 'report' ? route.params.sessionId : undefined)
   const actions = useDesignActions()
   const [ui, setUiState] = useState<UiSel>({ cmp: 'base', tk: 'rom' })
   const setUi = useCallback((p: Partial<UiSel>) => setUiState((u) => ({ ...u, ...p })), [])
@@ -103,6 +106,13 @@ export function DesignRoot() {
   const sessScreens = ['analyzing', 'capReview', 'capGuide']
   const sessQ = useSession(sessScreens.includes(route.screen) ? route.params.sessionId : undefined)
   const sessionAna = useMemo(() => (sessQ.data ? toAna(sessQ.data, sessQ.data.dog_id, sessQ.data.id) : null), [sessQ.data])
+  const qc = useQueryClient()
+  const prevSt = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const st = sessQ.data?.status
+    if (prevSt.current && prevSt.current !== st && (st === 'DONE' || st === 'FAILED')) qc.invalidateQueries({ queryKey: dogKeys.all })
+    prevSt.current = st
+  }, [sessQ.data?.status, qc])
   const cmpDog = route.screen === 'compare' ? data.dogs.find((d) => d.id === route.params.dogId) : undefined
   const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null)
   const reportsQ = useReportData(route.screen === 'report' ? route.params.sessionId : undefined)

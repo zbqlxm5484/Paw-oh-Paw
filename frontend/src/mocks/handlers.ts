@@ -199,10 +199,8 @@ export const handlers = [
     await delay(350)
     const dog = findDog(params.dogId)
     if (!dog) return notFound()
-    const body = ((await request.text()) ? JSON.parse(await Promise.resolve('{}')) : {}) as SessionCreate
-    // request.text() 는 한 번만 읽힌다. 위에서 읽었으므로 다시 파싱한다
-    void body
-    const raw = await request.clone().text().catch(() => '')
+    // 본문은 한 번만 읽는다(빈 본문도 허용)
+    const raw = await request.text().catch(() => '')
     const data = (raw ? (JSON.parse(raw) as SessionCreate) : {}) ?? {}
     const open = sessions.find((s) => s.dog_id === dog.id && s.status === 'MEASURING')
     if (open) return err(409, 'SESSION_ALREADY_OPEN', '이 반려견은 이미 측정 중인 회차가 있습니다.', { session_id: open.id })

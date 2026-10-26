@@ -3,14 +3,14 @@
  * 반려견 목록 → 반려견별 측정 이력 → 끝난 회차의 결과(수치) 순으로 가져오고,
  * 측정 중인 회차는 2.5초마다 다시 읽어 "분석 중" 진행도를 만든다.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQueries, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '../app/auth'
 import * as dogsApi from '../api/dogs'
-import { getSessionResult, resultKeys, useAllSessions, useCompare, useReports, useTrends } from '../api/results'
+import { getSessionResult, resultKeys, useAllSessions, useCompare, useReports, useSessionResult, useTrends } from '../api/results'
 import * as sessApi from '../api/sessions'
-import type { DogCreate, DogUpdate, SessionResultOut } from '../api/types'
+import type { DogCreate, DogUpdate, SessionHistoryItem, SessionResultOut } from '../api/types'
 import { TREND_CODE, compareRows, toAcct, toAna, toDog, toResult, trendLines, type DAna, type DDog, type DRes } from './adapter'
 
 /** 결과(수치)를 미리 읽어 두는 회차 수. 목록·홈 요약에 쓴다 */
@@ -26,8 +26,10 @@ export interface DesignData {
   resultById: (id: string) => DRes | undefined
 }
 
-export function useDesignData(): DesignData {
+/** @param focusSessionId 지금 보고 있는 회차. 목록에 아직 없으면(방금 끝난 회차) 결과만 따로 읽어 끼워 넣는다 */
+export function useDesignData(focusSessionId?: string): DesignData {
   const { loggedIn, staff } = useAuth()
+  const qc = useQueryClient()
   const dogsQ = dogsApi.useDogs(loggedIn ? { size: 100 } : { size: 0 })
   const rawDogs = loggedIn ? dogsQ.data?.items : undefined
   const hist = useAllSessions(rawDogs)
@@ -47,19 +49,32 @@ export function useDesignData(): DesignData {
   })
 
   const dogs = useMemo(() => (rawDogs ?? []).map(toDog), [rawDogs])
-  const results = useMemo(
-    () =>
-      hist.items
-        .filter((s) => s.status === 'DONE' || s.status === 'FAILED')
-        .sort((a, b) => b.measured_on.localeCompare(a.measured_on) || b.id.localeCompare(a.id))
-        .map((s) => toResult(s, s.dog.id, resultsQ.get(s.id))),
-    [hist.items, resultsQ],
-  )
+  // 목록에 없는 회차(방금 끝난 회차)는 결과를 따로 읽는다
+  const missing = !!focusSessionId && !hist.isPending && !hist.items.some((s) => s.id === focusSessionId)
+  const focusQ = useSessionResult(missing ? focusSessionId : undefined)
+  const results = useMemo(() => {
+    const list = hist.items
+      .filter((s) => s.status === 'DONE' || s.status === 'FAILED')
+      .map((s) => toResult(s, s.dog.id, resultsQ.get(s.id)))
+    const f = focusQ.data
+    if (missing && f && !list.some((r) => r.id === f.id)) {
+      const h: SessionHistoryItem = { id: f.id, measured_on: f.measured_on, weight_kg: f.weight_kg, status: f.status, is_baseline: false, valid_passes: { LEFT: 0, RIGHT: 0 }, model_version: f.model_version, reports: null }
+      list.push(toResult(h, f.dog_id, f))
+    }
+    return list.sort((a, b) => b.measured_on.localeCompare(a.measured_on) || b.id.localeCompare(a.id))
+  }, [hist.items, resultsQ, focusQ.data, missing])
 
   // 측정 중인 회차(반려견의 open_session_id). 하나만 "분석 중" 으로 보여 준다
   const openDog = dogs.find((d) => d.open)
   const sessQ = sessApi.useSession(openDog?.open ?? undefined)
   const ana = useMemo(() => (openDog && openDog.open ? toAna(sessQ.data, openDog.id, openDog.open) : null), [openDog, sessQ.data])
+  // 측정 중이던 회차가 끝나면 반려견·이력 목록을 다시 읽는다
+  const lastStatus = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const st = sessQ.data?.status
+    if (lastStatus.current && lastStatus.current !== st && (st === 'DONE' || st === 'FAILED')) qc.invalidateQueries({ queryKey: dogsApi.dogKeys.all })
+    lastStatus.current = st
+  }, [sessQ.data?.status, qc])
 
   const acct = useMemo(() => toAcct(staff), [staff])
   return {
