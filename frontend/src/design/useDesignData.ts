@@ -30,7 +30,7 @@ export interface DesignData {
 export function useDesignData(focusSessionId?: string): DesignData {
   const { loggedIn, staff } = useAuth()
   const qc = useQueryClient()
-  const dogsQ = dogsApi.useDogs(loggedIn ? { size: 100 } : { size: 0 })
+  const dogsQ = dogsApi.useDogs({ size: 100 }, loggedIn)
   const rawDogs = loggedIn ? dogsQ.data?.items : undefined
   const hist = useAllSessions(rawDogs)
   const doneIds = useMemo(

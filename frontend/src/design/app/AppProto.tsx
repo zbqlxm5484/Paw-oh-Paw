@@ -59,9 +59,13 @@ export class AppProto extends DCLogic<Props, any> {
     this.t1 = setTimeout(() => this.setState({ joint: true }), 300)
     this.t2 = setTimeout(() => { this.setState({ splash: false }); if (this.props.screen === 'home' && !this.props.data.loggedIn) this.props.nav('/welcome', { replace: true }) }, 2200)
   }
+  /** 마지막으로 올린 영상(이 기기에서 고른 파일). 영상 첨부 화면의 미리보기에 쓴다 */
+  lastFileUrl: string | null = null
   vid = (el: HTMLVideoElement | null) => {
     if (!el || this.vids.has(el)) return
     this.vids.add(el)
+    // 영상 첨부 화면: 디자인의 견본 영상 대신 방금 올린 영상을 보여 준다
+    if (this.props.screen === 'capReview' && this.lastFileUrl) el.src = this.lastFileUrl
     el.muted = true; el.volume = 0; el.loop = true; el.playsInline = true
     const go = () => { el.muted = true; el.play().catch(() => {}) }
     go()
@@ -122,6 +126,9 @@ export class AppProto extends DCLogic<Props, any> {
     try {
       const sid = await this.ensureSession()
       const out = await this.props.actions.uploadShot(sid, file)
+      if (this.lastFileUrl) URL.revokeObjectURL(this.lastFileUrl)
+      this.lastFileUrl = URL.createObjectURL(file)
+      for (const v of this.vids) if (v.isConnected && this.props.screen === 'capReview') v.src = this.lastFileUrl
       this.toast(out.warnings?.length ? out.warnings[0].message : `${out.seq_no}번째 영상을 첨부했어요`)
       if (this.props.params.sessionId !== sid || this.props.screen !== 'capReview') this.nav('capReview', `/sessions/${sid}`, this.props.screen === 'capGuide')
     } catch (e) {

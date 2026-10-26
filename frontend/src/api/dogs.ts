@@ -32,8 +32,8 @@ export function listDogSessions(id: string, p: { page?: number; size?: number } 
   return request(`/dogs/${id}/sessions${qs({ page: p.page, size: p.size ?? 100 })}`)
 }
 
-export function useDogs(p: DogListParams) {
-  return useQuery({ queryKey: dogKeys.list(p), queryFn: () => listDogs(p), placeholderData: (prev) => prev })
+export function useDogs(p: DogListParams, enabled = true) {
+  return useQuery({ queryKey: dogKeys.list(p), queryFn: () => listDogs(p), placeholderData: (prev) => prev, enabled })
 }
 
 export function useDog(id: string | undefined) {
