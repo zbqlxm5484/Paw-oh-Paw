@@ -1,0 +1,25 @@
+{
+  "id": "2b8e6d10-4f3a-4c7e-9b21-5a9d0e3c8f44",
+  "shot_id": "sample-shot-002",
+  "status": "done",
+  "model": {
+    "name": "fs-v4",
+    "version": "0.1.0/v1/a4261a10",
+    "angle_def": "v1",
+    "weights_sha256": "a4261a107bc8e2f6a0418e8ffb02f510eb396c892aae1843092883b9fd63882f"
+  },
+  "input": {
+    "filename": "sample-sub1.mp4",
+    "codec": "h265",
+    "fps": 60.0,
+    "width": 1920,
+    "height": 1080,
+    "frames": 540
+  },
+  "validity": "invalid",
+  "validity_reason": "NO_DOG",
+  "summary": {"passes": 0, "used": 0, "excluded": 0},
+  "passes": [],
+  "files": {"keypoints": "/analyses/2b8e6d10-4f3a-4c7e-9b21-5a9d0e3c8f44/files/keypoints"},
+  "created_at": "2026-10-22T15:24:02+09:00"
+}
