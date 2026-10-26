@@ -131,7 +131,7 @@ class Conv:
         """'a {{ x }} b' → JS 식 문자열. 전부 바인딩이면 식 그대로, 섞이면 템플릿 리터럴."""
         parts = BIND.split(s)
         if len(parts) == 1:
-            return json.dumps(html.unescape(s))
+            return json.dumps(html.unescape(s), ensure_ascii=False)
         if len(parts) == 3 and parts[0] == '' and parts[2] == '':
             return self.expr(parts[1], scope)
         out = '`'
@@ -201,7 +201,7 @@ class Conv:
             if BIND.search(val):
                 out.append(f'{name}={{{self.interp(val, scope)}}}')
             else:
-                out.append(f'{name}={json.dumps(html.unescape(val))}')
+                out.append(f'{name}={json.dumps(html.unescape(val), ensure_ascii=False)}')
         if classes:
             out.append(f'className={json.dumps(" ".join(classes))}')
         return (' ' + ' '.join(out)) if out else ''
@@ -230,6 +230,23 @@ class Conv:
                 out += '{' + self.expr(p, scope) + '}'
         return out
 
+    def raw_text(self, n):
+        out = ''
+        for c in n.children:
+            out += c.s if isinstance(c, Text) else (' '.join(v or '' for _, v in c.attrs) + self.raw_text(c))
+        return ' '.join(v or '' for _, v in n.attrs) + out
+
+    def clone(self, n, ren):
+        def sub(s):
+            for a, b in ren.items():
+                s = re.sub(r'\{\{\s*' + a + r'\s*\}\}', '{{ ' + b + ' }}', s)
+            return s
+        if isinstance(n, Text):
+            return Text(sub(n.s))
+        m = Node(n.tag, [(k, sub(v) if v else v) for k, v in n.attrs])
+        m.children = [self.clone(c, ren) for c in n.children]
+        return m
+
     def children(self, node, scope, depth):
         return ''.join(self.node(c, scope, depth) for c in node.children)
 
@@ -250,6 +267,12 @@ class Conv:
             return '{(' + lst + ' || []).map((' + var + ': any, ' + idx + ': number) => (<Fragment key={' + idx + '}>' + inner + '</Fragment>))}'
         if a.get('data-jump') is not None:
             return ''
+        # 로그인 화면: 아이디 칸 앞에 같은 모양의 '기관 코드' 칸을 하나 더 둔다(API 가 institution_code 를 요구)
+        if tag == 'label' and 'loginIdLabel' in self.raw_text(n) and not getattr(n, '_injected', False):
+            clone = self.clone(n, {'loginIdLabel': 'loginCodeLabel', 'fLoginId': 'fLoginCode', 'onLoginId': 'onLoginCode', 'loginIdPh': 'loginCodePh'})
+            clone._injected = True
+            n._injected = True
+            return self.node(clone, scope, depth) + self.node(n, scope, depth)
         attrs = self.attrs(n, scope, root_override)
         if tag in VOID:
             return f'<{tag}{attrs} />'

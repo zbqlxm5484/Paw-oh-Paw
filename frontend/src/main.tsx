@@ -6,7 +6,6 @@ import { RouterProvider } from 'react-router-dom'
 import { ApiError } from './api/client'
 import { AuthProvider } from './app/auth'
 import { router } from './app/router'
-import { ToastProvider } from './app/toast'
 import './styles/global.css'
 
 const queryClient = new QueryClient({
@@ -31,9 +30,7 @@ enableMocking().then(() => {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ToastProvider>
-            <RouterProvider router={router} />
-          </ToastProvider>
+          <RouterProvider router={router} />
         </AuthProvider>
       </QueryClientProvider>
     </StrictMode>,

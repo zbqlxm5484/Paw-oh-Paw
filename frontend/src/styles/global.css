@@ -9,137 +9,42 @@
   font-display: swap;
 }
 
+/* 디자인 템플릿의 body 규칙 그대로. 화면 자체의 스타일은 생성된 AppView(인라인)에 있다 */
 * {
   box-sizing: border-box;
 }
-
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
-
 body {
   margin: 0;
-  background: var(--canvas);
-  color: var(--ink);
-  font-family: var(--font);
-  letter-spacing: -0.2px;
+  background: #faf9f6;
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  color: #1b2433;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.2px;
 }
-
 a {
-  color: var(--pri-d);
+  color: #b4501a;
 }
-
+a:hover {
+  color: #8f3f14;
+}
 input,
-textarea,
-button {
+textarea {
   font-family: inherit;
   letter-spacing: -0.2px;
 }
-
 input::placeholder,
 textarea::placeholder {
-  color: var(--dim);
+  color: #a0a7b2;
 }
-
-/* 폰 폭에서는 꽉 채우고, 넓은 화면에서는 디자인 기준 기기(Galaxy S24 Ultra, 412×915)와 같은 폭의 기둥으로 보여 준다 */
-.app-shell {
-  min-height: 100%;
-  display: flex;
-  justify-content: center;
-  background: var(--canvas);
-}
-
-.app-frame {
-  position: relative;
-  width: 100%;
-  max-width: 412px;
-  min-height: 100dvh;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-}
-
-/* 데스크톱 브라우저에서 볼 때: 폰 프레임처럼 412×915 로 띄운다 */
-@media (min-width: 640px) and (min-height: 700px) {
-  .app-shell {
-    align-items: center;
-    padding: 24px 0;
-  }
-  .app-frame {
-    height: 915px;
-    min-height: 0;
-    max-height: calc(100dvh - 48px);
-    border-radius: 28px;
-    overflow: hidden;
-    box-shadow: 0 30px 80px rgba(27, 36, 51, 0.16);
-  }
-  .tabbar,
-  .sheet,
-  .sheet-dim,
-  .toast {
-    position: absolute;
-  }
-}
-
-/* 세로 스크롤 영역. 스크롤바는 숨긴다(디자인 .pp-s) */
-.scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: none;
-}
-.scroll::-webkit-scrollbar {
+/* 앱 v5 가로 스크롤 영역: 스크롤바 숨김 */
+.pp-s::-webkit-scrollbar {
   display: none;
 }
-
-/* 화면 공통 레이아웃 */
-.screen {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding-top: env(safe-area-inset-top);
-}
-
-.screen-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 8px 20px 24px;
-}
-
-/* 탭이 있는 화면은 탭바 높이만큼 아래 여백 */
-.with-tabs {
-  padding-bottom: 110px;
-}
-
-.sticky-footer {
-  flex: none;
-  padding: 12px 20px calc(28px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  background: var(--bg);
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
-.ellipsis {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-p {
-  margin: 0;
+.pp-s {
+  scrollbar-width: none;
 }
