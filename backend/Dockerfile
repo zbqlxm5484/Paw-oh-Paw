@@ -1,6 +1,9 @@
 # Python 3.11 + requirements.txt 버전 고정 (PR-C-07)
 FROM python:3.11-slim
 WORKDIR /app
+# ffmpeg(ffprobe 포함): 업로드 영상 검사와 결과 영상 인코딩. pip이 아니라 OS 패키지라 requirements.txt 밖에 둔다
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
