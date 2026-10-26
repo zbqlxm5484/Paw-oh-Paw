@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}기관 회원가입 · Paw oh Paw{% endblock %}
+{% block topbar %}{% include "_authbar.html" %}{% endblock %}
+{% set inp = "height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none" %}
+{% block content %}
+<main style="max-width:560px;margin:24px auto 96px;padding:0 24px">
+  <form method="post" action="/signup" id="soForm" style="background:#fff;border:1px solid #ECE8E2;border-radius:20px;padding:36px 32px;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:26px;font-weight:800;letter-spacing:-0.6px">기관 회원가입</h1><p style="margin:0;font-size:15px;color:#5B6472">동물병원·재활센터용 계정이에요. 기관 정보와 로그인 정보를 입력해 주세요.</p></div>
+    <b style="font-size:16px;margin-top:4px">기관 정보</b>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">기관명</span><input class="inp so" name="org" placeholder="예) 한빛동물병원" style="{{ inp }}"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">기관 주소</span><input class="inp so" name="loc" placeholder="주소 검색" style="{{ inp }}"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">디바이스 번호</span><input class="inp so" name="dev" placeholder="예) PP-2410-0381" style="{{ inp }}"><span style="font-size:13px;color:#5B6472">측정 기기 뒷면 라벨에 적혀 있어요.</span></label>
+    <b style="font-size:16px;margin-top:10px">로그인 정보</b>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">아이디</span><input class="inp so" name="login_id" autocomplete="username" placeholder="영문·숫자 4~16자" style="{{ inp }}"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">비밀번호</span><input class="inp so" type="password" name="pw" autocomplete="new-password" placeholder="4자 이상" style="{{ inp }}"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">비밀번호 확인</span><input class="inp so" type="password" name="pw2" autocomplete="new-password" placeholder="한 번 더 입력" style="{{ inp }}"><span id="pwHint" style="font-size:13px;color:#C2412D;display:none">비밀번호가 달라요</span></label>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
+      <b style="font-size:16px;margin-bottom:8px">약관 동의</b>
+      <div id="allTerms" style="height:56px;border-radius:12px;background:#F2EEE8;display:flex;align-items:center;gap:14px;padding:0 18px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#C9C4BC"><use href="#w-check"></use></svg><span style="font-size:16px;font-weight:600">모두 동의합니다.</span></div>
+      {% for label in ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 및 이용', '[필수] 측정 기기 연동 및 위치정보 이용', '[선택] 마케팅 정보 수신'] %}
+      <div class="term" style="min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer"><input type="hidden" name="t{{ loop.index0 }}" value=""><svg width="20" height="20" viewBox="0 0 24 24" style="color:#C9C4BC;flex:none"><use href="#w-check"></use></svg><span style="flex:1;font-size:15px;color:#3A4250">{{ label }}</span><span class="view" data-toast="약관 전문은 준비 중이에요" style="font-size:13px;color:#A0A7B2;text-decoration:underline">보기</span></div>
+      {% endfor %}
+    </div>
+    <button class="bt" type="submit" id="soBtn" style="height:56px;border-radius:14px;background:#C3C8CF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;margin-top:6px">가입하기</button>
+    <a class="lk" href="/login" style="align-self:center;font-size:14px;color:#5B6472">이미 계정이 있어요 · <b style="color:#1B2433">로그인</b></a>
+  </form>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var f = document.getElementById('soForm'), terms = Array.prototype.slice.call(document.querySelectorAll('.term'));
+  var v = function (n) { return f.elements[n].value; };
+  var on = function (t) { return !!t.querySelector('input').value; };
+  function set(t, yes) { t.querySelector('input').value = yes ? '1' : ''; t.querySelector('svg').style.color = yes ? '#D2601A' : '#C9C4BC'; }
+  function paint() {
+    var all = terms.every(on);
+    document.querySelector('#allTerms svg').style.color = all ? '#D2601A' : '#C9C4BC';
+    document.getElementById('pwHint').style.display = v('pw2') && v('pw') !== v('pw2') ? 'block' : 'none';
+    var ok = on(terms[0]) && on(terms[1]) && on(terms[2]) && v('org') && v('dev') && v('login_id').length >= 4 && v('pw').length >= 4 && v('pw') === v('pw2');
+    document.getElementById('soBtn').style.background = ok ? '#D2601A' : '#C3C8CF';
+  }
+  terms.forEach(function (t) { t.addEventListener('click', function (e) { if (e.target.classList.contains('view')) return; set(t, !on(t)); paint(); }); });
+  document.getElementById('allTerms').addEventListener('click', function () { var all = terms.every(on); terms.forEach(function (t) { set(t, !all); }); paint(); });
+  f.querySelectorAll('.so').forEach(function (i) { i.addEventListener('input', paint); });
+})();
+</script>
+{% endblock %}
