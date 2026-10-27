@@ -1,5 +1,6 @@
-"""워커 분석 제출·조회(명세 3절, 12.4, 13.3, 14.2, 17.3 BE-06·07). 결과 저장(DONE)은 2/2(결과 저장 작업)에서 본다."""
+"""워커 분석 제출·조회·결과 저장(명세 3절, 6절, 12.4, 13.3, 14.2, 14.3, 17.3 BE-06·07·08·11)."""
 
+import json
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -8,16 +9,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.orm import Session
 
-from app.clients.analysis import AnalysisClientError, AnalysisStatus, MockAnalysisClient, SubmitInfo
+from app.clients.analysis import AnalysisClientError, AnalysisStatus, MockAnalysisClient, SubmitInfo, load_fixture
 from app.core.config import Settings, get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
-from app.models import MeasureSession, Shot
+from app.models import MeasureSession, Shot, WalkPass
 from app.services.sessions import cancel_session
 from app.storage.base import get_storage
+from app.storage.keys import analysis_key
 from app.worker.main import Worker, clean_worker_tmp, run_once
 
 # ---- 준비 ----
@@ -65,14 +67,22 @@ def _fresh(db: Session, shot: Shot) -> Shot | None:
 
 
 class FakeClient:
-    """제출·상태를 마음대로 정하는 분석 클라이언트. submit_hook은 제출 중에 다른 처리가 끼어드는 상황용."""
+    """제출·상태·결과를 마음대로 정하는 분석 클라이언트. *_hook은 그 호출 중에 다른 처리가 끼어드는 상황용."""
 
-    def __init__(self, statuses: dict[str, Any] | None = None, submit_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        statuses: dict[str, Any] | None = None,
+        submit_error: Exception | None = None,
+        results: dict[str, Any] | None = None,
+    ) -> None:
         self.statuses = statuses or {}
         self.submit_error = submit_error
+        self.results = results or {}
         self.submit_hook = None
+        self.result_hook = None
         self.submits: list[tuple[Path, SubmitInfo]] = []
         self.status_calls: list[str] = []
+        self.result_calls: list[str] = []
 
     def submit(self, video: Path, info: SubmitInfo) -> str:
         self.submits.append((video, info))
@@ -90,10 +100,37 @@ class FakeClient:
         return answer
 
     def get_result(self, job_id: str) -> dict[str, Any]:
-        raise NotImplementedError("결과 저장은 2/2")
+        self.result_calls.append(job_id)
+        if self.result_hook:
+            self.result_hook(job_id)
+        answer = self.results.get(job_id, AnalysisClientError("409 NOT_READY"))
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
 
     def get_keypoints(self, job_id: str) -> dict[str, Any]:
-        raise NotImplementedError("결과 저장은 2/2")
+        raise NotImplementedError("관절점 파일은 결과 영상 작업에서 쓴다")
+
+
+class HookedStorage:
+    """저장소를 감싸 write_bytes 직후에 훅을 부른다. 12.4 "파일을 먼저 쓰고 키를 붙인다"의 그 사이에 끼어드는 상황용."""
+
+    def __init__(self, after_write=None, write_error: Exception | None = None) -> None:
+        self._inner = get_storage()
+        self._after_write = after_write
+        self._write_error = write_error
+        self.written: list[str] = []
+
+    def write_bytes(self, key: str, data: bytes) -> None:
+        if self._write_error:
+            raise self._write_error
+        self._inner.write_bytes(key, data)
+        self.written.append(key)
+        if self._after_write:
+            self._after_write(key)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 # ---- 가져오기·제출 (BE-06) ----
@@ -168,6 +205,43 @@ def test_submit_failures_keep_the_shot_claimed_then_give_up(db: Session, dog, st
     assert len(client.submits) == 3
 
 
+def test_rejected_submit_fails_without_retry(db: Session, dog, staff) -> None:
+    # 87 MR 리뷰 제안 A: 분석 API가 요청 자체를 거부하면(415 등 4xx) 다시 보내지 않고 바로 FAILED
+    session = _session(db, dog, staff)
+    shot = _shot(db, session, 1)
+    client = FakeClient(submit_error=AnalysisClientError("415 UNSUPPORTED_MEDIA", retryable=False))
+
+    stats = run_once(db, client, _settings(ANALYSIS_SUBMIT_MAX_ATTEMPTS=3), get_storage())
+
+    row = _fresh(db, shot)
+    assert stats.failed == 1 and stats.submit_attempt_failed == 0
+    assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_SUBMIT_FAILED" and row.attempt_count == 1
+    assert len(client.submits) == 1
+
+
+def test_auth_failure_pauses_submissions_without_counting_attempts(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture
+) -> None:
+    # 12.4: 401·403은 키 설정 문제다. 촬영을 실패시키지도, attempt_count를 올리지도 않고 그 바퀴의 제출을 멈춘다
+    session = _session(db, dog, staff)
+    shots = [_shot(db, session, seq_no) for seq_no in (1, 2)]
+    client = FakeClient(submit_error=AnalysisClientError("401 AUTH_REQUIRED", status_code=401))
+    caplog.set_level(logging.ERROR, logger="app.worker")
+
+    stats = run_once(db, client, _settings(ANALYSIS_SUBMIT_MAX_ATTEMPTS=3), get_storage())
+
+    assert stats.claimed == 2 and stats.submitted == 0 and stats.failed == 0 and stats.submit_attempt_failed == 1
+    assert len(client.submits) == 1  # 첫 촬영에서 멈춘다. 나머지도 같은 키라 같다
+    for shot in shots:
+        row = _fresh(db, shot)
+        assert row.status == "SUBMITTED" and row.job_id is None and row.attempt_count == 0
+    assert "ANALYSIS_API_KEY" in caplog.text
+
+    client.submit_error = None  # 키를 고치면 다음 바퀴에 그대로 보낸다
+    stats = run_once(db, client, _settings(), get_storage())
+    assert stats.submitted == 2 and all(_fresh(db, shot).job_id for shot in shots)
+
+
 def test_missing_original_file_is_a_failed_attempt(db: Session, dog, staff) -> None:
     session = _session(db, dog, staff)
     shot = _shot(db, session, 1)
@@ -219,7 +293,8 @@ def test_poll_moves_shots_by_analysis_status(db: Session, dog, staff, caplog: py
             "r": AnalysisStatus("running"),
             "d": AnalysisStatus("done", model_name="fs-v4", model_version="0.1.0/v1/a4261a10"),
             "f": AnalysisStatus("failed", error_code="NO_DOG", error_message="개 미검출"),
-        }
+        },
+        results={"d": load_fixture("result_valid")},
     )
     caplog.set_level(logging.ERROR, logger="app.worker")
 
@@ -229,7 +304,7 @@ def test_poll_moves_shots_by_analysis_status(db: Session, dog, staff, caplog: py
     assert sorted(client.status_calls) == ["d", "f", "q", "r"]  # job_id 없는 것은 묻지 않는다
     assert _fresh(db, queued).status == "SUBMITTED"
     assert _fresh(db, running).status == "ANALYZING"
-    assert _fresh(db, done).status == "ANALYZING"  # DONE과 결과 저장은 2/2
+    assert _fresh(db, done).status == "DONE"
     row = _fresh(db, failed)
     assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_FAILED"
     assert "NO_DOG" in caplog.text and "개 미검출" in caplog.text  # 원래 사유는 로그에만(14.2)
@@ -264,10 +339,41 @@ def test_status_call_error_leaves_the_shot_in_flight(db: Session, dog, staff) ->
     assert _fresh(db, broken).status == "SUBMITTED" and _fresh(db, fine).status == "ANALYZING"
 
 
+def test_missing_job_fails_the_shot_immediately(db: Session, dog, staff, caplog: pytest.LogCaptureFixture) -> None:
+    # 12.4: 상태 조회에서 작업이 없다고 답하면(404·410) 시간 초과를 기다리지 않고 바로 ANALYSIS_FAILED
+    session = _session(db, dog, staff)
+    gone = _shot(db, session, 1, "ANALYZING", job_id="gone", submitted_at=datetime.now(UTC))
+    client = FakeClient(statuses={"gone": AnalysisClientError("404 NOT_FOUND", retryable=False, status_code=404)})
+    caplog.set_level(logging.ERROR, logger="app.worker")
+
+    stats = run_once(db, client, _settings(ANALYSIS_TIMEOUT_SEC=600), get_storage())
+
+    row = _fresh(db, gone)
+    assert stats.failed == 1 and stats.timed_out == 0
+    assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_FAILED"
+    assert "NOT_FOUND" in caplog.text
+
+
+def test_auth_failure_pauses_status_checks(db: Session, dog, staff) -> None:
+    # 12.4: 키가 틀리면 다른 촬영을 물어도 같다. 촬영은 그대로 두고 그 바퀴의 조회를 멈춘다
+    session = _session(db, dog, staff)
+    now = datetime.now(UTC)
+    shots = [_shot(db, session, seq_no, "ANALYZING", job_id=f"j{seq_no}", submitted_at=now) for seq_no in (1, 2)]
+    denied = AnalysisClientError("403 FORBIDDEN", status_code=403)
+    client = FakeClient(statuses={"j1": denied, "j2": denied})
+
+    stats = run_once(db, client, _settings(), get_storage())
+
+    assert stats.failed == 0 and stats.polled == 0
+    assert len(client.status_calls) == 1  # 첫 촬영에서 멈춘다(같은 시각에 보낸 둘의 순서는 UUID 순이라 정하지 않는다)
+    assert [_fresh(db, shot).status for shot in shots] == ["ANALYZING", "ANALYZING"]
+
+
 # ---- Mock으로 끝까지 ----
 
 
-def test_mock_client_end_to_end_reaches_analyzing(db: Session, dog, staff) -> None:
+def test_mock_client_end_to_end_reaches_done(db: Session, dog, staff) -> None:
+    # 17.3 BE-06: Mock 모드에서 MOCK_ANALYSIS_DELAY_SEC 뒤 DONE
     session = _session(db, dog, staff)
     shot = _shot(db, session, 1)
     client = MockAnalysisClient(delay_sec=0)
@@ -278,8 +384,316 @@ def test_mock_client_end_to_end_reaches_analyzing(db: Session, dog, staff) -> No
     assert first.submitted == 1 and row.status == "SUBMITTED" and row.job_id.startswith("mock-valid-")
 
     second = run_once(db, client, settings, get_storage())
+    row = _fresh(db, shot)
     assert second.polled == 1 and second.done == 1
-    assert _fresh(db, shot).status == "ANALYZING"
+    assert row.status == "DONE" and row.validity == "VALID" and len(row.passes) == 4
+    assert row.analysis_key and json.loads(get_storage().read_bytes(row.analysis_key))["status"] == "done"
+
+
+# ---- 결과 저장 (BE-07·08·11) ----
+
+
+def _done_shot(db: Session, session: MeasureSession, seq_no: int = 1, status: str = "ANALYZING") -> Shot:
+    return _shot(db, session, seq_no, status, job_id="d", submitted_at=datetime.now(UTC))
+
+
+def _client_done(result: Any) -> FakeClient:
+    return FakeClient(statuses={"d": AnalysisStatus("done")}, results={"d": result})
+
+
+def _pass_tuples(shot: Shot) -> list[tuple]:
+    return [
+        (p.pass_no, p.camera_side, p.gait_type, p.is_valid, p.exclude_reason, p.start_frame, p.end_frame)
+        for p in shot.passes
+    ]
+
+
+def test_valid_result_is_saved_as_done_with_passes(db: Session, dog, staff) -> None:
+    # 17.3 BE-07·11: DONE이 되고 통과별 start_frame·end_frame·exclude_reason이 결과 JSON과 같다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    result = load_fixture("result_valid")
+
+    stats = run_once(db, _client_done(result), _settings(), get_storage())
+
+    row = _fresh(db, shot)
+    assert stats.done == 1 and stats.failed == 0
+    assert row.status == "DONE" and row.validity == "VALID" and row.validity_reason is None
+    assert row.model_name == "fs-v4" and row.model_version == "0.1.0/v1/a4261a10"
+    assert row.analyzed_at is not None and row.fail_reason is None
+    assert row.analysis_key == analysis_key(dog.institution_id, dog.id, session.id, shot.id)
+    assert json.loads(get_storage().read_bytes(row.analysis_key)) == result  # 받은 그대로 보관(6절)
+    assert _pass_tuples(row) == [
+        (p["index"], p["camera_side"].upper(), "TROT", True, None, p["start_frame"], p["end_frame"])
+        for p in result["passes"]
+    ]
+
+
+def test_partial_result_keeps_null_reason_and_maps_excluded_pass(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+
+    run_once(db, _client_done(load_fixture("result_partial")), _settings(), get_storage())
+
+    row = _fresh(db, shot)
+    assert row.status == "DONE" and row.validity == "PARTIAL"
+    assert row.validity_reason is None  # partial의 null = 유효 통과는 충분한데 일부 제외(14.3, 조유진 MR !30)
+    assert _pass_tuples(row)[2] == (3, "RIGHT", "OTHER", False, "PARTIAL_PASS", 470, 560)  # gait null → OTHER
+    assert [p.is_valid for p in row.passes] == [True, True, False]
+
+
+def test_invalid_result_has_no_passes(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    run_once(db, _client_done(load_fixture("result_invalid")), _settings(), get_storage())
+    row = _fresh(db, shot)
+    assert row.status == "DONE" and row.validity == "INVALID" and row.validity_reason == "NO_DOG"
+    assert row.passes == []
+
+
+def test_invalid_without_reason_defaults_to_no_valid_pass(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    result = load_fixture("result_invalid")
+    result["validity_reason"] = None
+    run_once(db, _client_done(result), _settings(), get_storage())
+    assert _fresh(db, shot).validity_reason == "NO_VALID_PASS"
+
+
+def test_unknown_reason_codes_are_stored_as_unknown_and_logged(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture
+) -> None:
+    # 17.3 BE-08: 모르는 코드는 UNKNOWN_REASON으로 저장되고 원래 코드가 로그에 남는다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    result = load_fixture("result_partial")
+    result["validity_reason"] = "SOMETHING_NEW"
+    result["passes"][2]["reason_code"] = "WEIRD_CODE"
+    caplog.set_level(logging.WARNING)
+
+    run_once(db, _client_done(result), _settings(), get_storage())
+
+    row = _fresh(db, shot)
+    assert row.validity_reason == "UNKNOWN_REASON" and row.passes[2].exclude_reason == "UNKNOWN_REASON"
+    assert "SOMETHING_NEW" in caplog.text and "WEIRD_CODE" in caplog.text
+
+
+def test_done_straight_from_submitted(db: Session, dog, staff) -> None:
+    # 12.4: SUBMITTED → DONE도 가능
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session, status="SUBMITTED")
+    stats = run_once(db, _client_done(load_fixture("result_valid")), _settings(), get_storage())
+    assert stats.done == 1 and _fresh(db, shot).status == "DONE"
+
+
+def test_result_fetch_error_keeps_the_shot_analyzing_and_retries(db: Session, dog, staff) -> None:
+    # 409 NOT_READY(HttpAnalysisClient는 retryable=False로 분류)도 결과 조회에서는 "아직"이라 다음 바퀴에 다시 받는다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session, status="SUBMITTED")
+    client = _client_done(AnalysisClientError("409 NOT_READY", retryable=False, status_code=409))
+
+    first = run_once(db, client, _settings(), get_storage())
+    row = _fresh(db, shot)
+    assert first.done == 0 and first.failed == 0
+    assert row.status == "ANALYZING" and row.analysis_key is None and row.passes == []
+
+    client.results["d"] = load_fixture("result_valid")
+    second = run_once(db, client, _settings(), get_storage())
+    assert second.done == 1 and _fresh(db, shot).status == "DONE"
+
+
+def test_missing_result_fails_the_shot_immediately(db: Session, dog, staff) -> None:
+    # 12.4: done인데 결과가 없다고 답하면(404·410) 바로 ANALYSIS_FAILED. 엉뚱한 ANALYSIS_TIMEOUT으로 끝내지 않는다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    client = _client_done(AnalysisClientError("404 NOT_FOUND", retryable=False, status_code=404))
+
+    stats = run_once(db, client, _settings(), get_storage())
+
+    row = _fresh(db, shot)
+    assert stats.failed == 1 and stats.done == 0
+    assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_FAILED" and row.analysis_key is None
+
+
+def test_integer_valued_floats_are_accepted(db: Session, dog, staff) -> None:
+    # 분석 쪽이 numpy 값을 JSON으로 내보내면 40.0처럼 온다. 정수값이면 받는다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    result = load_fixture("result_valid")
+    result["passes"][0].update(index=1.0, start_frame=40.0, end_frame=205.0)
+
+    stats = run_once(db, _client_done(result), _settings(), get_storage())
+
+    row = _fresh(db, shot)
+    assert stats.done == 1 and row.status == "DONE"
+    assert (row.passes[0].pass_no, row.passes[0].start_frame, row.passes[0].end_frame) == (1, 40, 205)
+
+
+@pytest.mark.parametrize(
+    ("index_edit", "message_part"),
+    [
+        ({0: 40_000}, "unusable"),  # SMALLINT 초과 → 받은 순서
+        ({1: 1}, "renumbered"),  # 1이 둘 → 전부 받은 순서로
+    ],
+)
+def test_unusable_or_duplicate_index_is_renumbered_and_logged(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture, index_edit: dict[int, int], message_part: str
+) -> None:
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    result = load_fixture("result_valid")
+    for position, value in index_edit.items():
+        result["passes"][position]["index"] = value
+    caplog.set_level(logging.WARNING)
+
+    stats = run_once(db, _client_done(result), _settings(), get_storage())
+
+    assert stats.done == 1 and [p.pass_no for p in _fresh(db, shot).passes] == [1, 2, 3, 4]
+    assert message_part in caplog.text
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"validity": "weird", "passes": []},
+        {"validity": "valid", "passes": [{"index": 1, "start_frame": 1, "end_frame": 2, "valid": True}]},
+        {"validity": "valid", "passes": [{"index": 1, "camera_side": "left", "start_frame": "a", "end_frame": 2}]},
+        {"validity": "valid"},
+        # valid가 없거나 문자열이면 전부 제외·전부 유효로 조용히 저장되므로 형식 오류여야 한다
+        {"validity": "valid", "passes": [{"index": 1, "camera_side": "left", "start_frame": 1, "end_frame": 2}]},
+        {
+            "validity": "valid",
+            "passes": [{"index": 1, "camera_side": "left", "start_frame": 1, "end_frame": 2, "valid": "false"}],
+        },
+        # INTEGER 범위를 넘는 프레임은 DB까지 가면 저장 중 오류다. 여기서 막는다
+        {
+            "validity": "valid",
+            "passes": [{"index": 1, "camera_side": "left", "start_frame": 1, "end_frame": 2**31, "valid": True}],
+        },
+    ],
+)
+def test_unreadable_result_fails_the_shot(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture, broken: dict[str, Any]
+) -> None:
+    # 6절 계약과 다른 결과 JSON: FAILED(ANALYSIS_FAILED), 어느 필드인지 로그에, 파일은 남기지 않는다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    caplog.set_level(logging.ERROR, logger="app.worker")
+
+    stats = run_once(db, _client_done(broken), _settings(), get_storage())
+
+    row = _fresh(db, shot)
+    assert stats.failed == 1 and stats.done == 0
+    assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_FAILED"
+    assert row.analysis_key is None and row.passes == []
+    assert "unreadable" in caplog.text
+
+
+def test_shot_deleted_during_result_save_discards_the_file(db: Session, dog, staff) -> None:
+    # 12.4: 파일을 먼저 쓰고 키를 붙이는 UPDATE가 0행이면(파기로 행이 사라짐) 방금 쓴 analysis.json을 지운다.
+    # 훅은 파일을 쓴 직후에 끼어든다. 결과를 받는 중에 끼어들면 파일이 아예 안 쓰여 이 순서를 못 본다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    key = analysis_key(dog.institution_id, dog.id, session.id, shot.id)
+
+    def purge_after_write(written_key: str) -> None:
+        db.execute(delete(Shot).where(Shot.id == shot.id))
+        db.commit()
+
+    storage = HookedStorage(after_write=purge_after_write)
+    stats = run_once(db, _client_done(load_fixture("result_valid")), _settings(), storage)
+
+    assert stats.done == 0 and _fresh(db, shot) is None
+    assert storage.written == [key] and get_storage().delete(key) == 0  # 썼다가 지웠다
+
+
+def test_shot_changed_during_result_save_discards_the_file(db: Session, dog, staff) -> None:
+    # 12.4: 행은 있지만 그사이 상태가 바뀌었어도(여기서는 FAILED) 0행이라 파일을 지우고 행은 건드리지 않는다
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    key = analysis_key(dog.institution_id, dog.id, session.id, shot.id)
+
+    def fail_after_write(written_key: str) -> None:
+        db.execute(update(Shot).where(Shot.id == shot.id).values(status="FAILED", fail_reason="ANALYSIS_TIMEOUT"))
+        db.commit()
+
+    storage = HookedStorage(after_write=fail_after_write)
+    stats = run_once(db, _client_done(load_fixture("result_valid")), _settings(), storage)
+
+    row = _fresh(db, shot)
+    assert stats.done == 0
+    assert row.status == "FAILED" and row.fail_reason == "ANALYSIS_TIMEOUT" and row.analysis_key is None
+    assert row.passes == [] and storage.written == [key] and get_storage().delete(key) == 0
+
+
+def test_save_error_skips_only_that_shot(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 저장 중 예외(DB 오류)는 그 촬영만 건너뛴다. 같은 바퀴의 다른 촬영 저장과 가져오기·제출은 이어진다
+    from app.services.analysis_results import apply_result as real_apply_result
+
+    session = _session(db, dog, staff)
+    now = datetime.now(UTC)
+    bad = _shot(db, session, 1, "ANALYZING", job_id="bad", submitted_at=now)
+    good = _shot(db, session, 2, "ANALYZING", job_id="good", submitted_at=now)
+    waiting = _shot(db, session, 3)  # UPLOADED. 같은 바퀴의 가져오기·제출이 맡는다
+    done = AnalysisStatus("done")
+    client = FakeClient(
+        statuses={"bad": done, "good": done},
+        results={"bad": load_fixture("result_valid"), "good": load_fixture("result_valid")},
+    )
+    failing: set[uuid.UUID] = {bad.id}
+
+    def flaky_apply_result(db_: Session, shot_id: uuid.UUID, parsed, **kwargs):
+        if shot_id in failing:
+            raise RuntimeError("db hiccup")
+        return real_apply_result(db_, shot_id, parsed, **kwargs)
+
+    monkeypatch.setattr("app.worker.main.apply_result", flaky_apply_result)
+    storage = HookedStorage()
+    caplog.set_level(logging.ERROR, logger="app.worker")
+    bad_key = analysis_key(dog.institution_id, dog.id, session.id, bad.id)
+
+    stats = run_once(db, client, _settings(), storage)
+
+    assert stats.done == 1 and stats.failed == 0 and stats.claimed == 1 and stats.submitted == 1
+    assert _fresh(db, bad).status == "ANALYZING" and _fresh(db, bad).analysis_key is None
+    assert _fresh(db, good).status == "DONE" and _fresh(db, waiting).status == "SUBMITTED"
+    assert bad_key in storage.written and get_storage().delete(bad_key) == 0  # 썼다가 지웠다
+    assert "save failed" in caplog.text and "RuntimeError" in caplog.text
+
+    failing.clear()  # 다음 바퀴에 다시 저장한다
+    assert run_once(db, client, _settings(), storage).done == 1 and _fresh(db, bad).status == "DONE"
+
+
+def test_storage_write_failure_keeps_the_shot_and_hides_the_path(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture
+) -> None:
+    # 파일을 못 쓰면 DB는 건드리지 않고 다음 바퀴에 다시 한다. 로그에 파일 경로를 남기지 않는다(11.8)
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    storage = HookedStorage(write_error=OSError(28, "No space left on device", "D:/secret-root/analysis.json"))
+    caplog.set_level(logging.ERROR, logger="app.worker")
+
+    stats = run_once(db, _client_done(load_fixture("result_valid")), _settings(), storage)
+
+    row = _fresh(db, shot)
+    assert stats.done == 0 and stats.failed == 0
+    assert row.status == "ANALYZING" and row.analysis_key is None and row.passes == []
+    assert "errno=28" in caplog.text and "secret-root" not in caplog.text
+
+
+def test_saving_replaces_leftover_passes(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    shot = _done_shot(db, session)
+    db.add(
+        WalkPass(
+            shot_id=shot.id, pass_no=9, camera_side="LEFT", gait_type="WALK", is_valid=True, start_frame=0, end_frame=1
+        )
+    )
+    db.flush()
+    run_once(db, _client_done(load_fixture("result_valid")), _settings(), get_storage())
+    assert [p.pass_no for p in _fresh(db, shot).passes] == [1, 2, 3, 4]
 
 
 # ---- 실행 ----

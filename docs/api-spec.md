@@ -819,7 +819,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 
 ### 11.3 판정·제외 사유
 
-분석 결과로 나오는 사유다. 촬영은 `validity_reason`, 통과는 `exclude_reason`, 수치는 `unmeasurable_reason`에 온다. 기업의 유효·무효 기준 문서를 받으면 목록이 바뀔 수 있다.
+분석 결과로 나오는 사유다. 촬영은 `validity_reason`, 통과는 `exclude_reason`, 수치는 `unmeasurable_reason`에 온다. 기업의 유효·무효 기준 문서를 받으면 목록이 바뀔 수 있다. 촬영이 일부 유효(`PARTIAL`)인데 `validity_reason`이 null이면 유효 통과는 충분하고 제외된 통과만 있다는 뜻이다. 어느 통과가 왜 빠졌는지는 통과별 `exclude_reason`에 있다.
 
 | code | 대상 | 기본 문구 |
 | --- | --- | --- |
@@ -836,7 +836,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `NOT_SIDE_VIEW` | 통과 | 옆모습이 찍히지 않았습니다. |
 | `OCCLUDED` | 통과 | 몸이 가려졌습니다. |
 | `OVERLAP` | 통과 | 다른 동물이나 사람과 겹쳤습니다. |
-| `NO_DOG` | 통과 | 반려견이 화면에 없습니다. |
+| `NO_DOG` | 촬영·통과 | 반려견이 화면에 없습니다. |
 | `GAIT_PACE` | 통과 | 측대보라 수치 계산에서 뺐습니다. |
 | `GAIT_OTHER` | 통과 | 평보·속보가 아니라 수치 계산에서 뺐습니다. |
 | `NO_PASS_FOR_LIMB` | 수치 | 이 다리를 잴 유효 통과가 없습니다. 반대 방향으로도 걷게 해 주세요. |

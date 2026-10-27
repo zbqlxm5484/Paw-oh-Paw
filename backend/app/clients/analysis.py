@@ -8,8 +8,9 @@
   화면·워커·보고서를 먼저 만들고, 시연 날 분석 서버가 안 될 때의 대비다.
 
 Spring에 빗대면 AnalysisClient는 인터페이스이고 두 클래스는 @Profile("mock"/"http")로 갈아 끼우는 구현체다.
-분석 API가 주는 값(소문자 상태값, 사유 코드)을 우리 코드(14절)로 바꾸는 일은 여기서 하지 않고
-결과를 저장하는 서비스가 한다.
+클라이언트 두 클래스는 분석 API가 준 값을 그대로 돌려준다. 그 값(소문자 판정·보행·카메라 쪽, 사유 코드)을 우리
+코드(14절)로 바꾸는 대응표는 이 모듈 끝의 map_* 함수이고(14.3), 결과를 DB에 넣는 services/analysis_results.py가
+쓴다.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from typing import Any, Literal, Protocol
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.core.errors import JudgeReason
+from app.models.enums import CameraSide, GaitType, Validity
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +43,35 @@ JobState = Literal["queued", "running", "done", "failed"]
 JOB_STATES: tuple[JobState, ...] = ("queued", "running", "done", "failed")
 
 
+# 인증 키 문제. 촬영의 잘못이 아니라 워커는 attempt_count를 올리지 않고 로그만 남긴 뒤 그 바퀴의 제출을 멈춘다(12.4)
+AUTH_FAILED_STATUSES = (401, 403)
+# 작업이 분석 API에 없다(재시작으로 잃었거나 보관 기간이 지남). 상태·결과 조회에서 받으면 워커는 바로 FAILED다(12.4)
+JOB_GONE_STATUSES = (404, 410)
+
+
 class AnalysisClientError(Exception):
     """분석 API를 부르지 못했거나(연결·시간 초과) 예상 밖 응답을 받았을 때.
 
-    워커는 제출 중에 이것을 받으면 attempt_count를 올린다(12.4).
+    retryable이 True면 다시 보내면 될 수 있는 실패(연결 실패, 시간 초과, 5xx, 깨진 응답, 408·429)라 워커가
+    attempt_count를 올리고 다음 바퀴에 다시 보낸다(12.4). False면 분석 API가 요청 자체를 거부한 것(400·413·415 같은
+    4xx)이라 몇 번을 보내도 같으므로 워커는 바로 FAILED로 둔다(87 MR 리뷰 제안 A). 401·403은 요청이 아니라 설정
+    문제라 거부로 보지 않고 auth_failed로 따로 알린다. status_code는 HTTP 응답일 때만 있다.
     """
+
+    def __init__(self, message: str, *, retryable: bool = True, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.status_code = status_code
+
+    @property
+    def auth_failed(self) -> bool:
+        """인증 키(ANALYSIS_API_KEY)가 틀렸다. 촬영마다 다시 보내도 같고, 촬영을 실패시킬 일도 아니다."""
+        return self.status_code in AUTH_FAILED_STATUSES
+
+    @property
+    def job_gone(self) -> bool:
+        """상태·결과 조회에서 작업이 없다고 답했다. 기다려도 오지 않으므로 바로 끝낸다."""
+        return self.status_code in JOB_GONE_STATUSES
 
 
 @dataclass(frozen=True)
@@ -184,7 +211,11 @@ class MockAnalysisClient:
 
 
 class HttpAnalysisClient:
-    """조유진 분석 API. 모든 오류는 AnalysisClientError 하나로 낸다(연결 실패, 시간 초과, 4xx·5xx, 깨진 JSON)."""
+    """조유진 분석 API. 모든 오류는 AnalysisClientError 하나로 낸다(연결 실패, 시간 초과, 4xx·5xx, 깨진 JSON).
+
+    4xx(401·403·408·429 제외)는 retryable=False다. 요청 자체가 잘못된 것이라 다시 보내도 같기 때문이다. 401·403은
+    auth_failed, 404·410은 job_gone으로 워커가 따로 다룬다.
+    """
 
     def __init__(
         self,
@@ -193,7 +224,8 @@ class HttpAnalysisClient:
         timeout_sec: float = 30,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        # TODO(질문: 인증 키를 어느 헤더로 보낼지 조유진과 합의 전. 16절 ANALYSIS_API_KEY. 지금은 X-API-Key)
+        # 인증 헤더는 X-API-Key로 확정(조유진, 87 MR 리뷰 10-26).
+        # 키가 비어 있으면 헤더를 보내지 않고, 분석 API도 그때는 인증을 끈다
         headers = {"X-API-Key": api_key} if api_key else {}
         self._client = httpx.Client(base_url=base_url, headers=headers, timeout=timeout_sec, transport=transport)
 
@@ -208,9 +240,15 @@ class HttpAnalysisClient:
 
     @staticmethod
     def _json(response: httpx.Response, *, expected: int) -> dict[str, Any]:
-        if response.status_code != expected:
+        status = response.status_code
+        if status != expected:
+            # 4xx는 요청이 잘못된 것이라 다시 보내도 같다. 408(시간 초과)·429(너무 잦음)는 다시 보낼 수 있고,
+            # 401·403은 요청이 아니라 키 설정 문제라 거부로 보지 않는다(auth_failed)
+            rejected = 400 <= status < 500 and status not in (*AUTH_FAILED_STATUSES, 408, 429)
             raise AnalysisClientError(
-                f"분석 API 응답 {response.status_code} (기대 {expected}): {_error_summary(response)}"
+                f"분석 API 응답 {status} (기대 {expected}): {_error_summary(response)}",
+                retryable=not rejected,
+                status_code=status,
             )
         try:
             body = response.json()
@@ -273,3 +311,48 @@ def build_analysis_client(settings: Settings | None = None) -> AnalysisClient:
         settings.ANALYSIS_API_KEY.get_secret_value(),
         settings.ANALYSIS_HTTP_TIMEOUT_SEC,
     )
+
+
+# ---- 14절 대응표 (14.3) ----
+#
+# 분석 API의 소문자 값을 우리 코드로 바꾼다. 클라이언트는 받은 그대로 돌려주고, 결과를 저장하는 쪽
+# (services/analysis_results.py)이 이 함수들로 바꾼다. 모르는 사유 코드는 UNKNOWN_REASON으로 두고 원래 코드를 로그에
+# 남긴다(17.3 BE-08).
+
+VALIDITY_MAP = {"valid": Validity.VALID.value, "partial": Validity.PARTIAL.value, "invalid": Validity.INVALID.value}
+GAIT_MAP = {
+    "walk": GaitType.WALK.value,
+    "trot": GaitType.TROT.value,
+    "pace": GaitType.PACE.value,
+    "other": GaitType.OTHER.value,
+}
+CAMERA_SIDE_MAP = {"left": CameraSide.LEFT.value, "right": CameraSide.RIGHT.value}
+# 촬영 판정 사유가 비어 있을 때. PARTIAL의 null은 "유효 통과는 기준 수 이상인데 제외된 통과가 있다"는 뜻이라 그대로
+# 두고(조유진 유효 판별 규칙 초안 4.2, MR !30), INVALID만 NO_VALID_PASS로 채운다. VALID는 사유가 없다
+DEFAULT_VALIDITY_REASON = {Validity.INVALID.value: JudgeReason.NO_VALID_PASS.value}
+KNOWN_REASONS = frozenset(member.value for member in JudgeReason)
+
+
+def map_validity(value: Any) -> str | None:
+    """valid·partial·invalid → VALID·PARTIAL·INVALID. 모르는 값이면 None(부르는 쪽이 형식 오류로 처리한다)."""
+    return VALIDITY_MAP.get(value.lower()) if isinstance(value, str) else None
+
+
+def map_camera_side(value: Any) -> str | None:
+    """left·right → LEFT·RIGHT. 모르는 값이면 None."""
+    return CAMERA_SIDE_MAP.get(value.lower()) if isinstance(value, str) else None
+
+
+def map_gait(value: Any) -> str:
+    """walk·trot·pace → WALK·TROT·PACE. 비어 있거나(제외된 통과) 모르는 값이면 OTHER(walk_pass.gait_type은 NOT NULL)."""
+    if isinstance(value, str):
+        return GAIT_MAP.get(value.lower(), GaitType.OTHER.value)
+    return GaitType.OTHER.value
+
+
+def map_reason(code: Any, *, shot_id: uuid.UUID, where: str) -> str:
+    """14.3 사유 코드. 목록에 없으면 UNKNOWN_REASON으로 두고 원래 코드를 로그에 남긴다."""
+    if isinstance(code, str) and code.upper() in KNOWN_REASONS:
+        return code.upper()
+    logger.warning("unknown reason code %r in %s shot=%s; stored as UNKNOWN_REASON", code, where, shot_id)
+    return JudgeReason.UNKNOWN_REASON.value

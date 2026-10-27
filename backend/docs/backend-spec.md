@@ -6,6 +6,7 @@ Oct 19, 2026 · @조영운
 
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
+| v1.8 | 2026-10-26 | 분석 결과 저장(작업 단위 6 뒷부분, S15P31A404-124): 6절 결과 저장 원칙에 파일·DB에 넣는 값과 대응표 위치, 14.2 `ANALYSIS_FAILED`에 결과 JSON을 읽을 수 없는 경우, 14.3에 비어 있는 판정 사유 규칙(PARTIAL은 null 그대로, INVALID은 `NO_VALID_PASS`)·`NO_DOG` 촬영 단위·제외된 통과의 보행 유형 규칙. 87 MR 리뷰 반영: 12.4·14.2 분석 API가 거부한 제출(4xx)은 다시 보내지 않음, 6절·16절 `X-API-Key` 확정과 모드 전환 주의. MR !34 검토 반영(10-27): 12.4·14.2 저장 중 오류는 그 촬영만 건너뜀, 상태·결과 조회 404·410은 바로 `ANALYSIS_FAILED`, 401·403은 촬영을 건드리지 않고 제출 보류, 결과 값의 DB 범위 검사, 16절 `ANALYSIS_API_KEY` |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -237,7 +238,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 - `AnalysisClient`는 네 동작만 정한다: `submit(영상, 촬영 정보) → job_id`, `get_status(job_id) → 상태·실패 사유`, `get_result(job_id) → 결과 JSON`, `get_keypoints(job_id) → 관절점 파일 JSON`(프레임별 22점·각도, 10-22 검토 답변 Q4).
 - `HttpAnalysisClient`: 개발 환경의 우리 분석 API와, 기업 GPU 서버에 올린 같은 API를 부른다. 같은 코드라 주소만 다르다. 현행 모델과 개선 모델의 전환은 분석 API 안에서 한다(PR-F07-04).
 - `MockAnalysisClient`: 견본 결과 JSON을 몇 초 뒤 돌려준다. 분석 API가 준비되기 전에 화면과 보고서를 먼저 만들 수 있고, 시연 날 분석 서버가 안 될 때의 대비도 된다.
-- 설정(.env): `ANALYSIS_API_MODE=http|mock`, `ANALYSIS_API_BASE_URL`, `ANALYSIS_API_KEY`
+- 설정(.env): `ANALYSIS_API_MODE=http|mock`, `ANALYSIS_API_BASE_URL`, `ANALYSIS_API_KEY`(`X-API-Key` 헤더로 보냄, 10-26 확정). 모드를 mock ↔ http로 바꿀 때는 진행 중(SUBMITTED·ANALYZING) 촬영이 없을 때 한다. DB에 남은 작업 ID가 다른 쪽 API에는 없기 때문이다.
 
 "엔드포인트만 바꾸면 된다"는 이제 거의 그대로 맞다. 부르는 대상이 모두 우리가 만든 같은 API이기 때문이다. 남은 위험은 형식이 아니라 연결이다. 시연 때 팀 서버가 기업 GPU 서버의 API에 닿을 수 있는지(주소 공개, 방화벽, 인증)를 미리 확인해야 한다(10절 Q1).
 
@@ -246,6 +247,9 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 ### 결과 저장 원칙
 
 분석 결과 JSON은 받은 그대로 파일로 보관하고, DB에는 화면과 비교에 쓰는 값만 뽑아 넣는다. 규격서 필드가 바뀌어도 원본에서 다시 뽑을 수 있고, 보고서 수치 대조(PR-F08-12)의 기준이 된다.
+
+- 파일은 촬영 키의 `analysis.json`(7절)이다. DB에는 촬영 판정·사유·모델 이름·버전(`shot`)과 통과별 행(`walk_pass`: 순번, 카메라 쪽, 보행 유형, 유효 여부·제외 사유, 시작·끝 프레임)만 넣는다. 통과별 수치는 JSON에만 있고 회차 집계(작업 단위 8)가 거기서 읽는다.
+- 분석 API의 소문자 값(판정, 보행 유형, 카메라 쪽, 사유 코드)은 `clients/analysis.py`의 대응표(`map_*`)로 우리 코드(12.2, 14.3)로 바꾸고, 바꾸는 일과 DB 쓰기는 `services/analysis_results.py`가 한다. 파일 쓰기와 조건을 건 UPDATE의 순서는 12.4를 따른다.
 
 ### 조유진과 맞출 계약
 
@@ -873,7 +877,8 @@ CREATE TABLE purge_log (
 | `report.status` | PENDING → GENERATING → DONE 또는 FAILED. 워커가 켜질 때 GENERATING → PENDING | 워커, 다시 만들기 API(→ PENDING) | 워커는 회차를 DONE으로 바꾸는 같은 트랜잭션에서 판본마다 1행을 PENDING으로 만든다. 화면이 DONE인데 보고서 행이 없는 순간을 보지 않게 하기 위해서다 |
 
 - 상태는 조건을 건 UPDATE로만 바꾼다. 예: `UPDATE shot SET status='SUBMITTED' WHERE id=:id AND status='UPLOADED'`. 바뀐 행이 0개면 다른 처리가 먼저 가져간 것이므로 건너뛴다. 같은 일을 두 번 하지 않기 위해서다.
-- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 그동안 촬영은 SUBMITTED에 머물고 `job_id`는 비어 있다(화면에는 대기로 보인다). 3번 실패하면 FAILED(`ANALYSIS_SUBMIT_FAILED`)다.
+- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 그동안 촬영은 SUBMITTED에 머물고 `job_id`는 비어 있다(화면에는 대기로 보인다). 3번 실패하면 FAILED(`ANALYSIS_SUBMIT_FAILED`)다. 분석 API가 요청 자체를 거부하면(400·413·415처럼 다시 보내도 같은 4xx) 다시 보내지 않고 바로 FAILED(`ANALYSIS_SUBMIT_FAILED`)다(87 MR 리뷰). 다시 보내는 것은 연결 실패·시간 초과·5xx·깨진 응답·408·429다. 401·403은 요청이 아니라 인증 키(`ANALYSIS_API_KEY`) 설정 문제라 촬영을 건드리지 않는다: `attempt_count`를 올리지 않고 로그만 남긴 뒤 그 바퀴의 제출(과 상태 조회)을 멈추고, 키를 고치면 다음 바퀴에 그대로 이어 보낸다. 못 고치면 `ANALYSIS_TIMEOUT_SEC` 뒤 시간 초과로 끝난다. 키 하나가 틀렸다고 대기 중인 촬영이 전부 FAILED가 되지 않게 하기 위해서다(MR !34 검토).
+- 상태·결과 조회에서 분석 API가 작업이 없다고 답하면(404·410. 재시작으로 작업을 잃었거나 보관 기간이 지남) 기다려도 오지 않으므로 바로 FAILED(`ANALYSIS_FAILED`)다. 409(아직 결과 없음)·5xx·연결 실패는 다음 바퀴에 다시 묻고 시간 초과가 끝을 낸다. 결과를 DB에 넣다가 오류가 나면 방금 쓴 파일을 지우고 그 촬영만 건너뛴다(다음 바퀴에 다시). 한 촬영의 오류가 같은 바퀴의 다른 촬영·가져오기·제출을 막지 않는다. 결과 JSON의 값은 DB 범위(`pass_no` SMALLINT, 프레임 INTEGER)까지 미리 검사해 저장 중 형식 오류가 나지 않게 한다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
 * **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
@@ -1032,8 +1037,8 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 
 | 코드 | 어디에 | 기본 문구 | 언제 |
 | --- | --- | --- | --- |
-| `ANALYSIS_SUBMIT_FAILED` | `shot.fail_reason` | 분석 서버에 보내지 못했습니다. 다시 분석을 눌러 주세요. | 제출 3번 실패 |
-| `ANALYSIS_FAILED` | `shot.fail_reason` | 분석에 실패했습니다. | 분석 API가 실패로 답함. 분석 API의 원래 사유는 로그에 남긴다 |
+| `ANALYSIS_SUBMIT_FAILED` | `shot.fail_reason` | 분석 서버에 보내지 못했습니다. 다시 분석을 눌러 주세요. | 제출 3번 실패, 또는 분석 API가 요청을 거부(400·413·415 같은 4xx. 401·403은 제외)해 다시 보내지 않음 |
+| `ANALYSIS_FAILED` | `shot.fail_reason` | 분석에 실패했습니다. | 분석 API가 실패로 답함(원래 사유는 로그에), 상태·결과 조회에서 작업이 없다고 답함(404·410), 또는 결과 JSON이 6절 계약과 달라 읽을 수 없음(어느 필드인지 로그에) |
 | `ANALYSIS_TIMEOUT` | `shot.fail_reason` | 분석이 너무 오래 걸려 중단했습니다. | 시간 초과(기본 600초) |
 | `VIDEO_RENDER_FAILED` | `shot.video_status`=FAILED | 결과 영상을 만들지 못했습니다. 판정 결과는 그대로 볼 수 있습니다. | 골격 그리기·얼굴 가리기·인코딩 실패 |
 | `AGGREGATION_FAILED` | `measure_session.fail_reason` | 회차 수치를 계산하지 못했습니다. | 회차 집계 오류 |
@@ -1059,7 +1064,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `NOT_SIDE_VIEW` | 통과 | 옆모습이 찍히지 않았습니다. | PR-F03-02 |
 | `OCCLUDED` | 통과 | 몸이 가려졌습니다. | PR-F03-02 |
 | `OVERLAP` | 통과 | 다른 동물이나 사람과 겹쳤습니다. | PR-F03-02 |
-| `NO_DOG` | 통과 | 반려견이 화면에 없습니다. | PR-F03-02 |
+| `NO_DOG` | 촬영·통과 | 반려견이 화면에 없습니다. | PR-F03-02 |
 | `GAIT_PACE` | 통과 | 측대보라 수치 계산에서 뺐습니다. | PR-F03-09 |
 | `GAIT_OTHER` | 통과 | 평보·속보가 아니라 수치 계산에서 뺐습니다. | PR-F03-09 |
 | `NO_PASS_FOR_LIMB` | 수치 | 이 다리를 잴 유효 통과가 없습니다. 반대 방향으로도 걷게 해 주세요. | PR-F02-04·05 |
@@ -1069,6 +1074,8 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 
 - 분석 API가 보내는 사유는 `clients/analysis.py`의 대응표로 위 코드로 바꿔 저장한다. 대응표에 없는 코드는 `UNKNOWN_REASON`으로 저장하고 원래 코드를 로그에 남긴다.
 - 통과 하나에 사유가 여러 개면 분석 API가 처음에 낸 하나만 저장한다.
+- 분석 API가 촬영 판정 사유(`validity_reason`)를 비워 보내면: PARTIAL은 "유효 통과는 기준 수 이상인데 제외된 통과가 있다"는 뜻이라 null 그대로 저장하고(조유진 유효 판별 규칙 초안 4.2, MR !30), INVALID은 `NO_VALID_PASS`로 저장한다. VALID는 사유가 없다. 어느 통과가 왜 빠졌는지는 통과별 `exclude_reason`에 있다. 제외된 통과의 `reason_code`가 비어 있으면 `UNKNOWN_REASON`이다.
+- 제외된 통과는 분석 API가 `gait`를 비워 보내므로 `walk_pass.gait_type`은 `OTHER`로 저장한다.
 - 사유 코드 목록은 조유진의 판별 결과가 정해지면 그에 맞춰 더하거나 뺀다(10절 Q6).
 
 ### 14.4 경고·안내
@@ -1711,7 +1718,7 @@ stride_length: 2.0   # pct_body
 | `FFMPEG_PATH` | `ffmpeg` | ffmpeg 실행 파일(결과 영상 인코딩) | 7절 |
 | `ANALYSIS_API_MODE` | `mock` | `mock` 또는 `http` | 6절 |
 | `ANALYSIS_API_BASE_URL` | (`http`일 때 필수) | 분석 API 주소. 개발 환경과 기업 GPU 서버는 이 값만 다르다 | 6절 |
-| `ANALYSIS_API_KEY` | (빈 값) | 분석 API 인증 키. 보내는 방식은 조유진과 합의 | 6절 |
+| `ANALYSIS_API_KEY` | (빈 값) | 분석 API 인증 키. `X-API-Key` 헤더로 보낸다(10-26 확정). 비어 있으면 헤더를 보내지 않고 분석 API도 인증을 끈다(로컬 개발). 키가 틀리면(401·403) 워커는 촬영을 실패시키지 않고 제출을 멈춘 채 로그를 남긴다(12.4) | 6절 |
 | `ANALYSIS_HTTP_TIMEOUT_SEC` | `30` | 분석 API 요청 하나의 한도(영상 전송 포함) | 6절 |
 | `ANALYSIS_TIMEOUT_SEC` | `600` | 제출부터 분석 완료까지 기다리는 한도. 넘으면 `ANALYSIS_TIMEOUT` | 12.4 |
 | `ANALYSIS_SUBMIT_MAX_ATTEMPTS` | `3` | 제출 재시도 횟수. 다 실패하면 `ANALYSIS_SUBMIT_FAILED` | 12.4 |
