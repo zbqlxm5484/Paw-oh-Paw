@@ -7,6 +7,7 @@ Oct 19, 2026 · @조영운
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
 | v1.8 | 2026-10-26 | 분석 결과 저장(작업 단위 6 뒷부분, S15P31A404-124): 6절 결과 저장 원칙에 파일·DB에 넣는 값과 대응표 위치, 14.2 `ANALYSIS_FAILED`에 결과 JSON을 읽을 수 없는 경우, 14.3에 비어 있는 판정 사유 규칙(PARTIAL은 null 그대로, INVALID은 `NO_VALID_PASS`)·`NO_DOG` 촬영 단위·제외된 통과의 보행 유형 규칙. 87 MR 리뷰 반영: 12.4·14.2 분석 API가 거부한 제출(4xx)은 다시 보내지 않음, 6절·16절 `X-API-Key` 확정과 모드 전환 주의. MR !34 검토 반영(10-27): 12.4·14.2 저장 중 오류는 그 촬영만 건너뜀, 상태·결과 조회 404·410은 바로 `ANALYSIS_FAILED`, 401·403은 촬영을 건드리지 않고 제출 보류, 결과 값의 DB 범위 검사, 16절 `ANALYSIS_API_KEY` |
+| v1.9 | 2026-10-27 | 기관별 동시 처리 상한 구현(작업 단위 6 마무리, S15P31A404-141): 12.4 기관별 상한 줄에 후보 조회에 LIMIT을 걸지 않는 이유와 한 바퀴 안에서 찬 기관을 건너뛰는 규칙 보강 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -890,7 +891,7 @@ CREATE TABLE purge_log (
 * **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 끝나면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
 * **자식 프로세스가 죽으면**: `BrokenProcessPool`이 나면 그 풀을 새로 만들고, 그 풀에서 실행 중이던 작업을 모두 FAILED(`VIDEO_RENDER_FAILED`·`REPORT_FAILED`)로 둔다.
 * **다시 켤 때**: 워커가 켜지면 `UPLOAD_TMP_DIR/worker/`를 비우고, GENERATING 보고서를 PENDING으로 돌린다. 만들던 중에 꺼진 것이기 때문이다. 결과 영상은 PENDING에 머물러 있으므로 그대로 다시 맡긴다. 이 규칙은 워커가 한 대일 때만 맞다(3절 확장 계획).
-* **기관별 상한**: UPLOADED 촬영을 고를 때 `shot → measure_session → dog`를 join해 기관별 SUBMITTED·ANALYZING 수를 GROUP BY로 센다. `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`이 찬 기관은 SQL에서 빼고 업로드 순으로 가져온다. 한 바퀴 안에서 제출할 때마다 메모리의 개수를 늘리고, 전체 상한 `WORKER_MAX_IN_FLIGHT`도 함께 지킨다. 한 기관이 한꺼번에 많이 올려도 전체 자리를 다 차지하지 못한다(3절).
+* **기관별 상한**: UPLOADED 촬영을 고를 때 `shot → measure_session → dog`를 join해 기관별 SUBMITTED·ANALYZING 수를 GROUP BY로 센다. `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`이 찬 기관은 SQL에서 빼고 업로드 순으로 가져온다. 한 바퀴 안에서 가져올 때마다 메모리의 개수를 늘려, 그 바퀴에서 찬 기관의 나머지 촬영은 건너뛰고 그 뒤에 올린 다른 기관의 촬영을 본다. 그래서 후보 조회에는 LIMIT을 걸지 않는다(ID만 읽는 가벼운 조회다). 전체 상한 `WORKER_MAX_IN_FLIGHT`도 함께 지킨다. 한 기관이 한꺼번에 많이 올려도 전체 자리를 다 차지하지 못한다(3절).
 
 ### 12.5 데이터 규칙
 

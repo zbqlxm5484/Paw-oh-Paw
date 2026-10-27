@@ -1,4 +1,4 @@
-"""워커 분석 제출·조회·결과 저장(명세 3절, 6절, 12.4, 13.3, 14.2, 14.3, 17.3 BE-06·07·08·11)."""
+"""워커 분석 제출·조회·결과 저장·기관별 상한(명세 3절, 6절, 12.4, 13.3, 14.2, 14.3, 17.3 BE-06·07·08·11, 17.6)."""
 
 import json
 import logging
@@ -16,7 +16,7 @@ from app.clients.analysis import AnalysisClientError, AnalysisStatus, MockAnalys
 from app.core.config import Settings, get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
-from app.models import MeasureSession, Shot, WalkPass
+from app.models import Dog, MeasureSession, Shot, WalkPass
 from app.services.sessions import cancel_session
 from app.storage.base import get_storage
 from app.storage.keys import analysis_key
@@ -26,7 +26,8 @@ from app.worker.main import Worker, clean_worker_tmp, run_once
 
 
 def _settings(**overrides: Any) -> Settings:
-    return get_settings().model_copy(update=overrides)
+    # 기관별 상한(기본 4)은 그 절의 테스트에서만 건다. 다른 테스트는 촬영이 모두 한 기관이라 상한에 걸리지 않게 둔다
+    return get_settings().model_copy(update={"WORKER_MAX_IN_FLIGHT_PER_INSTITUTION": 100, **overrides})
 
 
 def _session(db: Session, dog, staff) -> MeasureSession:
@@ -64,6 +65,20 @@ def _shot(db: Session, session: MeasureSession, seq_no: int, status: str = "UPLO
 def _fresh(db: Session, shot: Shot) -> Shot | None:
     db.expire_all()
     return db.get(Shot, shot.id)
+
+
+def _other_dog(db: Session, other_staff) -> Dog:
+    """other_staff 기관(T02)의 반려견. 기관별 상한 확인용."""
+    row = Dog(
+        institution_id=other_staff.institution_id,
+        name="콩이",
+        breed="푸들",
+        weight_kg=Decimal("6.20"),
+        size_class="SMALL",
+    )
+    db.add(row)
+    db.flush()
+    return row
 
 
 class FakeClient:
@@ -178,6 +193,61 @@ def test_in_flight_cap_limits_claims(db: Session, dog, staff) -> None:
     third = run_once(db, client, settings, get_storage())
     assert third.failed == 1 and third.claimed == 1 and third.submitted == 1
     assert _fresh(db, shots[2]).status == "SUBMITTED"
+
+
+# ---- 기관별 상한 (12.4, 17.6) ----
+
+
+def test_institution_cap_leaves_room_for_other_institutions(db: Session, dog, staff, other_staff) -> None:
+    # 17.6: 한 기관이 한꺼번에 많이 올려도 그 기관은 상한까지만, 다른 기관의 새 촬영은 바로 SUBMITTED
+    mine = _session(db, dog, staff)
+    many = [_shot(db, mine, seq_no) for seq_no in range(1, 11)]  # T01이 10건을 먼저 올림
+    theirs = _session(db, _other_dog(db, other_staff), other_staff)
+    late = _shot(db, theirs, 1, uploaded_at=datetime.now(UTC) + timedelta(seconds=30))  # T02가 가장 늦게 1건
+    settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+    client = FakeClient()
+
+    stats = run_once(db, client, settings, get_storage())
+
+    assert stats.claimed == 5 and stats.submitted == 5
+    assert [_fresh(db, s).status for s in many] == ["SUBMITTED"] * 4 + ["UPLOADED"] * 6  # 올린 순서대로 4건
+    assert _fresh(db, late).status == "SUBMITTED"
+    # 분석이 안 끝났으면 다음 바퀴에도 T01은 더 못 가져간다(이미 찬 기관은 SQL에서 뺀다)
+    assert run_once(db, client, settings, get_storage()).claimed == 0
+
+
+def test_institution_cap_counts_shots_already_in_flight(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    busy = [_shot(db, session, seq_no, status="ANALYZING", job_id=f"old-{seq_no}") for seq_no in (1, 2, 3)]
+    waiting = [_shot(db, session, seq_no) for seq_no in (4, 5)]
+    client = FakeClient(statuses={f"old-{n}": AnalysisStatus("running") for n in (1, 2, 3)})
+    settings = _settings(WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+
+    first = run_once(db, client, settings, get_storage())
+
+    assert first.claimed == 1 and first.submitted == 1
+    assert [_fresh(db, s).status for s in waiting] == ["SUBMITTED", "UPLOADED"]
+    assert {_fresh(db, s).status for s in busy} == {"ANALYZING"}
+    # 하나가 끝나 그 기관에 자리가 나면 다음 바퀴에 가져온다
+    client.statuses["old-1"] = AnalysisStatus("failed", error_code="DECODE_FAILED", error_message="x")
+    second = run_once(db, client, settings, get_storage())
+    assert second.failed == 1 and second.claimed == 1
+    assert _fresh(db, waiting[1]).status == "SUBMITTED"
+
+
+def test_global_cap_still_applies_across_institutions(db: Session, dog, staff, other_staff) -> None:
+    # 기관별 자리가 남아도 전체 자리(WORKER_MAX_IN_FLIGHT)가 없으면 못 가져간다. 올린 순서대로
+    mine = _session(db, dog, staff)
+    theirs = _session(db, _other_dog(db, other_staff), other_staff)
+    first = [_shot(db, mine, n) for n in (1, 2, 3)]
+    second = [_shot(db, theirs, n, uploaded_at=datetime.now(UTC) + timedelta(seconds=10 + n)) for n in (1, 2, 3)]
+    settings = _settings(WORKER_MAX_IN_FLIGHT=4, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=3)
+
+    stats = run_once(db, FakeClient(), settings, get_storage())
+
+    assert stats.claimed == 4
+    assert [_fresh(db, s).status for s in first] == ["SUBMITTED"] * 3
+    assert [_fresh(db, s).status for s in second] == ["SUBMITTED", "UPLOADED", "UPLOADED"]
 
 
 def test_submit_failures_keep_the_shot_claimed_then_give_up(db: Session, dog, staff) -> None:

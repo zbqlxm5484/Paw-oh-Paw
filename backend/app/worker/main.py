@@ -8,7 +8,8 @@
    JSON을 읽을 수 없거나 분석 API가 작업이 없다고 답하면(404·410) FAILED(ANALYSIS_FAILED). 저장 중 오류는 그 촬영만
    건너뛰고(다음 바퀴에 다시) 바퀴는 이어 간다. 결과 영상·회차 집계는 다음 작업이다.
 2. UPLOADED 촬영 가져오기(BE-06): 그 회차 행을 잠근 채 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한다. 측정 취소·촬영
-   삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). WORKER_MAX_IN_FLIGHT까지만 가져온다.
+   삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). 전체로는 WORKER_MAX_IN_FLIGHT, 기관별로는
+   WORKER_MAX_IN_FLIGHT_PER_INSTITUTION까지만 가져와 한 기관이 자리를 다 차지하지 못하게 한다(3절, 12.4 기관별 상한).
 3. 가져온 촬영(SUBMITTED인데 job_id가 없는 것)을 분석 API에 보낸다. 되면 job_id를 적고, 못 보내면 SUBMITTED에 둔 채
    attempt_count를 올려 다음 바퀴에 다시 보내며, ANALYSIS_SUBMIT_MAX_ATTEMPTS번 실패하면 FAILED(ANALYSIS_SUBMIT_FAILED).
    분석 API가 요청 자체를 거부하면(400·413·415 같은 4xx) 다시 보내지 않고 바로 FAILED다. 인증 키가 틀리면(401·403)
@@ -82,8 +83,17 @@ def _now() -> datetime:
 # ---- 상태 조회 ----
 
 
-def count_in_flight(db: Session) -> int:
-    return db.scalar(select(func.count()).select_from(Shot).where(Shot.status.in_(IN_FLIGHT))) or 0
+def count_in_flight_by_institution(db: Session) -> dict[uuid.UUID, int]:
+    """기관별 SUBMITTED·ANALYZING 수(shot → measure_session → dog를 join해 GROUP BY, 12.4). 전체 수는 값의 합이다."""
+    rows = db.execute(
+        select(Dog.institution_id, func.count())
+        .select_from(Shot)
+        .join(MeasureSession, Shot.session_id == MeasureSession.id)
+        .join(Dog, MeasureSession.dog_id == Dog.id)
+        .where(Shot.status.in_(IN_FLIGHT))
+        .group_by(Dog.institution_id)
+    ).all()
+    return {institution_id: count for institution_id, count in rows}
 
 
 def _fail(db: Session, shot_id: uuid.UUID, reason: FailReason) -> bool:
@@ -249,19 +259,35 @@ def _save_result(
 
 
 def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
-    """UPLOADED 촬영을 올린 순서대로 SUBMITTED로 가져온다. 자리(WORKER_MAX_IN_FLIGHT)가 있는 만큼만.
+    """UPLOADED 촬영을 올린 순서대로 SUBMITTED로 가져온다. 전체 자리(WORKER_MAX_IN_FLIGHT)와 그 기관의 자리
+    (WORKER_MAX_IN_FLIGHT_PER_INSTITUTION)가 둘 다 있는 것만(12.4 기관별 상한).
 
     회차 행을 잠근 채 바꾼다(12.4 잠금). 측정 취소·촬영 삭제가 같은 행을 잠그므로, 취소가 먼저면 여기서 바뀐 행이
     0개이고 여기가 먼저면 취소가 SUBMITTED를 보고 409 SHOT_IN_PROGRESS를 낸다. 분석 API는 아직 부르지 않아 잠금이 짧다.
     """
-    # TODO(S15P31A404 다음 이슈 "기관별 동시 처리 상한"): WORKER_MAX_IN_FLIGHT_PER_INSTITUTION은 거기서 더한다(12.4)
-    room = settings.WORKER_MAX_IN_FLIGHT - count_in_flight(db)
+    in_flight = count_in_flight_by_institution(db)
+    room = settings.WORKER_MAX_IN_FLIGHT - sum(in_flight.values())
     if room <= 0:
         return
-    rows = db.execute(
-        select(Shot.id, Shot.session_id).where(Shot.status == UPLOADED).order_by(Shot.uploaded_at, Shot.id).limit(room)
-    ).all()
-    for shot_id, session_id in rows:
+    per_institution = settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION
+    full = [institution_id for institution_id, count in in_flight.items() if count >= per_institution]
+    # 이미 찬 기관은 SQL에서 뺀다. LIMIT은 걸지 않는다: 이 바퀴 안에서 차는 기관의 나머지 촬영은 건너뛰고 그 뒤에 올린
+    # 다른 기관의 촬영을 가져와야 하기 때문이다(3절 "한 기관의 대량 업로드"). ID 세 개짜리 행이라 가볍다
+    query = (
+        select(Shot.id, Shot.session_id, Dog.institution_id)
+        .join(MeasureSession, Shot.session_id == MeasureSession.id)
+        .join(Dog, MeasureSession.dog_id == Dog.id)
+        .where(Shot.status == UPLOADED)
+        .order_by(Shot.uploaded_at, Shot.id)
+    )
+    if full:
+        query = query.where(Dog.institution_id.not_in(full))
+    claimed = 0
+    for shot_id, session_id, institution_id in db.execute(query).all():
+        if claimed >= room:
+            break
+        if in_flight.get(institution_id, 0) >= per_institution:
+            continue  # 이 바퀴에서 찼다. 뒤에 다른 기관의 촬영이 있을 수 있으니 계속 본다
         locked = db.execute(select(MeasureSession.id).where(MeasureSession.id == session_id).with_for_update()).first()
         if locked is None:  # 그사이 회차가 지워졌다
             db.commit()
@@ -273,6 +299,8 @@ def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
         ).rowcount
         db.commit()  # 잠금을 바로 푼다
         if changed:
+            claimed += 1
+            in_flight[institution_id] = in_flight.get(institution_id, 0) + 1
             stats.claimed += 1
 
 
@@ -411,10 +439,11 @@ def main() -> int:
     signal.signal(signal.SIGINT, worker.stop)
     signal.signal(signal.SIGTERM, worker.stop)
     logger.info(
-        "worker started mode=%s interval=%ss max_in_flight=%d timeout=%ss",
+        "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss",
         settings.ANALYSIS_API_MODE,
         settings.WORKER_POLL_INTERVAL_SEC,
         settings.WORKER_MAX_IN_FLIGHT,
+        settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION,
         settings.ANALYSIS_TIMEOUT_SEC,
     )
     worker.run_forever()
