@@ -17,7 +17,7 @@ model = dict(backbone=dict(norm_eval=True))
 
 train_pipeline = [
     dict(type="LoadImage", backend_args=None),
-    dict(type="GetBBoxCenterScale", padding=1.15),
+    dict(type="GetBBoxCenterScale", padding=1.25),
     dict(type="RandomFlip", direction="horizontal"),
     dict(type="RandomBBoxTransform", scale_factor=[0.75, 1.25], rotate_factor=30),
     dict(type="TopdownAffine", input_size=codec["input_size"]),

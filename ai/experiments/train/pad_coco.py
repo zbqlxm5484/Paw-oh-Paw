@@ -3,6 +3,7 @@ import json
 
 N_OUT = 46
 N_IN = 22
+BOX_MARGIN = 0.15
 
 
 def main():
@@ -11,9 +12,11 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--drop-untouched", action="store_true")
     ap.add_argument("--visible-only", action="store_true")
+    ap.add_argument("--box-margin", type=float, default=BOX_MARGIN)
     a = ap.parse_args()
     d = json.load(open(a.src, encoding="utf-8"))
     dropped = kept = 0
+    ims = {im["id"]: im for im in d["images"]}
     for ann in d["annotations"]:
         k = ann["keypoints"]
         touched = (ann.get("attributes") or {}).get("touched") or [1] * N_IN
@@ -30,6 +33,11 @@ def main():
         out += [0, 0, 0] * (N_OUT - N_IN)
         ann["keypoints"] = out
         ann["num_keypoints"] = sum(1 for i in range(N_OUT) if out[3 * i + 2] > 0)
+        x, y, w, h = ann["bbox"]
+        m = a.box_margin * max(w, h)
+        im = ims[ann["image_id"]]
+        x1, y1 = max(0.0, x - m), max(0.0, y - m)
+        ann["bbox"] = [x1, y1, min(float(im["width"]), x + w + m) - x1, min(float(im["height"]), y + h + m) - y1]
     cat = d["categories"][0]
     cat["keypoints"] = cat["keypoints"][:N_IN] + [f"kp_{i}" for i in range(N_IN, N_OUT)]
     json.dump(d, open(a.out, "w", encoding="utf-8"), ensure_ascii=False)
