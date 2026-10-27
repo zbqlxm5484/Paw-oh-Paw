@@ -1,0 +1,17 @@
+models/
+results/
+train/creamoff46.py
+cv/data/
+cv/runs/
+cv/*.jsonl
+cv/*.log
+cv/*.md
+cv/*.html
+cv/*.jpg
+cv/*.json
+cv/pose_flip.py
+pl/*.json
+pl/*.txt
+pl/*.log
+pl/*.toml
+pl/set_*/
