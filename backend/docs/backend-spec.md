@@ -7,7 +7,7 @@ Oct 19, 2026 · @조영운
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
 | v1.8 | 2026-10-26 | 분석 결과 저장(작업 단위 6 뒷부분, S15P31A404-124): 6절 결과 저장 원칙에 파일·DB에 넣는 값과 대응표 위치, 14.2 `ANALYSIS_FAILED`에 결과 JSON을 읽을 수 없는 경우, 14.3에 비어 있는 판정 사유 규칙(PARTIAL은 null 그대로, INVALID은 `NO_VALID_PASS`)·`NO_DOG` 촬영 단위·제외된 통과의 보행 유형 규칙. 87 MR 리뷰 반영: 12.4·14.2 분석 API가 거부한 제출(4xx)은 다시 보내지 않음, 6절·16절 `X-API-Key` 확정과 모드 전환 주의. MR !34 검토 반영(10-27): 12.4·14.2 저장 중 오류는 그 촬영만 건너뜀, 상태·결과 조회 404·410은 바로 `ANALYSIS_FAILED`, 401·403은 촬영을 건드리지 않고 제출 보류, 결과 값의 DB 범위 검사, 16절 `ANALYSIS_API_KEY` |
-| v1.9 | 2026-10-27 | 기관별 동시 처리 상한 구현(작업 단위 6 마무리, S15P31A404-141): 12.4 기관별 상한 줄에 후보 조회에 LIMIT을 걸지 않는 이유와 한 바퀴 안에서 찬 기관을 건너뛰는 규칙 보강 |
+| v1.9 | 2026-10-27 | 기관별 동시 처리 상한 구현(작업 단위 6 마무리, S15P31A404-141): 12.4 기관별 상한 줄을 "후보 조회가 기관별 남은 자리만큼만 뽑고(row_number) 전체는 LIMIT, 메모리 개수는 안전망"으로 정리(141 검토 반영). 11.7 워커 세션은 바퀴당 하나, 16절 두 상한의 최솟값 1, 17.6 "바로 SUBMITTED"는 전체 자리가 남아 있을 때 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -540,7 +540,7 @@ sig:  71dc0ee5f533d3459657e501b062aefcaec8867af045a52eaab5b75bb3c98b95
 ### 11.7 DB 사용 규칙
 
 - 요청 하나에 세션 하나를 쓴다(`deps.get_db`). 요청이 성공하면 `get_db`가 한 번 commit하고, 예외가 나면 rollback한다. services는 `flush()`까지만 한다.
-- 워커는 작업 하나마다 새 세션을 열고, 작업이 끝나면 commit한다.
+- 워커는 바퀴(주 반복 한 번)마다 새 세션을 열고, 상태를 바꾸는 일 하나가 끝날 때마다 commit한다. 바퀴가 끝나면 세션을 닫는다.
 - 테이블 변경은 Alembic 마이그레이션 파일로만 한다. DB에 직접 `ALTER`하지 않는다.
 - 삭제는 실제로 지운다(행과 파일 모두). "삭제 표시"만 하는 방식은 쓰지 않는다. 과제가 끝나면 파기해야 하기 때문이다(REQ-CM-002).
 - **오류가 난 뒤**: PostgreSQL은 트랜잭션 안에서 SQL 오류가 한 번 나면 rollback할 때까지 그 연결의 다음 쿼리를 모두 거부한다. DB 오류를 잡은 뒤 같은 세션으로 이어서 쓰지 않는다. 오류를 예상하고 이어 가야 하면 `db.begin_nested()`(세이브포인트) 안에서 실행한다.
@@ -891,7 +891,7 @@ CREATE TABLE purge_log (
 * **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 끝나면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
 * **자식 프로세스가 죽으면**: `BrokenProcessPool`이 나면 그 풀을 새로 만들고, 그 풀에서 실행 중이던 작업을 모두 FAILED(`VIDEO_RENDER_FAILED`·`REPORT_FAILED`)로 둔다.
 * **다시 켤 때**: 워커가 켜지면 `UPLOAD_TMP_DIR/worker/`를 비우고, GENERATING 보고서를 PENDING으로 돌린다. 만들던 중에 꺼진 것이기 때문이다. 결과 영상은 PENDING에 머물러 있으므로 그대로 다시 맡긴다. 이 규칙은 워커가 한 대일 때만 맞다(3절 확장 계획).
-* **기관별 상한**: UPLOADED 촬영을 고를 때 `shot → measure_session → dog`를 join해 기관별 SUBMITTED·ANALYZING 수를 GROUP BY로 센다. `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`이 찬 기관은 SQL에서 빼고 업로드 순으로 가져온다. 한 바퀴 안에서 가져올 때마다 메모리의 개수를 늘려, 그 바퀴에서 찬 기관의 나머지 촬영은 건너뛰고 그 뒤에 올린 다른 기관의 촬영을 본다. 그래서 후보 조회에는 LIMIT을 걸지 않는다(ID만 읽는 가벼운 조회다). 전체 상한 `WORKER_MAX_IN_FLIGHT`도 함께 지킨다. 한 기관이 한꺼번에 많이 올려도 전체 자리를 다 차지하지 못한다(3절).
+* **기관별 상한**: UPLOADED 촬영을 고를 때 `shot → measure_session → dog`를 join해 기관별 SUBMITTED·ANALYZING 수를 GROUP BY로 센다. 후보 조회는 기관별로 올린 순서에 번호를 매겨(`row_number() OVER (PARTITION BY 기관 ORDER BY uploaded_at, id)`) 그 기관의 남은 자리(`WORKER_MAX_IN_FLIGHT_PER_INSTITUTION` − 진행 중) 이하인 것만 남기고, 전체는 올린 순서로 남은 전체 자리(`WORKER_MAX_IN_FLIGHT` − 진행 중)만큼만 읽는다(LIMIT). 그래서 한 기관이 앞에 많이 올려도 그 뒤 다른 기관의 촬영이 보이고, 대기열이 아무리 길어도 바퀴마다 읽는 행은 남은 자리 수다. 한 바퀴 안에서 가져올 때마다 메모리의 개수도 늘리는데 이것은 안전망이다. 한 기관이 한꺼번에 많이 올려도 전체 자리를 다 차지하지 못하고, 다른 기관의 새 촬영은 전체 자리가 남아 있으면 바로 가져간다(3절).
 
 ### 12.5 데이터 규칙
 
@@ -1725,8 +1725,8 @@ stride_length: 2.0   # pct_body
 | `ANALYSIS_SUBMIT_MAX_ATTEMPTS` | `3` | 제출 재시도 횟수. 다 실패하면 `ANALYSIS_SUBMIT_FAILED` | 12.4 |
 | `MOCK_ANALYSIS_DELAY_SEC` | `5` | Mock이 결과를 돌려줄 때까지 걸리는 시간 | 6절 |
 | `WORKER_POLL_INTERVAL_SEC` | `2` | 워커가 DB와 분석 상태를 보는 간격 | 3절 |
-| `WORKER_MAX_IN_FLIGHT` | `16` | 동시에 분석 API에 맡겨 둘 촬영 수. 분석 서버가 버티지 못하면 줄인다 | 3절 |
-| `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION` | `4` | 한 기관이 동시에 분석 API에 맡길 수 있는 촬영 수 | 3절, 12.4 |
+| `WORKER_MAX_IN_FLIGHT` | `16` | 동시에 분석 API에 맡겨 둘 촬영 수. 분석 서버가 버티지 못하면 줄인다. 1 이상(0이면 워커가 아무것도 가져가지 않으므로 시작 때 막는다) | 3절 |
+| `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION` | `4` | 한 기관이 동시에 분석 API에 맡길 수 있는 촬영 수. 1 이상. 기관이 하나뿐인 환경(시연)에서는 전체 상한과 같게 두어도 된다 | 3절, 12.4 |
 | `WORKER_RENDER_CONCURRENCY` | `1` | 결과 영상을 동시에 만드는 프로세스 수. 보고서는 따로 1개다. 서버 코어가 넉넉하면 올린다 | 3절, 12.4 |
 | `RECOMMENDED_PASSES` | `8` | 방향별 권장 유효 통과 수. D-14 결과가 나오면 바꾼다 | 15.6 |
 | `SIZE_SMALL_MAX_KG` | `10` | 등록 체중이 이 값 미만이면 SMALL | 12.5 |
@@ -1842,7 +1842,7 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-19: STAFF 계정으로 부르면 403 `FORBIDDEN`이다.
 - [ ] BE-20: DB를 멈추면 `/api/v1/health`가 503과 `"db": "error"`를 낸다.
 - [ ] 워커: 결과 영상 20건이 밀려 있어도 새 촬영의 판정은 2초 조회 주기대로 나온다(무거운 일이 주 반복을 막지 않는다, 12.4).
-- [ ] 워커: 한 기관이 촬영 30건을 한꺼번에 올려도 그 기관의 SUBMITTED·ANALYZING 수는 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`을 넘지 않고, 다른 기관의 새 촬영은 바로 SUBMITTED가 된다.
+- [ ] 워커: 한 기관이 촬영 30건을 한꺼번에 올려도 그 기관의 SUBMITTED·ANALYZING 수는 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`을 넘지 않고, 다른 기관의 새 촬영은 전체 자리(`WORKER_MAX_IN_FLIGHT`)가 남아 있으면 바로 SUBMITTED가 된다.
 - [ ] 워커: 회차가 DONE이 될 때 결과 영상이 밀려 있어도 보고서는 기다리지 않고 바로 만든다(보고서 전용 프로세스).
 - [ ] 워커: 보고서를 만드는 도중에 워커를 껐다 켜면 그 보고서가 다시 만들어져 DONE이 된다.
 - [ ] BE-19: `s3`에서 파기하면 버킷에 그 대상의 키가 하나도 남지 않는다.

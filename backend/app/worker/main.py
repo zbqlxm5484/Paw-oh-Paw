@@ -83,17 +83,21 @@ def _now() -> datetime:
 # ---- 상태 조회 ----
 
 
-def count_in_flight_by_institution(db: Session) -> dict[uuid.UUID, int]:
-    """기관별 SUBMITTED·ANALYZING 수(shot → measure_session → dog를 join해 GROUP BY, 12.4). 전체 수는 값의 합이다."""
-    rows = db.execute(
-        select(Dog.institution_id, func.count())
+def _in_flight_by_institution():
+    """기관별 SUBMITTED·ANALYZING 수를 세는 SELECT(shot → measure_session → dog를 join해 GROUP BY, 12.4)."""
+    return (
+        select(Dog.institution_id.label("institution_id"), func.count().label("busy"))
         .select_from(Shot)
         .join(MeasureSession, Shot.session_id == MeasureSession.id)
         .join(Dog, MeasureSession.dog_id == Dog.id)
         .where(Shot.status.in_(IN_FLIGHT))
         .group_by(Dog.institution_id)
-    ).all()
-    return {institution_id: count for institution_id, count in rows}
+    )
+
+
+def count_in_flight_by_institution(db: Session) -> dict[uuid.UUID, int]:
+    """기관별 SUBMITTED·ANALYZING 수. 전체 수는 값의 합이다."""
+    return {institution_id: busy for institution_id, busy in db.execute(_in_flight_by_institution()).all()}
 
 
 def _fail(db: Session, shot_id: uuid.UUID, reason: FailReason) -> bool:
@@ -258,9 +262,19 @@ def _save_result(
 # ---- 가져오기 ----
 
 
+def _lock_session(db: Session, session_id: uuid.UUID) -> bool:
+    """회차 행을 FOR UPDATE로 잠근다(12.4 잠금). 그사이 지워졌으면 False."""
+    row = db.execute(select(MeasureSession.id).where(MeasureSession.id == session_id).with_for_update()).first()
+    return row is not None
+
+
 def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
     """UPLOADED 촬영을 올린 순서대로 SUBMITTED로 가져온다. 전체 자리(WORKER_MAX_IN_FLIGHT)와 그 기관의 자리
     (WORKER_MAX_IN_FLIGHT_PER_INSTITUTION)가 둘 다 있는 것만(12.4 기관별 상한).
+
+    후보는 SQL에서 기관별 남은 자리만큼만 뽑는다(12.4): 기관별로 올린 순서에 번호를 매겨(row_number) 그 기관의 남은
+    자리(상한 − 진행 중) 이하인 것만 남기고, 전체는 올린 순서로 room개까지(LIMIT). 그래서 한 기관이 앞에 많이 올려도 그
+    뒤 다른 기관의 촬영이 보이고, 대기열이 아무리 길어도 읽어 오는 행은 room개다(3절 "한 기관의 대량 업로드").
 
     회차 행을 잠근 채 바꾼다(12.4 잠금). 측정 취소·촬영 삭제가 같은 행을 잠그므로, 취소가 먼저면 여기서 바뀐 행이
     0개이고 여기가 먼저면 취소가 SUBMITTED를 보고 409 SHOT_IN_PROGRESS를 낸다. 분석 API는 아직 부르지 않아 잠금이 짧다.
@@ -270,26 +284,35 @@ def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
     if room <= 0:
         return
     per_institution = settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION
-    full = [institution_id for institution_id, count in in_flight.items() if count >= per_institution]
-    # 이미 찬 기관은 SQL에서 뺀다. LIMIT은 걸지 않는다: 이 바퀴 안에서 차는 기관의 나머지 촬영은 건너뛰고 그 뒤에 올린
-    # 다른 기관의 촬영을 가져와야 하기 때문이다(3절 "한 기관의 대량 업로드"). ID 세 개짜리 행이라 가볍다
-    query = (
-        select(Shot.id, Shot.session_id, Dog.institution_id)
+    busy = _in_flight_by_institution().subquery("in_flight")
+    ranked = (
+        select(
+            Shot.id.label("shot_id"),
+            Shot.session_id.label("session_id"),
+            Dog.institution_id.label("institution_id"),
+            Shot.uploaded_at.label("uploaded_at"),
+            func.row_number().over(partition_by=Dog.institution_id, order_by=(Shot.uploaded_at, Shot.id)).label("rank"),
+        )
+        .select_from(Shot)
         .join(MeasureSession, Shot.session_id == MeasureSession.id)
         .join(Dog, MeasureSession.dog_id == Dog.id)
         .where(Shot.status == UPLOADED)
-        .order_by(Shot.uploaded_at, Shot.id)
+    ).subquery("ranked")
+    query = (
+        select(ranked.c.shot_id, ranked.c.session_id, ranked.c.institution_id)
+        .outerjoin(busy, busy.c.institution_id == ranked.c.institution_id)
+        .where(ranked.c.rank <= per_institution - func.coalesce(busy.c.busy, 0))
+        .order_by(ranked.c.uploaded_at, ranked.c.shot_id)
+        .limit(room)
     )
-    if full:
-        query = query.where(Dog.institution_id.not_in(full))
     claimed = 0
     for shot_id, session_id, institution_id in db.execute(query).all():
+        # 아래 두 검사는 안전망이다. SQL이 자리를 맞춰 뽑았으므로 보통은 걸리지 않는다
         if claimed >= room:
             break
         if in_flight.get(institution_id, 0) >= per_institution:
-            continue  # 이 바퀴에서 찼다. 뒤에 다른 기관의 촬영이 있을 수 있으니 계속 본다
-        locked = db.execute(select(MeasureSession.id).where(MeasureSession.id == session_id).with_for_update()).first()
-        if locked is None:  # 그사이 회차가 지워졌다
+            continue
+        if not _lock_session(db, session_id):  # 그사이 회차가 지워졌다(촬영도 함께)
             db.commit()
             continue
         changed = db.execute(

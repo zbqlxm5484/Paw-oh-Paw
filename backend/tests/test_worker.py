@@ -199,20 +199,21 @@ def test_in_flight_cap_limits_claims(db: Session, dog, staff) -> None:
 
 
 def test_institution_cap_leaves_room_for_other_institutions(db: Session, dog, staff, other_staff) -> None:
-    # 17.6: 한 기관이 한꺼번에 많이 올려도 그 기관은 상한까지만, 다른 기관의 새 촬영은 바로 SUBMITTED
+    # 17.6: 한 기관이 30건을 한꺼번에 올려도 그 기관은 상한까지만, 다른 기관의 새 촬영은 바로 SUBMITTED.
+    # 30건은 전체 자리 16보다 많아야 한다: 앞에서 16행만 보는 구현이면 T02의 촬영을 못 본다
     mine = _session(db, dog, staff)
-    many = [_shot(db, mine, seq_no) for seq_no in range(1, 11)]  # T01이 10건을 먼저 올림
+    many = [_shot(db, mine, seq_no) for seq_no in range(1, 31)]  # T01이 30건을 먼저 올림
     theirs = _session(db, _other_dog(db, other_staff), other_staff)
-    late = _shot(db, theirs, 1, uploaded_at=datetime.now(UTC) + timedelta(seconds=30))  # T02가 가장 늦게 1건
+    late = _shot(db, theirs, 1, uploaded_at=datetime.now(UTC) + timedelta(seconds=60))  # T02가 가장 늦게 1건
     settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
     client = FakeClient()
 
     stats = run_once(db, client, settings, get_storage())
 
     assert stats.claimed == 5 and stats.submitted == 5
-    assert [_fresh(db, s).status for s in many] == ["SUBMITTED"] * 4 + ["UPLOADED"] * 6  # 올린 순서대로 4건
+    assert [_fresh(db, s).status for s in many] == ["SUBMITTED"] * 4 + ["UPLOADED"] * 26  # 올린 순서대로 4건
     assert _fresh(db, late).status == "SUBMITTED"
-    # 분석이 안 끝났으면 다음 바퀴에도 T01은 더 못 가져간다(이미 찬 기관은 SQL에서 뺀다)
+    # 분석이 안 끝났으면 다음 바퀴에도 T01은 더 못 가져간다(SQL이 그 기관의 남은 자리를 0으로 본다)
     assert run_once(db, client, settings, get_storage()).claimed == 0
 
 
@@ -221,7 +222,7 @@ def test_institution_cap_counts_shots_already_in_flight(db: Session, dog, staff)
     busy = [_shot(db, session, seq_no, status="ANALYZING", job_id=f"old-{seq_no}") for seq_no in (1, 2, 3)]
     waiting = [_shot(db, session, seq_no) for seq_no in (4, 5)]
     client = FakeClient(statuses={f"old-{n}": AnalysisStatus("running") for n in (1, 2, 3)})
-    settings = _settings(WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+    settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
 
     first = run_once(db, client, settings, get_storage())
 
@@ -248,6 +249,104 @@ def test_global_cap_still_applies_across_institutions(db: Session, dog, staff, o
     assert stats.claimed == 4
     assert [_fresh(db, s).status for s in first] == ["SUBMITTED"] * 3
     assert [_fresh(db, s).status for s in second] == ["SUBMITTED", "UPLOADED", "UPLOADED"]
+
+
+def test_two_partially_full_institutions_get_their_remaining_room(db: Session, dog, staff, other_staff) -> None:
+    # T01은 3건, T02는 2건이 이미 진행 중(상한 4) → 올린 순서대로 각각 1건·2건만 더
+    mine = _session(db, dog, staff)
+    theirs = _session(db, _other_dog(db, other_staff), other_staff)
+    for seq_no in (1, 2, 3):
+        _shot(db, mine, seq_no, status="ANALYZING", job_id=f"m{seq_no}")
+    for seq_no in (1, 2):
+        _shot(db, theirs, seq_no, status="ANALYZING", job_id=f"t{seq_no}")
+    base = datetime.now(UTC) + timedelta(seconds=100)
+    waiting_mine = [_shot(db, mine, n, uploaded_at=base + timedelta(seconds=n)) for n in (4, 5, 6)]
+    waiting_theirs = [_shot(db, theirs, n, uploaded_at=base + timedelta(seconds=10 + n)) for n in (3, 4, 5)]
+    client = FakeClient(statuses={k: AnalysisStatus("running") for k in ("m1", "m2", "m3", "t1", "t2")})
+    settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+
+    stats = run_once(db, client, settings, get_storage())
+
+    assert stats.claimed == 3
+    assert [_fresh(db, s).status for s in waiting_mine] == ["SUBMITTED", "UPLOADED", "UPLOADED"]
+    assert [_fresh(db, s).status for s in waiting_theirs] == ["SUBMITTED", "SUBMITTED", "UPLOADED"]
+
+
+def test_global_cap_reached_mid_loop_then_upload_order_for_the_rest(db: Session, dog, staff, other_staff) -> None:
+    # 전체 5·기관별 4: A 4건, B 2건, C 1건 순으로 올림 → A4·B1, C는 기다린다. 자리가 하나 나면 C보다 먼저 올린 B의 둘째
+    a = _session(db, dog, staff)
+    other = _other_dog(db, other_staff)
+    b = _session(db, other, other_staff)
+    c_dog = Dog(
+        institution_id=other.institution_id, name="보리2", breed="푸들", weight_kg=Decimal("6.20"), size_class="SMALL"
+    )
+    db.add(c_dog)
+    db.flush()
+    base = datetime.now(UTC) + timedelta(seconds=100)
+    a_shots = [_shot(db, a, n, uploaded_at=base + timedelta(seconds=n)) for n in (1, 2, 3, 4)]
+    b_shots = [_shot(db, b, n, uploaded_at=base + timedelta(seconds=4 + n)) for n in (1, 2)]
+    # C는 세 번째 기관이어야 하는데 테스트 기관이 둘뿐이라, B와 같은 기관의 다른 회차로 "그 뒤에 올린 촬영"만 본다
+    c = _session(db, c_dog, other_staff)
+    c_shot = _shot(db, c, 1, uploaded_at=base + timedelta(seconds=7))
+    client = FakeClient()
+    settings = _settings(WORKER_MAX_IN_FLIGHT=5, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+
+    first = run_once(db, client, settings, get_storage())
+
+    assert first.claimed == 5
+    assert [_fresh(db, s).status for s in a_shots] == ["SUBMITTED"] * 4
+    assert [_fresh(db, s).status for s in b_shots] == ["SUBMITTED", "UPLOADED"]
+    assert _fresh(db, c_shot).status == "UPLOADED"
+
+    client.statuses["job-1"] = AnalysisStatus("failed", error_code="DECODE_FAILED", error_message="x")  # A 하나 끝
+    second = run_once(db, client, settings, get_storage())
+    assert second.failed == 1 and second.claimed == 1
+    assert _fresh(db, b_shots[1]).status == "SUBMITTED" and _fresh(db, c_shot).status == "UPLOADED"
+
+
+def test_session_deleted_between_candidate_query_and_lock_is_skipped(
+    db: Session, dog, staff, other_staff, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 후보 조회와 잠금 사이에 회차가 통째로 지워지면(파기) 그 촬영은 건너뛰고 나머지는 그대로 가져간다
+    from app.worker import main as worker_main
+
+    gone = _session(db, dog, staff)
+    gone_shot = _shot(db, gone, 1)
+    kept = _session(db, _other_dog(db, other_staff), other_staff)
+    kept_shot = _shot(db, kept, 1, uploaded_at=datetime.now(UTC) + timedelta(seconds=30))
+    real_lock = worker_main._lock_session
+
+    def purge_then_lock(db_: Session, session_id: uuid.UUID) -> bool:
+        if session_id == gone.id:
+            db_.execute(delete(Shot).where(Shot.session_id == gone.id))
+            db_.execute(delete(MeasureSession).where(MeasureSession.id == gone.id))
+            db_.commit()
+        return real_lock(db_, session_id)
+
+    monkeypatch.setattr("app.worker.main._lock_session", purge_then_lock)
+    stats = run_once(db, FakeClient(), _settings(), get_storage())
+
+    assert stats.claimed == 1 and stats.submitted == 1
+    assert _fresh(db, gone_shot) is None and _fresh(db, kept_shot).status == "SUBMITTED"
+
+
+def test_submit_order_follows_upload_time_not_claim_time(db: Session, dog, staff) -> None:
+    # 5ef46df: 보내는 순서는 uploaded_at이다. submitted_at(가져온 시각)으로 세우면 같은 바퀴에 가져온 것은 동률이라
+    # UUID 순이 된다. 여기서는 두 값의 순서를 반대로 두어 어느 쪽으로 세우는지 드러낸다
+    session = _session(db, dog, staff)
+    now = datetime.now(UTC)
+    first_uploaded = _shot(
+        db, session, 1, "SUBMITTED", uploaded_at=now + timedelta(seconds=1), submitted_at=now + timedelta(seconds=10)
+    )
+    second_uploaded = _shot(
+        db, session, 2, "SUBMITTED", uploaded_at=now + timedelta(seconds=2), submitted_at=now + timedelta(seconds=5)
+    )
+    client = FakeClient()
+
+    stats = run_once(db, client, _settings(), get_storage())
+
+    assert stats.submitted == 2
+    assert [info.shot_id for _, info in client.submits] == [first_uploaded.id, second_uploaded.id]
 
 
 def test_submit_failures_keep_the_shot_claimed_then_give_up(db: Session, dog, staff) -> None:
