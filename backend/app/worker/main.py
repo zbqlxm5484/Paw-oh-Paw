@@ -318,11 +318,13 @@ def send_claimed(
     db: Session, client: AnalysisClient, settings: Settings, storage: StorageService, stats: WorkerStats
 ) -> None:
     """가져왔지만 아직 분석 API가 받지 않은 촬영(SUBMITTED, job_id 없음)을 보낸다. 실패했던 것도 여기서 다시 보낸다."""
+    # 올린 순서로 보낸다. submitted_at으로 줄 세우면 같은 바퀴에 가져온 촬영은 값이 같아(Windows의 시계 해상도는
+    # 15.6ms) UUID 순이 되어 버린다
     rows = db.execute(
         select(Shot, MeasureSession.size_class)
         .join(MeasureSession, Shot.session_id == MeasureSession.id)
         .where(Shot.status == SUBMITTED, Shot.job_id.is_(None))
-        .order_by(Shot.submitted_at, Shot.id)
+        .order_by(Shot.uploaded_at, Shot.id)
     ).all()
     for shot, size_class in rows:
         try:
