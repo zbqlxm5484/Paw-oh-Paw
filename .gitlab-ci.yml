@@ -27,13 +27,7 @@ variables:
 reproduce:                  # 기업 검수 절차(새 venv → 설치 → 실행) 재현
   extends: .tool
   script:
-    - >
-      $RUN $PY_IMAGE sh -ec '
-      python -m venv /tmp/venv && . /tmp/venv/bin/activate &&
-      pip install -q -r requirements-dev.txt &&
-      if [ -f backend/requirements.txt ]; then pip install -q -r backend/requirements.txt; fi &&
-      if [ -f analysis_api/requirements.txt ]; then pip install -q -r analysis_api/requirements.txt; fi &&
-      pytest -q -p no:cacheprovider'
+    - $RUN $PY_IMAGE sh infra/ci/reproduce.sh      # 서비스마다 새 venv(루트·backend·analysis_api·prototype)
 
 ruff:
   extends: .tool
