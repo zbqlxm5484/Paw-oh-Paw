@@ -8,7 +8,7 @@
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import SecretStr, ValidationError, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # 16절 "상수로 두는 값": 세부명세서가 정한 값이라 환경 변수가 아니라 코드 상수로 둔다.
@@ -79,8 +79,9 @@ class Settings(DbSettings):
     MOCK_ANALYSIS_DELAY_SEC: float = 5
 
     WORKER_POLL_INTERVAL_SEC: float = 2
-    WORKER_MAX_IN_FLIGHT: int = 16
-    WORKER_MAX_IN_FLIGHT_PER_INSTITUTION: int = 4
+    # 16절: 둘 다 1 이상. 0이면 워커가 오류 없이 아무것도 가져가지 않으므로 시작 자체를 막는다
+    WORKER_MAX_IN_FLIGHT: int = Field(16, ge=1)
+    WORKER_MAX_IN_FLIGHT_PER_INSTITUTION: int = Field(4, ge=1)
     WORKER_RENDER_CONCURRENCY: int = 1
 
     RECOMMENDED_PASSES: int = 8
