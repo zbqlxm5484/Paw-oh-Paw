@@ -55,6 +55,7 @@ def configure_logging(level: str) -> None:
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt="%Y-%m-%dT%H:%M:%S"))
     root.addHandler(handler)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # 워커가 분석 API를 부를 때마다 한 줄씩 찍지 않는다(11.8)
     _logging_ready = True
 
 

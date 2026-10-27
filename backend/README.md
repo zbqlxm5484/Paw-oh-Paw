@@ -1,6 +1,6 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.6. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소)다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.6. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6의 앞부분(분석 클라이언트, 워커의 분석 제출·상태 조회. 결과 저장은 다음)이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
@@ -17,6 +17,7 @@
 | 파일 저장소 `StorageService`·`LocalStorage`·파일 키 (7절, 11.11) | `app/storage/` |
 | 분석 클라이언트 `MockAnalysisClient`·`HttpAnalysisClient`와 견본 JSON (6절, 16절 `ANALYSIS_API_MODE`) | `app/clients/analysis.py`, `app/clients/fixtures/` |
 | 실패한 요청이 만든 파일 정리 (12.4) | `app/api/deps.py`의 `delete_created_files` |
+| 워커: UPLOADED 촬영 제출 → SUBMITTED → ANALYZING, 제출 재시도·시간 초과 (3절, 12.4, 14.2) | `app/worker/main.py` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
 | 화면 문구 (14.5) | `messages/ko.yaml` |
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
@@ -85,6 +86,17 @@ uvicorn app.main:app --no-access-log
 - `http://localhost:8000/api/v1/health`가 `{"status": "ok", "db": "ok", "version": "1.0.0"}`이면 정상이다. DB에 못 붙으면 503이고 `status`·`db`가 `"error"`다. `storage`는 `STORAGE_ROOT`에 쓸 수 있는지 검사한 결과다.
 - 모든 오류 응답은 `{"error": {"code", "message", "detail"}}` 한 모양이다(11.5). `message`는 `messages/ko.yaml`에서 `code`로 찾는다.
 - `/docs`(Swagger)·`/redoc`·`/openapi.json`은 `.env`의 `API_DOCS_ENABLED=true`일 때만 열린다(`.env.example`은 true). 배포에서는 끄고, 화면·기업과 맞춘 공식 명세는 `docs/openapi.yaml`이다.
+
+## 워커 띄우기
+
+```bash
+python -m app.worker.main
+```
+
+- API와 같은 코드를 다른 명령으로 실행하는 별도 프로세스다(3절). `WORKER_POLL_INTERVAL_SEC`(기본 2초)마다 UPLOADED 촬영을 회차 행을 잠근 채 SUBMITTED로 가져온 뒤 분석 API에 보내고, 보낸 것의 상태를 물어 ANALYZING·FAILED로 바꾼다(12.4). 제출에 실패하면 SUBMITTED에 둔 채 다음 바퀴에 다시 보낸다. 제출이 `ANALYSIS_SUBMIT_MAX_ATTEMPTS`번 실패하면 `ANALYSIS_SUBMIT_FAILED`, 제출 뒤 `ANALYSIS_TIMEOUT_SEC`가 지나면 `ANALYSIS_TIMEOUT`이다.
+- `.env`의 `ANALYSIS_API_MODE=mock`이면 분석 API 없이 견본 결과(`app/clients/fixtures/`)를 `MOCK_ANALYSIS_DELAY_SEC` 뒤에 돌려준다. `http`면 `ANALYSIS_API_BASE_URL`의 분석 API를 부른다.
+- 분석 결과 저장(DONE, 통과·판정 행)과 결과 영상·보고서는 다음 작업에서 더한다. 그때까지 분석이 끝난 촬영은 ANALYZING에 머문다.
+- Ctrl+C(SIGINT)나 SIGTERM을 받으면 하던 바퀴를 끝내고 멈춘다. 상태가 DB에 있어 다시 켜면 이어서 한다.
 
 ## 테스트
 
