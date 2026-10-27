@@ -6,7 +6,7 @@ Oct 19, 2026 · @조영운
 
 | 버전 | 날짜 | 바뀐 내용 |
 | --- | --- | --- |
-| v1.8 | 2026-10-26 | 분석 결과 저장(작업 단위 6 뒷부분, S15P31A404-124): 6절 결과 저장 원칙에 파일·DB에 넣는 값과 대응표 위치, 14.2 `ANALYSIS_FAILED`에 결과 JSON을 읽을 수 없는 경우, 14.3에 비어 있는 판정 사유 규칙(PARTIAL은 null 그대로, INVALID은 `NO_VALID_PASS`)·`NO_DOG` 촬영 단위·제외된 통과의 보행 유형 규칙. 87 MR 리뷰 반영: 12.4·14.2 분석 API가 거부한 제출(4xx)은 다시 보내지 않음, 6절·16절 `X-API-Key` 확정과 모드 전환 주의 |
+| v1.8 | 2026-10-26 | 분석 결과 저장(작업 단위 6 뒷부분, S15P31A404-124): 6절 결과 저장 원칙에 파일·DB에 넣는 값과 대응표 위치, 14.2 `ANALYSIS_FAILED`에 결과 JSON을 읽을 수 없는 경우, 14.3에 비어 있는 판정 사유 규칙(PARTIAL은 null 그대로, INVALID은 `NO_VALID_PASS`)·`NO_DOG` 촬영 단위·제외된 통과의 보행 유형 규칙. 87 MR 리뷰 반영: 12.4·14.2 분석 API가 거부한 제출(4xx)은 다시 보내지 않음, 6절·16절 `X-API-Key` 확정과 모드 전환 주의. MR !34 검토 반영(10-27): 12.4·14.2 저장 중 오류는 그 촬영만 건너뜀, 상태·결과 조회 404·410은 바로 `ANALYSIS_FAILED`, 401·403은 촬영을 건드리지 않고 제출 보류, 결과 값의 DB 범위 검사, 16절 `ANALYSIS_API_KEY` |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -877,7 +877,8 @@ CREATE TABLE purge_log (
 | `report.status` | PENDING → GENERATING → DONE 또는 FAILED. 워커가 켜질 때 GENERATING → PENDING | 워커, 다시 만들기 API(→ PENDING) | 워커는 회차를 DONE으로 바꾸는 같은 트랜잭션에서 판본마다 1행을 PENDING으로 만든다. 화면이 DONE인데 보고서 행이 없는 순간을 보지 않게 하기 위해서다 |
 
 - 상태는 조건을 건 UPDATE로만 바꾼다. 예: `UPDATE shot SET status='SUBMITTED' WHERE id=:id AND status='UPLOADED'`. 바뀐 행이 0개면 다른 처리가 먼저 가져간 것이므로 건너뛴다. 같은 일을 두 번 하지 않기 위해서다.
-- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 그동안 촬영은 SUBMITTED에 머물고 `job_id`는 비어 있다(화면에는 대기로 보인다). 3번 실패하면 FAILED(`ANALYSIS_SUBMIT_FAILED`)다. 분석 API가 요청 자체를 거부하면(400·401·413·415처럼 다시 보내도 같은 4xx. 408·429는 제외) 다시 보내지 않고 바로 FAILED(`ANALYSIS_SUBMIT_FAILED`)다(87 MR 리뷰). 다시 보내는 것은 연결 실패·시간 초과·5xx·깨진 응답뿐이다.
+- 분석 API 제출이 네트워크 오류로 실패하면 `attempt_count`를 올리고 다음 차례에 다시 보낸다. 그동안 촬영은 SUBMITTED에 머물고 `job_id`는 비어 있다(화면에는 대기로 보인다). 3번 실패하면 FAILED(`ANALYSIS_SUBMIT_FAILED`)다. 분석 API가 요청 자체를 거부하면(400·413·415처럼 다시 보내도 같은 4xx) 다시 보내지 않고 바로 FAILED(`ANALYSIS_SUBMIT_FAILED`)다(87 MR 리뷰). 다시 보내는 것은 연결 실패·시간 초과·5xx·깨진 응답·408·429다. 401·403은 요청이 아니라 인증 키(`ANALYSIS_API_KEY`) 설정 문제라 촬영을 건드리지 않는다: `attempt_count`를 올리지 않고 로그만 남긴 뒤 그 바퀴의 제출(과 상태 조회)을 멈추고, 키를 고치면 다음 바퀴에 그대로 이어 보낸다. 못 고치면 `ANALYSIS_TIMEOUT_SEC` 뒤 시간 초과로 끝난다. 키 하나가 틀렸다고 대기 중인 촬영이 전부 FAILED가 되지 않게 하기 위해서다(MR !34 검토).
+- 상태·결과 조회에서 분석 API가 작업이 없다고 답하면(404·410. 재시작으로 작업을 잃었거나 보관 기간이 지남) 기다려도 오지 않으므로 바로 FAILED(`ANALYSIS_FAILED`)다. 409(아직 결과 없음)·5xx·연결 실패는 다음 바퀴에 다시 묻고 시간 초과가 끝을 낸다. 결과를 DB에 넣다가 오류가 나면 방금 쓴 파일을 지우고 그 촬영만 건너뛴다(다음 바퀴에 다시). 한 촬영의 오류가 같은 바퀴의 다른 촬영·가져오기·제출을 막지 않는다. 결과 JSON의 값은 DB 범위(`pass_no` SMALLINT, 프레임 INTEGER)까지 미리 검사해 저장 중 형식 오류가 나지 않게 한다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
 * **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
@@ -1036,8 +1037,8 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 
 | 코드 | 어디에 | 기본 문구 | 언제 |
 | --- | --- | --- | --- |
-| `ANALYSIS_SUBMIT_FAILED` | `shot.fail_reason` | 분석 서버에 보내지 못했습니다. 다시 분석을 눌러 주세요. | 제출 3번 실패, 또는 분석 API가 요청을 거부(4xx)해 다시 보내지 않음 |
-| `ANALYSIS_FAILED` | `shot.fail_reason` | 분석에 실패했습니다. | 분석 API가 실패로 답함(원래 사유는 로그에), 또는 결과 JSON이 6절 계약과 달라 읽을 수 없음(어느 필드인지 로그에) |
+| `ANALYSIS_SUBMIT_FAILED` | `shot.fail_reason` | 분석 서버에 보내지 못했습니다. 다시 분석을 눌러 주세요. | 제출 3번 실패, 또는 분석 API가 요청을 거부(400·413·415 같은 4xx. 401·403은 제외)해 다시 보내지 않음 |
+| `ANALYSIS_FAILED` | `shot.fail_reason` | 분석에 실패했습니다. | 분석 API가 실패로 답함(원래 사유는 로그에), 상태·결과 조회에서 작업이 없다고 답함(404·410), 또는 결과 JSON이 6절 계약과 달라 읽을 수 없음(어느 필드인지 로그에) |
 | `ANALYSIS_TIMEOUT` | `shot.fail_reason` | 분석이 너무 오래 걸려 중단했습니다. | 시간 초과(기본 600초) |
 | `VIDEO_RENDER_FAILED` | `shot.video_status`=FAILED | 결과 영상을 만들지 못했습니다. 판정 결과는 그대로 볼 수 있습니다. | 골격 그리기·얼굴 가리기·인코딩 실패 |
 | `AGGREGATION_FAILED` | `measure_session.fail_reason` | 회차 수치를 계산하지 못했습니다. | 회차 집계 오류 |
@@ -1717,7 +1718,7 @@ stride_length: 2.0   # pct_body
 | `FFMPEG_PATH` | `ffmpeg` | ffmpeg 실행 파일(결과 영상 인코딩) | 7절 |
 | `ANALYSIS_API_MODE` | `mock` | `mock` 또는 `http` | 6절 |
 | `ANALYSIS_API_BASE_URL` | (`http`일 때 필수) | 분석 API 주소. 개발 환경과 기업 GPU 서버는 이 값만 다르다 | 6절 |
-| `ANALYSIS_API_KEY` | (빈 값) | 분석 API 인증 키. `X-API-Key` 헤더로 보낸다(10-26 확정). 비어 있으면 헤더를 보내지 않고 분석 API도 인증을 끈다(로컬 개발) | 6절 |
+| `ANALYSIS_API_KEY` | (빈 값) | 분석 API 인증 키. `X-API-Key` 헤더로 보낸다(10-26 확정). 비어 있으면 헤더를 보내지 않고 분석 API도 인증을 끈다(로컬 개발). 키가 틀리면(401·403) 워커는 촬영을 실패시키지 않고 제출을 멈춘 채 로그를 남긴다(12.4) | 6절 |
 | `ANALYSIS_HTTP_TIMEOUT_SEC` | `30` | 분석 API 요청 하나의 한도(영상 전송 포함) | 6절 |
 | `ANALYSIS_TIMEOUT_SEC` | `600` | 제출부터 분석 완료까지 기다리는 한도. 넘으면 `ANALYSIS_TIMEOUT` | 12.4 |
 | `ANALYSIS_SUBMIT_MAX_ATTEMPTS` | `3` | 제출 재시도 횟수. 다 실패하면 `ANALYSIS_SUBMIT_FAILED` | 12.4 |

@@ -184,8 +184,9 @@ def _rejection(status: int, code: str) -> httpx.Response:
     [
         (_rejection(415, "UNSUPPORTED_MEDIA"), "UNSUPPORTED_MEDIA", False),
         (_rejection(413, "TOO_LARGE"), "TOO_LARGE", False),
-        (_rejection(401, "AUTH_REQUIRED"), "AUTH_REQUIRED", False),
         (_rejection(400, "INVALID_META"), "INVALID_META", False),
+        (_rejection(401, "AUTH_REQUIRED"), "AUTH_REQUIRED", True),  # 키 문제. 거부가 아니라 auth_failed
+        (_rejection(403, "FORBIDDEN"), "FORBIDDEN", True),
         (httpx.Response(429, text="slow down"), "429", True),
         (httpx.Response(500, text="boom"), "500", True),
         (httpx.Response(202, text="not json"), "JSON", True),
@@ -197,8 +198,21 @@ def test_http_submit_turns_bad_responses_into_client_errors(
 ) -> None:
     with pytest.raises(AnalysisClientError, match=message_part) as caught:
         _http(lambda request: response).submit(video, INFO)
-    # 4xx는 다시 보내도 같으므로 retryable=False, 나머지는 다시 보낼 수 있다(87 MR 리뷰 제안 A)
+    # 4xx는 다시 보내도 같으므로 retryable=False, 나머지는 다시 보낼 수 있다(87 MR 리뷰 제안 A). 401·403은 예외다
     assert caught.value.retryable is retryable
+
+
+def test_http_errors_flag_auth_and_missing_jobs() -> None:
+    # 워커가 따로 다루는 두 가지: 401·403은 auth_failed(키 문제), 404·410은 job_gone(작업 없음)
+    with pytest.raises(AnalysisClientError) as caught:
+        _http(lambda request: _rejection(404, "NOT_FOUND")).get_status("job-x")
+    assert caught.value.status_code == 404 and caught.value.job_gone and not caught.value.auth_failed
+    with pytest.raises(AnalysisClientError) as caught:
+        _http(lambda request: _rejection(403, "FORBIDDEN")).get_result("job-x")
+    assert caught.value.auth_failed and caught.value.retryable and not caught.value.job_gone
+    with pytest.raises(AnalysisClientError) as caught:
+        _http(lambda request: _rejection(409, "NOT_READY")).get_result("job-x")
+    assert caught.value.status_code == 409 and not caught.value.job_gone and not caught.value.auth_failed
 
 
 def test_http_connection_failure_is_a_client_error(video: Path) -> None:

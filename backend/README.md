@@ -93,10 +93,10 @@ uvicorn app.main:app --no-access-log
 python -m app.worker.main
 ```
 
-- API와 같은 코드를 다른 명령으로 실행하는 별도 프로세스다(3절). `WORKER_POLL_INTERVAL_SEC`(기본 2초)마다 UPLOADED 촬영을 회차 행을 잠근 채 SUBMITTED로 가져온 뒤 분석 API에 보내고, 보낸 것의 상태를 물어 ANALYZING·FAILED로 바꾼다(12.4). 제출에 실패하면 SUBMITTED에 둔 채 다음 바퀴에 다시 보낸다. 제출이 `ANALYSIS_SUBMIT_MAX_ATTEMPTS`번 실패하거나 분석 API가 요청 자체를 거부하면(400·401·413·415 같은 4xx, 다시 보내지 않음) `ANALYSIS_SUBMIT_FAILED`, 제출 뒤 `ANALYSIS_TIMEOUT_SEC`가 지나면 `ANALYSIS_TIMEOUT`이다.
+- API와 같은 코드를 다른 명령으로 실행하는 별도 프로세스다(3절). `WORKER_POLL_INTERVAL_SEC`(기본 2초)마다 UPLOADED 촬영을 회차 행을 잠근 채 SUBMITTED로 가져온 뒤 분석 API에 보내고, 보낸 것의 상태를 물어 ANALYZING·FAILED로 바꾼다(12.4). 제출에 실패하면 SUBMITTED에 둔 채 다음 바퀴에 다시 보낸다. 제출이 `ANALYSIS_SUBMIT_MAX_ATTEMPTS`번 실패하거나 분석 API가 요청 자체를 거부하면(400·413·415 같은 4xx, 다시 보내지 않음) `ANALYSIS_SUBMIT_FAILED`, 제출 뒤 `ANALYSIS_TIMEOUT_SEC`가 지나면 `ANALYSIS_TIMEOUT`이다. 인증 키가 틀리면(401·403) 촬영을 실패시키지 않고 제출을 멈춘 채 로그만 남기며, 키를 고치면 다음 바퀴에 이어 보낸다.
 - `.env`의 `ANALYSIS_API_MODE=mock`이면 분석 API 없이 견본 결과(`app/clients/fixtures/`)를 `MOCK_ANALYSIS_DELAY_SEC` 뒤에 돌려준다. `http`면 `ANALYSIS_API_BASE_URL`의 분석 API를 부른다. 인증 키 `ANALYSIS_API_KEY`는 `X-API-Key` 헤더로 보내고, 비어 있으면 보내지 않는다.
 - 모드를 mock ↔ http로 바꿀 때는 진행 중(SUBMITTED·ANALYZING) 촬영이 없을 때 한다. DB에 남은 작업 ID가 다른 쪽 API에는 없어 상태 조회가 계속 실패하다 `ANALYSIS_TIMEOUT`으로 끝난다.
-- 분석이 끝나면 결과 JSON을 촬영 키의 `analysis.json`으로 보관하고 촬영 판정·사유와 통과 행(`walk_pass`)을 넣어 DONE이 된다(6절). 결과 JSON을 읽을 수 없으면 `ANALYSIS_FAILED`다. 결과 영상·회차 집계·보고서는 다음 작업에서 더한다.
+- 분석이 끝나면 결과 JSON을 촬영 키의 `analysis.json`으로 보관하고 촬영 판정·사유와 통과 행(`walk_pass`)을 넣어 DONE이 된다(6절). 결과 JSON을 읽을 수 없거나 분석 API가 작업이 없다고 답하면(404·410) `ANALYSIS_FAILED`다. 저장 중 오류는 그 촬영만 건너뛰고 다음 바퀴에 다시 한다. 결과 영상·회차 집계·보고서는 다음 작업에서 더한다.
 - Ctrl+C(SIGINT)나 SIGTERM을 받으면 하던 바퀴를 끝내고 멈춘다. 상태가 DB에 있어 다시 켜면 이어서 한다.
 
 ## 테스트

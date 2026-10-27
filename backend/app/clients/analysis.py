@@ -43,18 +43,35 @@ JobState = Literal["queued", "running", "done", "failed"]
 JOB_STATES: tuple[JobState, ...] = ("queued", "running", "done", "failed")
 
 
+# 인증 키 문제. 촬영의 잘못이 아니라 워커는 attempt_count를 올리지 않고 로그만 남긴 뒤 그 바퀴의 제출을 멈춘다(12.4)
+AUTH_FAILED_STATUSES = (401, 403)
+# 작업이 분석 API에 없다(재시작으로 잃었거나 보관 기간이 지남). 상태·결과 조회에서 받으면 워커는 바로 FAILED다(12.4)
+JOB_GONE_STATUSES = (404, 410)
+
+
 class AnalysisClientError(Exception):
     """분석 API를 부르지 못했거나(연결·시간 초과) 예상 밖 응답을 받았을 때.
 
-    retryable이 True면 다시 보내면 될 수 있는 실패(연결 실패, 시간 초과, 5xx, 깨진 응답)라 워커가 attempt_count를
-    올리고 다음 바퀴에 다시 보낸다(12.4). False면 분석 API가 요청 자체를 거부한 것(400·401·413·415 같은 4xx)이라
-    몇 번을 보내도 같으므로 워커는 바로 FAILED로 둔다(87 MR 리뷰 제안 A). status_code는 HTTP 응답일 때만 있다.
+    retryable이 True면 다시 보내면 될 수 있는 실패(연결 실패, 시간 초과, 5xx, 깨진 응답, 408·429)라 워커가
+    attempt_count를 올리고 다음 바퀴에 다시 보낸다(12.4). False면 분석 API가 요청 자체를 거부한 것(400·413·415 같은
+    4xx)이라 몇 번을 보내도 같으므로 워커는 바로 FAILED로 둔다(87 MR 리뷰 제안 A). 401·403은 요청이 아니라 설정
+    문제라 거부로 보지 않고 auth_failed로 따로 알린다. status_code는 HTTP 응답일 때만 있다.
     """
 
     def __init__(self, message: str, *, retryable: bool = True, status_code: int | None = None) -> None:
         super().__init__(message)
         self.retryable = retryable
         self.status_code = status_code
+
+    @property
+    def auth_failed(self) -> bool:
+        """인증 키(ANALYSIS_API_KEY)가 틀렸다. 촬영마다 다시 보내도 같고, 촬영을 실패시킬 일도 아니다."""
+        return self.status_code in AUTH_FAILED_STATUSES
+
+    @property
+    def job_gone(self) -> bool:
+        """상태·결과 조회에서 작업이 없다고 답했다. 기다려도 오지 않으므로 바로 끝낸다."""
+        return self.status_code in JOB_GONE_STATUSES
 
 
 @dataclass(frozen=True)
@@ -196,7 +213,8 @@ class MockAnalysisClient:
 class HttpAnalysisClient:
     """조유진 분석 API. 모든 오류는 AnalysisClientError 하나로 낸다(연결 실패, 시간 초과, 4xx·5xx, 깨진 JSON).
 
-    4xx(408·429 제외)는 retryable=False다. 요청 자체가 잘못된 것이라 다시 보내도 같기 때문이다.
+    4xx(401·403·408·429 제외)는 retryable=False다. 요청 자체가 잘못된 것이라 다시 보내도 같기 때문이다. 401·403은
+    auth_failed, 404·410은 job_gone으로 워커가 따로 다룬다.
     """
 
     def __init__(
@@ -224,8 +242,9 @@ class HttpAnalysisClient:
     def _json(response: httpx.Response, *, expected: int) -> dict[str, Any]:
         status = response.status_code
         if status != expected:
-            # 4xx는 요청이 잘못된 것이라 다시 보내도 같다. 408(시간 초과)·429(너무 잦음)만 다시 보낼 수 있다
-            rejected = 400 <= status < 500 and status not in (408, 429)
+            # 4xx는 요청이 잘못된 것이라 다시 보내도 같다. 408(시간 초과)·429(너무 잦음)는 다시 보낼 수 있고,
+            # 401·403은 요청이 아니라 키 설정 문제라 거부로 보지 않는다(auth_failed)
+            rejected = 400 <= status < 500 and status not in (*AUTH_FAILED_STATUSES, 408, 429)
             raise AnalysisClientError(
                 f"분석 API 응답 {status} (기대 {expected}): {_error_summary(response)}",
                 retryable=not rejected,

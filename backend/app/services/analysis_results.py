@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 # shot.model_name·model_version은 VARCHAR(50)이다(12.2)
 MODEL_FIELD_MAX = 50
+# walk_pass.pass_no는 SMALLINT, start_frame·end_frame은 INTEGER다(12.2). 넘는 값을 DB까지 보내면 저장 중 오류가 난다
+PASS_NO_MAX = 32_767
+FRAME_MAX = 2_147_483_647
 # 결과를 받아들이는 상태. 12.4: SUBMITTED → DONE도 가능
 SAVABLE = (ShotStatus.SUBMITTED.value, ShotStatus.ANALYZING.value)
 
@@ -61,10 +64,32 @@ class ParsedResult:
     passes: list[PassRow]
 
 
-def _frame(value: Any, *, field: str, position: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ResultFormatError(f"passes[{position}].{field}={value!r}")
+def _whole_number(value: Any) -> int | None:
+    """JSON의 정수. numpy 값을 내보내면 40.0처럼 오므로 정수값인 실수도 받는다. bool과 나머지는 None."""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
     return value
+
+
+def _frame(value: Any, *, field: str, position: int) -> int:
+    number = _whole_number(value)
+    if number is None or not 0 <= number <= FRAME_MAX:
+        raise ResultFormatError(f"passes[{position}].{field}={value!r}")
+    return number
+
+
+def _pass_no(value: Any, *, position: int, shot_id: uuid.UUID) -> int:
+    """통과 순번. 분석 API의 index를 쓰고, 없거나 못 쓰는 값(0 이하, SMALLINT 초과)이면 받은 순서로 매긴다.
+
+    그러면 DB의 pass_no가 JSON의 index와 달라지므로 경고로 남긴다(BE-11).
+    """
+    number = _whole_number(value)
+    if number is not None and 1 <= number <= PASS_NO_MAX:
+        return number
+    logger.warning("passes[%d].index=%r unusable shot=%s; numbered by position", position, value, shot_id)
+    return position
 
 
 def _model_field(value: Any, *, field: str, shot_id: uuid.UUID) -> str | None:
@@ -80,8 +105,9 @@ def _model_field(value: Any, *, field: str, shot_id: uuid.UUID) -> str | None:
 def parse_result(result: Any, *, shot_id: uuid.UUID) -> ParsedResult:
     """결과 JSON → 저장할 값.
 
-    분석 API의 소문자 값은 clients/analysis.py의 대응표로 바꾼다. 계약과 다르면(모르는 판정값, 통과의 카메라 쪽·프레임이
-    없음) ResultFormatError이고, 모르는 사유 코드는 UNKNOWN_REASON으로 두고 원래 코드를 로그에 남긴다(14.3).
+    분석 API의 소문자 값은 clients/analysis.py의 대응표로 바꾼다. 계약과 다르면(모르는 판정값, 통과의 카메라 쪽·유효
+    여부·프레임이 없거나 DB 범위를 넘음) ResultFormatError이고, 모르는 사유 코드는 UNKNOWN_REASON으로 두고 원래 코드를
+    로그에 남긴다(14.3). 여기서 걸러진 값만 DB로 가므로 저장 중에 형식 때문에 오류가 나지 않는다.
     """
     if not isinstance(result, dict):
         raise ResultFormatError(f"result={type(result).__name__}")
@@ -106,11 +132,13 @@ def parse_result(result: Any, *, shot_id: uuid.UUID) -> ParsedResult:
         camera_side = map_camera_side(item.get("camera_side"))
         if camera_side is None:
             raise ResultFormatError(f"passes[{position}].camera_side={item.get('camera_side')!r}")
-        is_valid = bool(item.get("valid"))
-        index = item.get("index")
+        is_valid = item.get("valid")
+        if not isinstance(is_valid, bool):
+            # 없거나 문자열이면 전부 제외(또는 전부 유효)로 조용히 저장되므로 형식 오류로 막는다
+            raise ResultFormatError(f"passes[{position}].valid={is_valid!r}")
         passes.append(
             PassRow(
-                pass_no=index if isinstance(index, int) and not isinstance(index, bool) and index > 0 else position,
+                pass_no=_pass_no(item.get("index"), position=position, shot_id=shot_id),
                 camera_side=camera_side,
                 gait_type=map_gait(item.get("gait")),
                 is_valid=is_valid,
@@ -122,7 +150,8 @@ def parse_result(result: Any, *, shot_id: uuid.UUID) -> ParsedResult:
             )
         )
     if len({row.pass_no for row in passes}) != len(passes):
-        # index가 겹치면(uq_pass_no 위반) 받은 순서대로 다시 매긴다
+        # index가 겹치면(uq_pass_no 위반) 받은 순서대로 다시 매긴다. DB의 pass_no가 JSON의 index와 달라지므로 남긴다
+        logger.warning("duplicate pass index shot=%s; all passes renumbered by position", shot_id)
         passes = [replace(row, pass_no=position) for position, row in enumerate(passes, start=1)]
 
     raw_model = result.get("model")
