@@ -1,6 +1,5 @@
 import json
 import math
-import statistics
 import sys
 
 base = json.load(open("/exp/results/base.track.json", encoding="utf-8"))

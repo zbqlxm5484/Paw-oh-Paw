@@ -3,6 +3,9 @@ import json
 import sys
 from pathlib import Path
 
+import matplotlib
+import matplotlib.pyplot as plt
+
 R = Path(sys.argv[1] if len(sys.argv) > 1 else "/exp/results/sweep_1027")
 speed = json.loads((R / "speed.json").read_text(encoding="utf-8"))
 base = speed["results"][0]
@@ -39,9 +42,7 @@ for r in sorted(rows, key=lambda x: (x["fp16"], x["k"])):
           f" KPI-01 {r.get('kpi01_change_pct')} KPI-02 {r.get('kpi02_change_pct')}"
           f" KPI-24 {r.get('kpi24_change_pct')} KPI-23 {r.get('kpi23_worst_pp')}")
 
-import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 panels = [("kpi01_change_pct", "KPI-01 leg length CV, change vs fs-v4 (%)"),
           ("kpi02_change_pct", "KPI-02 left/right angle diff, change vs fs-v4 (%)"),

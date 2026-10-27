@@ -1,8 +1,6 @@
 import json
 import os
 import random
-import subprocess
-import sys
 
 import cv2
 import numpy as np

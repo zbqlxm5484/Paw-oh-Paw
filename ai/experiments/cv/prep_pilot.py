@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from prep_cv import to_train, dump
+from prep_cv import dump, to_train
 
 D = Path(__file__).parent / "data"
 p = json.loads((D / "gt_pilot.json").read_text(encoding="utf-8"))
