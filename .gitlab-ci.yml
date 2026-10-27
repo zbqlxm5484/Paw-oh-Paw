@@ -31,8 +31,8 @@ reproduce:                  # 기업 검수 절차(새 venv → 설치 → 실�
       $RUN $PY_IMAGE sh -ec '
       python -m venv /tmp/venv && . /tmp/venv/bin/activate &&
       pip install -q -r requirements-dev.txt &&
-      { [ -f backend/requirements.txt ] && pip install -q -r backend/requirements.txt || true; } &&
-      { [ -f analysis_api/requirements.txt ] && pip install -q -r analysis_api/requirements.txt || true; } &&
+      if [ -f backend/requirements.txt ]; then pip install -q -r backend/requirements.txt; fi &&
+      if [ -f analysis_api/requirements.txt ]; then pip install -q -r analysis_api/requirements.txt; fi &&
       pytest -q -p no:cacheprovider'
 
 ruff:
