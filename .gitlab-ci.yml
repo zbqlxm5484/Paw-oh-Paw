@@ -63,13 +63,12 @@ pip-audit:
       pip install -q pip-audit && pip-audit -r backend/requirements.txt'
 
 # ---------- build ----------
-# backend/·frontend/ 코드(requirements.txt, package.json)가 들어오면 아래 주석을 해제하고 allow_failure 줄은 삭제
-# build:
-#   stage: build
-#   allow_failure: true       # backend/·frontend/ 코드 들어오면 이 줄 삭제
-#   script:
-#     - cp .env.example .env
-#     - docker compose build
+build:
+  stage: build
+  allow_failure: true       # 파이프라인이 안정적으로 통과하면 이 줄 삭제
+  script:
+    - cp .env.example .env
+    - docker compose build
 
 # ---------- smoke ----------
 # smoke:
