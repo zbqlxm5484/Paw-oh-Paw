@@ -192,3 +192,27 @@ def test_recommended_met_when_both_sides_reach_the_recommended_count(
     assert body["progress"]["LEFT"]["valid_passes"] == body["progress"]["RIGHT"]["valid_passes"] == 2 * needed
     assert 2 * needed >= recommended
     assert [notice["code"] for notice in body["notices"]] == ["RECOMMENDED_MET"]
+
+
+def test_no_recommended_met_when_only_one_side_reaches_the_count(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 14.4 RECOMMENDED_MET은 양쪽 "모두" 권장 수 이상일 때만. 한쪽만 채우고 다른 쪽이 1 이상이면 안내가 없다
+    # (ONE_SIDE_ONLY도 아니다. 그건 다른 쪽이 0일 때다)
+    recommended = get_settings().RECOMMENDED_PASSES
+    left_shots = math.ceil(recommended / 4)  # result_valid를 전부 왼쪽으로 돌리면 촬영 하나에 왼쪽 유효 통과 4개
+    session_id = _start(client, auth_headers, dog.id)
+    shots = [_uploaded_shot(db, session_id, seq_no) for seq_no in range(1, left_shots + 2)]
+    analysis = ScriptedClient()
+    analysis.status = DONE
+    for shot in shots[:-1]:
+        analysis.results[f"job-{shot.id}"] = _all_on(load_fixture("result_valid"), "left")
+    analysis.results[f"job-{shots[-1].id}"] = load_fixture("result_partial")  # 오른쪽 1·왼쪽 1 유효
+
+    _run(db, analysis, times=2)
+
+    body = _detail(client, db, auth_headers, session_id)
+    left, right = body["progress"]["LEFT"]["valid_passes"], body["progress"]["RIGHT"]["valid_passes"]
+    assert left == 4 * left_shots + 1 and right == 1
+    assert left >= recommended > right > 0
+    assert body["notices"] == []
