@@ -30,7 +30,7 @@
 
 ## 🔄 촬영 한 건이 분석되는 흐름
 
-<img src="docs/readme/shot-flow.png" alt="촬영 한 건의 분석 흐름" width="760">
+![촬영 한 건의 분석 흐름](docs/readme/shot-flow.png)
 
 | 단계 | 하는 일 | 코드 |
 | :--- | :--- | :--- |
