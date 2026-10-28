@@ -1,4 +1,4 @@
-"""촬영·통과 응답 모델(15.3 ShotOut, PassOut)."""
+"""촬영·통과 응답 모델(15.3 ShotOut, PassOut, ShotDetailOut)."""
 
 from __future__ import annotations
 
@@ -41,3 +41,24 @@ class ShotUploadOut(ShotOut):
     """POST /sessions/{id}/shots 응답(15.6): ShotOut + warnings(14.4 BELOW_MIN_SPEC, ASPECT_NOT_16_9)."""
 
     warnings: list[ReasonOut]
+
+
+class ShotDetailOut(ShotOut):
+    """GET /shots/{id} 응답(15.3): ShotOut + 영상 정보·모델·시각·결과 영상 주소.
+
+    fps·duration_sec는 DB의 NUMERIC을 JSON 숫자로 내보내려고 float다(15.1). video_url은 video_status가 READY일 때만
+    서명 URL(11.6)이고, 아니면 url_expires_at과 함께 null이다. 원본 영상의 주소·키는 넣지 않는다(BE-12).
+    """
+
+    width: int
+    height: int
+    fps: float
+    duration_sec: float
+    bitrate_kbps: int
+    codec: str
+    model_name: str | None
+    model_version: str | None
+    submitted_at: UtcDateTime | None
+    video_ready_at: UtcDateTime | None
+    video_url: str | None
+    url_expires_at: UtcDateTime | None

@@ -1,6 +1,6 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.9. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장)이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.9. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7의 앞부분(촬영 상세·다시 분석·삭제)이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
@@ -14,6 +14,7 @@
 | "오늘"의 시간대 (16절 APP_TIMEZONE) | `app/core/dates.py` |
 | 회차 시작·상태·진행·촬영 목록·측정 취소, 회차 시점 체급 (12.5, 13.3, 15.6) | `app/api/routes/sessions.py`, `app/services/sessions.py`, `app/schemas/sessions.py` |
 | 영상 업로드 검사 9가지·저장 (13.1, 15.6) | `app/services/uploads.py`, `app/video/probe.py`(ffprobe) |
+| 촬영 상세(결과 영상 주소는 READY일 때 서명 URL)·다시 분석·삭제 (13.3, 15.3, 15.6) | `app/api/routes/shots.py`, `app/services/shots.py`, `app/schemas/shots.py` |
 | 파일 저장소 `StorageService`·`LocalStorage`·파일 키 (7절, 11.11) | `app/storage/` |
 | 분석 클라이언트 `MockAnalysisClient`·`HttpAnalysisClient`와 견본 JSON (6절, 16절 `ANALYSIS_API_MODE`) | `app/clients/analysis.py`, `app/clients/fixtures/` |
 | 실패한 요청이 만든 파일 정리 (12.4) | `app/api/deps.py`의 `delete_created_files` |
@@ -27,7 +28,7 @@
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-측정 종료·워커·촬영 상세·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
+결과 영상 재생(서명 URL 검증)·측정 종료·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
 
 ## 준비 (처음 한 번)
 
