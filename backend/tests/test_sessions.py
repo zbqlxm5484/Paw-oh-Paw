@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -230,6 +230,41 @@ def test_progress_notices_and_shot_list(client: TestClient, db: Session, auth_he
         "RIGHT": {"valid_passes": recommended, "recommended": recommended},
     }
     assert [n["code"] for n in body["notices"]] == ["RECOMMENDED_MET"]
+
+
+def test_session_detail_query_count_does_not_grow_with_shots(
+    client: TestClient, db: Session, engine, auth_headers: dict, dog
+) -> None:
+    # 15.1: 촬영·통과는 selectinload로 한 번에 읽는다(N+1 금지). 촬영이 늘어도 SELECT 수가 같다
+    session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
+    session_id = session.id  # expire_all() 뒤에 session.id를 읽으면 그 refresh SELECT까지 세게 된다
+
+    def selects_for_one_detail_call() -> int:
+        statements: list[str] = []
+
+        def record(conn, cursor, statement, parameters, context, executemany) -> None:
+            statements.append(statement)
+
+        db.expire_all()
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            assert client.get(f"/api/v1/sessions/{session_id}", headers=auth_headers).status_code == 200
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+        return sum(1 for statement in statements if statement.lstrip().upper().startswith("SELECT"))
+
+    first = _shot(db, session, 1, "DONE")
+    _pass(db, first, 1, "LEFT", True)
+    with_one_shot = selects_for_one_detail_call()
+    assert with_one_shot > 0
+
+    for seq_no in range(2, 9):
+        more = _shot(db, session, seq_no, "DONE")
+        for pass_no in range(1, 5):
+            _pass(
+                db, more, pass_no, "LEFT" if pass_no % 2 else "RIGHT", pass_no != 4, "RUNNING" if pass_no == 4 else None
+            )
+    assert selects_for_one_detail_call() == with_one_shot
 
 
 # ---- 측정 취소 (BE-10) ----
