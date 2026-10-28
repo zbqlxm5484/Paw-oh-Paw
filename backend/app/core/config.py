@@ -82,7 +82,8 @@ class Settings(DbSettings):
     # 16절: 둘 다 1 이상. 0이면 워커가 오류 없이 아무것도 가져가지 않으므로 시작 자체를 막는다
     WORKER_MAX_IN_FLIGHT: int = Field(16, ge=1)
     WORKER_MAX_IN_FLIGHT_PER_INSTITUTION: int = Field(4, ge=1)
-    WORKER_RENDER_CONCURRENCY: int = 1
+    # 결과 영상 프로세스 풀의 크기(12.4). 0이면 결과 영상이 영영 PENDING이므로 같은 이유로 시작을 막는다
+    WORKER_RENDER_CONCURRENCY: int = Field(1, ge=1)
 
     RECOMMENDED_PASSES: int = 8
     SIZE_SMALL_MAX_KG: float = 10

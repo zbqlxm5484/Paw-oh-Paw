@@ -6,7 +6,7 @@
    로그에만), 제출 뒤 ANALYSIS_TIMEOUT_SEC가 지나면 FAILED(ANALYSIS_TIMEOUT). done이면 결과 JSON을 받아
    analysis.json으로 보관하고 촬영 판정·사유·통과 행을 넣은 뒤 DONE(BE-07·08, services/analysis_results.py). 결과
    JSON을 읽을 수 없거나 분석 API가 작업이 없다고 답하면(404·410) FAILED(ANALYSIS_FAILED). 저장 중 오류는 그 촬영만
-   건너뛰고(다음 바퀴에 다시) 바퀴는 이어 간다. 결과 영상·회차 집계는 다음 작업이다.
+   건너뛰고(다음 바퀴에 다시) 바퀴는 이어 간다. 회차 집계는 다음 작업이다.
 2. UPLOADED 촬영 가져오기(BE-06): 그 회차 행을 잠근 채 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한다. 측정 취소·촬영
    삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). 전체로는 WORKER_MAX_IN_FLIGHT, 기관별로는
    WORKER_MAX_IN_FLIGHT_PER_INSTITUTION까지만 가져와 한 기관이 자리를 다 차지하지 못하게 한다(3절, 12.4 기관별 상한).
@@ -14,6 +14,9 @@
    attempt_count를 올려 다음 바퀴에 다시 보내며, ANALYSIS_SUBMIT_MAX_ATTEMPTS번 실패하면 FAILED(ANALYSIS_SUBMIT_FAILED).
    분석 API가 요청 자체를 거부하면(400·413·415 같은 4xx) 다시 보내지 않고 바로 FAILED다. 인증 키가 틀리면(401·403)
    촬영의 잘못이 아니라 촬영은 그대로 두고 로그만 남긴 뒤 그 바퀴의 제출을 멈춘다. 키를 고치면 다음 바퀴에 이어 보낸다.
+4. 결과 영상(BE-12, 12.4 "무거운 일 나누기"): app/worker/render.py의 VideoRenderer가 끝난 작업을 거두어 READY·FAILED로
+   두고, 빈 자리(WORKER_RENDER_CONCURRENCY)만큼 DONE·PENDING 촬영을 자식 프로세스에 맡긴다. 기다리지 않으므로 결과
+   영상이 밀려 있어도 1~3은 2초 주기대로 돈다(17.6).
 
 상태는 조건을 건 UPDATE로만 바꾼다(12.4). 바뀐 행이 0개면 그사이 상태가 달라진 것이므로 건너뛴다. 작업 큐는
 DB(shot.status)이고 워커는 한 대다. 메모리에 상태를 두지 않으므로 껐다 켜도 하던 일이 이어진다.
@@ -40,7 +43,7 @@ from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClient, AnalysisClientError, SubmitInfo, build_analysis_client
 from app.core.config import Settings, get_settings
-from app.core.db import SessionLocal, db_error_code
+from app.core.db import SessionLocal
 from app.core.errors import FailReason
 from app.main import configure_logging
 from app.models import Dog, MeasureSession, Shot
@@ -48,6 +51,7 @@ from app.models.enums import ShotStatus
 from app.services.analysis_results import ResultFormatError, apply_result, parse_result
 from app.storage.base import StorageError, StorageService, get_storage
 from app.storage.keys import analysis_key
+from app.worker.render import VideoRenderer, describe_error
 
 logger = logging.getLogger("app.worker")
 
@@ -71,6 +75,9 @@ class WorkerStats:
     done: int = 0  # 결과를 저장해 DONE이 된 수
     failed: int = 0  # → FAILED (제출 포기, 분석 실패)
     timed_out: int = 0  # → FAILED (ANALYSIS_TIMEOUT)
+    render_started: int = 0  # 결과 영상을 자식 프로세스에 맡긴 수
+    rendered: int = 0  # video_status → READY
+    render_failed: int = 0  # video_status → FAILED (VIDEO_RENDER_FAILED)
 
     def busy(self) -> bool:
         return any(value for value in self.__dict__.values())
@@ -180,21 +187,12 @@ def poll_in_flight(
 # ---- 결과 저장 ----
 
 
-def _describe(error: BaseException) -> str:
-    """로그용 한 줄. str(error)에는 파일 경로(OSError)나 SQL 매개변수(DB 오류)가 섞이므로 종류와 번호만 남긴다(11.8)."""
-    name = type(error).__name__
-    if isinstance(error, OSError):
-        return f"{name} errno={error.errno}"
-    sqlstate = db_error_code(error)
-    return f"{name} sqlstate={sqlstate}" if sqlstate else name
-
-
 def _discard(storage: StorageService, key: str, shot_id: uuid.UUID) -> None:
     """DB에 키가 붙지 못한 analysis.json을 지운다(12.4). 지우기가 실패해도 바퀴는 이어 간다."""
     try:
         storage.delete(key)
     except (StorageError, OSError) as e:
-        logger.error("analysis.json discard failed shot=%s: %s", shot_id, _describe(e))
+        logger.error("analysis.json discard failed shot=%s: %s", shot_id, describe_error(e))
 
 
 def _save_result(
@@ -236,7 +234,7 @@ def _save_result(
     try:
         storage.write_bytes(key, json.dumps(result, ensure_ascii=False).encode("utf-8"))
     except (StorageError, OSError) as e:
-        logger.error("analysis.json write failed shot=%s: %s", shot_id, _describe(e))
+        logger.error("analysis.json write failed shot=%s: %s", shot_id, describe_error(e))
         return
     try:
         saved = apply_result(db, shot_id, parsed, analysis_key=key, analyzed_at=_now())
@@ -248,7 +246,7 @@ def _save_result(
         db.rollback()
         _discard(storage, key, shot_id)
         logger.error(
-            "analysis result save failed shot=%s job=%s; retrying next loop: %s", shot_id, job_id, _describe(e)
+            "analysis result save failed shot=%s job=%s; retrying next loop: %s", shot_id, job_id, describe_error(e)
         )
         return
     if saved:
@@ -402,12 +400,23 @@ def send_claimed(
 # ---- 주 반복 ----
 
 
-def run_once(db: Session, client: AnalysisClient, settings: Settings, storage: StorageService) -> WorkerStats:
-    """한 바퀴. 상태를 조회해 자리를 비우고 → 새 촬영을 가져오고 → 가져온 것을 보낸다."""
+def run_once(
+    db: Session,
+    client: AnalysisClient,
+    settings: Settings,
+    storage: StorageService,
+    renderer: VideoRenderer | None = None,
+) -> WorkerStats:
+    """한 바퀴. 상태를 조회해 자리를 비우고 → 새 촬영을 가져오고 → 가져온 것을 보내고 → 결과 영상을 거두고 맡긴다.
+
+    renderer가 없으면 결과 영상은 건너뛴다(분석 쪽만 보는 테스트용). Worker는 늘 넘긴다.
+    """
     stats = WorkerStats()
     poll_in_flight(db, client, settings, storage, stats)
     claim_uploaded(db, settings, stats)
     send_claimed(db, client, settings, storage, stats)
+    if renderer is not None:
+        renderer.run(db, stats)
     return stats
 
 
@@ -425,10 +434,12 @@ class Worker:
         settings: Settings | None = None,
         client: AnalysisClient | None = None,
         storage: StorageService | None = None,
+        renderer: VideoRenderer | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.client = client or build_analysis_client(self.settings)
         self.storage = storage or get_storage()
+        self.renderer = renderer or VideoRenderer(self.settings, self.storage, self.client)
         self._stop = False
 
     def stop(self, *_: object) -> None:
@@ -436,21 +447,27 @@ class Worker:
         self._stop = True
 
     def run_forever(self, max_loops: int | None = None) -> int:
-        """주 반복. 한 바퀴가 실패해도(DB 끊김 등) 로그만 남기고 다음 바퀴를 돈다. 돈 바퀴 수를 돌려준다."""
+        """주 반복. 한 바퀴가 실패해도(DB 끊김 등) 로그만 남기고 다음 바퀴를 돈다. 돈 바퀴 수를 돌려준다.
+
+        끝날 때 렌더 풀을 닫는다. 만들던 결과 영상은 PENDING 그대로라 다시 켜면 처음부터 다시 만든다(12.4).
+        """
         loops = 0
-        while not self._stop and (max_loops is None or loops < max_loops):
-            loops += 1
-            started = time.monotonic()
-            try:
-                with SessionLocal() as db:
-                    stats = run_once(db, self.client, self.settings, self.storage)
-                if stats.busy():
-                    logger.info("loop: %s", stats)
-            except Exception:
-                logger.exception("worker loop failed; retrying next loop")
-            if self._stop or (max_loops is not None and loops >= max_loops):
-                break
-            time.sleep(max(0.0, self.settings.WORKER_POLL_INTERVAL_SEC - (time.monotonic() - started)))
+        try:
+            while not self._stop and (max_loops is None or loops < max_loops):
+                loops += 1
+                started = time.monotonic()
+                try:
+                    with SessionLocal() as db:
+                        stats = run_once(db, self.client, self.settings, self.storage, self.renderer)
+                    if stats.busy():
+                        logger.info("loop: %s", stats)
+                except Exception:
+                    logger.exception("worker loop failed; retrying next loop")
+                if self._stop or (max_loops is not None and loops >= max_loops):
+                    break
+                time.sleep(max(0.0, self.settings.WORKER_POLL_INTERVAL_SEC - (time.monotonic() - started)))
+        finally:
+            self.renderer.shutdown()
         return loops
 
 
@@ -462,12 +479,13 @@ def main() -> int:
     signal.signal(signal.SIGINT, worker.stop)
     signal.signal(signal.SIGTERM, worker.stop)
     logger.info(
-        "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss",
+        "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss render_concurrency=%d",
         settings.ANALYSIS_API_MODE,
         settings.WORKER_POLL_INTERVAL_SEC,
         settings.WORKER_MAX_IN_FLIGHT,
         settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION,
         settings.ANALYSIS_TIMEOUT_SEC,
+        settings.WORKER_RENDER_CONCURRENCY,
     )
     worker.run_forever()
     logger.info("worker stopped")
