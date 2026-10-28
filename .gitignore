@@ -13,6 +13,7 @@ data/
 # frontend assets (logo, intro images) are allowed; videos are still ignored
 !frontend/public/**/*.png
 !frontend/public/assets/landing.mp4
+!docs/readme/*.png
 *.pth
 *.pt
 *.onnx
