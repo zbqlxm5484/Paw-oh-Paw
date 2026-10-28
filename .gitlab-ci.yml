@@ -65,7 +65,6 @@ pip-audit:
 # ---------- build ----------
 build:
   stage: build
-  allow_failure: true       # 파이프라인이 안정적으로 통과하면 이 줄 삭제
   script:
     - cp .env.example .env
     - docker compose build
