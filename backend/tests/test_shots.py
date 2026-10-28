@@ -1,7 +1,7 @@
-"""촬영 상세·다시 분석·삭제(13.3, 15.3, 15.6, 17.3 BE-06·10·11·12 일부)."""
+"""촬영 상세·다시 분석·삭제·결과 영상 재생(13.3, 15.3, 15.6, 17.3 BE-06·10·11·12)."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -9,8 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import verify_signed_url
+from app.core.config import get_settings
+from app.core.security import make_signed_url, verify_signed_url
 from app.models import MeasureSession, Shot, WalkPass
+from app.services import shots as shot_service
 from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
 from app.worker.main import run_once
@@ -267,3 +269,126 @@ def test_delete_shot_rules_closed_session_and_other_institution(
     closed = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
     assert closed.status_code == 409 and closed.json()["error"]["code"] == "SESSION_CLOSED"
     assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) == shot.id
+
+
+# ---- 결과 영상 재생 (BE-12) ----
+
+VIDEO_BYTES = bytes(range(256)) * 4  # 1,024바이트. Range로 자른 조각을 바이트 값으로 맞춰 본다
+
+
+def _ready_shot(db: Session, dog, session: MeasureSession, seq_no: int = 1, data: bytes = VIDEO_BYTES) -> Shot:
+    """결과 영상이 READY인 촬영. 파일은 저장소의 result_key 자리에 실제로 둔다."""
+    shot = _shot(db, session, seq_no, "DONE")
+    shot.video_status = "READY"
+    shot.result_key = f"{shot_prefix(dog.institution_id, dog.id, session.id, shot.id)}result.mp4"
+    shot.video_ready_at = datetime.now(UTC)
+    db.flush()
+    get_storage().write_bytes(shot.result_key, data)
+    return shot
+
+
+def _video_url(client: TestClient, headers: dict, shot: Shot) -> str:
+    """촬영 상세가 준 video_url. 화면은 이 값을 <video src>에 그대로 넣는다(15.1)."""
+    return client.get(f"/api/v1/shots/{shot.id}", headers=headers).json()["video_url"]
+
+
+def _signed(path: str) -> str:
+    return make_signed_url(path)[0]
+
+
+def _not_found(response) -> bool:
+    return response.status_code == 404 and response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_video_url_from_shot_detail_plays_without_a_token(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 15.6: 상세가 준 video_url을 그대로 부르면 토큰 없이 video/mp4가 온다. Cache-Control은 private에 서명 유효 시간만큼
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _ready_shot(db, dog, session)
+
+    response = client.get(_video_url(client, auth_headers, shot))  # Authorization 없음
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["accept-ranges"] == "bytes"
+    assert response.headers["cache-control"] == f"private, max-age={get_settings().FILE_URL_TTL_SEC}"
+    assert int(response.headers["content-length"]) == len(VIDEO_BYTES)
+    assert response.content == VIDEO_BYTES
+
+
+def test_video_range_request_is_206_with_only_the_requested_bytes(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 17.3 BE-12: 앞뒤로 넘기기. Range는 Starlette FileResponse가 처리한다(15.6)
+    session = _open_session(client, db, auth_headers, dog)
+    url = _video_url(client, auth_headers, _ready_shot(db, dog, session))
+    size = len(VIDEO_BYTES)
+
+    middle = client.get(url, headers={"Range": "bytes=100-355"})
+    assert middle.status_code == 206
+    assert middle.headers["content-range"] == f"bytes 100-355/{size}"
+    assert middle.headers["content-type"] == "video/mp4"
+    assert middle.content == VIDEO_BYTES[100:356]
+
+    tail = client.get(url, headers={"Range": "bytes=-16"})  # 끝에서 16바이트
+    assert tail.status_code == 206 and tail.content == VIDEO_BYTES[-16:]
+
+    beyond = client.get(url, headers={"Range": f"bytes={size}-"})  # 파일 끝을 넘긴 구간
+    assert beyond.status_code == 416 and beyond.headers["content-range"] == f"bytes */{size}"
+
+
+def test_video_link_expired_or_tampered_is_403_before_looking_at_the_shot(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 17.3 BE-12: 5분이 지나거나 sig를 한 글자만 바꿔도 403 FILE_LINK_EXPIRED.
+    # 서명을 DB보다 먼저 보므로 없는 촬영도 403이다
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _ready_shot(db, dog, session)
+    path = f"/api/v1/shots/{shot.id}/video"
+    query = parse_qs(urlsplit(_video_url(client, auth_headers, shot)).query)
+    exp, sig = int(query["exp"][0]), query["sig"][0]
+    flipped = sig[:-1] + ("0" if sig[-1] != "0" else "1")
+    ttl = get_settings().FILE_URL_TTL_SEC
+    expired, _ = make_signed_url(path, now=datetime.now(UTC) - timedelta(seconds=ttl + 1))
+    other_path = f"/api/v1/shots/{uuid.uuid4()}/video"
+    urls = {
+        "만료": expired,
+        "sig 한 글자 바꿈": f"{path}?exp={exp}&sig={flipped}",
+        "exp만 늘림": f"{path}?exp={exp + 1}&sig={sig}",
+        "exp가 정수 아님": f"{path}?exp={exp}x&sig={sig}",
+        "exp 음수": f"{path}?exp=-{exp}&sig={sig}",
+        "sig 없음": f"{path}?exp={exp}",
+        "exp 없음": f"{path}?sig={sig}",
+        "쿼리 없음": path,
+        "다른 촬영의 서명": f"{path}?{urlsplit(_signed(other_path)).query}",
+        "없는 촬영에 이 촬영의 서명": f"{other_path}?exp={exp}&sig={sig}",
+    }
+    for name, url in urls.items():
+        response = client.get(url)
+        assert response.status_code == 403, name
+        assert response.json()["error"]["code"] == "FILE_LINK_EXPIRED", name
+    assert client.get(f"{path}?exp={exp}&sig={sig}").status_code == 200  # 바른 서명은 그대로 열린다
+
+
+def test_video_is_404_when_not_ready_gone_or_not_on_local_storage(
+    client: TestClient, db: Session, auth_headers: dict, dog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 15.6: 서명이 맞아도 video_status가 READY가 아니면 404. 촬영·파일이 없어도 404. 저장소가 S3면 이 API는 404(11.11)
+    session = _open_session(client, db, auth_headers, dog)
+
+    pending = _shot(db, session, 1, "DONE")  # video_status는 PENDING
+    assert _not_found(client.get(_signed(f"/api/v1/shots/{pending.id}/video")))
+    assert _not_found(client.get(_signed(f"/api/v1/shots/{uuid.uuid4()}/video")))  # 지워진 촬영
+    assert client.get("/api/v1/shots/not-a-uuid/video?exp=1&sig=x").status_code == 404  # 15.1
+
+    ready = _ready_shot(db, dog, session, seq_no=2)
+    url = _video_url(client, auth_headers, ready)
+    assert client.get(url).status_code == 200
+    get_storage().delete(ready.result_key)
+    assert _not_found(client.get(url))  # READY인데 파일이 없다
+
+    on_s3 = _ready_shot(db, dog, session, seq_no=3)
+    url = _video_url(client, auth_headers, on_s3)
+    monkeypatch.setattr(shot_service, "get_storage", lambda: object())  # LocalStorage가 아닌 저장소
+    assert _not_found(client.get(url))

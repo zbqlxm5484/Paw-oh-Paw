@@ -1,4 +1,4 @@
-"""요청 단위 의존성(11.2 deps.py): DB 세션(11.7), 로그인 담당자(11.6), 관리자 확인.
+"""요청 단위 의존성(11.2 deps.py): DB 세션(11.7), 로그인 담당자(11.6), 관리자 확인, 서명 URL 검사(11.6).
 
 Spring에 빗대면 get_db는 요청 하나를 감싸는 @Transactional 경계이고,
 get_current_staff는 JWT 필터 + @AuthenticationPrincipal이다.
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import SessionLocal
 from app.core.errors import AppError, ErrorCode
-from app.core.security import TokenError, TokenExpiredError, decode_access_token
+from app.core.security import TokenError, TokenExpiredError, decode_access_token, verify_signed_url
 from app.models import Staff
 from app.models.enums import StaffRole
 
@@ -98,3 +98,19 @@ def require_admin(staff: CurrentStaff) -> Staff:
 
 
 AdminStaff = Annotated[Staff, Depends(require_admin)]
+
+
+# ---- 서명 URL로 여는 파일 (11.6, 15.2의 16·21번) ----
+
+
+def check_file_link(path: str, exp: str | None, sig: str | None) -> None:
+    """결과 영상·보고서 PDF처럼 로그인 토큰 없이 서명으로 여는 파일 API의 exp·sig 검사(11.6).
+
+    path는 서명을 만들 때 쓴 /api/v1부터의 경로다. exp·sig가 없거나, exp가 10진수 정수가 아니거나, 서명이 틀리거나,
+    exp가 지났으면 모두 403 FILE_LINK_EXPIRED다(15.6). 쿼리를 통째로 지운 주소도 "고친 주소"라 같은 답이다.
+    서명은 기관 확인을 거친 조회 API만 만들므로, 맞으면 기관 확인을 다시 하지 않는다. DB를 보기 전에 부른다.
+    """
+    if exp is None or sig is None or not (exp.isascii() and exp.isdigit()):
+        raise AppError(ErrorCode.FILE_LINK_EXPIRED)
+    if not verify_signed_url(path, int(exp), sig):
+        raise AppError(ErrorCode.FILE_LINK_EXPIRED)
