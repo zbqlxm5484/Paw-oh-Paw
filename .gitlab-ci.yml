@@ -70,22 +70,24 @@ build:
     - docker compose build
 
 # ---------- smoke ----------
-# smoke:
-#   stage: smoke
-#   allow_failure: true       # backend/·frontend/ 코드 들어오면 이 줄 삭제
-#   variables:
-#     COMPOSE: docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml
-#   script:
-#     - cp .env.example .env
-#     - $COMPOSE up -d
-#     - |
-#       for i in $(seq 1 30); do
-#         curl -fsS http://127.0.0.1:18080/api/v1/health && exit 0
-#         sleep 2
-#       done
-#       echo "health check failed"; $COMPOSE logs --tail=50; exit 1
-#   after_script:
-#     - docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml down -v --remove-orphans
+smoke:
+  stage: smoke
+  variables:
+    COMPOSE: docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml
+  script:
+    - cp .env.example .env
+    # JWT_SECRET·FILE_URL_SECRET은 32자 이상이고 서로 달라야 한다(backend/app/core/config.py). 실행할 때마다 새로 만들어 저장소에 값을 두지 않는다
+    - echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+    - echo "FILE_URL_SECRET=$(openssl rand -hex 32)" >> .env
+    - $COMPOSE up -d
+    - |
+      for i in $(seq 1 30); do
+        curl -fsS http://127.0.0.1:18080/api/v1/health && exit 0
+        sleep 2
+      done
+      echo "health check failed"; $COMPOSE logs --tail=50; exit 1
+  after_script:
+    - docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml down -v --remove-orphans
 
 # ---------- deploy ----------
 deploy:
