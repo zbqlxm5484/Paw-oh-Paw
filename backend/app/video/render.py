@@ -7,6 +7,9 @@ OpenCV가 바로 쓰는 mp4v 코덱은 Chrome에서 열리지 않기 때문이�
 
 워커의 자식 프로세스(app/worker/render.py)가 render_video 하나를 부른다. 자식은 이 모듈만 import한다.
 관절점 번호의 뜻은 docs/labeling/labelGuide.md 1장(0부터), 연결은 ai/data_prep/aihub_to_coco.py의 SKELETON과 같다.
+프레임마다 관절점 파일의 camera_side(right·left·null)에 따라 몸통과 카메라 쪽 다리만 그리고 반대쪽 다리는 그리지
+않는다(세부명세서 PR-F01-04: 반대쪽 다리 관절점은 고객 결과에 쓰지 않는다. 몸에 가려 틀리게 찍히는 일이 많다).
+판정은 분석 API가 한다(engine/camera_side.py와 같은 규칙). 여기서는 그 값을 따른다(128 리뷰).
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from __future__ import annotations
 import json
 import math
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,7 +26,8 @@ import cv2
 import numpy as np
 
 KEYPOINT_COUNT = 22
-# 신뢰도가 이보다 낮은 점은 못 찾은 점으로 보고 그리지 않는다. 그리는 모양의 문제라 명세에는 없고 흔히 쓰는 값이다
+# 신뢰도가 이보다 낮은 점은 못 찾은 점으로 보고 그리지 않는다. 기업 평가 도구 video_kpi.py의 CONF = 0.3("서비스와
+# 같다"), engine/camera_side.py의 CONF와 같은 값이다(128 리뷰). 바꿀 때는 셋을 같이 본다
 MIN_CONFIDENCE = 0.3
 # 12.4: 자식 프로세스의 ffmpeg는 -threads 2
 FFMPEG_THREADS = 2
@@ -83,6 +87,23 @@ def limb_of(index: int) -> str:
     return BODY
 
 
+# 카메라 쪽 다리만 그린다(세부명세서 PR-F01-04). 값은 관절점 파일의 camera_side. 몸통은 귀·등 가운데·엉덩이 위
+CAMERA_RIGHT, CAMERA_LEFT = "right", "left"
+BODY_POINTS = frozenset({0, 1, 2, 13})
+LEFT_POINTS = frozenset(range(3, 8)) | frozenset(range(14, 18))
+RIGHT_POINTS = frozenset(range(8, 13)) | frozenset(range(18, 22))
+ALL_POINTS = frozenset(range(KEYPOINT_COUNT))
+
+
+def visible_points(camera_side: str | None) -> frozenset[int]:
+    """그릴 점 번호. right면 몸통 + 오른쪽 다리, left면 몸통 + 왼쪽 다리, null(판정 못 함)이면 몸통만."""
+    if camera_side == CAMERA_RIGHT:
+        return BODY_POINTS | RIGHT_POINTS
+    if camera_side == CAMERA_LEFT:
+        return BODY_POINTS | LEFT_POINTS
+    return BODY_POINTS
+
+
 class VideoRenderError(Exception):
     """원본 영상을 읽지 못했거나, 관절점 파일이 형식에 맞지 않거나, 인코딩이 실패했다.
 
@@ -91,13 +112,21 @@ class VideoRenderError(Exception):
 
 
 @dataclass(frozen=True)
+class FramePoints:
+    """관절점 파일의 프레임 하나: 22점과 카메라 쪽(right·left, 판정 못 했으면 None)."""
+
+    points: list[Point]
+    camera_side: str | None
+
+
+@dataclass(frozen=True)
 class Keypoints:
-    """관절점 파일(6절). frames는 프레임 번호 → 22점이고, 개를 못 찾은 프레임(points가 null)은 들어 있지 않다."""
+    """관절점 파일(6절). frames는 프레임 번호 → FramePoints이고, 개를 못 찾은 프레임(points가 null)은 들어 있지 않다."""
 
     width: int | None
     height: int | None
     fps: float | None
-    frames: dict[int, list[Point]]
+    frames: dict[int, FramePoints]
 
 
 @dataclass(frozen=True)
@@ -135,15 +164,22 @@ def _point(raw: Any) -> Point:
     return x, y
 
 
+def _camera_side(raw: Any) -> str | None:
+    """right·left(대소문자 무관)만 받고 그 밖(null, 다른 값)은 판정 못 함(None)으로 본다. 그러면 몸통만 그린다."""
+    if isinstance(raw, str) and raw.lower() in (CAMERA_RIGHT, CAMERA_LEFT):
+        return raw.lower()
+    return None
+
+
 def parse_keypoints(data: Any) -> Keypoints:
     """관절점 JSON(dict) → Keypoints. 형식이 다르면 VideoRenderError(어느 자리인지 메시지에).
 
-    프레임 번호는 0부터이고 원본 영상을 처음부터 읽은 순서와 같다고 본다.
-    # TODO(질문: 조유진 — 관절점 파일의 frame이 0부터인지, 디코더가 읽는 순서와 같은지. 6절 계약에 적어 둘 것)
+    프레임 번호는 0부터이고, 원본 영상을 OpenCV VideoCapture.read()로 처음부터 차례로 읽은 순서다. 분석 API도 같은
+    방식으로 번호를 매긴다(128 리뷰에서 확인, 분석 API 명세에 적기로 함). 개를 못 찾은 프레임은 points가 null이다.
     """
     if not isinstance(data, dict) or not isinstance(data.get("frames"), list):
         raise VideoRenderError("관절점 파일에 frames 목록이 없습니다")
-    frames: dict[int, list[Point]] = {}
+    frames: dict[int, FramePoints] = {}
     for position, item in enumerate(data["frames"]):
         if not isinstance(item, dict):
             raise VideoRenderError(f"frames[{position}]이 객체가 아닙니다")
@@ -155,7 +191,7 @@ def parse_keypoints(data: Any) -> Keypoints:
             continue  # 개를 못 찾은 프레임
         if not isinstance(points, list) or len(points) != KEYPOINT_COUNT:
             raise VideoRenderError(f"frames[{position}].points가 {KEYPOINT_COUNT}점이 아닙니다")
-        frames[int(frame)] = [_point(raw) for raw in points]
+        frames[int(frame)] = FramePoints([_point(raw) for raw in points], _camera_side(item.get("camera_side")))
     return Keypoints(
         width=_positive_int(data.get("width")),
         height=_positive_int(data.get("height")),
@@ -175,17 +211,27 @@ def load_keypoints(path: Path) -> Keypoints:
 # ---- 그리기 ----
 
 
-def draw_skeleton(frame: np.ndarray, points: Sequence[Point], *, scale: tuple[float, float] = (1.0, 1.0)) -> int:
-    """frame(BGR, 제자리에서 고친다)에 연결선과 22점을 그리고 그린 점의 수를 돌려준다.
+def draw_skeleton(
+    frame: np.ndarray,
+    points: Sequence[Point],
+    *,
+    scale: tuple[float, float] = (1.0, 1.0),
+    visible: Collection[int] = ALL_POINTS,
+) -> int:
+    """frame(BGR, 제자리에서 고친다)에 연결선과 점을 그리고 그린 점의 수를 돌려준다.
 
-    scale은 관절점 좌표계(관절점 파일의 width·height) → 이 프레임 크기의 비율이다. 못 찾은 점(None)과 그 점에 닿는
-    선은 건너뛴다. 선 굵기는 프레임 크기에 맞춘다(720p에서 2, 1080p에서 3).
+    scale은 관절점 좌표계(관절점 파일의 width·height) → 이 프레임 크기의 비율이다. visible에 든 번호만 그리고
+    (visible_points: 카메라 반대쪽 다리는 뺀다), 못 찾은 점(None)이나 visible 밖의 점에 닿는 선은 건너뛴다.
+    선 굵기는 프레임 크기에 맞춘다(720p에서 2, 1080p에서 3).
     """
     height, width = frame.shape[:2]
     thickness = max(2, round(min(width, height) / 360))
     radius = thickness + 2
     scale_x, scale_y = scale
-    pixels = [None if p is None else (round(p[0] * scale_x), round(p[1] * scale_y)) for p in points]
+    pixels = [
+        None if p is None or index not in visible else (round(p[0] * scale_x), round(p[1] * scale_y))
+        for index, p in enumerate(points)
+    ]
     for a, b in SKELETON:
         if a >= len(pixels) or b >= len(pixels) or pixels[a] is None or pixels[b] is None:
             continue
@@ -201,14 +247,15 @@ def draw_skeleton(frame: np.ndarray, points: Sequence[Point], *, scale: tuple[fl
     return drawn
 
 
-def process_frame(frame: np.ndarray, points: Sequence[Point] | None, *, scale: tuple[float, float]) -> bool:
+def process_frame(frame: np.ndarray, frame_points: FramePoints | None, *, scale: tuple[float, float]) -> bool:
     """프레임 하나를 결과 영상용으로 고친다. 지금은 골격만 그린다. 얼굴 가리기(Jira 150)는 여기에 더한다.
 
-    골격을 하나라도 그렸으면 True.
+    카메라 쪽 다리만 그린다(visible_points). 골격을 하나라도 그렸으면 True.
     """
-    if points is None:
+    if frame_points is None:
         return False
-    return draw_skeleton(frame, points, scale=scale) > 0
+    visible = visible_points(frame_points.camera_side)
+    return draw_skeleton(frame, frame_points.points, scale=scale, visible=visible) > 0
 
 
 # ---- 인코딩 ----

@@ -18,7 +18,10 @@ import pytest
 from app.clients.analysis import load_fixture
 from app.core.config import get_settings
 from app.video.render import (
+    BODY_POINTS,
     KEYPOINT_COUNT,
+    LEFT_POINTS,
+    RIGHT_POINTS,
     SKELETON,
     VideoRenderError,
     draw_skeleton,
@@ -26,6 +29,7 @@ from app.video.render import (
     load_keypoints,
     parse_keypoints,
     render_video,
+    visible_points,
 )
 
 # ---- 관절점 파일 ----
@@ -35,8 +39,9 @@ def test_fixture_keypoints_are_parsed() -> None:
     keypoints = parse_keypoints(load_fixture("keypoints"))
     assert (keypoints.width, keypoints.height, keypoints.fps) == (1920, 1080, 59.94)
     assert sorted(keypoints.frames) == [40, 41]  # 42번은 points가 null(개 없음)이라 들어 있지 않다
-    assert len(keypoints.frames[40]) == KEYPOINT_COUNT
-    assert keypoints.frames[40][0] == (612.0, 402.0) and keypoints.frames[41][0] == (620.5, 402.0)
+    assert len(keypoints.frames[40].points) == KEYPOINT_COUNT
+    assert keypoints.frames[40].points[0] == (612.0, 402.0) and keypoints.frames[41].points[0] == (620.5, 402.0)
+    assert keypoints.frames[40].camera_side == keypoints.frames[41].camera_side == "right"
 
 
 def test_points_without_confidence_or_below_threshold() -> None:
@@ -45,9 +50,30 @@ def test_points_without_confidence_or_below_threshold() -> None:
     points[1] = [1, "2", 0.9]  # 숫자가 아니면 못 찾은 점
     points[2] = [True, 2, 0.9]  # bool도 숫자로 보지 않는다
     keypoints = parse_keypoints({"frames": [{"frame": 7, "points": points}]})
-    frame = keypoints.frames[7]
+    frame = keypoints.frames[7].points
     assert frame[0] is None and frame[1] is None and frame[2] is None and frame[3] == (3.0, 4.0)
     assert keypoints.width is None and keypoints.fps is None
+    assert keypoints.frames[7].camera_side is None  # camera_side가 없으면 판정 못 한 것으로 본다
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("right", "right"), ("LEFT", "left"), ("Right", "right"), (None, None), ("up", None), (5, None)],
+)
+def test_camera_side_is_normalised(raw: Any, expected: str | None) -> None:
+    keypoints = parse_keypoints({"frames": [{"frame": 0, "camera_side": raw, "points": [[1, 2]] * KEYPOINT_COUNT}]})
+    assert keypoints.frames[0].camera_side == expected
+
+
+def test_visible_points_follow_the_camera_side() -> None:
+    # 세부명세서 PR-F01-04: 카메라 반대쪽 다리는 쓰지 않는다. 몸통은 귀 둘·등 가운데·엉덩이 위
+    assert BODY_POINTS == {0, 1, 2, 13}
+    assert LEFT_POINTS == set(range(3, 8)) | set(range(14, 18)) and RIGHT_POINTS == set(range(8, 13)) | set(
+        range(18, 22)
+    )
+    assert visible_points("right") == BODY_POINTS | RIGHT_POINTS
+    assert visible_points("left") == BODY_POINTS | LEFT_POINTS
+    assert visible_points(None) == BODY_POINTS
 
 
 @pytest.mark.parametrize(
@@ -110,6 +136,18 @@ def test_draw_skeleton_marks_points_and_skips_missing_ones() -> None:
     assert draw_skeleton(blank, [None] * KEYPOINT_COUNT) == 0 and not blank.any()
 
 
+def test_draw_skeleton_draws_only_the_visible_points() -> None:
+    # 0번(귀, 몸통)·7번(왼쪽 앞발끝)·12번(오른쪽 앞발끝)만 있는 프레임. 오른쪽이 카메라 쪽이면 7번은 그리지 않는다
+    frame = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
+    points: list[tuple[float, float] | None] = [None] * KEYPOINT_COUNT
+    points[0], points[7], points[12] = (80.0, 20.0), (40.0, 60.0), (120.0, 60.0)
+    assert draw_skeleton(frame, points, visible=visible_points("right")) == 2
+    assert frame[20, 80].any() and frame[60, 120].any() and not frame[60, 40].any()
+    body_only = np.zeros_like(frame)
+    assert draw_skeleton(body_only, points, visible=visible_points(None)) == 1
+    assert body_only[20, 80].any() and not body_only[60, 120].any() and not body_only[60, 40].any()
+
+
 def test_draw_skeleton_scales_from_keypoint_coordinates_to_the_frame() -> None:
     # 관절점 파일은 1280x960 좌표계, 프레임은 160x120 → 비율 0.125
     frame = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
@@ -145,13 +183,18 @@ def black_video(ffmpeg: str, tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def write_keypoints(
-    path: Path, frames: dict[int, list[Any] | None], *, width: int = WIDTH, height: int = HEIGHT
+    path: Path,
+    frames: dict[int, list[Any] | None],
+    *,
+    width: int = WIDTH,
+    height: int = HEIGHT,
+    camera_side: str | None = "left",
 ) -> Path:
     data = {
         "width": width,
         "height": height,
         "fps": 10,
-        "frames": [{"frame": n, "camera_side": "left", "points": pts} for n, pts in frames.items()],
+        "frames": [{"frame": n, "camera_side": camera_side, "points": pts} for n, pts in frames.items()],
     }
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
@@ -210,6 +253,17 @@ def test_render_video_scales_keypoints_of_a_different_size(black_video: Path, ff
     first = _decode(tmp_path / "result.mp4")[0]
     assert int(first[round(y), round(x)].min()) > 180  # 흰 점의 가운데(인코딩 손실만큼만 어둡다)
     assert int(first[round(y) + 20, round(x) + 20].max()) < 40
+
+
+def test_render_video_skips_the_far_side_limbs(black_video: Path, ffmpeg: str, tmp_path: Path) -> None:
+    # 7번(왼쪽 앞발끝)과 12번(오른쪽 앞발끝)만 있는 프레임. camera_side가 right면 결과 영상에 12번만 보인다
+    points: list[Any] = [None] * KEYPOINT_COUNT
+    points[7], points[12] = [40, 60, 0.9], [120, 60, 0.9]
+    keypoints = write_keypoints(tmp_path / "keypoints.json", {0: points}, camera_side="right")
+    result = render_video(black_video, keypoints, tmp_path / "result.mp4", ffmpeg_path=ffmpeg)
+    assert result.drawn_frames == 1
+    first = _decode(tmp_path / "result.mp4")[0]
+    assert int(first[60, 120].max()) > 100 and int(first[60, 40].max()) < 40
 
 
 def test_render_video_rejects_an_unreadable_input(ffmpeg: str, tmp_path: Path) -> None:
