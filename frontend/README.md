@@ -108,7 +108,16 @@ npm run android:open                   # Android Studio 로 열기
 ```bash
 npm run build     # tsc + vite build
 npm run lint
+npm test          # 화면 표시 규칙 단위 테스트(vitest)
 ```
+
+단위 테스트(`src/**/*.test.ts`, 설정 `vitest.config.ts`)는 화면을 그리지 않고 값·문구 함수만 본다(screenPlan 5절 공통 처리).
+
+| 파일 | 보는 것 |
+| --- | --- |
+| `src/api/labels.test.ts` | 값 한글화(성별·체급·다리·보행 유형·유효 여부·상태·수치 코드)가 빠짐없이 있는지, 금지 표현이 없는지, 숫자 자릿수(각도 소수 1자리, 비율·횟수 정수, 그 밖 1자리), 측정 불가는 `—` |
+| `src/api/client.test.ts` | 오류 형식 분기: 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED` 면 토큰을 지우고 로그인으로, 다른 403 은 그대로, 422 `fields` 꺼내기, JSON 이 아닌 오류 본문 |
+| `src/design/adapter.test.ts` | 회차 결과·보고서·경과 비교 표에서 측정 불가 값을 0 으로 그리지 않는지, 좌우 차이 지수 소수 1자리 |
 
 Docker 로 전체 스택 확인은 저장소 루트에서 `docker compose up --build` (nginx 80 → frontend·api).
 

@@ -155,10 +155,10 @@ export const JUDGEMENT_LABEL: Record<Judgement, string> = {
   NOT_COMPARABLE: '비교 불가',
 }
 
-/** 수치 표시 자릿수(screenPlan 5절): 각도 1자리, 비율 정수, 그 밖 1자리 */
+/** 수치 표시 자릿수(screenPlan 5절): 각도 1자리, 비율·횟수 정수, 그 밖 1자리. 측정 불가는 — */
 export function fmtMetric(value: number | null | undefined, unit: Unit): string {
   if (value == null || !Number.isFinite(value)) return '—'
-  const digits = unit === 'deg' ? 1 : unit === 'pct' || unit === 'pct_body' ? 0 : unit === 'count' ? 0 : 2
+  const digits = unit === 'pct' || unit === 'pct_body' || unit === 'count' ? 0 : 1
   return `${value.toFixed(digits)}${UNIT_LABEL[unit]}`
 }
 
