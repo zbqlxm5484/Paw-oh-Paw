@@ -66,11 +66,11 @@ def test_camera_side_is_normalised(raw: Any, expected: str | None) -> None:
 
 
 def test_visible_points_follow_the_camera_side() -> None:
-    # 세부명세서 PR-F01-04: 카메라 반대쪽 다리는 쓰지 않는다. 몸통은 귀 둘·등 가운데·엉덩이 위
-    assert BODY_POINTS == {0, 1, 2, 13}
-    assert LEFT_POINTS == set(range(3, 8)) | set(range(14, 18)) and RIGHT_POINTS == set(range(8, 13)) | set(
-        range(18, 22)
-    )
+    # 세부명세서 PR-F01-04: 카메라 반대쪽 다리는 쓰지 않는다. 반대쪽 귀도 뺀다(10-29 결정). 집합은
+    # engine/camera_side.py의 LEFT·RIGHT와 같고, 몸통은 등 가운데(2)·엉덩이 위(13)뿐이다
+    assert BODY_POINTS == {2, 13}
+    assert LEFT_POINTS == {0, 3, 4, 5, 6, 7, 14, 15, 16, 17} and RIGHT_POINTS == {1, 8, 9, 10, 11, 12, 18, 19, 20, 21}
+    assert BODY_POINTS | LEFT_POINTS | RIGHT_POINTS == set(range(KEYPOINT_COUNT))
     assert visible_points("right") == BODY_POINTS | RIGHT_POINTS
     assert visible_points("left") == BODY_POINTS | LEFT_POINTS
     assert visible_points(None) == BODY_POINTS
@@ -137,15 +137,17 @@ def test_draw_skeleton_marks_points_and_skips_missing_ones() -> None:
 
 
 def test_draw_skeleton_draws_only_the_visible_points() -> None:
-    # 0번(귀, 몸통)·7번(왼쪽 앞발끝)·12번(오른쪽 앞발끝)만 있는 프레임. 오른쪽이 카메라 쪽이면 7번은 그리지 않는다
+    # 2번(등 가운데, 몸통)·0번(왼쪽 귀)·7번(왼쪽 앞발끝)·12번(오른쪽 앞발끝)만 있는 프레임.
+    # 오른쪽이 카메라 쪽이면 왼쪽 귀와 왼쪽 앞발끝은 그리지 않는다
     frame = np.zeros((HEIGHT, WIDTH, 3), np.uint8)
     points: list[tuple[float, float] | None] = [None] * KEYPOINT_COUNT
-    points[0], points[7], points[12] = (80.0, 20.0), (40.0, 60.0), (120.0, 60.0)
+    points[2], points[0], points[7], points[12] = (80.0, 20.0), (40.0, 20.0), (40.0, 60.0), (120.0, 60.0)
     assert draw_skeleton(frame, points, visible=visible_points("right")) == 2
-    assert frame[20, 80].any() and frame[60, 120].any() and not frame[60, 40].any()
+    assert frame[20, 80].any() and frame[60, 120].any()
+    assert not frame[20, 40].any() and not frame[60, 40].any()
     body_only = np.zeros_like(frame)
     assert draw_skeleton(body_only, points, visible=visible_points(None)) == 1
-    assert body_only[20, 80].any() and not body_only[60, 120].any() and not body_only[60, 40].any()
+    assert body_only[20, 80].any() and not body_only[20, 40].any() and not body_only[60, 120].any()
 
 
 def test_draw_skeleton_scales_from_keypoint_coordinates_to_the_frame() -> None:

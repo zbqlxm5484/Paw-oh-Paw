@@ -7,9 +7,9 @@ OpenCV가 바로 쓰는 mp4v 코덱은 Chrome에서 열리지 않기 때문이�
 
 워커의 자식 프로세스(app/worker/render.py)가 render_video 하나를 부른다. 자식은 이 모듈만 import한다.
 관절점 번호의 뜻은 docs/labeling/labelGuide.md 1장(0부터), 연결은 ai/data_prep/aihub_to_coco.py의 SKELETON과 같다.
-프레임마다 관절점 파일의 camera_side(right·left·null)에 따라 몸통과 카메라 쪽 다리만 그리고 반대쪽 다리는 그리지
-않는다(세부명세서 PR-F01-04: 반대쪽 다리 관절점은 고객 결과에 쓰지 않는다. 몸에 가려 틀리게 찍히는 일이 많다).
-판정은 분석 API가 한다(engine/camera_side.py와 같은 규칙). 여기서는 그 값을 따른다(128 리뷰).
+프레임마다 관절점 파일의 camera_side(right·left·null)에 따라 등 가운데·엉덩이 위와 카메라 쪽 귀·다리만 그리고
+반대쪽 귀·다리는 그리지 않는다(세부명세서 PR-F01-04: 반대쪽 다리 관절점은 고객 결과에 쓰지 않는다. 몸에 가려 틀리게
+찍히는 일이 많다. 반대쪽 귀도 같은 이유로 뺀다). 판정은 분석 API가 한다(engine/camera_side.py와 같은 규칙).
 """
 
 from __future__ import annotations
@@ -87,16 +87,17 @@ def limb_of(index: int) -> str:
     return BODY
 
 
-# 카메라 쪽 다리만 그린다(세부명세서 PR-F01-04). 값은 관절점 파일의 camera_side. 몸통은 귀·등 가운데·엉덩이 위
+# 카메라 쪽 귀·다리만 그린다(세부명세서 PR-F01-04). 값은 관절점 파일의 camera_side. 반대쪽 귀도 몸에 가려 틀리게
+# 찍히므로 뺀다(10-29 결정). 집합은 engine/camera_side.py의 LEFT·RIGHT와 같다. 몸통은 등 가운데(T13)·엉덩이 위 둘
 CAMERA_RIGHT, CAMERA_LEFT = "right", "left"
-BODY_POINTS = frozenset({0, 1, 2, 13})
-LEFT_POINTS = frozenset(range(3, 8)) | frozenset(range(14, 18))
-RIGHT_POINTS = frozenset(range(8, 13)) | frozenset(range(18, 22))
+BODY_POINTS = frozenset({2, 13})
+LEFT_POINTS = frozenset({0}) | frozenset(range(3, 8)) | frozenset(range(14, 18))
+RIGHT_POINTS = frozenset({1}) | frozenset(range(8, 13)) | frozenset(range(18, 22))
 ALL_POINTS = frozenset(range(KEYPOINT_COUNT))
 
 
 def visible_points(camera_side: str | None) -> frozenset[int]:
-    """그릴 점 번호. right면 몸통 + 오른쪽 다리, left면 몸통 + 왼쪽 다리, null(판정 못 함)이면 몸통만."""
+    """그릴 점 번호. right면 몸통 + 오른쪽 귀·다리, left면 몸통 + 왼쪽 귀·다리, null(판정 못 함)이면 몸통 둘만."""
     if camera_side == CAMERA_RIGHT:
         return BODY_POINTS | RIGHT_POINTS
     if camera_side == CAMERA_LEFT:
@@ -221,7 +222,7 @@ def draw_skeleton(
     """frame(BGR, 제자리에서 고친다)에 연결선과 점을 그리고 그린 점의 수를 돌려준다.
 
     scale은 관절점 좌표계(관절점 파일의 width·height) → 이 프레임 크기의 비율이다. visible에 든 번호만 그리고
-    (visible_points: 카메라 반대쪽 다리는 뺀다), 못 찾은 점(None)이나 visible 밖의 점에 닿는 선은 건너뛴다.
+    (visible_points: 카메라 반대쪽 귀·다리는 뺀다), 못 찾은 점(None)이나 visible 밖의 점에 닿는 선은 건너뛴다.
     선 굵기는 프레임 크기에 맞춘다(720p에서 2, 1080p에서 3).
     """
     height, width = frame.shape[:2]
@@ -250,7 +251,7 @@ def draw_skeleton(
 def process_frame(frame: np.ndarray, frame_points: FramePoints | None, *, scale: tuple[float, float]) -> bool:
     """프레임 하나를 결과 영상용으로 고친다. 지금은 골격만 그린다. 얼굴 가리기(Jira 150)는 여기에 더한다.
 
-    카메라 쪽 다리만 그린다(visible_points). 골격을 하나라도 그렸으면 True.
+    카메라 쪽 귀·다리만 그린다(visible_points). 골격을 하나라도 그렸으면 True.
     """
     if frame_points is None:
         return False
