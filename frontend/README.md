@@ -32,6 +32,8 @@ npm run dev
 
 백엔드에 붙이기: `.env.local` 에서 `VITE_MOCK=` 로 비우고 `VITE_DEV_PROXY_TARGET` 을 uvicorn 주소로 둔다. 로그인 계정은 `backend/scripts/seed.py` 로 만든다.
 
+백엔드에 반만 붙이기: `VITE_MOCK=partial`. 백엔드에 있는 API 는 진짜 서버로 가고, 아직 없는 API(측정 이력·측정 종료·결과·보고서·관절 각도·비교·추이)만 `src/mocks/partial.ts` 가 빈 목록이나 "아직 서버에 없어요" 오류(501 `NOT_IMPLEMENTED`)로 받는다. 진짜 id 를 가짜 DB 가 모르므로 가짜 데이터는 만들지 않는다. 백엔드에 API 가 생기면 그 줄을 지운다.
+
 ## 화면은 디자인 원본에서 생성한다
 
 화면 마크업은 손으로 그리지 않는다. Claude Design 에서 내보낸 `PawOhPaw_app.html` 을 풀어서 템플릿을 JSX 로 1:1 변환한다. 그래서 간격·색·문구가 디자인과 같다.
@@ -106,10 +108,23 @@ npm run android:open                   # Android Studio 로 열기
 ```bash
 npm run build     # tsc + vite build
 npm run lint
+npm test          # 화면 표시 규칙 단위 테스트(vitest)
 ```
+
+단위 테스트(`src/**/*.test.ts`, 설정 `vitest.config.ts`)는 화면을 그리지 않고 값·문구 함수만 본다(screenPlan 5절 공통 처리).
+
+| 파일 | 보는 것 |
+| --- | --- |
+| `src/api/labels.test.ts` | 값 한글화(성별·체급·다리·보행 유형·유효 여부·상태·수치 코드)가 빠짐없이 있는지, 금지 표현이 없는지, 숫자 자릿수(각도 소수 1자리, 비율·횟수 정수, 그 밖 1자리), 측정 불가는 `—` |
+| `src/api/client.test.ts` | 오류 형식 분기: 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED` 면 토큰을 지우고 로그인으로, 다른 403 은 그대로, 422 `fields` 꺼내기, JSON 이 아닌 오류 본문 |
+| `src/design/adapter.test.ts` | 회차 결과·보고서·경과 비교 표에서 측정 불가 값을 0 으로 그리지 않는지, 좌우 차이 지수 소수 1자리 |
 
 Docker 로 전체 스택 확인은 저장소 루트에서 `docker compose up --build` (nginx 80 → frontend·api).
 
 ## 백엔드와 맞춰 본 것 (10-23, 브랜치 S15P31A404-70)
 
 로그인 · 반려견 등록 · 회차 시작 · 영상 업로드(201) · 세로 영상 거부(400) · 측정 취소(204) 통과. 측정 이력·측정 종료·촬영 삭제·결과·보고서·비교 API 는 아직 없어 화면이 서버 오류 문구를 그대로 보여 준다(가짜 서버에서는 전부 돈다). 실제 연결은 S15P31A404-103 에서 이어간다.
+
+## 백엔드와 맞춰 본 것 (10-29, 브랜치 S15P31A404-103-fe-partial-mock)
+
+`VITE_MOCK=partial` 로 develop 백엔드(API·워커 Docker, 분석은 mock)에 붙여 앱 화면에서 확인: 로그인 → 홈(실제 반려견 2마리) → 보행 촬영 → 갤러리 영상 첨부(`POST /sessions/{id}/shots` 201) → 워커 분석 저장(VALID, 통과 4) → 분석 시작은 측정 종료 API 가 없어 "측정 종료 기능은 아직 서버에 없어요" 안내.
