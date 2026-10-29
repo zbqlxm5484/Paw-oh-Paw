@@ -1,6 +1,6 @@
-"""관절점 정규화 v0 (F-01) — 2차원 기하 보정. 검토용 구현이며 기업 확인 전이다.
+"""관절점 정규화 v1 (F-01) — 2차원 기하 보정. 검토용 구현이며 기업 확인 전이다.
 
-    python normalize.py --track fs-v4.track.json --out fs-v4.norm.track.json [--no-scale-x] [--no-scale-y] [--iso] [--tilt]
+    python normalize.py --track fs-v4.track.json --out fs-v4.norm.track.json [--stretch-x] [--no-scale-y] [--tilt]
 
 입력·출력은 paw_eval video_kpi 의 track 형식이다. 프레임마다 원본 "kp" 는 그대로 두고(PR-F01-05)
 보정한 좌표를 "norm" 에 넣는다. 영상마다 "passes" 에 통과별 진행 방향·카메라 쪽 다리·보정 값을 적는다.
@@ -8,9 +8,13 @@
 보정 (통과 단위)
 - 진행 방향: 몸통(T13 - 장골능)이 옆으로 누운 프레임의 다수결. +1 = 머리가 화면 오른쪽.
   카메라 쪽 다리: 머리가 오른쪽이면 개의 오른쪽 다리가 카메라 쪽이다(PR-F01-04).
-- 가로 크기: 비스듬히 걸으면 화면 위치에 따라 몸통이 짧아 보인다. 몸통 길이의 로그를 몸통 가운데 x 에
-  대한 직선으로 맞추고(Theil-Sen), 통과 안에서 가장 긴 쪽(가장 옆모습에 가까운 쪽)에 맞춰 가로를 늘린다.
-- 세로 크기: 카메라와의 거리 변화. 상자 높이의 로그를 같은 방식으로 맞춰 세로를 늘린다.
+- 크기(v1 기본): 카메라와의 거리 변화만 보정한다. 상자 높이의 로그를 몸통 가운데 x 에 대한 직선으로 맞추고
+  (Theil-Sen), 통과 안에서 가장 큰 쪽에 맞춰 가로·세로를 같은 비율로 키운다.
+- 가로 늘리기(--stretch-x, v0 기본이었음): 몸통 길이의 로그를 같은 방식으로 맞춰 가로만 늘린다. 비스듬히 걸어
+  몸통이 짧아 보이는 것을 펴려던 것인데, 세로로 선 다리 체절까지 가로로 늘려 KPI-01 을 4~21% 키워서 v1 에서 껐다
+  (S15P31A404-102, docs/normalize/oblique.md).
+- 비스듬함: 통과마다 oblique.py 의 측정값(path_deg·yaw_change·len_change)과 판정을 "oblique" 에 적는다. 표시만 하고
+  보정·제외는 하지 않는다(비스듬한 통과를 빼면 실제 촬영에서 KPI 가 오히려 나빠지고, 합성 yaw 에서는 통과 대부분이 빠진다).
 - 기울기(--tilt, 기본 끔): 통과 안 몸통 가운데 궤적의 기울기만큼 몸통 가운데를 축으로 돌린다.
 - 보정은 몸통 가운데를 고정점으로 하므로 화면 위치(KPI-02 의 왼쪽·오른쪽 1/3)는 바뀌지 않는다.
 - 맞춘 직선은 통과 전체에서 하나라 프레임별 흔들림을 키우지 않는다. 체절(다리) 길이는 쓰지 않는다.
@@ -23,14 +27,14 @@ import statistics
 import sys
 from pathlib import Path
 
-NORM_VERSION = "v0"
+NORM_VERSION = "v1"
 T13, ILIAC = 2, 13
 CONF = 0.3                     # paw_eval 과 같은 확신도 바닥
 SIDE_MIN = 0.5                 # 옆모습 판정
 GAP_S = 0.5
 MIN_TRAVEL = 1 / 3
 MIN_FRAMES = 10
-MAX_STRETCH = 1.6              # 통과 안 가로 보정 최대 비율. 넘으면 limit_exceeded
+MAX_STRETCH = 1.6              # 통과 안 몸통 길이 변화(가로 늘리기 비율) 최대. 넘으면 limit_exceeded
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -102,7 +106,7 @@ def fit_pass(v, a, b, heading):
             "limit_exceeded": stretch > MAX_STRETCH}
 
 
-def apply(kp, p, use_x=True, use_y=True, tilt=False, iso=False):
+def apply(kp, p, use_x=False, use_y=True, tilt=False, iso=True):
     t = _trunk(kp)
     if t is None:
         return None
@@ -119,13 +123,17 @@ def apply(kp, p, use_x=True, use_y=True, tilt=False, iso=False):
     return out
 
 
-def normalize(d, use_x=True, use_y=True, tilt=False, iso=False):
+def normalize(d, use_x=False, use_y=True, tilt=False, iso=True):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from oblique import measure_pass  # oblique 가 이 모듈을 가져다 쓰므로 여기서 가져온다
     for v in d["videos"]:
         passes = []
         for a, b, h in find_passes(v):
             p = fit_pass(v, a, b, h)
             if p["n_fit"] < MIN_FRAMES:
                 continue
+            ob = measure_pass(v, a, b, h)
+            p["oblique"] = None if ob is None else {k: ob[k] for k in ("path_deg", "yaw_change", "len_change", "oblique", "reasons")}
             passes.append(p)
             for f in v["frames"][a:b + 1]:
                 if f:
@@ -150,7 +158,7 @@ def self_test():
         frames.append({"box": [x - 120, 200, x + 120, 400], "kp": kp})
     d = {"meta": {"model": {"name": "t"}}, "videos": [{"video": "a", "width": W, "height": 600, "fps": 30,
                                                      "frames": frames}]}
-    normalize(d)
+    normalize(d, use_x=True, iso=False)
     v = d["videos"][0]
     assert len(v["passes"]) == 1 and v["passes"][0]["camera_side"] == "right", v["passes"]
     lens = [_trunk(f["norm"])["len"] for f in v["frames"]]
@@ -163,10 +171,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--track")
     ap.add_argument("--out")
-    ap.add_argument("--no-scale-x", action="store_true")
-    ap.add_argument("--no-scale-y", action="store_true")
+    ap.add_argument("--stretch-x", action="store_true", help="v0 방식: 몸통 길이로 가로만 늘린다(v1 기본은 끔)")
+    ap.add_argument("--no-scale-y", action="store_true", help="거리 변화 보정도 끈다")
     ap.add_argument("--tilt", action="store_true")
-    ap.add_argument("--iso", action="store_true", help="--no-scale-x 와 함께: 세로 비율을 가로에도 똑같이 적용(거리 변화만 보정)")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:
@@ -174,11 +181,12 @@ def main():
     if not (a.track and a.out):
         ap.error("--track 과 --out 이 필요하다")
     d = json.loads(Path(a.track).read_text(encoding="utf-8"))
-    normalize(d, not a.no_scale_x, not a.no_scale_y, a.tilt, a.iso)
+    normalize(d, use_x=a.stretch_x, use_y=not a.no_scale_y, tilt=a.tilt, iso=not a.stretch_x)
     ps = [p for v in d["videos"] for p in v["passes"]]
     print(f"통과 {len(ps)}개, 가로 보정 비율 중앙 {statistics.median(p['stretch_x'] for p in ps):.3f}"
           f" (최대 {max(p['stretch_x'] for p in ps):.3f}), 한계 초과 {sum(p['limit_exceeded'] for p in ps)}개,"
-          f" 기울기 중앙 {statistics.median(p['tilt_deg'] for p in ps):.2f}°")
+          f" 기울기 중앙 {statistics.median(p['tilt_deg'] for p in ps):.2f}°,"
+          f" 비스듬함 {sum(bool(p['oblique'] and p['oblique']['oblique']) for p in ps)}개")
     Path(a.out).write_text(json.dumps(d), encoding="utf-8")
     print(f"-> {a.out}")
 

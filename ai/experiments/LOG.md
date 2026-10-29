@@ -20,3 +20,4 @@
 | 10-26 | 비스듬 보행 판별, 카메라 오차 합성 확인 그림 | `normalize/oblique_sheet.py`, `synth_sheet.py` (본체는 `ai/normalize/oblique.py`, `synth_camera.py`) | `docs/normalize/` |
 | 10-28 | 기업 정답(260820, 제니 한 마리)·와우와우가 오토라벨에서 관절을 어느 방향으로 옮겼나: 통계, 겹쳐 보기, 나란히 보기 | `labels/direction_stats.py`, `gt_overlays.py`, `gt_side_by_side.py`, `ww_overlays.py`, `ww_compare.py` | 무릎은 반대 방향(기업 머리 쪽, 와우와우 꼬리 쪽), 기업은 몸통 점을 0~5%만 고침 |
 | 10-28 | 와우와우 30장을 기업 방식으로 다시 라벨링할 표본 (CVAT 태스크 18) | `labels/select30.py` | 라벨링 중 |
+| 10-29 | 비스듬한 통과 처리 방법별 KPI-01·02 (S15P31A404-102): 정규화 없음, v0, 비스듬한 통과만 기울기 보정, 비스듬한 통과 제외, 가로 늘리기 없이 거리만 보정(iso). 실제 26·72개, 합성 카메라 | `normalize/oblique_fix.py` | iso 만 KPI-01 을 줄임(실제 +7%·+4%, 합성 yaw +21%), v0 는 −14%·−7% 로 키움. KPI-02 는 모두 그대로. 정규화 v1 기본을 iso 로 바꿈(docs/normalize/oblique.md) |
