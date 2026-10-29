@@ -24,9 +24,11 @@ def test_defaults_follow_section_16() -> None:
     assert settings.CORS_ORIGINS == ["http://localhost:5173"]
 
 
-@pytest.mark.parametrize("name", ["WORKER_MAX_IN_FLIGHT", "WORKER_MAX_IN_FLIGHT_PER_INSTITUTION"])
+@pytest.mark.parametrize(
+    "name", ["WORKER_MAX_IN_FLIGHT", "WORKER_MAX_IN_FLIGHT_PER_INSTITUTION", "WORKER_RENDER_CONCURRENCY"]
+)
 def test_worker_caps_must_be_at_least_one(name: str) -> None:
-    # 16절: 0이면 워커가 오류 없이 아무것도 가져가지 않으므로 시작 때 막는다
+    # 16절: 0이면 워커가 오류 없이 아무것도 가져가지 않으므로(결과 영상은 영영 PENDING) 시작 때 막는다
     with pytest.raises(ValidationError, match=name):
         _settings(**{name: 0})
 
