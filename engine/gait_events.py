@@ -14,14 +14,15 @@
 입력은 통과 하나의 프레임들이다(유효 판별에서 자른 구간). 카메라 쪽 다리만 넣는다(PR-F02-04).
 관절점 번호는 세부명세서 6.5.3절, `engine/camera_side.py`와 같다.
 
-기준값은 데이터로 맞추기 전의 처음 값이다. 정답 대조(S15P31A404-160)에서 바꾼다.
+v1(10-29): STANCE_RATIO 0.25 → 0.40, 흔들림 창과 관절점 빠짐 허용을 프레임 수에서 초로 바꿈.
+흔들림 창 최종값은 정답 대조(S15P31A404-160, engine/gait_eval.py)에서 정한다.
 """
 import math
 import statistics
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
-EVENTS_VERSION = "v0"
+EVENTS_VERSION = "v1"
 
 T13, ILIAC = 2, 13
 CONF = 0.3                  # 관절점 확신도 바닥 (paw_eval과 같음)
@@ -30,11 +31,12 @@ PAWS = {                    # 카메라 쪽 다리의 발끝 번호
     "left": {"front": 7, "hind": 17},
 }
 
-SMOOTH_FRAMES = 5           # 발끝 속도 이동 중앙값 창 (PR-F02-03 흔들림 처리)
+# 시간 기준값은 초로 두고 영상 fps로 프레임 수를 정한다. 60fps와 30fps 영상이 섞여 있어서다
+SMOOTH_S = 0.15             # 발끝 속도 이동 중앙값 창 (PR-F02-03 흔들림 처리). 30fps 5프레임, 60fps 9프레임
 STANCE_MIN_SPEED = 0.15     # 몸통 길이/초. 디딤으로 보는 속도 바닥 (몸통이 거의 안 움직일 때)
-STANCE_RATIO = 0.25         # 몸통 속도의 이 비율보다 느리면 디딤
+STANCE_RATIO = 0.40         # 몸통 속도의 이 비율보다 느리면 디딤. 공개 정답 데이터 141걸음으로 맞춤(박규원 10-29)
 MIN_STANCE_S = 0.06         # 이보다 짧은 디딤은 흔들림으로 보고 버림
-MAX_GAP_FRAMES = 2          # 디딤 구간 안에서 관절점이 빠져도 이어 붙이는 최대 프레임 수
+MAX_GAP_S = 0.05            # 디딤 구간 안에서 관절점이 빠져도 이어 붙이는 최대 시간
 
 Point = Optional[Sequence[float]]   # (x, y, 확신도) 또는 None
 Frame = Optional[Sequence[Point]]   # 22점 또는 None(개 없음)
@@ -119,6 +121,12 @@ def _speeds(points: list, fps: float, length: float) -> list:
     return out
 
 
+def frames_for(seconds: float, fps: float, odd: bool = False) -> int:
+    """초를 이 영상의 프레임 수로. odd면 가운데가 있게 홀수로"""
+    n = max(1, round(seconds * fps))
+    return n + 1 if odd and n % 2 == 0 else n
+
+
 def _moving_median(values: list, window: int) -> list:
     half = window // 2
     out = []
@@ -157,13 +165,14 @@ def detect_paw(frames: Sequence[Frame], fps: float, slot: int, paw: str = "",
     if body_speed is None:
         body_speed = trunk_speed(frames, fps, length) or 0.0
 
-    speeds = _moving_median(_speeds([_point(f, slot) for f in frames], fps, length), SMOOTH_FRAMES)
+    window = max(3, frames_for(SMOOTH_S, fps, odd=True))
+    speeds = _moving_median(_speeds([_point(f, slot) for f in frames], fps, length), window)
     limit = max(STANCE_MIN_SPEED, STANCE_RATIO * body_speed)
     mask = [None if s is None else s < limit for s in speeds]
     min_frames = max(1, math.ceil(MIN_STANCE_S * fps))
 
     n = len(frames)
-    for first, last in _runs(mask, MAX_GAP_FRAMES):
+    for first, last in _runs(mask, frames_for(MAX_GAP_S, fps)):
         if last - first + 1 < min_frames:
             continue
         seen_start = first > 0 and mask[first - 1] is False      # 직전 프레임에 발이 움직이는 걸 봤나
