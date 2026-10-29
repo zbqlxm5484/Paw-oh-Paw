@@ -20,9 +20,15 @@ const queryClient = new QueryClient({
 })
 
 async function enableMocking() {
-  if (import.meta.env.VITE_MOCK !== '1') return
-  const { worker } = await import('./mocks/browser')
-  await worker.start()
+  const mode = import.meta.env.VITE_MOCK
+  if (mode === '1') {
+    const { worker } = await import('./mocks/browser')
+    await worker.start()
+  } else if (mode === 'partial') {
+    // 백엔드에 있는 API 는 진짜 서버로, 없는 것만 가짜로 (mocks/partial.ts)
+    const { partialWorker } = await import('./mocks/browser')
+    await partialWorker.start({ onUnhandledFrame: 'bypass' })
+  }
 }
 
 enableMocking().then(() => {
