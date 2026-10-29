@@ -14,7 +14,7 @@
 | "오늘"의 시간대 (16절 APP_TIMEZONE) | `app/core/dates.py` |
 | 회차 시작·상태·진행·촬영 목록·측정 취소, 회차 시점 체급 (12.5, 13.3, 15.6) | `app/api/routes/sessions.py`, `app/services/sessions.py`, `app/schemas/sessions.py` |
 | 영상 업로드 검사 9가지·저장 (13.1, 15.6) | `app/services/uploads.py`, `app/video/probe.py`(ffprobe) |
-| 촬영 상세(결과 영상 주소는 READY일 때 서명 URL)·다시 분석·삭제 (13.3, 15.3, 15.6) | `app/api/routes/shots.py`, `app/services/shots.py`, `app/schemas/shots.py` |
+| 촬영 상세(결과 영상 주소는 READY일 때 서명 URL)·다시 분석·삭제·결과 영상 재생(서명 검증, Range 206) (11.6, 13.3, 15.3, 15.6) | `app/api/routes/shots.py`, `app/services/shots.py`, `app/schemas/shots.py`, `app/api/deps.py`의 `check_file_link` |
 | 파일 저장소 `StorageService`·`LocalStorage`·파일 키 (7절, 11.11) | `app/storage/` |
 | 분석 클라이언트 `MockAnalysisClient`·`HttpAnalysisClient`와 견본 JSON (6절, 16절 `ANALYSIS_API_MODE`) | `app/clients/analysis.py`, `app/clients/fixtures/` |
 | 실패한 요청이 만든 파일 정리 (12.4) | `app/api/deps.py`의 `delete_created_files` |

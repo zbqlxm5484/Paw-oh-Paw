@@ -1,6 +1,8 @@
 """촬영 응답 만들기와 촬영 상세·다시 분석·삭제(13.3, 15.3, 15.6, BE-08·10·11). 업로드 검사·저장은 services/uploads.py.
 
 촬영은 shot → measure_session → dog를 거쳐 기관으로 거른다(11.6). 없거나 다른 기관의 촬영이면 똑같이 404다(15.1).
+결과 영상 재생(result_video_path)만 예외로 촬영 ID로만 찾는다. 서명 URL은 기관 확인을 거친 조회 API만 만들고,
+서명이 맞으면 기관 확인을 다시 하지 않기 때문이다(15.6).
 상태를 바꾸는 다시 분석·삭제는 그 회차 행을 FOR UPDATE로 잠근 뒤 조건을 본다(12.4 잠금). 워커가 UPLOADED 촬영을
 가져갈 때 같은 잠금을 잡으므로, 지우는 사이에 워커가 그 촬영을 보내거나 결과를 쓰는 일이 없다(13.3).
 Spring에 빗대면 @Transactional 없이 flush까지만 하는 서비스이고, commit은 get_db가 한다(11.7).
@@ -9,6 +11,7 @@ Spring에 빗대면 @Transactional 없이 flush까지만 하는 서비스이고,
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
@@ -20,6 +23,7 @@ from app.schemas.common import reason_out
 from app.schemas.shots import PassOut, ShotDetailOut, ShotOut
 from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
+from app.storage.local import LocalStorage
 
 # 결과 영상 재생 API의 경로(15.6). 서명은 이 경로로 만든다(11.6). 앞부분은 app/main.py의 API_PREFIX와 같다
 VIDEO_API_PATH = "/api/v1/shots/{shot_id}/video"
@@ -112,6 +116,24 @@ def shot_detail(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID) -> S
     if shot is None:
         raise AppError(ErrorCode.NOT_FOUND)
     return to_shot_detail_out(shot)
+
+
+def result_video_path(db: Session, shot_id: uuid.UUID) -> Path:
+    """GET /shots/{id}/video(BE-12, 15.6)가 FileResponse에 넘길 결과 영상의 실제 경로. 서명 확인은 라우트가 먼저 한다.
+
+    촬영이 없거나 video_status가 READY가 아니면 404 NOT_FOUND이고, READY인데 파일이 없어도 같다(열 것이 없다).
+    저장소가 S3면 video_url이 S3 주소라 이 API는 쓰이지 않고, 불리면 404다(11.11). 경로는 LocalStorage.path로만 얻는다.
+    """
+    storage = get_storage()
+    if not isinstance(storage, LocalStorage):
+        raise AppError(ErrorCode.NOT_FOUND)
+    shot = db.get(Shot, shot_id)
+    if shot is None or shot.video_status != VideoStatus.READY or not shot.result_key:
+        raise AppError(ErrorCode.NOT_FOUND)
+    path = storage.path(shot.result_key)
+    if not path.is_file():
+        raise AppError(ErrorCode.NOT_FOUND)
+    return path
 
 
 # ---- 다시 분석·삭제 ----
