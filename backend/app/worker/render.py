@@ -6,7 +6,8 @@
 
 - 풀: ProcessPoolExecutor(mp_context=spawn), 크기는 WORKER_RENDER_CONCURRENCY(16절). fork면 DB 연결 풀이 자식에
   복사되므로 spawn이다(12.4). 보고서 풀(1개, 작업 단위 9)은 같은 모양으로 하나 더 둔다.
-- 자식: app/video/render.py의 render_video만 부른다. DB·저장소·분석 API를 모른다(11.3).
+- 자식: app/video/render.py의 render_video만 부른다. DB·저장소·분석 API를 모른다(11.3). 얼굴 검출 모델은 그 패키지에
+  들어 있어 따로 설정할 것이 없다(Jira 150).
 - 작업 폴더: UPLOAD_TMP_DIR/worker/{촬영 ID}/. 원본은 storage.local_copy로 준비해 작업별 ExitStack에 열어 두고(S3면
   내려받은 복사본, local이면 저장소 경로 그대로), 관절점 파일(분석 API get_keypoints)을 keypoints.json으로 쓴다.
   성공·실패 모두 ExitStack을 닫고 폴더를 지운다.
@@ -295,10 +296,11 @@ class VideoRenderer:
         if changed:
             stats.rendered += 1
             logger.info(
-                "video ready shot=%s frames=%d drawn=%d size=%dx%d bytes=%d in %.1fs",
+                "video ready shot=%s frames=%d drawn=%d faces=%d size=%dx%d bytes=%d in %.1fs",
                 shot_id,
                 result.frames,
                 result.drawn_frames,
+                result.face_frames,
                 result.width,
                 result.height,
                 result.bytes,

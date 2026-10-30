@@ -17,6 +17,8 @@ data/
 *.pth
 *.pt
 *.onnx
+# backend bundles one third-party face-detection model (MediaPipe BlazeFace, Apache-2.0, 2.0 MB) as a library file
+!backend/app/video/models/*.onnx
 *.ckpt
 runs/
 outputs/
