@@ -26,6 +26,53 @@ def kdate(d: Optional[date] = None) -> str:
 
 
 @dataclass
+class History:
+    """진단·수술·재활 단계 변경 한 건 (히스토리 탭, 홈 특이사항 배지)."""
+    day: str                  # YYYY-MM-DD
+    kind: str                 # 진단 | 수술 | 재활
+    title: str                # 예) 앞십자인대 파열 · TPLO
+    site: str = ""            # LF | RF | LH | RH | SP(척추) | ""
+    by: str = ""              # 집도의·진단의
+    author: str = ""          # 기록한 사람
+
+
+@dataclass
+class Vital:
+    """방문 한 번의 바이탈. 빈 값은 그날 재지 않은 것."""
+    day: str                  # YYYY-MM-DD
+    kg: str = ""
+    temp: str = ""            # 체온 ℃
+    hr: str = ""              # 심박 bpm
+    sbp: str = ""             # 수축기 혈압 mmHg
+    dbp: str = ""             # 이완기 혈압 mmHg
+    author: str = ""
+
+
+@dataclass
+class Note:
+    """동물 메모(차팅). 지우지 않고, 고치면 이전 내용을 revs 에 남긴다."""
+    id: str
+    at: str                   # YYYY-MM-DD HH:MM
+    author: str
+    cat: str                  # 경과 | 특이사항 | 처치 | 전달
+    text: str
+    important: bool = False   # 홈 특이사항 배지에 올린다
+    revs: list = field(default_factory=list)   # [(at, author, text)] 오래된 것부터
+    rid: str = ""             # 회차 메모면 그 회차 id, 반려견 메모면 빈 값
+
+
+@dataclass
+class Image:
+    """방사선·사진 한 장."""
+    id: str
+    day: str                  # YYYY-MM-DD 촬영일
+    kind: str                 # pre | post | photo
+    caption: str
+    path: str
+    author: str = ""
+
+
+@dataclass
 class Dog:
     id: str
     name: str
@@ -39,6 +86,15 @@ class Dog:
     focus: Optional[str] = None  # LF | RF | LH | RH
     memo: str = ""
     base: Optional[str] = None   # 직접 지정한 기준 회차 id
+    no: str = ""              # 동물번호 (병원 차트 번호)
+    owner: str = ""           # 보호자 이름
+    phone: str = ""           # 보호자 연락처
+    stage: str = "rehab"      # pre(수술 전) | rehab(재활 중) | done(종결)
+    stage_day: str = ""       # 단계가 바뀐 날 YYYY-MM-DD
+    history: list = field(default_factory=list)   # [History] 오래된 것부터
+    vitals: list = field(default_factory=list)    # [Vital] 최신이 앞
+    notes: list = field(default_factory=list)     # [Note] 최신이 앞
+    images: list = field(default_factory=list)    # [Image] 최신이 앞
 
 
 @dataclass
@@ -60,6 +116,10 @@ class Result:
     ex: list = field(default_factory=list)  # [(제외 사유, 횟수)]
     rep: bool = False
     videos: list = field(default_factory=list)
+    day: str = ""             # YYYY-MM-DD (변동 판정·시간 축용. date 는 화면용 "10월 15일")
+    by: str = ""              # 측정한 사람
+    m: dict = field(default_factory=dict)   # 실측 수치 {다리: {코드: 값}} (real.py). 비어 있으면 예전 예시 공식
+    src: str = ""             # 수치를 가져온 실측 회차 (출처:촬영 묶음)
 
 
 @dataclass
@@ -73,6 +133,7 @@ class Job:
     videos: list = field(default_factory=list)
     result_id: Optional[str] = None
     notified: bool = False
+    by: str = ""              # 측정한 사람
 
     def progress(self) -> float:
         return min(5.0, (time.time() - self.started) / config.ANALYSIS_SEC * 5)

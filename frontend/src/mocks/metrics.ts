@@ -1,55 +1,57 @@
 /**
- * 가짜 서버의 회차 수치·비교·추이·촬영 상세. 회차 ID 와 수치 코드로 정해지는 값이라 새로고침해도 같다.
+ * 가짜 서버의 회차 수치·비교·추이·촬영 상세. 수치·관절각은 시연 회차(demoSessions.json + companySample.json)에서 가져온다.
  * 수치 코드와 단위는 api-spec 10.4, 응답 모양은 7·8절.
  */
 import type { AnglesOut, CompareItem, CompareOut, GaitType, Judgement, LimbCompareOut, MetricLimb, MetricOut, Pair, Reason, SessionResultOut, ShotDetailOut, TrendsOut, Unit } from '../api/types'
 import { dogs, findDog, reason, sessions, toSessionOut, validPasses, type MockSession, type MockShot } from './db'
+import demo from './demoSessions.json'
 
-/** 수치 정의: 코드, 단위, 다리, 기준값, 흔들림 폭 */
-const DEFS: { code: string; unit: Unit; limbs: MetricLimb[]; base: number; spread: number }[] = [
-  { code: 'rom_stifle', unit: 'deg', limbs: ['LH', 'RH'], base: 38, spread: 6 },
-  { code: 'rom_hip', unit: 'deg', limbs: ['LH', 'RH'], base: 30, spread: 4 },
-  { code: 'rom_tarsus', unit: 'deg', limbs: ['LH', 'RH'], base: 42, spread: 5 },
-  { code: 'rom_shoulder', unit: 'deg', limbs: ['LF', 'RF'], base: 34, spread: 4 },
-  { code: 'rom_elbow', unit: 'deg', limbs: ['LF', 'RF'], base: 52, spread: 5 },
-  { code: 'rom_carpus', unit: 'deg', limbs: ['LF', 'RF'], base: 60, spread: 6 },
-  { code: 'stride_length', unit: 'pct_body', limbs: ['LF', 'RF', 'LH', 'RH'], base: 58, spread: 8 },
-  { code: 'stance_ratio', unit: 'pct', limbs: ['LF', 'RF', 'LH', 'RH'], base: 61, spread: 4 },
-  { code: 'paw_lift', unit: 'pct_body', limbs: ['LF', 'RF', 'LH', 'RH'], base: 12, spread: 3 },
-  { code: 'walk_speed', unit: 'body_per_sec', limbs: ['NONE'], base: 1.4, spread: 0.3 },
-  { code: 'gait_cycles', unit: 'count', limbs: ['NONE'], base: 10, spread: 3 },
+/**
+ * 시연 회차: AI-Hub 71878 라벨 관절점으로 잰 관절각·가동 범위 + 합성 값(demoSessions.json, prototype/tools/build_demo_sessions.py).
+ * 회사 데이터(제니) 1회차는 companySample.json 에 따로 둔다. 시연에 써도 되는지 멘토링에서 확인하기 전까지만 두고,
+ * 그 파일을 지우면 아래 glob 이 빈 결과라 자동으로 빠진다(코드 수정 필요 없음).
+ * 가짜 회차마다 시연 회차 하나를 차례로 붙여 수치·관절각을 그대로 쓴다(반려견·날짜는 가짜 DB 값).
+ */
+type RealSession = { id: string; source: string; cycles: number; walk_speed: number | null; fps: number
+  metrics: Record<string, Record<string, number>>; angle_series: Record<string, Record<string, (number | null)[] | string>> }
+const company = Object.values(import.meta.glob('./companySample.json', { eager: true, import: 'default' })) as { sessions: RealSession[] }[]
+const REAL: RealSession[] = [...(demo as { sessions: RealSession[] }).sessions, ...company.flatMap((c) => c.sessions)]
+
+/** 완료 회차 전체를 날짜순으로 세워 실측 회차를 돌려 가며 붙인다 */
+function realOf(s: MockSession): RealSession {
+  const all = sessions.filter((x) => x.status === 'DONE').sort((a, b) => a.measured_on.localeCompare(b.measured_on) || a.id.localeCompare(b.id))
+  const i = Math.max(0, all.findIndex((x) => x.id === s.id))
+  return REAL[i % REAL.length]
+}
+
+/** 수치 정의: 코드, 단위, 다리 (값은 실측 회차에서) */
+const DEFS: { code: string; unit: Unit; limbs: MetricLimb[] }[] = [
+  { code: 'rom_stifle', unit: 'deg', limbs: ['LH', 'RH'] },
+  { code: 'rom_hip', unit: 'deg', limbs: ['LH', 'RH'] },
+  { code: 'rom_tarsus', unit: 'deg', limbs: ['LH', 'RH'] },
+  { code: 'rom_shoulder', unit: 'deg', limbs: ['LF', 'RF'] },
+  { code: 'rom_elbow', unit: 'deg', limbs: ['LF', 'RF'] },
+  { code: 'rom_carpus', unit: 'deg', limbs: ['LF', 'RF'] },
+  { code: 'stride_length', unit: 'pct_body', limbs: ['LF', 'RF', 'LH', 'RH'] },
+  { code: 'stance_ratio', unit: 'pct', limbs: ['LF', 'RF', 'LH', 'RH'] },
+  { code: 'paw_lift', unit: 'pct_body', limbs: ['LF', 'RF', 'LH', 'RH'] },
+  { code: 'walk_speed', unit: 'body_per_sec', limbs: ['NONE'] },
+  { code: 'gait_cycles', unit: 'count', limbs: ['NONE'] },
 ]
 
-function hash(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
-  return (h >>> 0) / 4294967295
-}
 
 /** 반려견의 완료 회차를 오래된 순으로 */
 function doneAsc(dogId: string): MockSession[] {
   return sessions.filter((s) => s.dog_id === dogId && s.status === 'DONE').sort((a, b) => a.measured_on.localeCompare(b.measured_on))
 }
 
-/** 한 회차·수치·다리의 값. 관심 다리는 조금 낮고, 회차가 쌓일수록 좌우 차이가 줄어든다. */
-function metricValue(s: MockSession, code: string, limb: MetricLimb, gait: GaitType): number | null {
-  const def = DEFS.find((d) => d.code === code)!
-  const dog = findDog(s.dog_id)
-  // 발 높이 LF 는 신뢰도 낮음으로 측정 불가 (측정 불가 표시 확인용)
-  if (code === 'paw_lift' && limb === 'LF') return null
-  const idx = doneAsc(s.dog_id).findIndex((x) => x.id === s.id)
-  const n = Math.max(1, doneAsc(s.dog_id).length)
-  const noise = (hash(`${s.id}:${code}:${limb}`) - 0.5) * def.spread
-  const gaitF = gait === 'WALK' ? 0.86 : 1
-  let v = def.base * gaitF + noise
-  if (def.unit === 'pct_body' && dog) v *= dog.size_class === 'SMALL' ? 1.12 : dog.size_class === 'LARGE' ? 0.95 : 1
-  // 관심 다리는 기준 회차에서 가장 낮고 최근 회차로 갈수록 회복
-  if (dog?.focus_limb && limb === dog.focus_limb && def.unit !== 'pct') {
-    const gap = def.spread * 1.2 * (1 - idx / n)
-    v -= gap
-  }
-  if (code === 'gait_cycles') return Math.round(v)
-  return Math.round(v * 10) / 10
+/** 한 회차·수치·다리의 실측값. 그 다리를 잴 수 없었으면 null. 평보·속보 구분은 실측에 없어 같은 값 */
+function metricValue(s: MockSession, code: string, limb: MetricLimb, _gait: GaitType): number | null {
+  const r = realOf(s)
+  if (code === 'walk_speed') return r.walk_speed
+  if (code === 'gait_cycles') return r.cycles
+  const v = r.metrics[limb]?.[code]
+  return v == null ? null : Math.round(v * 10) / 10
 }
 
 function pairOf(limb: MetricLimb): Pair | null {
@@ -65,7 +67,7 @@ export function resultFor(s: MockSession): SessionResultOut {
   const vp = validPasses(s)
   const used = vp.LEFT + vp.RIGHT
   const measured = used + Math.max(2, Math.round(used * 0.4))
-  const gaits: GaitType[] = s.id.endsWith('5') || s.id.endsWith('2') ? ['WALK', 'TROT'] : ['TROT']
+  const gaits: GaitType[] = ['TROT']   // 실측 영상에 보행 종류 판별이 아직 없다
   const nPass = (limb: MetricLimb) => (limb === 'LF' || limb === 'LH' ? vp.LEFT : limb === 'RF' || limb === 'RH' ? vp.RIGHT : used)
   return {
     ...toSessionOut(s),
@@ -248,34 +250,24 @@ export function shotDetailFor(shot: MockShot, s: MockSession, origin: string): S
   }
 }
 
+/** 촬영 상세의 프레임별 관절각: 같은 방향 실측 통과의 관절각을 그대로 (프레임 수는 실측 통과 길이) */
 export function anglesFor(shot: MockShot): AnglesOut {
-  const fps = 59.94
+  const owner = sessions.find((x) => x.shots.some((y) => y.id === shot.id))
+  const r = owner ? realOf(owner) : REAL[0]
   const passes = shot.passes
     .filter((p) => p.is_valid)
     .map((p) => {
-      const n = p.end_frame - p.start_frame
-      const curve = (base: number, amp: number, phase: number) =>
-        Array.from({ length: n }, (_, i) => {
-          if (i % 37 === 19) return null // 관절점을 못 찾은 프레임
-          const t = (i / n) * Math.PI * 2 * 3 + phase + hash(`${shot.id}:${p.pass_no}`) * 2
-          return Math.round((base + amp * Math.sin(t) + amp * 0.3 * Math.sin(t * 2.1)) * 10) / 10
-        })
+      const a = r.angle_series[p.camera_side === 'LEFT' ? 'L' : 'R'] ?? Object.values(r.angle_series)[0]
+      const pick = (k: string) => (Array.isArray(a?.[k]) ? (a[k] as (number | null)[]) : [])
       return {
         pass_no: p.pass_no,
         camera_side: p.camera_side,
         gait_type: p.gait_type,
         start_frame: p.start_frame,
-        angles: {
-          shoulder: curve(112, 14, 0),
-          elbow: curve(120, 22, 0.6),
-          carpus: curve(150, 26, 1.1),
-          hip: curve(108, 12, 0.3),
-          stifle: curve(122, 18, 0.9),
-          tarsus: curve(135, 20, 1.4),
-        },
+        angles: { shoulder: pick('shoulder'), elbow: pick('elbow'), carpus: pick('carpus'), hip: pick('hip'), stifle: pick('stifle'), tarsus: pick('tarsus') },
       }
     })
-  return { shot_id: shot.id, fps, passes }
+  return { shot_id: shot.id, fps: r.fps, passes }
 }
 
 export { dogs as _dogs }

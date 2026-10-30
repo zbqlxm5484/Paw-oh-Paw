@@ -31,14 +31,14 @@
   <header class="no-print" style="position:sticky;top:0;z-index:20;background:rgba(250,243,231,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid #ECE8E2">
     <div style="padding:0 25px;height:74px;display:flex;align-items:center;gap:28px">
       <a class="lk" href="/home" style="display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px;flex:none"><img src="{{ url_for('static', path='assets/logo.png') }}" alt="" style="width:30px;height:30px;object-fit:contain">Paw oh Paw</a>
-      <nav class="app-nav" style="display:flex;align-items:center;gap:4px;flex:none">
-        {% for key, label, href in [('home', '홈', '/home'), ('about', '서비스 소개', '/about'), ('results', '분석 결과', '/results')] %}
-        {% set on = nav == key %}
-        <a class="lk" href="{{ href }}" style="height:40px;padding:0 14px;border-radius:10px;display:flex;align-items:center;font-size:15px;font-weight:{{ 700 if on else 500 }};color:{{ '#B4501A' if on else '#3A4250' }};background:{{ '#F1EAE0' if on else 'transparent' }};white-space:nowrap">{{ label }}</a>
-        {% endfor %}
-      </nav>
-      <div style="flex:1;min-width:0"></div>
-      <a class="lk hv-orange" href="/upload" style="height:42px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;flex:none"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>분석하기</a>
+      {# 가운데 검색: 어느 화면에서든 이름·동물번호·특이사항·메모·진단·보호자로 찾는다 #}
+      <form method="get" action="/home" style="flex:1;display:flex;justify-content:center;margin:0;min-width:0">
+        <label style="width:100%;max-width:560px;height:44px;border-radius:22px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;gap:8px;padding:0 16px;color:#7A808A">
+          <svg width="18" height="18" viewBox="0 0 24 24" style="flex:none"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+          <input name="q" value="{{ q if q is defined else '' }}" placeholder="반려견 이름 · 동물번호 · 특이사항 · 메모 · 진단 · 보호자" style="flex:1;min-width:0;border:none;outline:none;font-size:15px;background:transparent;color:#1B2433">
+        </label>
+      </form>
+      <a class="lk hv-orange" href="/upload" style="height:42px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;flex:none"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>
       <a class="lk hv-border" href="/my" style="height:42px;padding:0 14px 0 6px;border-radius:21px;border:1px solid #E2DCD3;background:{{ '#FCEEE3' if nav == 'my' else '#fff' }};display:flex;align-items:center;gap:8px;flex:none"><span style="width:30px;height:30px;border-radius:15px;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800">{{ acct.name[:1] }}</span><span class="acct-kind" style="font-size:13px;font-weight:600;color:#7A808A;white-space:nowrap">기관</span><span class="acct-name" style="font-size:14px;font-weight:700;white-space:nowrap">{{ acct.name }}</span></a>
     </div>
   </header>
@@ -53,12 +53,14 @@
 
 <div id="toast" class="no-print" style="position:fixed;left:0;right:0;bottom:40px;z-index:60;display:{{ 'flex' if toast else 'none' }};justify-content:center;pointer-events:none"><span id="toastMsg" style="padding:13px 20px;border-radius:12px;background:rgba(27,36,51,.94);color:#fff;font-size:14.5px;font-weight:600">{{ toast }}</span></div>
 
+{% if jumps %}
 <div class="no-print" style="position:fixed;left:20px;bottom:20px;z-index:70;display:flex;flex-direction:column;align-items:flex-start;gap:8px">
   <div id="jumpMenu" style="width:220px;max-height:60vh;overflow:auto;background:#fff;border:1px solid #E2DCD3;border-radius:14px;box-shadow:0 16px 40px rgba(27,36,51,.16);padding:6px;display:none;flex-direction:column">
     {% for label, url, need in jumps %}<a class="lk hv-menu" href="/jump/{{ loop.index0 }}" style="min-height:36px;padding:0 12px;border-radius:8px;display:flex;align-items:center;font-size:13.5px">{{ label }}</a>{% endfor %}
   </div>
   <div id="jumpBtn" style="height:40px;padding:0 14px;border-radius:20px;background:#1B2433;color:#fff;display:flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(27,36,51,.25)">화면 바로가기</div>
 </div>
+{% endif %}
 
 <script>window.PP = { toast: {{ toast|tojson }}, pollNotices: {{ 'true' if has_active and not job_id else 'false' }}, breeds: {{ breeds|tojson }}, dogs: {{ dogs_data|tojson }}, openPet: {{ 'true' if modal == 'pet' else 'false' }} };</script>
 <script src="{{ url_for('static', path='app.js') }}"></script>

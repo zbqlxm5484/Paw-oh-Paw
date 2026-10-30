@@ -2,7 +2,7 @@
 {% block title %}{{ dog.name }} 경과 비교 · Paw oh Paw{% endblock %}
 {% block content %}
 <main style="max-width:none;margin:0;padding:24px 80px 96px;display:flex;flex-direction:column;gap:20px">
-  <a class="lk" href="/home?dog={{ dog.id }}" style="align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>홈</a>
+  <a class="lk" href="/dogs/{{ dog.id }}" style="align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{{ dog.name }} 차트</a>
   <div style="display:flex;flex-direction:column;gap:6px"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px">{{ cp.name }} 경과 비교</h1><span style="font-size:15px;color:#5B6472">속보 · 같은 보행 유형, 같은 다리끼리만 비교해요</span></div>
   {% if not cp.has %}
   <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:40px 32px;font-size:15px;color:#5B6472">비교하려면 유효한 회차가 2개 이상 필요해요.</div>

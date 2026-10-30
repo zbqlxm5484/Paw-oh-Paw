@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 import shutil
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlencode
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 from . import config, views
 from .analysis import finish_due_jobs, start_job
 from .seed import DEMO_ID, demo_account, seed
-from .store import Account, Dog, new_id, store
+from .store import Account, Dog, History, Note, Vital, new_id, store
 
 COOKIE = "pp_acct"
 TOAST = "pp_toast"
@@ -28,7 +29,7 @@ config.UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=config.BASE_DIR / "static"), name="static")
 app.mount("/uploads", StaticFiles(directory=config.UPLOAD_DIR), name="uploads")
 templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
-templates.env.globals.update(SEX=config.SEX, SIZE=config.SIZE, LIMB=config.LIMB, STEPS=config.STEPS,
+templates.env.globals.update(SEX=config.SEX, SIZE=config.SIZE, LIMB=config.LIMB, SITE=config.SITE, STAGE_NAMES={k: v[0] for k, v in config.STAGE.items()}, STEPS=config.STEPS,
                              MAX_SHOTS=config.MAX_SHOTS)
 seed()
 
@@ -78,10 +79,10 @@ def page(request: Request, name: str, acct: Optional[Account] = None, nav: str =
     if acct:
         notices = finished_notices(acct, ctx.get("job_id", ""))
         toast = toast or (notices[0] if notices else "")
-    ctx.update(acct=acct, nav=nav, toast=toast, jumps=JUMPS,
+    ctx.update(acct=acct, nav=nav, toast=toast, jumps=JUMPS if config.SHOW_JUMPS else [],
                live_dogs=[j.dog for j in acct.active_jobs()] if acct else [],
                has_active=bool(acct and acct.active_jobs()),
-               breeds=config.BREEDS, dogs_data={d.id: vars(d) for d in acct.dogs} if acct else {})
+               breeds=config.BREEDS, dogs_data={d.id: {k: v for k, v in vars(d).items() if not isinstance(v, list)} for d in acct.dogs} if acct else {})
     resp = templates.TemplateResponse(request, name, ctx)
     if request.cookies.get(TOAST):
         resp.delete_cookie(TOAST)
@@ -91,7 +92,10 @@ def page(request: Request, name: str, acct: Optional[Account] = None, nav: str =
 # ── 로그인 전 ──
 @app.get("/")
 def landing(request: Request):
-    return page(request, "landing.html", current(request))
+    acct = current(request)
+    if acct:   # 서비스 소개는 로그인 전 화면. 로그인한 사람은 바로 홈으로
+        return redirect("/home")
+    return page(request, "landing.html")
 
 
 @app.get("/about")
@@ -164,30 +168,130 @@ def jump(idx: int):
     return resp
 
 
-# ── 홈 ──
+# ── 홈: 분석 · 반려견 · 촬영 담당자 목록 ──
+HOME_VIEWS = [("analyses", "분석"), ("dogs", "반려견"), ("staff", "촬영 담당자")]
+
+
 @app.get("/home")
-def home(request: Request, dog: str = "", q: str = "", modal: str = ""):
+def home(request: Request, view: str = "analyses", q: str = "", dog: str = "", by: str = "", changed: str = "",
+         stage: str = "", page_no: int = Query(1, alias="page"), modal: str = ""):
+    """버튼으로 목록 하나(분석·반려견·촬영 담당자)만 띄운다. 반려견을 누르면 반려견 차트로 간다."""
     acct = current(request)
     if not acct:
         return need_login()
-    cur = acct.dog(dog) or (acct.dogs[0] if acct.dogs else None)
-    strip = []
-    for d in acct.dogs:
-        all_ = [r for r in acct.results if r.dog == d.id]
-        strip.append({"id": d.id, "init": d.name[0], "name": d.name, "breed": d.breed or "견종 미입력",
-                      "meta": f"{len(all_)}회차 · {views.short(all_[0].date)}" if all_ else "측정 전",
-                      **views.avatar(cur is not None and d.id == cur.id)})
-    recent = []
-    for i, r in enumerate([r for r in acct.results if acct.dog(r.dog)][:12]):
-        d = acct.dog(r.dog)
-        recent.append({"id": r.id, "init": d.name[0], "name": d.name, "when": f"{r.date} · {views.sess_no(acct, r)}회차",
-                       **views.st_chip(r.st), "bt": "1px solid #F2EFEA" if i else "none"})
-    ctx = {"cur": cur, "strip": strip, "recent": recent, "q": q, "modal": modal}
-    if cur:
-        ctx["dd"] = views.dog_detail(acct, cur)
-        latest = next((r for r in acct.results if r.dog == cur.id), None)
-        ctx["latest"] = views.result_view(acct, latest, home=True)["rd"] if latest else None
-    return page(request, "home.html", acct, nav="home", **ctx)
+    if acct.dog(dog):   # 반려견은 차트에서 본다
+        return redirect(f"/dogs/{dog}")
+    view = "analyses" if by else (view if view in dict(HOME_VIEWS) else "analyses")
+    hv = views.home_view(acct, view, q, "", by, bool(changed), stage, page_no)
+    keep = {"view": view, "q": q, "by": by, "changed": changed, "stage": stage}
+    qs = lambda **kw: "/home?" + urlencode({k: v for k, v in {**keep, **kw}.items() if v})  # noqa: E731
+    return page(request, "home.html", acct, nav="home", hv=hv, view=view, views_=HOME_VIEWS, q=q, by=by,
+                changed=changed, stage=stage, qs=qs, modal=modal, today=views.fmt_date(date.today().isoformat()))
+
+
+CHART_TABS = [("summary", "차트 요약"), ("history", "히스토리"), ("vitals", "방문 · 바이탈"), ("notes", "동물 메모"),
+              ("gait", "보행 측정")]
+
+
+@app.get("/dogs/{dog_id}")
+def dog_chart(request: Request, dog_id: str, tab: str = "summary", edit: str = ""):
+    acct = current(request)
+    if not acct:
+        return need_login()
+    cur = acct.dog(dog_id)
+    if not cur:
+        return redirect("/home", "반려견을 찾을 수 없어요")
+    tab = tab if tab in dict(CHART_TABS) else "summary"
+    latest = next((r for r in acct.results if r.dog == cur.id), None)
+    live = {j.dog for j in acct.active_jobs()}
+    return page(request, "dog.html", acct, nav="home", cur=cur, dd=views.dog_detail(acct, cur), tab=tab, tabs=CHART_TABS,
+                row=views.patient_row(acct, cur, live), sm=views.chart_summary(acct, cur), notes=views.note_rows(cur, acct),
+                panel=views.memo_panel(acct, cur),
+                vt=views.vital_rows(cur), edit=edit, note_cats=config.NOTE_CAT, today_iso=date.today().isoformat(),
+                latest=views.result_view(acct, latest, home=True)["rd"] if latest else None)
+
+
+def _now() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+@app.post("/dogs/{dog_id}/notes")
+def note_add(request: Request, dog_id: str, author: str = Form(""), cat: str = Form("경과"), text: str = Form(""),
+             important: str = Form(""), note_id: str = Form(""), next_url: str = Form(""), rid: str = Form("")):
+    """메모 쓰기·고치기. 공용 계정이라 작성자는 사람이 적는다. 고치면 이전 내용을 revs 에 남기고 지우지 않는다."""
+    acct = current(request)
+    if not acct:
+        return need_login()
+    d = acct.dog(dog_id)
+    back = next_url if next_url.startswith(("/results/", "/dogs/")) else f"/dogs/{dog_id}?tab=notes"   # 쓴 화면으로 돌아간다
+    if not d:
+        return redirect("/home")
+    author, text = author.strip(), text.strip()   # 작성자는 브라우저가 기억한 이름이 있으면 붙고, 없어도 남긴다
+    if not text:
+        return redirect(back, "내용을 적어 주세요")
+    cat = cat if cat in config.NOTE_CAT else "경과"
+    n = next((x for x in d.notes if x.id == note_id), None)
+    if n:
+        if n.text != text:
+            n.revs.append((n.at, n.author, n.text))
+            n.at, n.author, n.text = _now(), author, text
+        return redirect(back, "메모를 고쳤어요. 이전 내용은 이력에 남아요")
+    r = acct.result(rid)
+    d.notes.insert(0, Note(new_id("note"), _now(), author, cat, text, bool(important), rid=r.id if r and r.dog == d.id else ""))
+    return redirect(back, "메모를 남겼어요")
+
+
+def _vital_from_form(day, kg, temp, hr, sbp, dbp, author) -> Optional[Vital]:
+    vals = [x.strip() for x in (kg, temp, hr, sbp, dbp)]
+    if not any(vals):
+        return None
+    return Vital(day or date.today().isoformat(), *vals, author.strip())
+
+
+@app.post("/dogs/{dog_id}/vitals")
+def vital_add(request: Request, dog_id: str, day: str = Form(""), kg: str = Form(""), temp: str = Form(""),
+              hr: str = Form(""), sbp: str = Form(""), dbp: str = Form(""), author: str = Form("")):
+    acct = current(request)
+    if not acct:
+        return need_login()
+    d = acct.dog(dog_id)
+    back = f"/dogs/{dog_id}?tab=vitals"
+    if not d:
+        return redirect("/home")
+    if not author.strip():
+        return redirect(back, "작성자를 적어 주세요")
+    v = _vital_from_form(day, kg, temp, hr, sbp, dbp, author)
+    if not v:
+        return redirect(back, "값을 하나 이상 적어 주세요")
+    d.vitals.insert(0, v)
+    d.vitals.sort(key=lambda x: x.day, reverse=True)
+    if v.kg:
+        d.kg = v.kg
+    return redirect(back, "바이탈을 기록했어요")
+
+
+@app.post("/dogs/{dog_id}/history")
+def history_add(request: Request, dog_id: str, day: str = Form(""), kind: str = Form("진단"), title: str = Form(""),
+                site: str = Form(""), by: str = Form(""), stage: str = Form(""), author: str = Form("")):
+    """진단·수술·재활 단계 기록. 단계(stage)를 고르면 반려견 단계도 바뀐다."""
+    acct = current(request)
+    if not acct:
+        return need_login()
+    d = acct.dog(dog_id)
+    back = f"/dogs/{dog_id}?tab=history"
+    if not d:
+        return redirect("/home")
+    if not (author.strip() and title.strip()):
+        return redirect(back, "작성자와 내용을 적어 주세요")
+    day = day or date.today().isoformat()
+    kind = kind if kind in ("진단", "수술", "재활") else "진단"
+    d.history.append(History(day, kind, title.strip(), site if site in config.SITE else "", by.strip(), author.strip()))
+    d.history.sort(key=lambda h: h.day)
+    if stage in config.STAGE and stage != d.stage:
+        d.stage, d.stage_day = stage, day
+    if kind == "재활" and not d.rehab:
+        d.rehab = day
+    return redirect(back, "히스토리에 남겼어요")
 
 
 def _pet_from_form(name, breed, kg, birth, sex, size, rehab, focus, memo) -> dict:
@@ -217,8 +321,9 @@ def dog_save(request: Request, dog_id: str = Form(""), name: str = Form(""), bre
     d = Dog(new_id("p"), **data)
     acct.dogs.append(d)
     sep = "&" if "?" in next_url else "?"
-    target = next_url if next_url.startswith("/upload") or next_url.startswith("/my") else "/home"
-    return redirect(f"{target}{sep}dog={d.id}", f"{d.name} 등록을 마쳤어요")
+    if next_url.startswith("/upload") or next_url.startswith("/my"):
+        return redirect(f"{next_url}{sep}dog={d.id}", f"{d.name} 등록을 마쳤어요")
+    return redirect(f"/dogs/{d.id}", f"{d.name} 등록을 마쳤어요")
 
 
 @app.post("/dogs/{dog_id}/delete")
@@ -243,8 +348,8 @@ def set_base(request: Request, dog_id: str, rid: str = Form(...)):
     d, r = acct.dog(dog_id), acct.result(rid)
     if d and r and r.st != "fail":
         d.base = r.id
-        return redirect(f"/home?dog={dog_id}", f"{r.date} 회차를 기준으로 정했어요")
-    return redirect(f"/home?dog={dog_id}")
+        return redirect(f"/dogs/{dog_id}", f"{r.date} 회차를 기준으로 정했어요")
+    return redirect(f"/dogs/{dog_id}")
 
 
 # ── 영상 업로드 · 분석 ──
@@ -256,13 +361,15 @@ def upload(request: Request, dog: str = "", demo: int = 0):
     if not acct.dogs:
         return redirect("/home?modal=pet", "먼저 반려견을 등록해 주세요")
     sel = acct.dog(dog) or acct.dogs[0]
-    dogs = [{"id": d.id, "init": d.name[0], "name": d.name, "breed": d.breed or "견종 미입력", "kg": d.kg,
-             **views.avatar(d.id == sel.id)} for d in acct.dogs]
+    order = [sel] + [d for d in acct.dogs if d.id != sel.id]   # 고른 반려견을 맨 위에
+    dogs = [{"id": d.id, "init": d.name[0], "name": d.name, "no": d.no, "breed": d.breed or "견종 미입력", "kg": d.kg,
+             **views.avatar(d.id == sel.id)} for d in order]
     return page(request, "upload.html", acct, nav="upload", dogs=dogs, sel=sel, demo=max(0, min(demo, 16)))
 
 
 @app.post("/analyze")
 def analyze(request: Request, dog: str = Form(...), weight: str = Form(""), demo_count: int = Form(0),
+            author: str = Form(""), temp: str = Form(""), hr: str = Form(""), sbp: str = Form(""), dbp: str = Form(""),
             files: list[UploadFile] = File(default=[])):
     acct = current(request)
     if not acct:
@@ -284,6 +391,12 @@ def analyze(request: Request, dog: str = Form(...), weight: str = Form(""), demo
     if not n:
         return redirect(f"/upload?dog={dog}", "보행 영상을 1개 이상 올려 주세요")
     job = start_job(acct, dog, n, weight.strip(), saved)
+    job.by = author.strip()
+    v = _vital_from_form("", weight, temp, hr, sbp, dbp, author)   # 측정하면서 잰 바이탈은 차트에 바로 남긴다
+    if v:
+        d = acct.dog(dog)
+        d.vitals.insert(0, v)
+        d.kg = v.kg or d.kg
     return redirect(f"/analyzing/{job.id}")
 
 
@@ -346,32 +459,49 @@ def results(request: Request, dog: str = "all"):
 
 
 @app.get("/results/{rid}")
-def result_detail(request: Request, rid: str, gait: str = "trot"):
+def result_detail(request: Request, rid: str, type: str = "g"):
+    """회차 결과 = 보고서. 결과를 본 화면 그대로 PDF 로 내려받는다(실패한 회차는 다시 찍기 안내)."""
     acct = current(request)
     if not acct:
         return need_login()
     r = acct.result(rid)
     if not r:
-        return redirect("/results", "회차를 찾을 수 없어요")
-    gait = gait if gait in ("walk", "trot") else "trot"
-    v = views.result_view(acct, r, gait)
-    return page(request, "detail.html", acct, nav="results", rd=v["rd"], gait=gait,
-                gait_segs=views.seg([("walk", "평보"), ("trot", "속보")], gait), video=(r.videos or [None])[0])
+        return redirect("/home", "회차를 찾을 수 없어요")
+    v = views.result_view(acct, r)
+    d = acct.dog(r.dog)
+    side = {"panel": views.memo_panel(acct, d, r.id) if d else None, "note_cats": config.NOTE_CAT}
+    if r.st == "fail":
+        return page(request, "report.html", acct, rd=v["rd"], rp={}, kind="v", bm=None, segs=[], status="", **side)
+    kind = type if type in ("g", "v") else "g"
+    return page(request, "report.html", acct, rd=v["rd"], rp=v["rp"], kind=kind, bm=views.body_map(acct, r), **side,
+                segs=views.seg([("g", "보호자용"), ("v", "수의사용")], kind),
+                status=f"분석 모델 {r.model} · 템플릿 1.0")
 
 
 @app.get("/results/{rid}/report")
-def report(request: Request, rid: str, type: str = "g"):
+def report(rid: str, type: str = "g"):
+    """예전 보고서 주소는 회차 결과(= 보고서)로 보낸다."""
+    return redirect(f"/results/{rid}?type={type}")
+
+
+@app.get("/results/{rid}/3d")
+def gait_3d(request: Request, rid: str):
+    """보호자 설명용 3D 보기: 돌려 보고, 걷는 모습을 재생하고, 덜 쓰는 다리를 색으로 표시한다(동작은 일반 예시)."""
     acct = current(request)
     if not acct:
         return need_login()
     r = acct.result(rid)
     if not r or r.st == "fail":
-        return redirect(f"/results/{rid}" if r else "/results", "보고서를 만들 수 없는 회차예요")
-    kind = type if type in ("g", "v") else "g"
-    v = views.result_view(acct, r)
-    return page(request, "report.html", acct, nav="results", rd=v["rd"], rp=v["rp"], kind=kind,
-                segs=views.seg([("g", "보호자용"), ("v", "수의사용")], kind),
-                status=f"생성 완료 · {'9.1' if kind == 'v' else '8.4'}초 · 분석 모델 {r.model} · 템플릿 1.0")
+        return redirect(f"/results/{rid}" if r else "/results", "3D 로 볼 수 없는 회차예요")
+    d = acct.dog(r.dog)
+    bm = views.body_map(acct, r)
+    legs = {k: v for k, v in bm["legs"].items() if len(k) == 2}   # LF·RF·LH·RH (front·hind 는 한 쌍 요약)
+    overall = {"sym": bm["sym"], "front": bm["legs"]["front"]["say"], "hind": bm["legs"]["hind"]["say"]}
+    model = "assets/dog3d/" + ("husky.glb" if d and d.size == "L" else "shiba.glb")
+    return page(request, "gait3d.html", acct, nav="results", rd=views.result_view(acct, r)["rd"], bm=bm, legs=legs,
+                overall=overall, model_url=str(request.url_for("static", path=model)),
+                # 측정 걸음: 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성). 회사 데이터는 쓰지 않는다
+                gait_url=str(request.url_for("static", path="assets/dog3d/gait_demo.json")))
 
 
 # ── 경과 비교 ──
@@ -384,7 +514,7 @@ def compare(request: Request, dog_id: str, cmp: str = "base", tk: str = "rom"):
     if not d:
         return redirect("/home")
     if len(views.valid(acct, d.id)) < 2:
-        return redirect(f"/home?dog={dog_id}", "유효한 회차가 2개 이상 있어야 비교할 수 있어요")
+        return redirect(f"/dogs/{dog_id}", "유효한 회차가 2개 이상 있어야 비교할 수 있어요")
     cmp = cmp if cmp in ("base", "prev") else "base"
     tk = tk if tk in dict(views.TREND_KEYS) else "rom"
     trend = [{"key": k, "label": label, "on": k == tk} for k, label in views.TREND_KEYS]

@@ -22,6 +22,12 @@
     render();
   }
   dogs.forEach(function (d) { d.addEventListener('click', function () { pickDog(d); }); });
+  // 환자가 많아서 이름·동물번호로 걸러 본다
+  var filt = $('dogFilter');
+  if (filt) filt.addEventListener('input', function () {
+    var q = filt.value.trim();
+    dogs.forEach(function (d) { d.style.display = !q || d.dataset.key.indexOf(q) >= 0 ? 'flex' : 'none'; });
+  });
 
   // 3. 영상 첨부
   function add(list) {
