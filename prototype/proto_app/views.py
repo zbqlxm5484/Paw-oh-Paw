@@ -8,8 +8,8 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from .config import CHANGE_DAYS, LIMB, PAGE_SIZE, SEX, SITE, SIZE, ST, STAGE, SYM_CHANGE, auto_size
 from . import real
+from .config import CHANGE_DAYS, LIMB, PAGE_SIZE, SEX, SITE, SIZE, ST, STAGE, SYM_CHANGE, auto_size
 from .store import Account, Dog, Result, Vital
 
 

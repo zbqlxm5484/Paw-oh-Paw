@@ -33,13 +33,13 @@ try:
 except ImportError:
     import gait_events as ge  # 161 브랜치 초안(GAIT_EVENTS_DIR)
 PAWS, body_length, detect_pass, trunk_speed = ge.PAWS, ge.body_length, ge.detect_pass, ge.trunk_speed
-from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle
+from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle  # noqa: E402
 
 # 10-29 팀 합의(조유진·박규원, PLOS 정답 대조): STANCE_RATIO 0.40, 흔들림 창 0.15초. 엔진(v0)에 반영되기 전이라 여기서만 덮어쓴다.
 # 엔진이 바뀌면 이 두 줄과 one_pass 의 SMOOTH_FRAMES 줄을 지운다.
 STANCE_RATIO, SMOOTH_SEC = 0.40, 0.15
 
-from engine.camera_side import heading, pass_side
+from engine.camera_side import heading, pass_side  # noqa: E402
 
 CONF, T13, ILIAC, N_PHASE = 0.3, 2, 13, 50
 SIDE = {"right": "R", "left": "L"}

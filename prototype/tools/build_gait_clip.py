@@ -28,8 +28,8 @@ try:
     from engine.gait_events import detect_pass
 except ImportError:
     from gait_events import detect_pass  # 161 브랜치 초안
-from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle
-from engine.camera_side import heading, pass_side
+from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle  # noqa: E402
+from engine.camera_side import heading, pass_side  # noqa: E402
 
 N_PHASE = 50
 CONF = 0.3

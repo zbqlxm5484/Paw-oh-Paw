@@ -16,7 +16,6 @@
 
 import argparse
 import json
-import math
 import random
 import sys
 from collections import defaultdict
