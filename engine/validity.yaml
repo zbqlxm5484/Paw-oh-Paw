@@ -1,7 +1,8 @@
 # 유효 판별 기준값 (F-03, PR-F03-07: 개발 없이 설정으로 조정)
-# 규칙 설명: docs/engine/validityRules.md
-# 상태: company = 기업 평가 도구 값, team = 팀 코드 값, temp = 임시(데이터로 맞출 값), hold = 방법 미정
-version: "v0"
+# 규칙 설명: docs/engine/validityRules.md · 코드: engine/validity.py
+# 상태: company = 기업 평가 도구·판별 기준 문서 값, team = 팀 코드 값, temp = 임시(데이터로 맞출 값), hold = 방법 미정
+# 원칙(기업 판별 기준 문서 10-22): 무효를 잘 잡는 것(KPI-11)을 먼저, 그다음 유효를 잘못 버리지 않기(KPI-12)
+version: "v1"
 
 common:
   conf_min: 0.3            # company. 관절점 확신도 바닥 (paw_eval video_kpi CONF)
@@ -17,24 +18,27 @@ pass_rules:
   occluded_point_ratio: 0.30         # temp. 카메라 쪽 다리 점 중 확신도 미달 비율
   occluded_frame_ratio: 0.30         # temp. 위 조건 프레임이 통과에서 차지하는 비율
   side_view_min_ratio: 0.80          # temp. 옆모습 프레임 비율이 이보다 작으면 NOT_SIDE_VIEW
-  edge_px: 2                         # company. 상자가 화면 끝에서 이 안이면 몸 잘림 (EDGE_PX)
-  edge_frame_ratio: 0.30             # temp. 몸 잘림 프레임 비율이 넘으면 PARTIAL_PASS
-  toward_camera_scale: 1.2           # temp. 통과 처음과 끝 상자 높이 비율 (카메라 오차 범위 ±20%)
-  max_stretch: 1.6                   # team. 정규화 v0 가로 보정 한계 (MAX_STRETCH)
+  edge_px: 2                         # company. 상자가 화면 끝에서 이 안이면 몸 잘림 (EDGE_PX). 잘린 프레임은 검사에서 뺀다
+  min_inside_s: 0.3                  # temp. 몸 전체가 화면 안에 보인 시간이 이보다 짧으면 PARTIAL_PASS (제니 유효 72건 최소 0.33초)
+  exit_margin: 0.05                  # temp. 영상이 끝날 때 상자가 나가는 쪽 화면 끝에서 화면 폭의 이 비율보다 멀면 "다 지나가지 않음"
+  toward_camera_scale: 1.35          # temp. 통과 처음과 끝 상자 높이 비율 (제니 유효 72건 최대 1.28)
+  max_stretch: 1.6                   # team · hold. 정규화 v0 가로 보정 한계 (MAX_STRETCH). 정규화 연결 뒤 사용
   turned_frame_ratio: 0.20           # temp. 반대 방향 프레임 비율
   turned_reverse_s: 0.3              # temp. 몸통 중심이 거꾸로 움직인 시간
   sitting_height_ratio: 0.60         # temp. 골반 높이가 통과 중앙값의 이 비율 아래로
   sitting_min_s: 0.5                 # temp
   stopped_speed: 0.3                 # temp. 몸통 길이/초
   stopped_min_s: 0.5                 # temp
-  running_speed: 4.0                 # temp. 몸통 길이/초. 착지 검출 뒤 공중 구간 방식으로 교체
+  running_speed: 11.0                # temp. 몸통 길이/초 (제니 유효 72건 최대 8.7). 네 발이 모두 뜨는 구간 검출로 바꿀 예정
+  pace_phase_max: null               # hold. 같은 쪽 앞·뒷발 착지 위상 차이(주기 대비)가 이보다 작으면 측대보.
+                                     # 제니 유효 영상도 0.1에서 0.47로 퍼져 아직 끔. 측대보 영상 관절점이나 보행 유형 판별(박규원) 뒤 켬
 
 shot_rules:
   mat_detection: false               # hold. 매트 검출 방법이 정해지면 true
   no_dog_frame_ratio: 0.05           # temp. 영상 전체에서 개를 찾은 프레임 비율이 이보다 작으면 NO_DOG
-  min_valid_passes: 2                # temp. 미만이면 FEW_VALID_PASSES. 수렴 통과 수 분석(D-14) 뒤 교체
+  min_valid_passes: 2                # temp. 일부 유효일 때 유효 통과가 이보다 적으면 FEW_VALID_PASSES. 수렴 통과 수 분석(D-14) 뒤 교체
 
-# 통과 하나에 사유 하나. 앞에 있을수록 먼저
+# 통과 하나에 사유 하나. 앞에 있을수록 먼저 (다시 찍을 때 고칠 촬영 조건 → 개의 행동)
 reason_priority:
   - NO_DOG
   - OCCLUDED
