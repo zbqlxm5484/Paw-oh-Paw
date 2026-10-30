@@ -93,3 +93,86 @@ def test_set_base_and_delete(client):
     assert store.get("demo").dog("d1").base == "r4"
     client.post("/dogs/d4/delete")
     assert store.get("demo").dog("d4") is None
+
+
+# ── 환자 관리 (10-28) ──
+@pytest.mark.parametrize("url", [
+    "/home?view=dogs&changed=1", "/home?q=보리", "/home?view=dogs&stage=pre", "/home?view=staff", "/home?page=99",
+    "/home?dog=d1", "/home?by=박민준 테크니션", "/home?view=dogs&q=입질",
+    "/dogs/d1", "/dogs/d1?tab=history", "/dogs/d1?tab=vitals", "/dogs/d1?tab=notes", "/dogs/d1?tab=gait",
+    "/dogs/d2?tab=summary", "/dogs/d1?tab=notes&edit=n1", "/results/r1/3d", "/results/r5/3d",
+])
+def test_patient_pages(client, url):
+    login(client)
+    assert client.get(url).status_code == 200, url
+
+
+def test_home_views_search_and_memo_panel(client):
+    login(client)
+    acct = store.get("demo")
+    assert len(acct.dogs) == 120
+    html = client.get("/home?view=dogs&changed=1").text
+    assert "탄이" in html and "재촬영 필요" in html    # 이틀 전 분석 실패
+    assert "분석 중" not in client.get("/home").text
+    assert "보리" in client.get("/home?q=20190412").text   # 동물번호로 찾기
+    assert "탄이" in client.get("/home?view=dogs&q=입질").text   # 메모 내용으로 찾기
+    assert "박민준 테크니션" in client.get("/home?view=staff").text
+    assert client.get("/home?dog=d1", follow_redirects=False).headers["location"] == "/dogs/d1"   # 반려견은 차트로
+    panel = client.get("/results/r1").text   # 분석 결과 오른쪽에 반려견 칸
+    assert "넥카라" in panel and "이번 회차 메모" in panel
+    r = client.post("/dogs/d1/notes", data={"author": "최지우 수의사", "text": "홈에서 쓴 메모", "next_url": "/results/r1", "rid": "r1"},
+                    follow_redirects=False)
+    n = acct.dog("d1").notes[0]
+    assert r.headers["location"] == "/results/r1" and n.text == "홈에서 쓴 메모" and n.rid == "r1"
+    assert "홈에서 쓴 메모" in client.get("/dogs/d1?tab=notes").text   # 차트 메모 탭에도 회차 메모로 보인다
+
+
+def test_landing_redirects_when_logged_in(client):
+    login(client)
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/home"
+
+
+def test_note_add_edit_keeps_history(client):
+    login(client)
+    d = store.get("demo").dog("d1")
+    n0 = len(d.notes)
+    client.post("/dogs/d1/notes", data={"text": "입질 있음"})   # 작성자 없이도 바로 남긴다
+    assert len(d.notes) == n0 + 1 and d.notes[0].text == "입질 있음" and d.notes[0].author == ""
+    nid = d.notes[0].id
+    client.post("/dogs/d1/notes", data={"note_id": nid, "author": "박민준 테크니션", "text": "입질 심함"})
+    n = next(x for x in d.notes if x.id == nid)
+    assert n.text == "입질 심함" and n.author == "박민준 테크니션" and n.revs[-1][2] == "입질 있음"
+    client.post("/dogs/d1/notes", data={"text": "  "})   # 빈 내용은 안 남긴다
+    assert len(d.notes) == n0 + 1
+
+
+def test_vital_and_history_add(client):
+    login(client)
+    d = store.get("demo").dog("d2")
+    client.post("/dogs/d2/vitals", data={"author": "정하늘 테크니션", "kg": "3.4", "temp": "38.7"})
+    assert d.vitals[0].kg == "3.4" and d.kg == "3.4"
+    client.post("/dogs/d2/history", data={"author": "한도윤 수의사", "kind": "수술", "title": "슬개골 탈구 교정술",
+                                          "site": "LH", "stage": "rehab"})
+    assert d.history[-1].kind == "수술" and d.stage == "rehab"
+
+
+def test_analyze_records_author_and_vitals(client):
+    login(client)
+    d = store.get("demo").dog("d3")
+    n0 = len(d.vitals)
+    r = client.post("/analyze", data={"dog": "d3", "weight": "11.1", "author": "박민준 테크니션", "hr": "100"},
+                    files=[("files", ("a.mp4", b"x", "video/mp4"))], follow_redirects=False)
+    job = store.get("demo").job(r.headers["location"].rsplit("/", 1)[1])
+    assert job.by == "박민준 테크니션" and len(d.vitals) == n0 + 1 and d.vitals[0].hr == "100"
+
+
+def test_gait3d_measured_curve(client):
+    login(client)
+    r = client.get("/results/r1/3d")
+    assert r.status_code == 200 and "gait_demo.json" in r.text and 'id="mode-real"' in r.text
+    g = client.get("/static/assets/dog3d/gait_demo.json").json()   # 공개 논문 + 합성(tools/build_demo_clip.py)
+    assert set(g["legs"]) == {"LF", "RF", "LH", "RH"} and "회사" not in g["source"]
+    for code, leg in g["legs"].items():
+        joints = ("어깨", "팔꿈치", "앞발목") if code[1] == "F" else ("고관절", "무릎", "뒷발목")
+        assert all(len(leg["joint"][j]) == g["n_phase"] for j in joints) and leg["strides"] > 0

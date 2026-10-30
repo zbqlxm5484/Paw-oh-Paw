@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% import "_modals.html" as m %}
+{% import "_dogpanel.html" as dp %}
+{% block title %}{{ cur.name }} · Paw oh Paw{% endblock %}
+{% block content %}
+{% set tone = {'surg': ('#FCEEE3', '#A8481A'), 'diag': ('#EEF1F6', '#4A5A78'), 'warn': ('#FAF1DF', '#9A6A12')} %}
+<main style="padding:20px 32px 64px;max-width:1520px;margin:0 auto;display:flex;gap:24px;align-items:flex-start">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <a class="lk" href="/home" style="display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>목록</a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><span data-pet="{{ cur.id }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600;cursor:pointer">정보 수정</span><a class="lk" href="/compare/{{ cur.id }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600">경과 비교</a><a class="lk" href="/upload?dog={{ cur.id }}" style="height:40px;padding:0 16px;border-radius:10px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a></div>
+  </div>
+
+  {# 항상 보이는 정보: 누가 와서 열어도 이 줄부터 본다 #}
+  <div style="position:sticky;top:86px;z-index:10;padding:16px 20px;border-radius:18px;background:#fff;border:1px solid #ECE8E2;box-shadow:0 6px 18px rgba(27,36,51,.06);display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px">
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <span style="font-size:12.5px;color:#8E949C;font-variant-numeric:tabular-nums">{{ row.no }}</span>
+      <b style="font-size:24px;letter-spacing:-0.5px">{{ row.name }} <span style="padding:3px 9px;border-radius:8px;background:{{ row.st_bg }};color:{{ row.st_c }};font-size:13px;vertical-align:4px">{{ row.stage }}</span></b>
+      <span style="font-size:14px;color:#3A4250">{{ row.breed }} · {{ row.size }} · {{ row.age }} · {{ row.sex }}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,auto);column-gap:20px;row-gap:2px;font-variant-numeric:tabular-nums">
+      {% for k in ['체중', '체온', '심박', '혈압'] %}<span style="font-size:12px;color:#8E949C">{{ k }}</span>{% endfor %}
+      {% for v in [row.v.kg, row.v.temp, row.v.hr, row.v.bp] %}<b style="font-size:18px">{{ v }}</b>{% endfor %}
+      <span style="grid-column:1/-1;font-size:12px;color:#A0A7B2">{{ row.v.when }} 측정</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <span style="font-size:12px;color:#8E949C">보호자</span>
+      <span style="font-size:15px;font-weight:600">{{ row.owner }}{% if cur.phone %} <span style="font-weight:500;color:#5B6472;font-variant-numeric:tabular-nums">{{ cur.phone }}</span>{% endif %}</span>
+    </div>
+    <div style="flex:1 1 260px;display:flex;flex-wrap:wrap;gap:6px">
+      {% for b in row.badges %}<span style="padding:5px 10px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:13px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}
+    </div>
+  </div>
+
+  {# 탭 #}
+  <div style="display:flex;gap:4px;border-bottom:1px solid #E2DCD3;overflow-x:auto">
+    {% for key, label in tabs %}
+    <a class="lk" href="/dogs/{{ cur.id }}?tab={{ key }}" style="padding:12px 16px;font-size:15px;white-space:nowrap;font-weight:{{ 700 if tab == key else 500 }};color:{{ '#B4501A' if tab == key else '#5B6472' }};border-bottom:2.5px solid {{ '#D2601A' if tab == key else 'transparent' }};margin-bottom:-1px">{{ label }}{% if key == 'notes' and notes %} <span style="font-size:12.5px;color:#8E949C">{{ notes|length }}</span>{% endif %}</a>
+    {% endfor %}
+  </div>
+
+  {% if tab == 'summary' %}
+  {% if sm.has %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+    {% for f in sm.facts %}
+    <div style="padding:16px 18px;border-radius:16px;background:#fff;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:13px;font-weight:600;color:#5B6472">{{ f.k }}</span><b style="font-size:22px;letter-spacing:-0.4px">{{ f.v }}</b><span style="font-size:12.5px;color:#8E949C">{{ f.sub }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap"><b style="font-size:16px">경과 한눈에 보기</b>
+      <span style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#5B6472"><span><span style="display:inline-block;width:14px;height:3px;background:#D2601A;vertical-align:middle"></span> 대칭 지수</span><span><span style="display:inline-block;width:2px;height:12px;background:#A8481A;vertical-align:middle"></span> 수술</span><span><span style="display:inline-block;width:2px;height:12px;background:#7A8FB5;vertical-align:middle"></span> 재활 단계</span><span><span style="color:#B9BEC6">●</span> 메모</span><span style="color:#9AA3AF">▲ <span style="color:#5B6472">바이탈</span></span></span></div>
+    {% if sm.has %}
+    <svg viewBox="0 0 {{ sm.W }} {{ sm.H }}" style="width:100%;height:auto;max-height:300px">
+      {% for t in sm.yt %}<line x1="{{ sm.L }}" x2="{{ sm.W - sm.R }}" y1="{{ t.y }}" y2="{{ t.y }}" stroke="#F0ECE6"></line><text x="{{ sm.L - 8 }}" y="{{ t.y + 4 }}" text-anchor="end" font-size="11" fill="#8E949C">{{ t.v }}%</text>{% endfor %}
+      {% for mk in sm.marks %}<line x1="{{ mk.x }}" x2="{{ mk.x }}" y1="{{ sm.T - 6 }}" y2="{{ sm.H - sm.B }}" stroke="{{ '#A8481A' if mk.kind == '수술' else '#7A8FB5' }}" stroke-width="1.5" stroke-dasharray="{{ '' if mk.kind == '수술' else '4 3' }}"><title>{{ mk.day }} {{ mk.kind }} · {{ mk.label }}</title></line><text x="{{ mk.x + 4 }}" y="{{ sm.T + 2 }}" font-size="11" font-weight="700" fill="{{ '#A8481A' if mk.kind == '수술' else '#5A6F95' }}">{{ mk.label[:12] }}</text>{% endfor %}
+      {% if sm.pts|length > 1 %}<polyline points="{{ sm.line }}" fill="none" stroke="#D2601A" stroke-width="2.5" stroke-linejoin="round"></polyline>{% endif %}
+      {% for p in sm.pts %}<a href="/results/{{ p.id }}"><circle cx="{{ p.x }}" cy="{{ p.y }}" r="5" fill="#fff" stroke="#D2601A" stroke-width="2.5"><title>{{ p.day }} 대칭 지수 {{ p.sym }}% · {{ p.by }}</title></circle></a>{% endfor %}
+      {% for n in sm.notes %}<circle cx="{{ n.x }}" cy="{{ sm.H - sm.B + 16 }}" r="4.5" fill="#B9BEC6"><title>{{ n.day }} {{ n.t }}</title></circle>{% endfor %}
+      {% for v in sm.vit %}<path d="M{{ v.x - 4 }},{{ sm.H - sm.B + 34 }} L{{ v.x + 4 }},{{ sm.H - sm.B + 34 }} L{{ v.x }},{{ sm.H - sm.B + 27 }} Z" fill="#9AA3AF"></path>{% endfor %}
+      {% for t in sm.ticks %}<text x="{{ t.x }}" y="{{ sm.H - 4 }}" text-anchor="middle" font-size="11" fill="#8E949C">{{ t.t }}</text>{% endfor %}
+    </svg>
+    {% else %}<span style="font-size:14px;color:#A0A7B2">아직 기록이 없어요.</span>{% endif %}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">히스토리</b><a class="lk" href="/dogs/{{ cur.id }}?tab=history" style="font-size:13.5px;font-weight:600;color:#B4501A">전체 · 기록 추가 ›</a></div>
+      {% for h in (cur.history|reverse|list)[:5] %}
+      <div style="display:grid;grid-template-columns:88px 40px 1fr;gap:10px;font-size:14px"><span style="color:#7A808A;font-variant-numeric:tabular-nums">{{ h.day }}</span><b style="color:{{ '#A8481A' if h.kind == '수술' else '#3A4250' }}">{{ h.kind }}</b><span>{{ h.title }}{% if h.site %} · {{ SITE[h.site] }}{% endif %}</span></div>
+      {% endfor %}
+      {% if not cur.history %}<span style="font-size:14px;color:#A0A7B2">기록이 없어요.</span>{% endif %}
+    </div>
+  </div>
+
+  {% elif tab == 'history' %}
+  <form method="post" action="/dogs/{{ cur.id }}/history" style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px;margin:0">
+    <b style="font-size:16px">기록 추가</b>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-items:end">
+      <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12.5px;color:#5B6472">날짜</span><input class="inp" type="date" name="day" value="{{ today_iso }}" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+      <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12.5px;color:#5B6472">종류</span><select name="kind" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0">{% for k in ['진단', '수술', '재활'] %}<option>{{ k }}</option>{% endfor %}</select></label>
+      <label style="display:flex;flex-direction:column;gap:4px;min-width:0;grid-column:span 2"><span style="font-size:12.5px;color:#5B6472">내용</span><input class="inp" name="title" placeholder="예) TPLO (경골 고원 수평화 절골술)" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+      <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12.5px;color:#5B6472">부위</span><select name="site" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"><option value="">없음</option>{% for k, v in SITE.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      <label style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:12.5px;color:#5B6472">담당 수의사 <span style="color:#A0A7B2">선택</span></span><input class="inp" name="by" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+      <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12.5px;color:#5B6472">단계 바꾸기</span><select name="stage" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"><option value="">그대로 ({{ row.stage }})</option>{% for k, v in STAGE_NAMES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      <label style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:12.5px;color:#5B6472">작성자</span><input class="inp author-inp" name="author" placeholder="예) 최지우 수의사" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+    </div>
+    <button class="bt" type="submit" style="align-self:flex-start;height:44px;padding:0 18px;border-radius:10px;background:#1B2433;color:#fff;font-size:14.5px;font-weight:700">기록하기</button>
+  </form>
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    {% for h in cur.history|reverse %}
+    <div style="display:grid;grid-template-columns:96px 48px 1fr auto;gap:12px;align-items:baseline;font-size:14.5px;padding-top:{{ '10px' if not loop.first else '0' }};border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }}">
+      <span style="color:#7A808A;font-variant-numeric:tabular-nums">{{ h.day }}</span><b style="color:{{ '#A8481A' if h.kind == '수술' else '#3A4250' }}">{{ h.kind }}</b>
+      <span>{{ h.title }}{% if h.site %} · {{ SITE[h.site] }}{% endif %}{% if h.by %} <span style="color:#8E949C">· {{ h.by }}</span>{% endif %}</span><span style="font-size:12.5px;color:#A0A7B2">기록 {{ h.author }}</span>
+    </div>
+    {% endfor %}
+    {% if not cur.history %}<span style="font-size:14px;color:#A0A7B2">기록이 없어요.</span>{% endif %}
+  </div>
+
+  {% elif tab == 'vitals' %}
+  <form method="post" action="/dogs/{{ cur.id }}/vitals" style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px;margin:0">
+    <b style="font-size:16px">바이탈 기록</b>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;align-items:end">
+      <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12.5px;color:#5B6472">날짜</span><input class="inp" type="date" name="day" value="{{ today_iso }}" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+      {% for nm, label, ph in [('kg', '체중 kg', cur.kg), ('temp', '체온 ℃', '38.6'), ('hr', '심박 bpm', '92'), ('sbp', '수축기 mmHg', '140'), ('dbp', '이완기 mmHg', '85')] %}
+      <label style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:12.5px;color:#5B6472">{{ label }}</span><input class="inp" name="{{ nm }}" inputmode="decimal" placeholder="{{ ph }}" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+      {% endfor %}
+      <label style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:12.5px;color:#5B6472">작성자</span><input class="inp author-inp" name="author" placeholder="예) 최지우 수의사" style="height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0"></label>
+    </div>
+    <button class="bt" type="submit" style="align-self:flex-start;height:44px;padding:0 18px;border-radius:10px;background:#1B2433;color:#fff;font-size:14.5px;font-weight:700">기록하기</button>
+  </form>
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    {% if vt.kg_spark %}<div style="display:flex;align-items:center;gap:12px"><span style="font-size:13px;color:#5B6472">체중 추이</span><svg width="200" height="40" viewBox="0 0 200 40"><polyline points="{{ vt.kg_spark }}" fill="none" stroke="#D2601A" stroke-width="2"></polyline></svg><b style="font-size:14px">{{ vt.kg_range }}</b></div>{% endif %}
+    <div style="display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:13px;font-weight:700;color:#7A808A;padding-bottom:8px;border-bottom:1px solid #ECE8E2"><span>날짜</span><span>체중</span><span>체온</span><span>심박</span><span>혈압</span><span>기록</span></div>
+    {% for v in vt.rows %}
+    <div style="display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums"><span style="color:#7A808A">{{ v.day }}</span><b>{{ v.kg }}</b><span>{{ v.temp }}</span><span>{{ v.hr }}</span><span>{{ v.bp }}</span><span style="font-size:13px;color:#8E949C">{{ v.author }}</span></div>
+    {% endfor %}
+    {% if not vt.rows %}<span style="font-size:14px;color:#A0A7B2">기록이 없어요.</span>{% endif %}
+  </div>
+
+  {% elif tab == 'notes' %}
+  <form method="post" action="/dogs/{{ cur.id }}/notes" style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px;margin:0">
+    <b style="font-size:16px">새 메모</b>
+    <textarea class="inp" name="text" placeholder="메모 남기기" style="min-height:90px;border-radius:12px;border:1px solid #E2DCD3;padding:12px 14px;font-size:15px;line-height:1.55;font-family:inherit;outline:none;resize:vertical"></textarea>
+    <input type="hidden" class="author-inp" name="author" value="">
+    <button class="bt" type="submit" style="align-self:flex-end;height:42px;padding:0 18px;border-radius:10px;background:#1B2433;color:#fff;font-size:14.5px;font-weight:700">남기기</button>
+  </form>
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    {% for n in notes %}
+    <div style="display:flex;flex-direction:column;gap:6px;padding-top:{{ '14px' if not loop.first else '0' }};border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:#7A808A">
+        <b style="color:#3A4250">{{ n.at }}</b>{% if n.author %}<span>{{ n.author }}</span>{% endif %}{% if n.rid %}<a class="lk" href="/results/{{ n.rid }}" style="padding:2px 8px;border-radius:6px;background:#EEF1F6;color:#4A5A78;font-weight:700">{{ n.run }} 메모</a>{% endif %}
+        {% if n.revs %}<span>· 고친 이력 {{ n.revs|length }}</span>{% endif %}
+        <a class="lk" href="/dogs/{{ cur.id }}?tab=notes&edit={{ n.id }}#{{ n.id }}" style="margin-left:auto;font-weight:600;color:#B4501A">고치기</a>
+      </div>
+      {% if edit == n.id %}
+      <form id="{{ n.id }}" method="post" action="/dogs/{{ cur.id }}/notes" style="display:flex;flex-direction:column;gap:8px;margin:0">
+        <input type="hidden" name="note_id" value="{{ n.id }}">
+        <textarea class="inp" name="text" style="min-height:80px;border-radius:12px;border:1px solid #D2601A;padding:10px 12px;font-size:15px;line-height:1.55;font-family:inherit;outline:none">{{ n.text }}</textarea>
+        <input type="hidden" class="author-inp" name="author" value="">
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="bt" type="submit" style="height:40px;padding:0 16px;border-radius:10px;background:#1B2433;color:#fff;font-size:14px;font-weight:700">고친 내용 저장</button>
+          <a class="lk" href="/dogs/{{ cur.id }}?tab=notes" style="font-size:14px;color:#7A808A">취소</a>
+        </div>
+      </form>
+      {% else %}
+      <span style="font-size:15px;line-height:1.6;white-space:pre-line">{{ n.text }}</span>
+      {% endif %}
+      {% if n.revs %}
+      <details style="font-size:13px;color:#7A808A"><summary style="cursor:pointer">이전 내용 보기</summary>
+        {% for r in n.revs|reverse %}<div style="padding:6px 0 0 12px;border-left:2px solid #ECE8E2;margin-top:6px"><span>{{ r.at }} · {{ r.author }}</span><div style="text-decoration:line-through;white-space:pre-line">{{ r.text }}</div></div>{% endfor %}
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if not notes %}<span style="font-size:14px;color:#A0A7B2">메모가 없어요.</span>{% endif %}
+  </div>
+
+  {% else %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px 20px">
+            {% for a in dd.cells %}<div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:13px;color:#5B6472;font-weight:600">{{ a.k }}</span><b style="font-size:16px;font-variant-numeric:tabular-nums">{{ a.v }}</b>{% if a.sub %}<span style="font-size:12px;color:#A0A7B2">{{ a.sub }}</span>{% endif %}</div>{% endfor %}
+          </div>
+          <div style="border-top:1px solid #F2EFEA;padding-top:14px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><span style="font-size:13px;color:#5B6472;font-weight:600;flex:none">내부 메모</span><span style="flex:1 1 240px;font-size:14.5px;line-height:1.55">{{ dd.memo }}</span><span style="font-size:12px;color:#A0A7B2">보고서에는 넣지 않아요</span></div>
+        </div>
+        {% if latest and latest.fail %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px"><b style="font-size:18px">최근 회차를 분석하지 못했어요</b><span style="height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:{{ latest.bg }};color:{{ latest.c }};display:flex;align-items:center">{{ latest.st }}</span></div>
+          <span style="font-size:15px;line-height:1.6;color:#5B6472">쓸 수 있는 통과가 없었어요. 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 올려 주세요.</span>
+          <a class="lk" href="/upload?dog={{ cur.id }}" style="align-self:flex-start;margin-top:4px;height:46px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700">다시 올리기</a>
+        </div>
+        {% elif latest %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b style="font-size:16px">최근 회차</b><span style="font-size:14px;color:#5B6472;margin-left:8px;font-variant-numeric:tabular-nums">{{ latest.when }}</span></div><span style="height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:{{ latest.bg }};color:{{ latest.c }};display:flex;align-items:center">{{ latest.st }}</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+            <div style="background:#FAF6F0;border-radius:14px;padding:18px"><div style="font-size:13px;color:#5B6472;font-weight:600">대칭 지수</div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px;margin-top:6px;font-variant-numeric:tabular-nums">{{ latest.sym }}<span style="font-size:15px;font-weight:700;color:#5B6472;margin-left:2px">%</span></div><div style="font-size:12.5px;color:#5B6472;margin-top:2px">{{ latest.symD }}</div></div>
+            <div style="background:#FAF6F0;border-radius:14px;padding:18px"><div style="font-size:13px;color:#5B6472;font-weight:600">뒷무릎 가동 범위</div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px;margin-top:6px;font-variant-numeric:tabular-nums">{{ latest.rom }}<span style="font-size:15px;font-weight:700;color:#5B6472;margin-left:2px">°</span></div><div style="font-size:12.5px;color:#5B6472;margin-top:2px">{{ latest.romD }}</div></div>
+            <div style="background:#FAF6F0;border-radius:14px;padding:18px"><div style="font-size:13px;color:#5B6472;font-weight:600">걸음 길이 왼 / 오 (몸통 대비)</div><div style="font-size:34px;font-weight:800;letter-spacing:-0.9px;margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap">{{ latest.sL }}<span style="color:#A0A7B2;font-weight:500"> / </span>{{ latest.sR }}<span style="font-size:15px;font-weight:700;color:#5B6472;margin-left:2px">%</span></div><div style="font-size:12.5px;color:#5B6472;margin-top:2px">{{ latest.stD }}</div></div>
+          </div>
+          <div style="background:#1B2433;color:#fff;border-radius:14px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span style="font-size:12.5px;font-weight:700;color:#F5B38A">다리 비교 요약 · 속보</span><b style="font-size:18px;letter-spacing:-0.4px">{{ latest.topTitle }}</b><span style="font-size:13.5px;color:rgba(255,255,255,.78);font-variant-numeric:tabular-nums">{{ latest.topSub }}</span></div>
+            <div style="display:flex;gap:8px"><a class="lk" href="/results/{{ latest.id }}" style="height:44px;padding:0 16px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-doc"></use></svg>분석 결과 보기</a></div>
+          </div>
+        </div>
+        {% endif %}
+        <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow-x:auto">
+          <div style="min-width:720px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px 10px"><b style="font-size:17px">측정 이력 <span style="color:#A0A7B2;font-weight:600;font-size:15px">{{ dd.count }}</span></b></div>
+            <div style="display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;padding:10px 24px;border-top:1px solid #ECE8E2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472"><span>회차</span><span>측정일</span><span>체중</span><span>유효 통과</span><span>측정자 · 모델</span><span>보고서</span><span>상태</span><span></span></div>
+            {% for h in dd.hist %}
+            <div class="hv-row" data-href="/results/{{ h.id }}" style="display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 24px;border-top:{{ h.bt }};cursor:pointer;font-size:15px;font-variant-numeric:tabular-nums">
+              <span style="display:flex;align-items:center;gap:6px"><b>{{ h.no }}</b>{% if h.base %}<span style="height:20px;padding:0 7px;border-radius:5px;background:#1B2433;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center">기준</span>{% endif %}</span>
+              <span style="color:#5B6472">{{ h.date }}</span><span>{{ h.w }}</span><span>{{ h.pass }}</span><span>{{ h.by.split(' ')[0] }} · {{ h.model }}</span><span>{{ h.rep }}</span>
+              <span><span style="height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:{{ h.bg }};color:{{ h.c }};display:inline-flex;align-items:center">{{ h.st }}</span></span>
+              <span style="text-align:right">{% if h.canBase %}<form method="post" action="/dogs/{{ cur.id }}/base" style="display:inline;margin:0"><input type="hidden" name="rid" value="{{ h.id }}"><button class="bt" type="submit" style="background:none;font-size:13px;font-weight:700;color:#B4501A;padding:6px 0">기준 회차로 지정</button></form>{% endif %}</span>
+            </div>
+            {% endfor %}
+            {% if not dd.hist %}<div style="padding:28px 24px;font-size:15px;color:#5B6472">아직 측정 기록이 없어요.</div>{% endif %}
+          </div>
+        </div>
+
+  {% endif %}
+</div>
+{{ dp.dog_panel(panel, note_cats, '/dogs/' ~ cur.id ~ '?tab=' ~ tab, chart_link=False) }}
+</main>
+{% endblock %}
+{% block modals %}{{ m.pet_modal('/dogs/' ~ cur.id) }}{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='pet.js') }}"></script>{% endblock %}

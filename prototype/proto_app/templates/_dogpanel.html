@@ -1,0 +1,52 @@
+{# 오른쪽 반려견 칸: 분석 결과·반려견 차트 공통. 특이사항과 메모를 보고 바로 쓴다(인쇄에서는 빠짐). #}
+{% macro dog_panel(panel, note_cats, next_url, chart_link=True) -%}
+{% set tone = {'surg': ('#FCEEE3', '#A8481A'), 'diag': ('#EEF1F6', '#4A5A78'), 'warn': ('#FAF1DF', '#9A6A12')} %}
+{% macro note_card(n, cur_rid) -%}
+<div style="display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:12px;background:#FAF8F5">
+  <span style="font-size:12px;color:#8E949C">{{ n.at }}{% if n.author %} · {{ n.author }}{% endif %}{% if n.run and n.rid != cur_rid %} · {{ n.run }}{% endif %}</span>
+  <span style="font-size:14px;line-height:1.5;white-space:pre-line">{{ n.text }}</span>
+</div>
+{%- endmacro %}
+<aside class="no-print" style="width:340px;flex:none;position:sticky;top:96px;border-radius:18px;background:#fff;border:1px solid #ECE8E2;padding:18px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 120px);overflow-y:auto">
+  {% if chart_link %}{# 반려견 차트에서는 위 정보 줄과 겹쳐서 메모만 보인다 #}
+  <div style="display:flex;flex-direction:column;gap:2px">
+    <span style="font-size:12.5px;color:#8E949C">{{ panel.no }}</span>
+    <b style="font-size:20px">{{ panel.name }} <span style="padding:2px 8px;border-radius:7px;background:{{ panel.st_bg }};color:{{ panel.st_c }};font-size:12px;vertical-align:3px">{{ panel.stage }}</span></b>
+    <span style="font-size:13.5px;color:#3A4250">{{ panel.breed }} · {{ panel.size }} · {{ panel.age }} · {{ panel.sex }}</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;row-gap:2px;font-variant-numeric:tabular-nums">
+    {% for k in ['체중', '체온', '심박', '혈압'] %}<span style="font-size:11.5px;color:#8E949C">{{ k }}</span>{% endfor %}
+    {% for v in [panel.v.kg, panel.v.temp, panel.v.hr, panel.v.bp] %}<b style="font-size:15px">{{ v }}</b>{% endfor %}
+  </div>
+  {% if panel.badges %}<div style="display:flex;flex-wrap:wrap;gap:5px">{% for b in panel.badges %}<span style="padding:4px 9px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:12.5px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}</div>{% endif %}
+  {% endif %}
+
+  <form method="post" action="/dogs/{{ panel.id }}/notes" style="display:flex;flex-direction:column;gap:8px;margin:0;{{ 'padding-top:12px;border-top:1px solid #F2EFEA' if chart_link else '' }}">
+    <input type="hidden" name="next_url" value="{{ next_url }}">
+    <input type="hidden" class="author-inp" name="author" value="">
+    {% if panel.rid %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;padding:3px;border-radius:10px;background:#F1ECE5;gap:2px;font-size:13.5px;font-weight:700">
+      <label style="height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer"><input type="radio" name="rid" value="{{ panel.rid }}" checked> 이번 회차</label>
+      <label style="height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer"><input type="radio" name="rid" value=""> 반려견 전체</label>
+    </div>
+    {% endif %}
+    <textarea class="inp" name="text" placeholder="메모 남기기" style="min-height:64px;border-radius:10px;border:1px solid #E2DCD3;padding:10px 12px;font-size:14.5px;line-height:1.5;font-family:inherit;outline:none;resize:vertical"></textarea>
+    <button class="bt" type="submit" style="align-self:flex-end;height:38px;padding:0 18px;border-radius:10px;background:#1B2433;color:#fff;font-size:14px;font-weight:700">남기기</button>
+  </form>
+
+  {% if panel.rid %}
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <b style="font-size:14px">이번 회차 메모</b>
+    {% for n in panel.run_notes %}{{ note_card(n, panel.rid) }}{% endfor %}
+    {% if not panel.run_notes %}<span style="font-size:13.5px;color:#A0A7B2">이 회차에 남긴 메모가 없어요.</span>{% endif %}
+  </div>
+  {% endif %}
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <b style="font-size:14px">{{ '반려견 메모' if panel.rid else '메모' }}</b>
+    {% for n in panel.dog_notes %}{{ note_card(n, panel.rid) }}{% endfor %}
+    {% if not panel.dog_notes %}<span style="font-size:13.5px;color:#A0A7B2">메모가 없어요.</span>{% endif %}
+  </div>
+  {% if chart_link %}<a class="lk" href="/dogs/{{ panel.id }}" style="height:42px;border-radius:10px;border:1px solid #E2DCD3;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">반려견 차트 (메모 {{ panel.n_notes }} · 분석 {{ panel.n_res }})</a>
+  {% else %}<a class="lk" href="/dogs/{{ panel.id }}?tab=notes" style="font-size:13.5px;font-weight:600;color:#B4501A;text-align:center">메모 전체 · 고친 이력 ›</a>{% endif %}
+</aside>
+{%- endmacro %}

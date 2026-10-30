@@ -9,9 +9,9 @@
   };
   if (window.PP.toast) window.ppToast(window.PP.toast);
 
-  // 화면 바로가기
-  var menu = document.getElementById('jumpMenu');
-  document.getElementById('jumpBtn').addEventListener('click', function () {
+  // 화면 바로가기 (PP_JUMPS=1 로 켰을 때만 있다)
+  var menu = document.getElementById('jumpMenu'), jumpBtn = document.getElementById('jumpBtn');
+  if (jumpBtn) jumpBtn.addEventListener('click', function () {
     menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
   });
 
@@ -30,6 +30,15 @@
     var row = e.target.closest('[data-href]');
     if (row && !e.target.closest('form, button, a')) location.href = row.dataset.href;
   });
+
+  // 작성자 이름: 기관 계정을 여러 명이 번갈아 써서 기록마다 이름을 받는다. 이 브라우저에서 마지막에 쓴 이름을 채워 둔다
+  var AUTHOR = 'pp_author', last = '';
+  try { last = localStorage.getItem(AUTHOR) || ''; } catch (e) {}
+  document.querySelectorAll('input.author-inp').forEach(function (i) { if (!i.value) i.value = last; });
+  document.addEventListener('submit', function (e) {
+    var i = e.target.querySelector && e.target.querySelector('input.author-inp');
+    if (i && i.value.trim()) { try { localStorage.setItem(AUTHOR, i.value.trim()); } catch (err) {} }
+  }, true);
 
   // 다른 화면에 있을 때 분석이 끝나면 알림 (디자인: "콩이 분석이 끝났어요")
   if (window.PP.pollNotices) {

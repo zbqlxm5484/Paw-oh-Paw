@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import date, datetime
 
 from . import config
 from .seed import J
@@ -47,7 +47,9 @@ def _make_result(acct: Account, job: Job) -> Result:
         w=job.w or (dog.kg if dog and dog.kg else "-"),
         sym=min(98, b_sym + 2), rom=b_rom + 1, sL=b_sL, sR=min(b_sL, b_sR + 1),
         j=[[nm, left, min(left, right + 2)] for nm, left, right in b_j],
-        ps=(meas, used), ex=ex, rep=True, videos=job.videos,
+        ps=(meas, used), ex=ex, rep=True, videos=job.videos, day=date.today().isoformat(), by=job.by,
     )
+    if prev and prev.m:   # 실측 수치가 붙은 직전 회차가 있으면 그 수치를 이어 쓴다(새 실측 회차를 지어내지 않는다)
+        r.m, r.src, r.sym, r.rom, r.sL, r.sR, r.j = prev.m, prev.src, prev.sym, prev.rom, prev.sL, prev.sR, prev.j
     acct.results.insert(0, r)
     return r
