@@ -1,7 +1,8 @@
 """결과 영상 만들기(7절 "결과 영상 만들기" 1~3번, 작업 단위 7, Jira 128·150). DB·저장소·설정을 모르는 순수 함수다(11.3).
 
-원본 영상의 프레임마다 사람 얼굴을 찾아 모자이크로 가리고(7절 2번, BE-12), 분석 API의 관절점 파일(6절 get_keypoints:
-프레임별 22점·신뢰도)로 골격을 그린 뒤, 브라우저에서 바로 재생되는 H.264(yuv420p, faststart) MP4로 저장한다.
+원본 영상에서 사람 얼굴을 찾아 모자이크로 가리고(7절 2번, BE-12. 검출은 0.05초 간격, 사이 프레임은 마지막 자리를
+유지), 분석 API의 관절점 파일(6절 get_keypoints: 프레임별 22점·신뢰도)로 골격을 그린 뒤, 브라우저에서 바로 재생되는
+H.264(yuv420p, faststart) MP4로 저장한다.
 프레임 읽기·얼굴 검출·그리기는 OpenCV, 인코딩은 ffmpeg 실행 파일이다. OpenCV가 바로 쓰는 mp4v 코덱은 Chrome에서
 열리지 않기 때문이다(7절 3번). 소리는 넣지 않는다. 사람이 보는 용도라 보호자·직원의 목소리가 남을 이유가 없다.
 
@@ -53,17 +54,22 @@ FACE_ANCHOR_STRIDE = 4
 # 검출은 이 폭 이하로 줄인 프레임에서 한다(4K도 1080p 비용). 1080p는 그대로다
 FACE_DETECT_WIDTH = 1920
 # 프레임을 이 크기쯤의 겹치는 타일로 나눠 타일마다 찾는다. 192px 입력에 프레임을 통째로 넣으면 멀리 있는 보호자 얼굴
-# (1080p에서 60px 안팎)이 몇 px로 줄어 놓친다. 1080p면 4x3 타일이고 회사 프레임 20장에서 사람 얼굴 24/24, 오탐 0,
-# 1스레드 약 100ms/프레임이다. 3x2는 팔로 가린 얼굴 하나를, 2x2는 가장자리 얼굴을 놓쳤다
+# (1080p에서 60px 안팎)이 몇 px로 줄어 놓친다. 1080p면 4x3 타일이고 회사 프레임 20장에서 사람 얼굴 24/24, 1스레드
+# 약 90~120ms/프레임이다. 3x2는 팔로 가린 얼굴 하나를, 2x2는 가장자리 얼굴을 놓쳤다
 FACE_TILE_SIZE = (480, 360)
 FACE_TILE_OVERLAP = 0.2
-# MediaPipe full range 기본값(min_score_thresh 0.6). 0.5면 20장에서 오탐 1. 엉뚱한 곳을 가리는 쪽이 놓치는 쪽보다 낫다
-FACE_SCORE_THRESHOLD = 0.6
+# MediaPipe 기본값은 0.6이지만 0.5로 둔다. 회사 프레임 20장에서 진짜 얼굴 24개의 점수가 최저 0.657이라 0.6은 여유가
+# 0.06뿐이고(0.7이면 2개를 놓친다), 0.5는 24/24에 오탐 1(같은 사람의 턱 아래 상자라 가려도 해가 없다), 0.4는 오탐 5
+# (개 몸통 위 1). 얼굴을 놓치는 쪽이 엉뚱한 곳을 가리는 쪽보다 나쁘다(150 리뷰)
+FACE_SCORE_THRESHOLD = 0.5
 FACE_NMS_THRESHOLD = 0.3
 # 찾은 상자를 사방으로 이만큼 넓혀 가린다(머리카락·턱·옆얼굴)
 FACE_MARGIN = 0.3
 # 검출이 끊겨도 이 시간 동안은 마지막 자리를 계속 가린다. 한 프레임만 놓쳐도 얼굴이 드러나기 때문이다
 FACE_HOLD_SEC = 0.5
+# 검출은 이 간격으로만 하고 사이 프레임은 FaceTracker가 마지막 상자로 가린다(150 리뷰). 60fps는 3프레임, 30fps는
+# 2프레임마다다. 1080p 60fps 480프레임 렌더가 47초에서 20초가 됐고 가려진 프레임 수는 같았다(detect_interval_frames)
+FACE_DETECT_INTERVAL_SEC = 0.05
 # 모자이크 블록은 넓힌 상자 너비의 1/3(얼굴 하나가 두 칸쯤), 최소 16px. 6칸으로 가리면 그 결과에서 검출기(당시
 # YuNet)가 회사 프레임 20장 중 12장을 다시 얼굴로 찾았고(모양이 남는다), 3칸이면 0장이다. 그 위에 상자 너비의
 # 1/8 가우시안 흐림을 더해 칸 경계를 지운다
@@ -456,6 +462,14 @@ class FaceTracker:
         return [box for box, _ in self._held]
 
 
+def detect_interval_frames(fps: float, interval_sec: float = FACE_DETECT_INTERVAL_SEC) -> int:
+    """얼굴 검출을 몇 프레임마다 할지. 간격이 interval_sec 이상이 되는 가장 작은 프레임 수(최소 1).
+
+    60fps → 3, 30·29.97fps → 2, 10fps → 1. 곱이 3.0000000000000004처럼 나오는 것을 막으려고 반올림한 뒤 올린다.
+    """
+    return max(1, math.ceil(round(fps * interval_sec, 6)))
+
+
 def blur_faces(frame: np.ndarray, boxes: Sequence[Box], *, margin: float = FACE_MARGIN) -> int:
     """boxes를 margin만큼 넓혀 모자이크 + 흐림으로 가린다(제자리). 프레임 밖은 잘라낸다. 가린 상자 수를 돌려준다."""
     height, width = frame.shape[:2]
@@ -585,6 +599,7 @@ def render_video(
     ffmpeg의 오류 출력은 output_path 옆의 ffmpeg.log에 쓴다(표준 오류를 파이프로 받으면 프레임을 넘기는 중에 막힐 수
     있다). 워커가 작업 폴더째 지운다. 프레임 번호는 0부터, 읽는 순서다(parse_keypoints).
     detect_faces는 프레임 → 얼굴 상자 목록이다. None이면 BlazeFace(FaceDetector)이고, 테스트가 가짜를 끼우는 자리다.
+    detect_interval_frames(fps) 프레임마다 부르고, 사이 프레임은 FaceTracker가 마지막 상자로 가린다.
     """
     cv2.setNumThreads(1)  # 12.4: 자식 프로세스의 OpenCV 스레드는 1개
     keypoints = load_keypoints(keypoints_path)
@@ -605,6 +620,7 @@ def render_video(
         )
         finder = detect_faces or FaceDetector().detect  # 모델을 못 열면 ffmpeg를 띄우기 전에 실패한다
         tracker = FaceTracker(round(fps * FACE_HOLD_SEC))
+        detect_every = detect_interval_frames(fps)
         log_path = output_path.parent / "ffmpeg.log"
         hidden = (input_path, output_path, keypoints_path)
         try:
@@ -627,7 +643,7 @@ def render_video(
                 while ok and frame is not None:
                     if frame.shape[0] != height or frame.shape[1] != width:
                         raise VideoRenderError(f"{frames}번 프레임의 크기가 첫 프레임과 다릅니다")
-                    faces = tracker.update(finder(frame))
+                    faces = tracker.update(finder(frame) if frames % detect_every == 0 else [])
                     if faces:
                         face_frames += 1
                     if process_frame(frame, keypoints.frames.get(frames), scale=scale, faces=faces):

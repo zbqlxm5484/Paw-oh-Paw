@@ -27,6 +27,7 @@ from app.video.render import (
     _nms,
     _tiles,
     blur_faces,
+    detect_interval_frames,
     process_frame,
     render_video,
 )
@@ -110,6 +111,11 @@ def test_face_tracker_replaces_a_held_box_with_an_overlapping_detection() -> Non
 
 
 # ---- 골격과 합치기 ----
+
+
+@pytest.mark.parametrize(("fps", "every"), [(60, 3), (59.94, 3), (30, 2), (29.97, 2), (24, 2), (20, 1), (10, 1)])
+def test_detect_interval_frames_is_the_smallest_count_covering_the_interval(fps: float, every: int) -> None:
+    assert detect_interval_frames(fps) == every  # 0.05초 이상이 되는 가장 작은 프레임 수. 60 x 0.05의 부동소수 오차도 3
 
 
 def test_process_frame_blurs_first_and_draws_the_skeleton_on_top() -> None:
@@ -215,23 +221,19 @@ def ffmpeg() -> str:
     return path
 
 
-def _texture_video(ffmpeg: str, path: Path) -> Path:
-    """160x120, 10fps, 10프레임. 4px 네모마다 색이 다른 무늬를 거의 무손실(qp 0)로 넣는다.
+def _texture_video(ffmpeg: str, path: Path, *, fps: int = 10, count: int = 10) -> Path:
+    """160x120, fps·count 프레임(기본 10fps 10프레임). 4px 네모마다 색이 다른 무늬를 거의 무손실(qp 0)로 넣는다.
 
     검은 영상이나 ffmpeg 시험 무늬는 색이 몇 가지뿐이라 가린 자리가 드러나지 않는다. 이 무늬는 분산이 커서 드러난다.
     """
     frames = [
         cv2.resize(_noise(seed)[: HEIGHT // 4, : WIDTH // 4], (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
-        for seed in range(10)
+        for seed in range(count)
     ]
     size = f"{WIDTH}x{HEIGHT}"
-    subprocess.run(
-        [ffmpeg, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", size, "-framerate", "10", "-i", "-"]
-        + ["-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", str(path)],
-        input=b"".join(frame.tobytes() for frame in frames),
-        check=True,
-        capture_output=True,
-    )
+    command = [ffmpeg, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", size, "-framerate", str(fps)]
+    command += ["-i", "-", "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", str(path)]
+    subprocess.run(command, input=b"".join(frame.tobytes() for frame in frames), check=True, capture_output=True)
     return path
 
 
@@ -281,6 +283,27 @@ def test_render_video_blurs_with_the_given_detector_and_holds_half_a_second(
     )  # 유지가 끝나면 원본대로
     outside = (0, 0, 40, 30)
     assert _variance(_region(rendered[0], outside)) > _variance(_region(source[0], outside)) / 2  # 상자 밖은 그대로
+
+
+def test_render_video_detects_every_third_frame_at_60fps_and_covers_the_frames_between(
+    ffmpeg: str, tmp_path: Path
+) -> None:
+    video = _texture_video(ffmpeg, tmp_path / "texture60.mp4", fps=60, count=12)
+    calls = 0
+
+    def detect(frame: np.ndarray) -> list[Box]:
+        nonlocal calls
+        calls += 1
+        return [FACE]
+
+    output = tmp_path / "result.mp4"
+    result = render_video(video, _empty_keypoints(tmp_path / "k.json"), output, ffmpeg_path=ffmpeg, detect_faces=detect)
+
+    assert calls == 4  # 60fps x 0.05초 = 3프레임마다: 0·3·6·9번 프레임만 검출기를 부른다
+    assert (result.frames, result.face_frames) == (12, 12)  # 사이 프레임은 유지된 상자로 가린다
+    source, rendered = _decode(video), _decode(output)
+    for index in (1, 11):  # 검출기를 부르지 않은 프레임도 가려져 있다
+        assert _variance(_region(rendered[index], WIDENED)) < _variance(_region(source[index], WIDENED)) / 10
 
 
 def test_render_video_uses_blazeface_by_default(texture_video: Path, ffmpeg: str, tmp_path: Path) -> None:
