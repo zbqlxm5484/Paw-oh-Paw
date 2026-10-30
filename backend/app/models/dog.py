@@ -32,6 +32,11 @@ if TYPE_CHECKING:
     from app.models.measure_session import MeasureSession
 
 
+def _next_version(current: int | None) -> int:
+    """낙관적 잠금 번호(12.5): 등록 때 0, 수정마다 1 는다. SQLAlchemy 기본 생성기는 1부터 시작해서 따로 둔다."""
+    return 0 if current is None else current + 1
+
+
 class Dog(Base):
     __tablename__ = "dog"
     __table_args__ = (
@@ -63,12 +68,16 @@ class Dog(Base):
     )
     # 내부 메모. 보고서에 넣지 않는다
     memo: Mapped[str | None] = mapped_column(Text)
-    # 낙관적 잠금(12.5). 수정할 때마다 1 는다. WHERE version = :old를 붙이는 version_id_col은 작업 단위 15에서 켠다
+    # 낙관적 잠금(12.5). 수정할 때마다 1 는다. JPA @Version과 같다
     version: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    # ORM이 UPDATE에 WHERE version = :old를 붙이고, 맞는 행이 없으면 StaleDataError를 낸다.
+    # services.dogs가 그것을 409 DOG_MODIFIED로 바꾼다
+    __mapper_args__ = {"version_id_col": version, "version_id_generator": _next_version}
 
     institution: Mapped[Institution] = relationship()
     # 외래키가 두 갈래(dog_id, baseline_session_id)라 어느 쪽인지 적는다.

@@ -17,6 +17,14 @@ from app.services.size_class import BreedListError, classify_size, get_breeds, l
 from tests.conftest import bearer
 
 DOGS = "/api/v1/dogs"
+
+
+def _patch(client: TestClient, url: str, *, json: dict, headers: dict):
+    """지금 저장된 version을 읽어 같이 보낸다(15.5 BE-25). 잠금 자체는 test_patch_version_is_checked가 본다."""
+    version = client.get(url, headers=headers).json()["version"]
+    return client.patch(url, json={"version": version, **json}, headers=headers)
+
+
 BASE = {
     "name": "보리",
     "breed": "골든 리트리버",
@@ -28,6 +36,7 @@ BASE = {
     "memo": None,
 }
 DOG_OUT_KEYS = {
+    "version",
     "id",
     "name",
     "breed",
@@ -266,7 +275,7 @@ def test_other_institution_dog_is_404_identical_to_missing(client: TestClient, a
 
     names = [d["name"] for d in client.get(DOGS, headers=auth_headers).json()["items"]]
     assert "남의개" not in names
-    assert client.patch(f"{DOGS}/{theirs}", json={"memo": "x"}, headers=auth_headers).status_code == 404
+    assert client.patch(f"{DOGS}/{theirs}", json={"version": 0, "memo": "x"}, headers=auth_headers).status_code == 404
 
 
 # ---- 수정 (BE-02) ----
@@ -278,17 +287,17 @@ def _create(client: TestClient, headers: dict, **overrides) -> str:
 
 def test_patch_weight_reclassifies_when_not_manual(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers, breed="믹스", weight_kg=9.0)  # SMALL
-    response = client.patch(f"{DOGS}/{dog_id}", json={"weight_kg": 30.0}, headers=auth_headers)
+    response = _patch(client, f"{DOGS}/{dog_id}", json={"weight_kg": 30.0}, headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["weight_kg"] == 30.0
     assert (response.json()["size_class"], response.json()["size_class_manual"]) == ("LARGE", False)
-    again = client.patch(f"{DOGS}/{dog_id}", json={"weight_kg": 24.99}, headers=auth_headers).json()
+    again = _patch(client, f"{DOGS}/{dog_id}", json={"weight_kg": 24.99}, headers=auth_headers).json()
     assert again["size_class"] == "MEDIUM"
 
 
 def test_patch_breed_does_not_change_size_class(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers, breed="믹스", weight_kg=9.0)  # SMALL
-    response = client.patch(f"{DOGS}/{dog_id}", json={"breed": "골든 리트리버"}, headers=auth_headers)
+    response = _patch(client, f"{DOGS}/{dog_id}", json={"breed": "골든 리트리버"}, headers=auth_headers)
     assert response.json()["breed"] == "골든 리트리버"
     assert response.json()["size_class"] == "SMALL"
     assert response.json()["size_class_manual"] is False
@@ -296,26 +305,26 @@ def test_patch_breed_does_not_change_size_class(client: TestClient, auth_headers
 
 def test_patch_manual_size_class_sticks_until_null(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers, breed="말티즈", weight_kg=3.0)  # SMALL
-    manual = client.patch(f"{DOGS}/{dog_id}", json={"size_class": "LARGE"}, headers=auth_headers).json()
+    manual = _patch(client, f"{DOGS}/{dog_id}", json={"size_class": "LARGE"}, headers=auth_headers).json()
     assert (manual["size_class"], manual["size_class_manual"]) == ("LARGE", True)
 
-    after_weight = client.patch(f"{DOGS}/{dog_id}", json={"weight_kg": 3.5}, headers=auth_headers).json()
+    after_weight = _patch(client, f"{DOGS}/{dog_id}", json={"weight_kg": 3.5}, headers=auth_headers).json()
     assert after_weight["size_class"] == "LARGE"  # 직접 고친 체급은 체중을 바꿔도 그대로
 
-    auto = client.patch(f"{DOGS}/{dog_id}", json={"size_class": None}, headers=auth_headers).json()
+    auto = _patch(client, f"{DOGS}/{dog_id}", json={"size_class": None}, headers=auth_headers).json()
     assert (auto["size_class"], auto["size_class_manual"]) == ("SMALL", False)  # 저장된 체중 3.5 kg으로 다시 분류
 
 
 def test_patch_size_class_null_uses_stored_weight(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers, breed="믹스", weight_kg=30.0, size_class="SMALL")
-    auto = client.patch(f"{DOGS}/{dog_id}", json={"size_class": None}, headers=auth_headers).json()
+    auto = _patch(client, f"{DOGS}/{dog_id}", json={"size_class": None}, headers=auth_headers).json()
     assert auto["size_class"] == "LARGE"
 
 
 def test_patch_weight_and_size_class_together_size_class_wins(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers, breed="믹스", weight_kg=9.0)
     body = {"weight_kg": 30.0, "size_class": "MEDIUM"}
-    response = client.patch(f"{DOGS}/{dog_id}", json=body, headers=auth_headers).json()
+    response = _patch(client, f"{DOGS}/{dog_id}", json=body, headers=auth_headers).json()
     assert response["weight_kg"] == 30.0
     assert (response["size_class"], response["size_class_manual"]) == ("MEDIUM", True)
 
@@ -323,16 +332,16 @@ def test_patch_weight_and_size_class_together_size_class_wins(client: TestClient
 def test_patch_null_on_required_fields_is_422(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers)
     for field in ("name", "breed", "weight_kg"):
-        response = client.patch(f"{DOGS}/{dog_id}", json={field: None}, headers=auth_headers)
+        response = _patch(client, f"{DOGS}/{dog_id}", json={field: None}, headers=auth_headers)
         assert response.status_code == 422
         assert _fields(response) == [field]
 
 
 def test_patch_optional_fields_can_be_cleared_and_empty_patch_is_noop(client: TestClient, auth_headers: dict) -> None:
     dog_id = _create(client, auth_headers, memo="메모")
-    cleared = client.patch(f"{DOGS}/{dog_id}", json={"memo": None, "focus_limb": None}, headers=auth_headers).json()
+    cleared = _patch(client, f"{DOGS}/{dog_id}", json={"memo": None, "focus_limb": None}, headers=auth_headers).json()
     assert cleared["memo"] is None and cleared["focus_limb"] is None
-    untouched = client.patch(f"{DOGS}/{dog_id}", json={}, headers=auth_headers)
+    untouched = _patch(client, f"{DOGS}/{dog_id}", json={}, headers=auth_headers)
     assert untouched.status_code == 200
     assert untouched.json()["name"] == "보리"
 
@@ -345,13 +354,39 @@ def test_patch_baseline_session_rules(client: TestClient, db: Session, staff, au
     other_done = _session(db, other_dog, staff, date(2026, 10, 12), status="DONE")
 
     for bad in (measuring.id, other_done.id, uuid.uuid4()):
-        response = client.patch(f"{DOGS}/{dog.id}", json={"baseline_session_id": str(bad)}, headers=auth_headers)
+        response = _patch(client, f"{DOGS}/{dog.id}", json={"baseline_session_id": str(bad)}, headers=auth_headers)
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "BASELINE_INVALID"
 
-    ok = client.patch(f"{DOGS}/{dog.id}", json={"baseline_session_id": str(done.id)}, headers=auth_headers)
+    ok = _patch(client, f"{DOGS}/{dog.id}", json={"baseline_session_id": str(done.id)}, headers=auth_headers)
     assert ok.status_code == 200
     assert ok.json()["baseline_session_id"] == str(done.id)
 
-    cleared = client.patch(f"{DOGS}/{dog.id}", json={"baseline_session_id": None}, headers=auth_headers)
+    cleared = _patch(client, f"{DOGS}/{dog.id}", json={"baseline_session_id": None}, headers=auth_headers)
     assert cleared.json()["baseline_session_id"] is None
+
+
+# ---- 낙관적 잠금 (BE-25, 12.5, 15.5) ----
+
+
+def test_patch_version_is_checked(client: TestClient, auth_headers: dict) -> None:
+    created = client.post(DOGS, json={"name": "보리", "breed": "말티즈", "weight_kg": 3.0}, headers=auth_headers).json()
+    assert created["version"] == 0
+    url = f"{DOGS}/{created['id']}"
+
+    first = client.patch(url, json={"version": 0, "memo": "첫 수정"}, headers=auth_headers)
+    assert first.status_code == 200
+    assert first.json()["version"] == 1
+
+    stale = client.patch(url, json={"version": 0, "memo": "늦은 수정"}, headers=auth_headers)
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "DOG_MODIFIED"
+    current = client.get(url, headers=auth_headers).json()
+    assert (current["memo"], current["version"]) == ("첫 수정", 1)
+
+    missing = client.patch(url, json={"memo": "x"}, headers=auth_headers)
+    assert missing.status_code == 422
+    assert missing.json()["error"]["detail"]["fields"] == [{"field": "version", "type": "missing"}]
+
+    noop = client.patch(url, json={"version": 1}, headers=auth_headers)
+    assert noop.status_code == 200 and noop.json()["version"] == 1  # 바꾼 것이 없으면 번호도 그대로

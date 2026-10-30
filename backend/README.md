@@ -1,6 +1,6 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.12. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003. 회원가입·역할·계약 설계는 팀 합의 전이라 티켓 번호가 아직 없다)이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.12. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003), 15(반려견 수정 낙관적 잠금 `version`·409 `DOG_MODIFIED`. 12·15의 회원가입·역할·계약 설계는 팀 합의 전이라 티켓 번호가 아직 없다)이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
@@ -10,7 +10,7 @@
 | 요청 DB 세션, 로그인 담당자 스냅샷·계약 검사·역할 확인(ADMIN, 크림오프) (11.6, 11.7) | `app/api/deps.py` |
 | 담당자 스냅샷 캐시 `AuthStaff`(effective_role·contract_status 계산) (11.6 인증 캐시) | `app/core/auth_cache.py` |
 | `POST /api/v1/auth/login`, `GET /api/v1/auth/me` (15.4) | `app/api/routes/auth.py`, `app/services/auth.py` |
-| 반려견 목록·등록·상세·수정 (13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
+| 반려견 목록·등록·상세·수정, 수정은 `version` 낙관적 잠금 (12.5, 13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
 | 체급 분류 `classify_size`(체중 기준)와 견종 이름 목록 (12.5) | `app/services/size_class.py`, `config/breeds.yaml` |
 | "오늘"의 시간대 (16절 APP_TIMEZONE) | `app/core/dates.py` |
 | 회차 시작·상태·진행·촬영 목록·측정 취소, 회차 시점 체급 (12.5, 13.3, 15.6) | `app/api/routes/sessions.py`, `app/services/sessions.py`, `app/schemas/sessions.py` |
