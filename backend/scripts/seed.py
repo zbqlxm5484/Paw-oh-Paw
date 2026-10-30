@@ -1,6 +1,7 @@
-"""기관·담당자 계정 만들기 (명세 11.2, 13.4).
+"""기관·담당자 계정 만들기 (명세 11.2, 11.6, 13.4).
 
-회원가입 API가 없어서 계정은 이 스크립트로만 만든다. backend 폴더에서 실행한다.
+고객 담당자(CLIENT)는 디바이스 코드로 스스로 가입하고(15.4), 크림오프 쪽 ADMIN·STAFF와 시연 계정은 이 스크립트로 만든다.
+backend 폴더에서 실행한다.
 
     python -m scripts.seed --institution-code DEMO --institution-name "데모 병원" \\
         --login-id admin --name 관리자 --role ADMIN
@@ -8,8 +9,9 @@
 - 비밀번호: --password를 빼면 화면에서 두 번 묻는다(입력이 보이지 않는다).
   --password로 주면 셸 기록에 남으니 시연용 계정에만 쓴다.
 - 기관 코드가 이미 있으면 그 기관에 계정을 더한다. 없으면 기관도 만든다(이때 --institution-name 필요).
-- 같은 기관에 같은 아이디가 있으면 아무것도 만들지 않고 끝낸다.
-- 기관 코드와 아이디는 로그인 때 입력 그대로(대소문자 구분) 비교하므로 앞뒤 공백을 허용하지 않는다.
+- 같은 아이디가 어느 기관에든 있으면 아무것도 만들지 않고 끝낸다(아이디는 모든 기관에서 유일하다, 12.2).
+- 아이디는 로그인 때 입력 그대로(대소문자 구분) 비교하므로 앞뒤 공백을 허용하지 않는다.
+- 기관 코드는 관리 화면 표시용이다(v1.12부터 로그인에 쓰지 않는다).
 """
 
 import argparse
@@ -63,7 +65,7 @@ def create_account(
     login_id: str,
     name: str,
     password: str,
-    role: str = StaffRole.STAFF,
+    role: str = StaffRole.CLIENT,
 ) -> SeedResult:
     """기관(없으면)과 담당자 계정을 만든다. commit은 부르는 쪽이 한다."""
     _check_text("기관 코드", institution_code, INSTITUTION_CODE_MAX)
@@ -97,11 +99,9 @@ def create_account(
                 "--institution-name을 빼면 그 기관에 계정을 더합니다"
             )
 
-        duplicate = session.scalar(
-            select(Staff.id).where(Staff.institution_id == institution.id, Staff.login_id == login_id)
-        )
+        duplicate = session.scalar(select(Staff.id).where(Staff.login_id == login_id))
         if duplicate is not None:
-            raise SeedError(f"이 기관에 같은 아이디({login_id})가 이미 있습니다")
+            raise SeedError(f"같은 아이디({login_id})가 이미 있습니다(아이디는 모든 기관에서 유일하다)")
 
         staff = Staff(
             institution_id=institution.id,
@@ -131,11 +131,16 @@ def _ask_password() -> str:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m scripts.seed", description="기관·담당자 계정 만들기")
-    parser.add_argument("--institution-code", required=True, help="로그인 때 입력하는 기관 코드 (1~20자)")
+    parser.add_argument("--institution-code", required=True, help="기관 식별 코드 (1~20자, 관리 화면 표시용)")
     parser.add_argument("--institution-name", help="새 기관일 때만 필요 (1~100자)")
     parser.add_argument("--login-id", required=True, help="아이디 (1~50자)")
     parser.add_argument("--name", required=True, help="담당자 이름 (1~50자)")
-    parser.add_argument("--role", choices=[role.value for role in StaffRole], default=StaffRole.STAFF.value)
+    parser.add_argument(
+        "--role",
+        choices=[role.value for role in StaffRole],
+        default=StaffRole.CLIENT.value,
+        help="ADMIN·STAFF는 크림오프 쪽, CLIENT(기본값)는 고객 기관 담당자(11.6)",
+    )
     parser.add_argument("--password", help="빼면 화면에서 묻는다. 8자 이상, UTF-8로 72바이트 이하")
     return parser
 

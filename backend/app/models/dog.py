@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     SmallInteger,
     String,
@@ -62,6 +63,8 @@ class Dog(Base):
     )
     # 내부 메모. 보고서에 넣지 않는다
     memo: Mapped[str | None] = mapped_column(Text)
+    # 낙관적 잠금(12.5). 수정할 때마다 1 는다. WHERE version = :old를 붙이는 version_id_col은 작업 단위 15에서 켠다
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -16,12 +16,14 @@ def _settings(**values: object) -> Settings:
     return Settings(_env_file=None, **base)
 
 
-def test_defaults_follow_section_16() -> None:
+def test_defaults_follow_section_16(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AUTH_CACHE_TTL_SEC", raising=False)  # conftest가 테스트용으로 0을 넣어 둔다
     settings = _settings()
     assert settings.JWT_EXPIRE_HOURS == 12
     assert settings.STORAGE_BACKEND == "local"
     assert settings.ANALYSIS_API_MODE == "mock"
     assert settings.CORS_ORIGINS == ["http://localhost:5173"]
+    assert settings.AUTH_CACHE_TTL_SEC == 60
 
 
 @pytest.mark.parametrize(
@@ -31,6 +33,11 @@ def test_worker_caps_must_be_at_least_one(name: str) -> None:
     # 16절: 0이면 워커가 오류 없이 아무것도 가져가지 않으므로(결과 영상은 영영 PENDING) 시작 때 막는다
     with pytest.raises(ValidationError, match=name):
         _settings(**{name: 0})
+
+
+def test_auth_cache_ttl_cannot_be_negative() -> None:
+    with pytest.raises(ValidationError, match="AUTH_CACHE_TTL_SEC"):
+        _settings(AUTH_CACHE_TTL_SEC=-1)
 
 
 def test_database_url_must_use_pg8000() -> None:

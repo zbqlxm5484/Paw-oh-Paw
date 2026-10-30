@@ -1,5 +1,8 @@
 """마이그레이션이 명세 12.2와 같은 테이블을 만드는지, 모델과 어긋나지 않는지 확인한다."""
 
+import uuid
+
+import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
@@ -11,7 +14,8 @@ from tests.conftest import TABLES, alembic_config
 # 명세 12.2 DDL의 제약 이름. 오류 처리에서 이 이름으로 어느 규칙을 어겼는지 가린다.
 EXPECTED_CONSTRAINTS = {
     "institution": {"institution_pkey", "uq_institution_code"},
-    "staff": {"staff_pkey", "uq_staff_login", "ck_staff_role", "fk_staff_institution"},
+    "device_code": {"device_code_pkey", "uq_device_code", "ck_device_code_max", "fk_device_code_institution"},
+    "staff": {"staff_pkey", "uq_staff_login", "ck_staff_role", "fk_staff_institution", "fk_staff_device_code"},
     "dog": {
         "dog_pkey",
         "ck_dog_size_class",
@@ -142,3 +146,45 @@ def test_downgrade_then_upgrade(engine: Engine) -> None:
     command.upgrade(config, "head")
     with engine.connect() as conn:
         assert _tables(conn) == set(TABLES) | {"alembic_version"}
+
+
+def _has_column(conn: Connection, table: str, column: str) -> bool:
+    row = conn.execute(
+        text("SELECT 1 FROM information_schema.columns WHERE table_name = :t AND column_name = :c"),
+        {"t": table, "c": column},
+    ).first()
+    return row is not None
+
+
+def test_0003_turns_old_staff_into_client_and_rejects_duplicate_login_ids(engine: Engine, clean_tables: None) -> None:
+    """0003(v1.12): STAFF였던 기관 담당자는 CLIENT가 되고, 기관이 달라도 같은 아이디가 있으면 올라가지 않는다."""
+    config = alembic_config()
+    inst_a, inst_b = uuid.uuid4(), uuid.uuid4()
+    command.downgrade(config, "0002")
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO institution (id, code, name) VALUES (:a, 'A', '병원 A'), (:b, 'B', '병원 B')"),
+                {"a": inst_a, "b": inst_b},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO staff (id, institution_id, login_id, password_hash, name, role) VALUES "
+                    "(:s1, :a, 'dup', 'x', '갑', 'STAFF'), (:s2, :b, 'dup', 'x', '을', 'STAFF'), "
+                    "(:s3, :a, 'boss', 'x', '병', 'ADMIN')"
+                ),
+                {"s1": uuid.uuid4(), "s2": uuid.uuid4(), "s3": uuid.uuid4(), "a": inst_a, "b": inst_b},
+            )
+        with pytest.raises(RuntimeError, match="같은 아이디가 1개"):
+            command.upgrade(config, "head")
+        with engine.begin() as conn:  # 실패한 올리기는 아무것도 바꾸지 않았다. 중복을 치우면 올라간다
+            assert not _has_column(conn, "institution", "contract_ends_at")
+            conn.execute(text("DELETE FROM staff WHERE institution_id = :b"), {"b": inst_b})
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            roles = dict(conn.execute(text("SELECT login_id, role FROM staff")).all())
+            assert roles == {"dup": "CLIENT", "boss": "ADMIN"}
+            ends_at = conn.execute(text("SELECT contract_ends_at FROM institution WHERE id = :a"), {"a": inst_a})
+            assert ends_at.scalar_one() is None
+    finally:
+        command.upgrade(config, "head")

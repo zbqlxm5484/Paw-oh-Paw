@@ -1,13 +1,14 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.11. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기)이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.12. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003. 회원가입·역할·계약 설계는 팀 합의 전이라 티켓 번호가 아직 없다)이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
 | 환경 변수 읽기 (16절) | `app/core/config.py` |
 | DB 엔진·세션·오류 코드 (11.7) | `app/core/db.py` |
 | 비밀번호 해시·JWT·서명 URL (11.6, 13.4) | `app/core/security.py` |
-| 요청 DB 세션, 로그인 담당자·관리자 확인 (11.6, 11.7) | `app/api/deps.py` |
+| 요청 DB 세션, 로그인 담당자 스냅샷·계약 검사·역할 확인(ADMIN, 크림오프) (11.6, 11.7) | `app/api/deps.py` |
+| 담당자 스냅샷 캐시 `AuthStaff`(effective_role·contract_status 계산) (11.6 인증 캐시) | `app/core/auth_cache.py` |
 | `POST /api/v1/auth/login`, `GET /api/v1/auth/me` (15.4) | `app/api/routes/auth.py`, `app/services/auth.py` |
 | 반려견 목록·등록·상세·수정 (13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
 | 체급 분류 `classify_size`(체중 기준)와 견종 이름 목록 (12.5) | `app/services/size_class.py`, `config/breeds.yaml` |
@@ -24,12 +25,12 @@
 | 화면 문구 (14.5) | `messages/ko.yaml` |
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
 | `GET /api/v1/health` (15.9) | `app/api/routes/health.py` |
-| 테이블 9개 모델 (12.2) | `app/models/` |
-| 마이그레이션 (0001 테이블 9개, 0002 회차 체급) | `alembic/versions/` |
+| 테이블 10개 모델 (12.2) | `app/models/` |
+| 마이그레이션 (0001 테이블 9개, 0002 회차 체급, 0003 회원가입·역할·계약: 디바이스 코드 테이블, 계약 종료일, 역할 셋, 아이디 전역 유일) | `alembic/versions/` |
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-결과 영상 재생(서명 URL 검증)·측정 종료·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
+결과 영상 재생(서명 URL 검증)·측정 종료·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`). 로그인은 아이디+비밀번호다(기관 코드는 받지 않는다). 기관의 계약 종료일(`institution.contract_ends_at`)이 지나면 그 기관 CLIENT는 `effective_role`이 GUEST가 되어 로그인과 `/auth/me`만 되고 나머지는 403 `CONTRACT_EXPIRED`다. 담당자 스냅샷은 `AUTH_CACHE_TTL_SEC`(기본 60초) 동안 프로세스 메모리에 두므로 계정 중지·계약 만료는 최대 60초 뒤에 반영된다.
 
 ## 준비 (처음 한 번)
 
@@ -75,7 +76,7 @@ python -m scripts.seed --institution-code DEMO --institution-name "데모 병원
 ```
 
 비밀번호는 화면에서 두 번 묻는다. 8자 이상, UTF-8로 72바이트 이하(한글은 24자까지).
-같은 기관에 계정을 더할 때는 `--institution-name`을 빼도 된다.
+같은 기관에 계정을 더할 때는 `--institution-name`을 빼도 된다. `--role`은 ADMIN·STAFF(크림오프 쪽)·CLIENT(고객 기관 담당자, 기본값)이고, 아이디는 모든 기관에서 유일하다. 고객 담당자는 보통 디바이스 코드로 스스로 가입한다(작업 단위 13).
 
 ## 서버 띄우기
 

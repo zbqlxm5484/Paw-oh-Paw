@@ -46,10 +46,20 @@ def test_reuses_existing_institution(db: Session) -> None:
     assert db.scalar(select(func.count()).select_from(Institution)) == 1
 
 
-def test_same_login_id_in_other_institution_is_allowed(db: Session) -> None:
+def test_same_login_id_in_other_institution_is_rejected(db: Session) -> None:
+    """아이디는 모든 기관에서 유일하다(12.2 v1.12)."""
     _create(db)
-    other = _create(db, institution_code="OTHER", institution_name="다른 병원")
-    assert other.institution_created is True
+    with pytest.raises(SeedError, match="이미 있습니다"):
+        _create(db, institution_code="OTHER", institution_name="다른 병원")
+    assert db.scalar(select(func.count()).select_from(Staff)) == 1
+
+
+def test_default_role_is_client(db: Session) -> None:
+    """역할을 주지 않으면 고객 기관 담당자(CLIENT)다(11.6)."""
+    result = create_account(
+        db, institution_code="DEMO", institution_name="데모 병원", login_id="kim01", name="담당자", password=GOOD
+    )
+    assert db.get(Staff, result.staff_id).role == "CLIENT"
 
 
 @pytest.mark.parametrize(

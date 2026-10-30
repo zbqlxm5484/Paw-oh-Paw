@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 ROOT = Path(__file__).resolve().parents[1]
 TABLES = (
     "institution",
+    "device_code",
     "staff",
     "dog",
     "measure_session",
@@ -63,6 +64,8 @@ def pytest_configure(config: pytest.Config) -> None:
     # API 서버 설정의 필수 값(16절). 테스트에서만 쓰는 값이고, 셸에 이미 있으면 그 값을 쓴다.
     os.environ.setdefault("JWT_SECRET", "test-jwt-secret-" + "0" * 24)
     os.environ.setdefault("FILE_URL_SECRET", "test-file-url-secret-" + "1" * 24)
+    # 11.6 인증 캐시는 테스트에서 끈다(요청마다 DB). 캐시 자체 테스트만 TTL을 켠다
+    os.environ["AUTH_CACHE_TTL_SEC"] = "0"
     # 파일 저장소·임시 폴더는 실행마다 새 임시 폴더를 쓴다. 개발용 ./data는 건드리지 않는다.
     os.environ["STORAGE_BACKEND"] = "local"
     os.environ["STORAGE_ROOT"] = tempfile.mkdtemp(prefix="creamoff-test-files-")
@@ -134,7 +137,7 @@ def password_hash_for(password: str) -> str:
 
 @pytest.fixture
 def staff(db: Session):
-    """기관 T01과 활성 담당자 staff1(STAFF). 비밀번호는 GOOD_PASSWORD."""
+    """기관 T01(계약 기한 없음)과 활성 담당자 staff1(CLIENT). 비밀번호는 GOOD_PASSWORD."""
     from app.models import Institution, Staff
 
     institution = Institution(code="T01", name="테스트 병원")
@@ -145,7 +148,7 @@ def staff(db: Session):
         login_id="staff1",
         password_hash=password_hash_for(GOOD_PASSWORD),
         name="담당자",
-        role="STAFF",
+        role="CLIENT",
     )
     db.add(row)
     db.flush()
@@ -166,7 +169,7 @@ def other_staff(db: Session):
         login_id="staff2",
         password_hash=password_hash_for(GOOD_PASSWORD),
         name="다른 담당자",
-        role="STAFF",
+        role="CLIENT",
     )
     db.add(row)
     db.flush()
@@ -217,7 +220,7 @@ class DogIn(BaseModel):
 
 def _test_router() -> APIRouter:
     """오류 형식(11.5)과 의존성을 확인하려고 일부러 오류를 내는 라우트들. 실제 API에는 없다."""
-    from app.api.deps import AdminStaff, CurrentStaff
+    from app.api.deps import AdminStaff, CreamoffStaff, CurrentStaff
     from app.core.errors import AppError, ErrorCode
 
     router = APIRouter(prefix="/_test")
@@ -261,6 +264,10 @@ def _test_router() -> APIRouter:
 
     @router.get("/admin-only")
     def admin_only(staff: AdminStaff) -> dict[str, str]:
+        return {"login_id": staff.login_id}
+
+    @router.get("/creamoff-only")
+    def creamoff_only(staff: CreamoffStaff) -> dict[str, str]:
         return {"login_id": staff.login_id}
 
     return router

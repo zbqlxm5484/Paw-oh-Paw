@@ -95,6 +95,8 @@ class Settings(DbSettings):
     METRICS_ENABLED: bool = False
     # 16절: /docs·/redoc·/openapi.json 시험 화면. 개발 환경에서만 true. 기업에 주는 공식 명세는 docs/openapi.yaml 하나다
     API_DOCS_ENABLED: bool = False
+    # 11.6 인증 캐시: 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다(테스트)
+    AUTH_CACHE_TTL_SEC: int = Field(60, ge=0)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
