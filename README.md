@@ -96,3 +96,4 @@ S15P31A404/
 | 기존 모델 평가 재현 | [docs/eval/fs-v4Reproduction.md](docs/eval/fs-v4Reproduction.md) |
 | 학습 데이터 분할, 미세조정 | [docs/training/](docs/training/) |
 | 화면 계획 | [docs/frontend/screenPlan.md](docs/frontend/screenPlan.md) |
+| 라이선스 조사(얼굴 검출 모델, 결과 영상 코덱, 백엔드 라이브러리) | [docs/report/faceDetectorLicense.md](docs/report/faceDetectorLicense.md) |
