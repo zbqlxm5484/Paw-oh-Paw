@@ -83,4 +83,19 @@ PRD 목표(KPI-01 30% 감소, KPI-02 50% 감소)에는 둘 다 못 미쳐요. 2�
 
 - 260820 은 제니 한 마리, 한 장소예요. 와우와우·다른 개 영상으로 분포를 다시 봐야 해요.
 - 비스듬함 문턱(yaw 1.25 등)은 표시용 초안이에요. 처리를 바꾸지 않으므로 KPI 에는 영향이 없어요.
-- 다음 단계(S15P31A404-105 (3/3)): 정규화 단위 테스트와 문서 갱신.
+- 단위 테스트는 아래 '테스트' 절(S15P31A404-105).
+
+## 테스트 (10-30, S15P31A404-105)
+
+`python -m pytest tests/test_normalize.py` (17개). 합성 좌표로 판정 기준과 보정의 기하 성질을 고정해 둬요.
+
+| 테스트 | 확인하는 것 |
+|---|---|
+| `test_oblique_is_recorded_not_dropped` | 몸통만 짧아지면 `yaw` 로 표시, 통과는 버리지 않고 `norm` 도 만든다 |
+| `test_distance_change_alone_is_not_oblique` | 카메라와 거리만 바뀌면(몸통·상자 같은 비율) `yaw_change` < 1.1, 표시 안 함 |
+| `test_tilted_path_is_flagged` | 궤적이 약 6.8° 기울면 `path` 로 표시(문턱 5°) |
+| `test_iso_scaling_keeps_joint_angles` | 기본 보정(iso)은 관절 각도를 0.1° 안으로 보존 |
+| `test_stretch_x_changes_joint_angles` | 대조: v0 의 가로 늘리기는 각도를 바꾼다(v1 에서 기본을 바꾼 이유) |
+| `test_tilt_keeps_segment_lengths_and_angles` | 기울기 보정(`--tilt`)은 회전만 해서 체절 길이·각도를 보존 |
+
+나머지 11개는 v0·v1 공통 동작(화면 위치 유지, 원본 `kp` 보존, 진행 방향으로 카메라 쪽 결정, 짧은·멈춘 통과 건너뜀, 확신도 낮은 프레임 제외 등)이에요.
