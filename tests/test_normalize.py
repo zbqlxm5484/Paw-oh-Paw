@@ -11,7 +11,7 @@ _spec.loader.exec_module(nz)
 W, H = 1000, 600
 
 
-def make_pass(heading=1, shrink=0.75, box_shrink=1.0, n=71, conf=0.9, rise=0.0):
+def make_pass(heading=1, shrink=0.75, box_shrink=1.0, n=71, conf=0.9, rise=0.0, body=False):
     """화면 왼쪽에서 오른쪽으로 걷는 가짜 통과. 오른쪽으로 갈수록 몸통 가로가 shrink 배, 상자 높이가 box_shrink 배가 된다."""
     frames = []
     for i in range(n):
@@ -24,6 +24,11 @@ def make_pass(heading=1, shrink=0.75, box_shrink=1.0, n=71, conf=0.9, rise=0.0):
         # rise: 카메라가 기울어 궤적과 몸통이 같은 기울기로 기운 경우
         kp[nz.T13] = [x + heading * 100 * kx, y + rise * heading * 100 * kx, conf]
         kp[nz.ILIAC] = [x - heading * 100 * kx, y - rise * heading * 100 * kx, conf]
+        if body:   # 어깨(4·9)를 T13, 고관절(14·18)을 장골능 자리에 둬 oblique.py 의 몸통 축이 몸통과 같게
+            for i in (4, 9):
+                kp[i] = list(kp[nz.T13])
+            for i in (14, 18):
+                kp[i] = list(kp[nz.ILIAC])
         frames.append({"box": [x - 120, y - 100 * ky, x + 120, y + 100 * ky], "kp": kp})
     return {"meta": {"model": {"name": "t"}},
             "videos": [{"video": "a", "width": W, "height": H, "fps": 30, "frames": frames}]}
@@ -33,11 +38,32 @@ def trunk_lens(frames, key):
     return [nz._trunk(f[key])["len"] for f in frames if f and key in f]
 
 
-def test_horizontal_shrink_is_corrected():
-    d = nz.normalize(make_pass(shrink=0.75))
+def test_horizontal_shrink_is_corrected_only_with_stretch_x():
+    # v0 방식(가로 늘리기)은 몸통 길이를 펴고, v1 기본은 가로를 늘리지 않는다(S15P31A404-102)
+    d = nz.normalize(make_pass(shrink=0.75), use_x=True, iso=False)
     lens = trunk_lens(d["videos"][0]["frames"], "norm")
     assert len(lens) == 71
     assert max(lens) - min(lens) < 0.5
+    v1 = trunk_lens(nz.normalize(make_pass(shrink=0.75))["videos"][0]["frames"], "norm")
+    assert min(v1) / max(v1) < 0.8
+
+
+def test_default_scales_x_and_y_together():
+    # 카메라에서 멀어지면(상자 높이 0.8 배) 가로·세로를 같은 비율로 키워 몸통 길이도 펴진다
+    d = nz.normalize(make_pass(shrink=0.8, box_shrink=0.8))
+    lens = trunk_lens(d["videos"][0]["frames"], "norm")
+    assert max(lens) - min(lens) < 0.5
+    assert d["meta"]["normalize"]["version"] == "v1" and d["meta"]["normalize"]["iso"]
+
+
+def test_oblique_is_recorded_not_dropped():
+    # 몸통만 짧아지고 상자 높이는 그대로 = 비스듬한 진행. 표시만 하고 norm 은 그대로 만든다
+    d = nz.normalize(make_pass(shrink=0.6, body=True))
+    p = d["videos"][0]["passes"][0]
+    assert p["oblique"]["oblique"] and "yaw" in p["oblique"]["reasons"]
+    assert all("norm" in f for f in d["videos"][0]["frames"])
+    flat = nz.normalize(make_pass(shrink=1.0, body=True))["videos"][0]["passes"][0]
+    assert not flat["oblique"]["oblique"]
 
 
 def test_screen_position_is_kept():
@@ -112,3 +138,59 @@ def test_tilt_option_levels_the_path():
     for f in d["videos"][0]["frames"]:                      # 몸통 앞뒤 점이 같은 높이로 돌아온다
         a, b = f["norm"][nz.T13], f["norm"][nz.ILIAC]
         assert abs(a[1] - b[1]) < 0.5
+
+
+# ---- 비스듬함 판정과 보정 뒤 기하 보존 (S15P31A404-105) ----
+
+def _angle(a, b, c):
+    """b 에서 a·c 로 가는 두 선분 사이 각(도)."""
+    v1, v2 = (a[0] - b[0], a[1] - b[1]), (c[0] - b[0], c[1] - b[1])
+    cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (math.hypot(*v1) * math.hypot(*v2))
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+
+
+def _with_leg(d):
+    """가짜 통과의 뒷다리(14 고관절·15 무릎·16 뒷발목)를 꺾인 모양으로 바꾼다. 몸통(T13·장골능)은 그대로."""
+    for f in d["videos"][0]["frames"]:
+        x, y = f["kp"][nz.ILIAC][:2]
+        f["kp"][14] = [x, y + 20, 0.9]
+        f["kp"][15] = [x + 30, y + 70, 0.9]
+        f["kp"][16] = [x - 10, y + 120, 0.9]
+    return d
+
+
+def test_distance_change_alone_is_not_oblique():
+    # 카메라에서 멀어지기만 하면 몸통과 상자가 같은 비율로 작아진다 → yaw 로 걸리면 안 된다
+    p = nz.normalize(make_pass(shrink=0.7, box_shrink=0.7, body=True))["videos"][0]["passes"][0]["oblique"]
+    assert p["yaw_change"] < 1.1 and "yaw" not in p["reasons"]
+
+
+def test_tilted_path_is_flagged():
+    # 궤적이 수평에서 약 6.8° 기울면 path 로 표시된다(문턱 5°)
+    p = nz.normalize(make_pass(shrink=1.0, rise=0.12, body=True))["videos"][0]["passes"][0]["oblique"]
+    assert abs(p["path_deg"]) > 5 and "path" in p["reasons"] and p["oblique"]
+
+
+def test_iso_scaling_keeps_joint_angles():
+    # 기본(iso)은 가로·세로를 같은 비율로 키워서 관절 각도가 바뀌지 않는다
+    d = nz.normalize(_with_leg(make_pass(shrink=0.7, box_shrink=0.7)))
+    for f in d["videos"][0]["frames"]:
+        k, n = f["kp"], f["norm"]
+        assert abs(_angle(k[14], k[15], k[16]) - _angle(n[14], n[15], n[16])) < 0.1
+
+
+def test_stretch_x_changes_joint_angles():
+    # 대조: v0 방식(가로만 늘리기)은 각도를 바꾼다 — v1 에서 기본을 iso 로 바꾼 이유
+    d = nz.normalize(_with_leg(make_pass(shrink=0.6, box_shrink=1.0)), use_x=True, iso=False)
+    f = d["videos"][0]["frames"][-1]
+    assert abs(_angle(*(f["kp"][i] for i in (14, 15, 16))) - _angle(*(f["norm"][i] for i in (14, 15, 16)))) > 1
+
+
+def test_tilt_keeps_segment_lengths_and_angles():
+    # 기울기 보정은 회전만 하므로 체절 길이·관절 각도가 그대로다
+    d = nz.normalize(_with_leg(make_pass(shrink=1.0, rise=0.1)), use_y=False, iso=False, tilt=True)
+    for f in d["videos"][0]["frames"]:
+        k, n = f["kp"], f["norm"]
+        for i, j in ((14, 15), (15, 16)):
+            assert abs(math.dist(k[i][:2], k[j][:2]) - math.dist(n[i][:2], n[j][:2])) < 0.05
+        assert abs(_angle(k[14], k[15], k[16]) - _angle(n[14], n[15], n[16])) < 0.1
