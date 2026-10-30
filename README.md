@@ -68,7 +68,7 @@ S15P31A404/
 ├── infra/          nginx 설정, CI용 compose
 ├── docs/           API 명세, 컨벤션, 라벨링 기준, 평가 재현 기록
 ├── tests/          각도 계산, 카메라 방향, 정규화 테스트
-└── compose.yaml    팀 서버 배포 (nginx, frontend, api, postgres)
+└── compose.yaml    팀 서버 배포 (nginx, frontend, api, postgres, redis)
 ```
 
 ## 🚀 실행

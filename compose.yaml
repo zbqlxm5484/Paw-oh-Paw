@@ -39,5 +39,20 @@ services:
       timeout: 3s
       retries: 10
 
+  # 내부 네트워크 전용(ports 미공개, 비밀번호 없음). api·worker는 REDIS_URL(redis://redis:6379/0)로 접속
+  # maxmemory는 EC2 사양 확인 전 잠정값. noeviction이라 가득 차면 쓰기를 거부한다(큐·작업 상태 유실 방지)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   postgres-data:
+  redis-data:
