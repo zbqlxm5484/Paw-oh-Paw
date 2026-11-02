@@ -6,6 +6,7 @@ import { PostForm, useTitle } from '../app/page'
 import { currentStaff, redirect, setLogin } from '../app/session'
 import { activeCount, codesOf, contractStatus, db, show_code, staffOf } from '../store/db'
 import type { Staff } from '../store/types'
+import { isRemote, MOCK } from '../store/backend'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 
 const BTN = 'height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:600;cursor:pointer'
@@ -21,10 +22,12 @@ function admin_staff(demo: string): Staff | undefined {
   return s && (s.role === 'ADMIN' || s.role === 'STAFF') ? s : undefined
 }
 
-/** main.py admin_rows: 크림오프를 뺀 기관을 이름순(파이썬 문자열 비교)으로 */
-function admin_rows(): InstRow[] {
+/** main.py admin_rows: 크림오프를 뺀 기관을 이름순(파이썬 문자열 비교)으로.
+ *  백엔드 계정으로 들어왔으면 백엔드가 준 기관만(시연 기관은 버튼을 눌러도 서버에 없어 404). 시연 관리자(?demo=1)는 시연 기관 그대로 */
+function admin_rows(me: Staff): InstRow[] {
+  const onlyRemote = !MOCK && isRemote(me.inst)
   return Object.values(db.accounts)
-    .filter((x) => x.id !== 'creamoff')
+    .filter((x) => x.id !== 'creamoff' && (!onlyRemote || isRemote(x.id)))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
     .map((a) => ({
       id: a.id, code: a.code || '-', name: a.name, ends: a.contract_ends || '', status: contractStatus(a),
@@ -67,7 +70,7 @@ export default function Admin() {
   if (!s || demo) return null
   const me = s
   const can_write = s.role === 'ADMIN'
-  const insts = admin_rows()
+  const insts = admin_rows(me)
 
   return (
     <Base me={me} toast={toast} topbar={<AuthBar />}>

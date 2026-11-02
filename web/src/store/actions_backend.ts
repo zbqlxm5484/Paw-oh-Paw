@@ -1,12 +1,16 @@
-// 백엔드에 있는 기능의 폼 처리. 가짜 서버 모드(--mode mock)가 아니면 actions_impl.ts 보다 먼저 등록돼 같은 주소를 대신 받는다.
+// 백엔드에 있는 기능의 폼 처리. 가짜 서버 모드(--mode mock)가 아니면 BACKEND 우선순위로 등록돼, import 순서와 무관하게
+// actions_impl.ts 보다 먼저 같은 주소를 받는다.
 // 백엔드에 없는 기능(메모·바이탈·진단 이력·기준 회차·삭제 등)은 등록하지 않아 actions_impl.ts(브라우저 저장소)가 그대로 받는다.
 import { ApiError } from '../api/client'
 import { redirect, need_login, setLogin, current, currentStaff, type Go } from '../app/session'
 import * as config from '../config'
-import { on, f } from './actions'
+import { on, f, BACKEND, type Handler } from './actions'
 import { api, MOCK, SEX_OUT, SIZE_OUT, syncFromBackend, tokenStore, isRemote, syncAdmin } from './backend'
 import { db, dogOf } from './db'
 import { remember } from './sessions_backend'
+
+/** 백엔드 처리 함수 등록: 로컬(시제품) 처리 함수보다 언제나 먼저 불린다 */
+const onB = (pattern: string, h: Handler) => on(pattern, h, BACKEND)
 
 const msg = (e: unknown): string => (e instanceof ApiError ? e.message : '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
 
@@ -25,7 +29,7 @@ async function enter(token: { access_token: string; expires_at: string; staff: {
 }
 
 if (!MOCK) {
-  on('/login', async (_p, fd) => {
+  onB('/login', async (_p, fd) => {
     try {
       return await enter(await api.login(f(fd, 'login_id'), f(fd, 'password')))
     } catch (e) {
@@ -33,13 +37,13 @@ if (!MOCK) {
     }
   })
 
-  on('/logout', () => {
+  onB('/logout', () => {
     tokenStore.clear()
     setLogin(null)
     return redirect('/')
   })
 
-  on('/signup', async (_p, fd) => {
+  onB('/signup', async (_p, fd) => {
     if (!(f(fd, 't0') && f(fd, 't1') && f(fd, 't2'))) return redirect('/signup', '필수 약관에 동의해 주세요')
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/signup', '비밀번호가 서로 달라요')
     try {
@@ -50,7 +54,7 @@ if (!MOCK) {
     }
   })
 
-  on('/forgot', async (_p, fd) => {
+  onB('/forgot', async (_p, fd) => {
     try {
       await api.resetRequest(f(fd, 'login_id')) // 계정이 있든 없든 204. 링크는 메일로만 간다
       return redirect('/forgot?sent=1')
@@ -59,7 +63,7 @@ if (!MOCK) {
     }
   })
 
-  on('/reset-password', async (_p, fd) => {
+  onB('/reset-password', async (_p, fd) => {
     const token = f(fd, 'token')
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect(`/reset-password?token=${encodeURIComponent(token)}`, '8자 이상, 두 칸이 같게 입력해 주세요')
     try {
@@ -70,7 +74,7 @@ if (!MOCK) {
     }
   })
 
-  on('/account/profile', async (_p, fd) => {
+  onB('/account/profile', async (_p, fd) => {
     if (!current()) return need_login()
     try {
       await syncFromBackend(await api.updateMe({ name: f(fd, 'name').trim(), email: f(fd, 'email').trim() }))
@@ -80,7 +84,7 @@ if (!MOCK) {
     }
   })
 
-  on('/account/password', async (_p, fd) => {
+  onB('/account/password', async (_p, fd) => {
     if (!current()) return need_login()
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/account', '새 비밀번호는 8자 이상, 현재와 다르게 입력해 주세요')
     try {
@@ -92,7 +96,7 @@ if (!MOCK) {
   })
 
   // 반려견 등록·수정: 백엔드 기관이면 서버에 저장하고, 서버에 없는 칸(동물번호·보호자 등)은 이 브라우저에 둔다
-  on('/dogs', async (_p, fd) => {
+  onB('/dogs', async (_p, fd) => {
     const acct = current()
     if (!acct) return need_login()
     const next_url = f(fd, 'next_url') || '/home'
@@ -124,7 +128,7 @@ if (!MOCK) {
   })
 
   // 측정: 회차를 열고 영상을 올린 뒤 측정을 끝낸다(분석은 서버). 분석 중 화면에서 서버 상태를 따라가 결과로 넘어간다
-  on('/analyze', async (_p, fd) => {
+  onB('/analyze', async (_p, fd) => {
     const acct = current()
     if (!acct) return need_login()
     if (!isRemote(acct.id)) return { to: '__local__' }
@@ -132,16 +136,32 @@ if (!MOCK) {
     if (!dogOf(acct, dog)) return redirect('/upload', '반려견을 골라 주세요')
     const files = fd.getAll('files').filter((x): x is File => x instanceof File && !!x.name)
     if (!files.length) return redirect(`/upload?dog=${dog}`, '보행 영상을 1개 이상 올려 주세요')
+    // 회차 열기. 이미 측정 중인 회차가 있으면(앞서 업로드가 끊긴 경우 등) 그 회차에 이어서 올린다
+    let sid = '', created = false
     try {
-      const s = await api.startSession(dog, weight ? { weight_kg: Number(weight) } : {})
-      const n = Math.min(files.length, config.MAX_SHOTS)
-      for (const file of files.slice(0, n)) await api.uploadShot(s.id, file)
-      await api.completeSession(s.id)
-      remember(acct, { id: s.id, inst: acct.id, dog, started: Date.now(), n, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
-      return redirect(`/analyzing/${s.id}`)
+      sid = (await api.startSession(dog, weight ? { weight_kg: Number(weight) } : {})).id
+      created = true
+    } catch (e) {
+      const open = e instanceof ApiError && e.code === 'SESSION_ALREADY_OPEN' ? (await api.dog(dog).catch(() => null))?.open_session_id : null
+      if (!open) return redirect(`/upload?dog=${dog}`, msg(e))
+      sid = open
+    }
+    const n = Math.min(files.length, config.MAX_SHOTS)
+    try {
+      for (const file of files.slice(0, n)) await api.uploadShot(sid, file)
+    } catch (e) {
+      // 이번에 연 회차는 지운다(413·400·연결 끊김). 남겨 두면 그 반려견이 '측정 중'에 갇힌다. 이어서 쓰던 회차는 그대로 둬 다음 업로드가 이어 쓴다
+      if (created) await api.cancelSession(sid).catch(() => undefined)
+      await syncFromBackend().catch(() => undefined)
+      return redirect(`/upload?dog=${dog}`, msg(e))
+    }
+    try {
+      await api.completeSession(sid)
     } catch (e) {
       return redirect(`/upload?dog=${dog}`, msg(e))
     }
+    remember(acct, { id: sid, inst: acct.id, dog, started: Date.now(), n, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
+    return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸어요')
   })
 
   // ── 크림오프 관리(백엔드 /admin) ──
@@ -150,7 +170,7 @@ if (!MOCK) {
     await syncAdmin()
     return redirect('/admin', toast)
   }
-  on('/admin/institutions', async (_p, fd) => {
+  onB('/admin/institutions', async (_p, fd) => {
     const no = adminOnly()
     if (no) return no
     try {
@@ -160,7 +180,7 @@ if (!MOCK) {
       return redirect('/admin', msg(e))
     }
   })
-  on('/admin/institutions/:inst', async (p, fd) => {
+  onB('/admin/institutions/:inst', async (p, fd) => {
     const no = adminOnly()
     if (no) return no
     try {
@@ -170,7 +190,7 @@ if (!MOCK) {
       return redirect('/admin', msg(e))
     }
   })
-  on('/admin/institutions/:inst/codes', async (p, fd) => {
+  onB('/admin/institutions/:inst/codes', async (p, fd) => {
     const no = adminOnly()
     if (no) return no
     try {
@@ -180,7 +200,7 @@ if (!MOCK) {
       return redirect('/admin', msg(e))
     }
   })
-  on('/admin/codes/:cid', async (p, fd) => {
+  onB('/admin/codes/:cid', async (p, fd) => {
     const no = adminOnly()
     if (no) return no
     try {
@@ -191,7 +211,7 @@ if (!MOCK) {
       return redirect('/admin', msg(e))
     }
   })
-  on('/admin/staff/:sid', async (p) => {
+  onB('/admin/staff/:sid', async (p) => {
     const no = adminOnly()
     if (no) return no
     const s = db.staff[p.sid]

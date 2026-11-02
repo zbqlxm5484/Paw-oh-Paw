@@ -1,39 +1,53 @@
-# 웹 시제품 → React 옮기기 규칙 (작업자 공통)
+# React 웹(web/)
 
-목표: `prototype/proto_app`(FastAPI + Jinja2) 웹을 `web/`(Vite + React 19 + TypeScript + react-router-dom 7)으로 **픽셀 단위로 똑같이** 옮긴다.
-같은 시연 데이터(`web/src/mocks/fixture.json`, 시제품 seed 를 그대로 내보낸 것)로 두 화면을 스크린샷 비교한다.
+`prototype/proto_app`(FastAPI + Jinja2) 웹을 Vite + React 19 + TypeScript + react-router-dom 7 로 옮긴 것이다.
+화면·문구·동작은 시제품과 같게 유지하고, 같은 시연 데이터로 두 화면을 스크린샷 비교해 확인한다.
 
-## 레포·브랜치
-- 레포 `C:\Users\SSAFY\Desktop\PJT\S15P31A404`, 브랜치 `S15P31A404-103-web-react`. **커밋·브랜치 변경 금지. `backend/`·`prototype/`·`frontend/` 수정 금지**(읽기만).
-- 원본: `prototype/proto_app/` 의 `main.py`(주소·화면 준비·폼 처리), `views.py`·`real.py`·`analysis.py`·`seed.py`·`config.py`, `templates/*.html`, `static/*.js`, `static/app.css`.
+## 실행
 
-## 이미 있는 것 (web/src)
-- `config.ts`: config.py 그대로(같은 이름).
-- `store/types.ts`: store.py dataclass 를 같은 필드 이름의 interface 로(Dog, Result, Note, Vital, History, Image, Job, Staff, DeviceCode, Account, RealSession).
-- `store/db.ts`: `db`(= Store: accounts·staff·codes·sessions(= real.sessions())). 도우미 `dogOf(acct,id)`·`resultOf`·`jobOf`·`activeJobs(acct)`·`contractStatus(acct)`·`jobProgress(job)`·`getAccount(id)`·`byLogin`·`staffOf`·`codesOf`·`byCode`·`activeCount`·`effectiveRole(staff)`·`norm_code`·`show_code`·`new_id(prefix)`·`kdate(iso?)`·`isoToday()`·`changed()`(바꾼 뒤 부르면 화면 다시 그림)·`useDb()`·`freshAccount(id)`.
-- `store/demo.ts`: `DEMO_ID`, `DEMO_STAFF`, `DEMO_CODE`, `FULL_CODE`, `EXPIRED_CODE`, `STAFF`, `resetDemo()`(seed.demo_account).
-- `app/session.ts`: `currentStaff()`, `current()`(기관, 계약 만료면 `ContractExpired` 를 던짐), `setLogin(staffId|null)`(쿠키 pp_acct 대신), `setToast`·`takeToast`, `finished_notices(acct, skipJob)`, `redirect(to, toast)`·`need_login()` → `Go {to, toast}`, `hasActive(acct)`.
-- `app/page.tsx`: `usePage({login?, jobId?})` → `{acct, me, toast, query, go}` (로그인 필요 화면은 `login: true`; 안 됐으면 알아서 /login 으로 보냄. 이때 화면은 acct 없이 한 번 그려질 수 있으니 `if (!acct) return null`). `PostForm`(= `<form method="post" action="...">`, 주소 그대로 store/actions 로 보냄), `GetForm`, `submitGet`, `staticUrl(path)`(= url_for('static', path=...) → `/static/...`), `useTitle`.
-- `app/Base.tsx`: base.html. `<Base acct me nav q toast jobId topbar modals>{본문}</Base>`. `topbar={false}` = 상단 바 없음, `topbar={<AuthBar/>}` = 다른 상단 바. 모달은 `modals` 로. data-open/data-close/data-lightbox/data-toast/data-href 클릭, 화면 안 `<a href>` 클릭(새로 불러오지 않고 이동), `input.author-inp` 기본값 채우기, 분석 완료 알림은 Base 가 한다.
-- `app/css.ts`: `css('display:flex;gap:8px')` → style 객체. **인라인 style 은 반드시 이걸로 문자열 그대로 옮긴다**(손으로 camelCase 바꾸지 말 것). Jinja 값이 들어가면 템플릿 문자열: ``css(`background:${x.bg};color:${x.c}`)``.
-- `store/actions.ts`: `on('/dogs/:dog_id/notes', (p, fd) => Go)` 로 POST 주소 등록, `f(fd, 'name')` = Form(""). 등록은 `store/actions_impl.ts` 에서.
-- `App.tsx`: 주소 → 화면 표(시제품과 같은 주소). 화면 파일은 `pages/<이름>.tsx` 의 default export.
-- 정적 파일: `web/public/static/` = 시제품 `static/`(app.css·fonts·assets). 주소 `/static/...` 그대로.
+```bash
+cd web
+npm install
+npm run dev -- --mode mock   # 시연 데이터(src/mocks/fixture.json)만으로. 백엔드 없이 모든 화면
+npm run dev                  # 백엔드 API 사용(vite.config.ts 가 /api 를 localhost:8000 으로 넘긴다)
+npm run build                # tsc -b + vite build
+npm test                     # vitest
+```
 
-## 이름 약속 (병렬 작업이라 꼭 지킨다)
-- 파이썬 함수·dict 키 이름을 **그대로**(snake_case) TS 로 옮긴다. 예) `views.patient_row(acct, d, live)` → `patient_row(acct, d, live: Set<string>)` 같은 키의 객체. 다른 작업자는 이 이름을 믿고 부른다.
-- `web/src/views/views.ts`(views.py), `views/real.ts`(real.py), `views/analysis.ts`(analysis.py: `start_job`, `finish_due_jobs`; seed 의 `J` 도 여기서 export), `views/pyfmt.ts`(파이썬 round·f-string 숫자 서식 흉내).
-- 공통 조각: `pages/parts/Modals.tsx`(`_modals.html` 의 매크로 → `OpenModal`·`CloseModal`·`PetModal({next_url})`·`GuideModal`·`LogoutModal`·`DeleteModal`, pet.js 동작 포함), `pages/parts/DogPanel.tsx`(`_dogpanel.html` → `MemoCard`·`MemoForm`·`DogPanel`), `pages/parts/Vital.tsx`(`_vital.html` → `VV({value, f, size})`), `pages/parts/AuthBar.tsx`(`_authbar.html`).
+## 구조
 
-## 템플릿 → JSX 규칙
-1. 태그·속성·순서·글자를 그대로. `class` → `className`, `for` → `htmlFor`, SVG 속성은 camelCase(stroke-width → strokeWidth 등). 주석 `{# #}` 은 JSX 주석으로.
-2. **공백**: 플렉스·그리드가 아닌 부모 안에서 인라인 요소 사이의 줄바꿈·공백은 화면에 공백 한 칸으로 보인다. JSX 는 줄바꿈 공백을 지우므로, 그런 자리에는 `{' '}` 를 넣는다. 같은 줄의 공백은 JSX 도 남긴다. 템플릿의 `{%- -%}` 등으로 공백이 지워지는 곳도 맞춘다.
-3. 숫자·문자 서식은 파이썬과 같게(`{:.1f}`, round, `|tojson`, `|length` 등). 파이썬 round 는 반올림이 아니라 짝수 반올림이다(views/pyfmt.ts).
-4. 폼: `method="post"` → `<PostForm action="같은 주소">`. 입력은 비제어(`defaultValue`·`defaultChecked`), hidden 은 `value`. `onchange="this.form.submit()"` → `onChange={e => e.currentTarget.form?.requestSubmit()}`. GET 폼 → `<GetForm action=...>`.
-5. 페이지 JS(static/*.js, `<script>`)는 useEffect·상태로 옮기되 같은 결과가 보이게.
-6. 각 화면은 main.py 의 해당 `@app.get` 함수의 준비 로직(리다이렉트 포함)을 그대로 옮긴다. 리다이렉트는 `go(redirect(...))` 를 useEffect 에서, 또는 `<Navigate>`.
-7. 제목 `{% block title %}` → `useTitle(...)`.
+| 위치 | 내용 |
+|---|---|
+| `src/App.tsx` | 주소 → 화면(시제품과 같은 주소) |
+| `src/pages/*.tsx` | 화면. 시제품 `templates/*.html` 과 1:1. 공통 조각은 `pages/parts/` |
+| `src/views/` | 화면 값 계산. `views.py`·`real.py`·`analysis.py` 를 같은 함수 이름(snake_case)으로 옮김. `pyfmt.ts` 는 파이썬 round·숫자 서식 |
+| `src/store/` | `db.ts`(브라우저 저장소, 시연 데이터 불러오기), `actions.ts`(폼 POST 주소 → 처리 함수), `actions_impl.ts`(시제품 `main.py` 의 POST 처리), `actions_backend.ts`·`backend.ts`·`sessions_backend.ts`(백엔드 API) |
+| `src/api/client.ts` | 백엔드 API 호출·토큰 |
+| `src/app/` | `Base.tsx`(base.html), `page.tsx`(`usePage`·`PostForm`·`GetForm`), `session.ts`(로그인·토스트), `css.ts` |
+| `public/static/` | 시제품 `static/`(app.css·글꼴·그림) |
 
-## 끝나면
-- `cd web && npx tsc -p tsconfig.app.json --noEmit` 로 자기 파일 오류가 없게(다른 작업자 파일이 아직 없어 생기는 import 오류는 괜찮다).
-- 무엇을 만들었는지, 옮기면서 시제품과 다르게 할 수밖에 없었던 곳을 짧게 보고.
+## 백엔드 모드와 시연 모드
+
+- 폼은 `<PostForm action="/주소">` 로 보내고 `store/actions.ts` 의 `dispatch` 가 처리 함수를 고른다.
+- 백엔드에 있는 기능(로그인·가입·비밀번호, 반려견 등록·수정, 측정·업로드, 내 정보, 관리)은 `actions_backend.ts` 가 `BACKEND` 우선순위로 등록한다.
+  - **import 순서와 무관하게 언제나 먼저** 불린다.
+  - 처리 함수가 `{ to: '__local__' }` 를 돌려주면(시연 기관) 다음 처리 함수(`actions_impl.ts`)로 넘어간다.
+- 백엔드에 없는 기능(메모·바이탈·진단 이력·기준 회차 등)은 `actions_impl.ts` 만 받아 브라우저 저장소에 둔다.
+- 측정 결과는 `/sessions/{id}/result` 를 `sessions_backend.ts` 가 화면 결과로 바꾼다.
+  - 반려견별 회차 목록 API 가 없어 이 브라우저에서 연 회차와 측정 중 회차만 따라간다.
+
+## 시제품과 맞추기
+
+- 시연 데이터: `python prototype/tools/export_web_fixture.py` → `src/mocks/fixture.json`. 크림오프 제공 데이터는 넣지 않는다.
+- 화면 비교: `python web/scripts/proto_for_compare.py`(시제품을 8002 로, 회사 데이터 없이) + `npm run dev -- --mode mock` 뒤 `python web/scripts/pixel_compare.py`. Git Bash 에서는 `MSYS_NO_PATHCONV=1` 을 붙인다.
+- 값 비교: `python web/scripts/dump_views.py` → `src/views/__parity__/expected.json`(git 밖, 약 15MB) 뒤 `npm test`.
+  - 파일이 없으면 그 비교는 건너뛴다.
+  - 시험은 기대값을 뜬 날로 시계를 고정한다.
+
+## 옮길 때 규칙
+
+1. 태그·속성·순서·글자를 그대로. 인라인 style 은 `css('...')` 로 문자열 그대로 옮긴다.
+2. 플렉스·그리드가 아닌 부모 안의 인라인 요소 사이 줄바꿈은 화면에 공백 한 칸이다. JSX 는 지우므로 `{' '}` 를 넣는다.
+3. 숫자 서식은 파이썬과 같게(`views/pyfmt.ts`). 파이썬 round 는 짝수 반올림이다.
+4. 입력은 비제어(`defaultValue`·`defaultChecked`). `onchange="this.form.submit()"` → `onChange={(e) => e.currentTarget.form?.requestSubmit()}`.
+5. 시제품 화면을 고치면 같은 변경을 이쪽에도 넣고 화면 비교를 다시 돌린다.

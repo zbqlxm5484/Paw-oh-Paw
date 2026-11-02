@@ -79,7 +79,10 @@ export async function syncFromBackend(me?: StaffOut): Promise<string> {
 export async function restore(): Promise<string | null> {
   if (MOCK || !tokenStore.get() || tokenStore.isExpired()) return null
   try {
-    return await syncFromBackend()
+    const me = await api.me()
+    const sid = await syncFromBackend(me)
+    if (me.role === 'ADMIN' || me.role === 'STAFF') await syncAdmin() // 새로고침해도 관리 화면에 백엔드 기관이 남게(로그인 때와 같다)
+    return sid
   } catch {
     tokenStore.clear()
     return null

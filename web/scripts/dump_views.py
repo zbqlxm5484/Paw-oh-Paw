@@ -12,6 +12,7 @@
 import dataclasses
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -54,7 +55,8 @@ def plain(o):
 def main():
     seed.seed()
     acct = store.accounts[seed.DEMO_ID]
-    out = {"ROM_REF": views.ROM_REF, "MEDIAN_SPEED": views.MEDIAN_SPEED, "home": [], "dogs": {}, "results": {}, "compare": {}}
+    # 이 값을 뜬 날. TS 쪽 시험이 이 날로 시계를 고정해 같은 '오늘'·D+ 로 비교한다
+    out = {"today": date.today().isoformat(), "ROM_REF": views.ROM_REF, "MEDIAN_SPEED": views.MEDIAN_SPEED, "home": [], "dogs": {}, "results": {}, "compare": {}}
     for args in HOME:
         out["home"].append({"args": list(args), "out": views.home_view(acct, *args)})
     out["today_rows"] = views.today_rows(acct, acct.dogs)

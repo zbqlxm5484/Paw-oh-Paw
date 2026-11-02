@@ -71,11 +71,17 @@ export function applyMetrics(r: Result, m: Metrics): void {
 }
 
 /** 실패가 아닌 예시 회차에 실측 회차를 차례로 붙인다(오래된 회차부터). */
+/** 같은 날·같은 시각 회차의 순서: id 의 앞글자, 그다음 숫자 크기(real.py _id_key). 문자열로 견주면 res998 이 res1000 뒤로 간다 */
+function id_key(rid: string): [string, number, string] {
+  const m = /^(\D*)(\d*)/.exec(rid)!
+  return [m[1], Number(m[2] || 0), rid]
+}
+
 export function fill(results: Result[]): void {
   const ss = sessions()
   if (!ss.length) return
   let i = 0
-  for (const r of sorted(results, (r) => [r.day, r.time, r.id])) {
+  for (const r of sorted(results, (r) => [r.day, r.time, ...id_key(r.id)])) {
     if (r.st !== 'fail') {
       apply(r, ss[i % ss.length])
       i += 1

@@ -1,14 +1,16 @@
-// 파이썬 views.py 와 TS 옮김이 같은 값을 내는지 견준다. 기대값은 web/scripts/dump_views.py 로 만든다
-// (fixture.json 과 같은 날 만들어야 한다: 날짜가 하루 밀리면 '오늘'·D+ 가 달라진다).
-import { describe, expect, it } from 'vitest'
-import expectedRaw from './__parity__/expected.json'
-import { activeJobs, db } from '../store/db'
-import * as V from './views'
+// 파이썬 views.py 와 TS 옮김이 같은 값을 내는지 견준다. 기대값은 web/scripts/dump_views.py 로 만든다.
+// 기대값 파일(__parity__/expected.json)은 크고(약 15MB) 만든 날에 따라 달라 git 에 넣지 않는다. 없으면 이 비교는 건너뛴다.
+// 날짜: 시연 데이터는 '오늘' 기준으로 날짜를 옮기므로, 기대값을 뜬 날(E.today)로 시계를 고정한 뒤 데이터를 불러온다.
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import type { Account } from '../store/types'
 import * as P from './pyfmt'
 
+const found = import.meta.glob('./__parity__/expected.json', { eager: true, import: 'default' })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const E = expectedRaw as any
-const acct = db.accounts.demo
+const E: any = Object.values(found)[0] ?? null
+let acct: Account
+let V: typeof import('./views')
+let activeJobs: typeof import('../store/db').activeJobs
 const SVG_FULL = new Set(['r1', 'r2', 'r3', 'r4', 'r5'])
 const CMP_DOGS = ['d1', 'd2', 'd3', 'd4', 'g001', 'g002', 'g003']
 
@@ -49,7 +51,17 @@ describe('pyfmt', () => {
   })
 })
 
-describe('views parity', () => {
+describe.skipIf(!E)('views parity (기대값 파일이 있을 때만)', () => {
+  beforeAll(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(`${E.today}T12:00:00`))
+    const store = await import('../store/db')
+    activeJobs = store.activeJobs
+    acct = store.db.accounts.demo
+    V = await import('./views')
+  })
+  afterAll(() => vi.useRealTimers())
+
   it('ROM_REF·MEDIAN_SPEED', () => {
     expect(V.ROM_REF).toEqual(E.ROM_REF)
     expect(V.MEDIAN_SPEED).toEqual(E.MEDIAN_SPEED)

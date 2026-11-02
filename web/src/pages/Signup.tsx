@@ -6,6 +6,8 @@ import { PostForm, useTitle } from '../app/page'
 import { DEMO_CODE } from '../store/demo'
 import { show_code } from '../store/db'
 import { api_device_code_verify } from '../store/actions_impl'
+import { ApiError } from '../api/client'
+import { api, MOCK } from '../store/backend'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 
 const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none'
@@ -40,9 +42,19 @@ export default function Signup() {
     setVerified(false)
     setInst(null)
   }
-  const verify = () => {
+  const verify = async () => {
     if (verified) return
-    const r = api_device_code_verify(codeRef.current?.value || '')
+    const code = codeRef.current?.value || ''
+    // 백엔드 모드: 관리자 API 로 발급한 코드를 서버에서 확인한다. 가짜 서버 모드만 시연 코드(브라우저 저장소)로 확인
+    let r: Awaited<ReturnType<typeof api.verifyCode>> | { error: string }
+    if (MOCK) r = api_device_code_verify(code)
+    else {
+      try {
+        r = await api.verifyCode(code)
+      } catch (e) {
+        r = { error: e instanceof ApiError ? e.message : '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }
+      }
+    }
     if ('error' in r) {
       setMsg({ text: r.error, color: '#C2412D' })
       return
@@ -78,11 +90,11 @@ export default function Signup() {
           {msg ? (
             <span id="soCodeMsg" style={css(`font-size:13px;color:${msg.color};margin-top:-10px`)}>{msg.text}</span>
           ) : (
-            <span id="soCodeMsg" style={css('font-size:13px;color:#5B6472;margin-top:-10px')}>크림오프 계약 안내 메일에 적힌 20자 코드예요. 시연용 코드: <b style={css('cursor:pointer;color:#D2601A')} id="soDemo"
+            <span id="soCodeMsg" style={css('font-size:13px;color:#5B6472;margin-top:-10px')}>크림오프 계약 안내 메일에 적힌 20자 코드예요.{MOCK ? <> 시연용 코드: <b style={css('cursor:pointer;color:#D2601A')} id="soDemo"
               onClick={() => {
                 if (codeRef.current) codeRef.current.value = demo_code
                 reset()
-              }}>{demo_code}</b></span>
+              }}>{demo_code}</b></> : null}</span>
           )}
           <div id="soInst" style={css(`display:${verified ? 'flex' : 'none'};height:56px;border-radius:12px;background:#F2EEE8;align-items:center;gap:12px;padding:0 18px`)}><svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#2E8B57')}><use href="#w-check"></use></svg><span style={css('font-size:13px;color:#5B6472')}>기관</span><b id="soInstName" style={css('font-size:16px')}>{inst ? inst.institution.name : ''}</b><span id="soLeft" style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{inst ? `남은 계정 ${inst.remaining_accounts}개` : ''}</span></div>
 
