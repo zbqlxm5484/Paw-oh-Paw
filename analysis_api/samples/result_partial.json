@@ -123,17 +123,17 @@
       "camera_side": "right",
       "gait": null,
       "valid": false,
-      "reason_code": "PARTIAL_PASS",
-      "reason": "측정 구간을 일부만 지나갔습니다",
+      "reason_code": "NOT_SIDE_VIEW",
+      "reason": "옆모습이 찍히지 않았습니다.",
       "measure_start": null,
       "measure_end": null,
       "metrics": {},
       "checks": {
         "speed_body_per_s": 7.1,
         "lateral_phase": null,
-        "side_view_ratio": 1.0,
-        "inside_s": 0.2,
-        "found": ["PARTIAL_PASS"]
+        "side_view_ratio": 0.62,
+        "inside_s": 0.7,
+        "found": ["NOT_SIDE_VIEW"]
       }
     }
   ],
