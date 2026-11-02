@@ -100,6 +100,8 @@ deploy:
     - cp "$ENV_FILE" .env
     - docker compose -p creamoff up -d --build --remove-orphans
     - docker image prune -f
+    # api가 재생성되면 IP가 바뀌는데 nginx는 시작 시점의 api IP를 캐시해 502가 계속된다 → nginx 재시작
+    - docker compose -p creamoff restart nginx
     - |
       for i in $(seq 1 30); do
         curl -fsS http://127.0.0.1:8080/api/v1/health && exit 0
