@@ -1,4 +1,4 @@
-"""회차 API(15.6): 시작, 상태·진행·촬영 목록, 측정 취소, 영상 업로드. 측정 종료는 작업 단위 8에서 더한다."""
+"""회차 API(15.6, 15.7): 시작, 상태·진행·촬영 목록, 측정 취소, 영상 업로드, 측정 종료, 회차 결과."""
 
 import uuid
 from typing import Annotated
@@ -7,8 +7,9 @@ from fastapi import APIRouter, File, Response, UploadFile, status
 
 from app.api.deps import CurrentStaff, DbSession
 from app.schemas.common import reason_out
-from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionOut
+from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionOut, SessionResultOut
 from app.schemas.shots import ShotUploadOut
+from app.services import session_results as result_service
 from app.services import sessions as session_service
 from app.services import uploads as upload_service
 from app.services.shots import to_shot_out
@@ -33,6 +34,19 @@ def get_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Se
 def cancel_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
     session_service.cancel_session(db, staff.institution_id, session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/sessions/{session_id}/complete", response_model=SessionOut)
+def complete_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionOut:
+    """측정 종료(BE-13). 마지막 촬영의 분석을 기다리지 않고 바로 답한다."""
+    session = session_service.complete_session(db, staff.institution_id, session_id)
+    return session_service.to_session_out(session)
+
+
+@router.get("/sessions/{session_id}/result", response_model=SessionResultOut)
+def get_session_result(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionResultOut:
+    """회차 수치와 다리 비교 요약(BE-14·21)."""
+    return result_service.session_result(db, staff.institution_id, session_id)
 
 
 @router.post("/sessions/{session_id}/shots", response_model=ShotUploadOut, status_code=status.HTTP_201_CREATED)
