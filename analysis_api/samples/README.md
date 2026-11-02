@@ -5,7 +5,7 @@
 
 | 파일 | 어떤 응답 | 상황 |
 | --- | --- | --- |
-| `result_partial.json` | `GET /analyses/{id}/result` | 통과 3번 중 2번 사용, 1번 제외(`PARTIAL_PASS`). 2번 통과의 뒷발 들림은 측정 불가 |
+| `result_partial.json` | `GET /analyses/{id}/result` | 통과 3번 중 2번 사용, 1번 제외(`NOT_SIDE_VIEW`). 촬영 조건 문제로만 뺀 통과라 촬영은 `partial`(기업 무효 사유가 붙은 통과가 있으면 `invalid`). 2번 통과의 뒷발 들림은 측정 불가 |
 | `result_invalid.json` | `GET /analyses/{id}/result` | 영상에 개가 없어 무효(`NO_DOG`). 분석은 완료(`done`) |
 | `status_failed.json` | `GET /analyses/{id}` | 영상을 읽지 못해 분석 실패(`DECODE_FAILED`) |
 | `keypoints.json` | `GET /analyses/{id}/files/keypoints` | 3프레임만 줄인 관절점 파일. 마지막 프레임은 개 없음 |
