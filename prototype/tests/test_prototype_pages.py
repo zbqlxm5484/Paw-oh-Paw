@@ -217,7 +217,9 @@ def test_home_views_search_and_memo_panel(client):
     assert len(acct.dogs) == 120
     html = client.get("/home?view=dogs&changed=1").text
     assert "탄이" in html and "재촬영 필요" in html    # 이틀 전 분석 실패
-    assert "분석 중" not in client.get("/home").text
+    assert "분석 중" not in client.get("/home?view=analyses").text
+    today = client.get("/home").text     # 첫 탭 = 오늘: 오늘 온 반려견, 진료 기록 전이면 바로 쓰러 가기
+    assert "오늘 한 것" in today and "콩이" in today and "진료 기록 전" in today
     assert "보리" in client.get("/home?q=20190412").text   # 동물번호로 찾기
     assert "탄이" in client.get("/home?view=dogs&q=입질").text   # 메모 내용으로 찾기
     assert "박민준 테크니션" in client.get("/home?view=staff").text
@@ -307,3 +309,13 @@ def test_gait3d_measured_curve(client):
     for code, leg in g["legs"].items():
         joints = ("어깨", "팔꿈치", "앞발목") if code[1] == "F" else ("고관절", "무릎", "뒷발목")
         assert all(len(leg["joint"][j]) == g["n_phase"] for j in joints) and leg["strides"] > 0
+
+def test_vital_flags_and_weight_trend():
+    """바이탈 이상값 H/L(참고 범위 config.VITAL_REF), 체중은 직전 방문 대비 5% 넘게 바뀌면 표시"""
+    from proto_app import views
+    from proto_app.store import Vital
+    f = views.vital_flags(Vital("2026-11-02", "10.0", "39.6", "200", "165", "95"), "S", Vital("2026-10-20", "11.0"))
+    assert f["temp"]["m"] == "H" and f["hr"]["m"] == "H" and f["bp"]["m"] == "H" and f["kg"]["m"].startswith("▼")
+    ok = views.vital_flags(Vital("2026-11-02", "10.2", "38.6", "100", "120", "80"), "S", Vital("2026-10-20", "10.0"))
+    assert not any(x["m"] for x in ok.values())
+    assert views.vital_flags(Vital("2026-11-02", "", "", "", "145", "90"))["bp"]["m"] == "경계"

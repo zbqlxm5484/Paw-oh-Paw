@@ -413,11 +413,11 @@ def jump(idx: int):
 
 
 # ── 홈: 분석 · 반려견 · 촬영 담당자 목록 ──
-HOME_VIEWS = [("analyses", "분석"), ("dogs", "반려견"), ("staff", "촬영 담당자")]
+HOME_VIEWS = [("today", "오늘"), ("analyses", "분석"), ("dogs", "반려견"), ("staff", "촬영 담당자")]   # EMR 첫 화면처럼 오늘 온 반려견부터(11-02)
 
 
 @app.get("/home")
-def home(request: Request, view: str = "analyses", q: str = "", dog: str = "", by: str = "", changed: str = "",
+def home(request: Request, view: str = "today", q: str = "", dog: str = "", by: str = "", changed: str = "",
          stage: str = "", page_no: int = Query(1, alias="page"), modal: str = ""):
     """버튼으로 목록 하나(분석·반려견·촬영 담당자)만 띄운다. 반려견을 누르면 반려견 차트로 간다."""
     acct = current(request)
@@ -425,12 +425,12 @@ def home(request: Request, view: str = "analyses", q: str = "", dog: str = "", b
         return need_login()
     if acct.dog(dog):   # 반려견은 차트에서 본다
         return redirect(f"/dogs/{dog}")
-    view = "analyses" if by else (view if view in dict(HOME_VIEWS) else "analyses")
+    view = "analyses" if by else (view if view in dict(HOME_VIEWS) else "today")
     hv = views.home_view(acct, view, q, "", by, bool(changed), stage, page_no)
     keep = {"view": view, "q": q, "by": by, "changed": changed, "stage": stage}
     qs = lambda **kw: "/home?" + urlencode({k: v for k, v in {**keep, **kw}.items() if v})  # noqa: E731
     return page(request, "home.html", acct, nav="home", hv=hv, view=view, views_=HOME_VIEWS, q=q, by=by,
-                changed=changed, stage=stage, qs=qs, modal=modal, today=views.fmt_date(date.today().isoformat()))
+                changed=changed, stage=stage, qs=qs, modal=modal, today=views.fmt_date(date.today().isoformat()), today_iso=date.today().isoformat())
 
 
 # EMR 처럼: 진료 기록 = 왼쪽 방문 목록 + 가운데 그날 기록, 오른쪽 진단 이력. 경과 = 그래프·측정 이력·바이탈 표(11-02)
@@ -457,7 +457,7 @@ def dog_chart(request: Request, dog_id: str, tab: str = "visits", edit: str = ""
     return page(request, "dog.html", acct, nav="home", cur=cur, dd=views.dog_detail(acct, cur), tab=tab, tabs=CHART_TABS,
                 row=views.patient_row(acct, cur, live), sm=views.chart_summary(acct, cur), soap_def=config.SOAP,
                 memos=views.memos(cur), memo_cat=config.MEMO_CAT, team=views.care_team(acct, cur),
-                visits=vis, sel=next((x for x in vis if x["day"] == v), None), v=v, dx=views.dx_history(acct, cur), imgs=views.image_list(cur),
+                visits=vis, sel=next((x for x in vis if x["day"] == v), None), v=v, dx=views.dx_history(acct, cur), imgs=views.image_list(cur), kgt=views.kg_trend(cur),
                 vt=views.vital_rows(cur), edit=edit, today_iso=today,
                 latest=views.result_view(acct, latest, home=True)["rd"] if latest else None)
 
@@ -782,7 +782,8 @@ def gait_3d(request: Request, rid: str):
     return page(request, "gait3d.html", acct, nav="results", rd=views.result_view(acct, r)["rd"], bm=bm, legs=legs, view=views.best_view(bm),
                 overall=overall, model_url=str(request.url_for("static", path=model)), roms=roms, stance=stance, speed=speed,
                 rom_ref=views.ROM_REF,
-                gait_src=(f"{real.source_name(s)} 회차 수치(AI-Hub 라벨 관절점 + 합성)" if s else "시연용 합성 수치(실제 개의 값이 아님)"),
+                gait_src=(f"{real.source_name(s)} 회차 · 관절 가동 범위는 AI-Hub 71878 라벨 관절점, 입각기 비율은 공개 논문(PLOS ONE 2018) 실측 분포, 보행 속도는 합성"
+                          if s else "시연용 합성 수치(실제 개의 값이 아님)"),
                 # 측정 걸음: 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성). 회사 데이터는 쓰지 않는다
                 gait_url=str(request.url_for("static", path="assets/dog3d/gait_demo.json")))
 

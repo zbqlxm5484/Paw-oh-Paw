@@ -32,6 +32,13 @@ def sessions() -> list:
     return [s for s in d if s["passes"]["L"] and s["passes"]["R"] and s["cycles"] >= MIN_CYCLES]
 
 
+@lru_cache(maxsize=1)
+def population() -> dict:
+    """AI-Hub 71878 라벨의 실제 견종(체급별)·나이대 분포. 없으면 빈 값(seed 가 예전 목록을 쓴다)."""
+    f = ASSETS / "demo_sessions.json"
+    return json.loads(f.read_text(encoding="utf-8")).get("population", {}) if f.exists() else {}
+
+
 def session(src: str):
     """'출처:촬영 묶음' → 실측 회차"""
     sid = src.split(":", 1)[-1] if src else ""

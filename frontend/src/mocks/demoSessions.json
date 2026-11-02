@@ -2,11 +2,95 @@
  "note": "AI-Hub 71878 라벨 관절점으로 잰 관절각·가동 범위 + 합성 값(각 회차 synthetic). 회사 데이터 없음. prototype/tools/build_demo_sessions.py",
  "angle_def": "v1",
  "n_phase": 50,
+ "population": {
+  "source": "AI-Hub 71878 라벨(dog_type·size·age), 세션마다 하나",
+  "breeds": {
+   "S": {
+    "미니핀": 14,
+    "포메라니안": 187,
+    "말티즈": 242,
+    "비숑 프리제": 246,
+    "꼬통 드 툴레아": 16,
+    "베들링턴 테리어": 2,
+    "요크셔테리어": 27,
+    "화이트테리어": 9,
+    "말티푸": 72,
+    "시츄": 38,
+    "푸들": 365,
+    "닥스훈트": 16,
+    "믹스견": 52,
+    "폼스키": 13,
+    "치와와": 64,
+    "보스턴테리어": 10,
+    "퍼그": 4,
+    "스피츠": 16,
+    "폼피츠": 12,
+    "라사압소": 2,
+    "요키": 4,
+    "꼬똥": 2,
+    "시바이누": 4,
+    "꼬통드 툴레아": 4,
+    "빠삐용": 2,
+    "꼬똥드툴레아": 2,
+    "페키니즈": 35,
+    "실버푸들": 4,
+    "패키니즈": 4,
+    "시추": 4,
+    "푸들+비숑": 1,
+    "퓨둘": 2,
+    "시바견": 6,
+    "이탈리안그레이하운드": 14,
+    "웰시코기": 1,
+    "카발리에 킹 찰스": 2,
+    "카발리에킹찰스": 1,
+    "꼬통드툴레아": 4,
+    "슈나우저": 2,
+    "파피용": 4,
+    "미니비숑": 1,
+    "슈나": 2,
+    "말티츄": 4,
+    "폭스테리어": 1,
+    "말티폼": 1,
+    "꼬똥드뚤레아": 2,
+    "말티": 2,
+    "실키 테리어": 2,
+    "쉽독": 1,
+    "슈너우저": 2
+   },
+   "M": {
+    "보스턴테리어": 4,
+    "웰시코기": 12,
+    "스피츠": 5,
+    "라브라도": 2,
+    "퍼그": 2,
+    "비숑 프리제": 2,
+    "시바이누": 3,
+    "비글": 4,
+    "믹스견": 5,
+    "꼬똥드툴레아": 2,
+    "골든두들": 2,
+    "코카스페니얼": 1,
+    "프렌치 불독": 2,
+    "쉽독": 2,
+    "불독": 1
+   }
+  },
+  "ages": {
+   "성견": 573,
+   "노령견": 876,
+   "자견": 136
+  }
+ },
  "sessions": [
   {
    "id": "2024_09_12_16_02_10",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "말티즈",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/정상/2024_09_12_16_02_10/Left",
     "aihub71878/정상/2024_09_12_16_02_10/Right"
@@ -16,7 +100,7 @@
     "R": 1
    },
    "cycles": 7,
-   "walk_speed": 2.84,
+   "walk_speed": 2.66,
    "fps": 30.0,
    "date": "2024-09-12",
    "metrics": {
@@ -24,33 +108,33 @@
      "rom_shoulder": 35.4,
      "rom_elbow": 31.0,
      "rom_carpus": 31.5,
-     "stance_ratio": 60.0,
-     "stride_length": 235.2,
-     "paw_lift": 26.6
+     "stance_ratio": 68.5,
+     "stride_length": 234.0,
+     "paw_lift": 26.1
     },
     "LH": {
      "rom_hip": 20.2,
      "rom_stifle": 23.1,
      "rom_tarsus": 21.1,
-     "stance_ratio": 56.2,
-     "stride_length": 239.7,
-     "paw_lift": 19.3
+     "stance_ratio": 52.6,
+     "stride_length": 211.0,
+     "paw_lift": 23.9
     },
     "RF": {
      "rom_shoulder": 38.3,
      "rom_elbow": 59.8,
      "rom_carpus": 41.3,
-     "stance_ratio": 57.1,
-     "stride_length": 222.6,
-     "paw_lift": 23.4
+     "stance_ratio": 60.0,
+     "stride_length": 212.8,
+     "paw_lift": 22.0
     },
     "RH": {
      "rom_hip": 27.6,
      "rom_stifle": 51.4,
      "rom_tarsus": 41.6,
-     "stance_ratio": 62.3,
-     "stride_length": 219.6,
-     "paw_lift": 21.3
+     "stance_ratio": 61.0,
+     "stride_length": 237.1,
+     "paw_lift": 25.9
     }
    },
    "knee_curve": {
@@ -1284,18 +1368,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_14_15_20_05",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "말티푸",
+    "size": "S",
+    "age": "성견"
+   },
    "video_names": [
     "aihub71878/정상/2024_09_14_15_20_05/Left",
     "aihub71878/정상/2024_09_14_15_20_05/Right"
@@ -1304,8 +1395,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 10,
-   "walk_speed": 3.45,
+   "cycles": 6,
+   "walk_speed": 3.26,
    "fps": 30.0,
    "date": "2024-09-14",
    "metrics": {
@@ -1313,15 +1404,15 @@
      "rom_shoulder": 29.5,
      "rom_elbow": 20.0,
      "rom_carpus": 28.6,
-     "stance_ratio": 62.4,
-     "stride_length": 241.1,
-     "paw_lift": 20.2
+     "stance_ratio": 73.1,
+     "stride_length": 237.8,
+     "paw_lift": 27.0
     },
     "LH": {
      "rom_hip": 26.5,
      "rom_stifle": 16.1,
      "rom_tarsus": 27.2,
-     "stance_ratio": 58.8,
+     "stance_ratio": 60.8,
      "stride_length": 255.5,
      "paw_lift": 27.7
     },
@@ -1329,16 +1420,16 @@
      "rom_shoulder": 33.1,
      "rom_elbow": 23.6,
      "rom_carpus": 12.7,
-     "stance_ratio": 59.6,
-     "stride_length": 218.5,
-     "paw_lift": 27.8
+     "stance_ratio": 72.5,
+     "stride_length": 215.9,
+     "paw_lift": 18.2
     },
     "RH": {
      "rom_hip": 22.5,
      "rom_stifle": 32.9,
      "rom_tarsus": 47.2,
-     "stance_ratio": 61.5,
-     "stride_length": 246.3,
+     "stance_ratio": 58.1,
+     "stride_length": 233.4,
      "paw_lift": 20.5
     }
    },
@@ -2399,18 +2490,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_24_11_47_10",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "말티즈",
+    "size": "S",
+    "age": "자견"
+   },
    "video_names": [
     "aihub71878/정상/2024_09_24_11_47_10/Left",
     "aihub71878/정상/2024_09_24_11_47_10/Right"
@@ -2419,8 +2517,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 11,
-   "walk_speed": 3.24,
+   "cycles": 8,
+   "walk_speed": 2.8,
    "fps": 30.0,
    "date": "2024-09-24",
    "metrics": {
@@ -2428,15 +2526,15 @@
      "rom_shoulder": 30.0,
      "rom_elbow": 25.7,
      "rom_carpus": 35.7,
-     "stance_ratio": 57.6,
-     "stride_length": 218.0,
-     "paw_lift": 25.8
+     "stance_ratio": 69.8,
+     "stride_length": 243.2,
+     "paw_lift": 22.5
     },
     "LH": {
      "rom_hip": 25.9,
      "rom_stifle": 19.3,
      "rom_tarsus": 32.7,
-     "stance_ratio": 63.5,
+     "stance_ratio": 62.0,
      "stride_length": 243.4,
      "paw_lift": 23.4
     },
@@ -2444,17 +2542,17 @@
      "rom_shoulder": 32.4,
      "rom_elbow": 42.6,
      "rom_carpus": 48.7,
-     "stance_ratio": 58.7,
-     "stride_length": 239.3,
-     "paw_lift": 27.9
+     "stance_ratio": 53.1,
+     "stride_length": 216.0,
+     "paw_lift": 18.9
     },
     "RH": {
      "rom_hip": 27.4,
      "rom_stifle": 20.9,
      "rom_tarsus": 24.8,
-     "stance_ratio": 62.0,
-     "stride_length": 243.1,
-     "paw_lift": 21.3
+     "stance_ratio": 73.4,
+     "stride_length": 247.7,
+     "paw_lift": 24.6
     }
    },
    "knee_curve": {
@@ -3850,18 +3948,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_29_15_35_30",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "요크셔테리어",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/정상/2024_09_29_15_35_30/Left",
     "aihub71878/정상/2024_09_29_15_35_30/Right"
@@ -3871,7 +3976,7 @@
     "R": 1
    },
    "cycles": 8,
-   "walk_speed": 3.41,
+   "walk_speed": 3.04,
    "fps": 30.0,
    "date": "2024-09-29",
    "metrics": {
@@ -3879,33 +3984,33 @@
      "rom_shoulder": 33.2,
      "rom_elbow": 44.2,
      "rom_carpus": 42.7,
-     "stance_ratio": 59.1,
-     "stride_length": 229.2,
-     "paw_lift": 25.1
+     "stance_ratio": 61.3,
+     "stride_length": 255.0,
+     "paw_lift": 22.6
     },
     "LH": {
      "rom_hip": 28.0,
      "rom_stifle": 42.9,
      "rom_tarsus": 40.3,
-     "stance_ratio": 56.8,
-     "stride_length": 245.1,
-     "paw_lift": 21.5
+     "stance_ratio": 58.9,
+     "stride_length": 215.2,
+     "paw_lift": 25.0
     },
     "RF": {
      "rom_shoulder": 44.0,
      "rom_elbow": 39.5,
      "rom_carpus": 32.9,
-     "stance_ratio": 63.3,
-     "stride_length": 233.8,
-     "paw_lift": 27.5
+     "stance_ratio": 69.6,
+     "stride_length": 213.4,
+     "paw_lift": 25.5
     },
     "RH": {
      "rom_hip": 41.2,
      "rom_stifle": 60.1,
      "rom_tarsus": 41.6,
-     "stance_ratio": 58.0,
-     "stride_length": 225.0,
-     "paw_lift": 21.5
+     "stance_ratio": 65.7,
+     "stride_length": 257.7,
+     "paw_lift": 20.6
     }
    },
    "knee_curve": {
@@ -5439,18 +5544,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_10_04_10_48_30",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "비숑 프리제",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/정상/2024_10_04_10_48_30/Left",
     "aihub71878/정상/2024_10_04_10_48_30/Right"
@@ -5459,8 +5571,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 12,
-   "walk_speed": 2.83,
+   "cycles": 7,
+   "walk_speed": 2.84,
    "fps": 30.0,
    "date": "2024-10-04",
    "metrics": {
@@ -5468,33 +5580,33 @@
      "rom_shoulder": 39.9,
      "rom_elbow": 46.6,
      "rom_carpus": 29.7,
-     "stance_ratio": 60.6,
-     "stride_length": 256.4,
-     "paw_lift": 20.6
+     "stance_ratio": 62.1,
+     "stride_length": 247.7,
+     "paw_lift": 22.3
     },
     "LH": {
      "rom_hip": 28.0,
      "rom_stifle": 57.5,
      "rom_tarsus": 69.4,
-     "stance_ratio": 59.9,
-     "stride_length": 249.4,
-     "paw_lift": 24.1
+     "stance_ratio": 56.5,
+     "stride_length": 234.3,
+     "paw_lift": 25.9
     },
     "RF": {
      "rom_shoulder": 31.5,
      "rom_elbow": 46.6,
      "rom_carpus": 42.3,
-     "stance_ratio": 60.5,
-     "stride_length": 222.2,
-     "paw_lift": 27.6
+     "stance_ratio": 58.6,
+     "stride_length": 232.8,
+     "paw_lift": 21.8
     },
     "RH": {
      "rom_hip": 24.5,
      "rom_stifle": 46.1,
      "rom_tarsus": 67.6,
-     "stance_ratio": 56.8,
-     "stride_length": 220.3,
-     "paw_lift": 19.9
+     "stance_ratio": 64.6,
+     "stride_length": 258.1,
+     "paw_lift": 19.0
     }
    },
    "knee_curve": {
@@ -6614,18 +6726,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_10_15_18_24_00",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "말티츄",
+    "size": "S",
+    "age": "성견"
+   },
    "video_names": [
     "aihub71878/정상/2024_10_15_18_24_00/Left",
     "aihub71878/정상/2024_10_15_18_24_00/Right"
@@ -6634,8 +6753,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 10,
-   "walk_speed": 2.76,
+   "cycles": 9,
+   "walk_speed": 3.53,
    "fps": 30.0,
    "date": "2024-10-15",
    "metrics": {
@@ -6643,33 +6762,33 @@
      "rom_shoulder": 43.1,
      "rom_elbow": 54.0,
      "rom_carpus": 68.9,
-     "stance_ratio": 59.8,
-     "stride_length": 225.3,
-     "paw_lift": 27.7
+     "stance_ratio": 69.4,
+     "stride_length": 246.6,
+     "paw_lift": 20.4
     },
     "LH": {
      "rom_hip": 41.2,
      "rom_stifle": 99.6,
      "rom_tarsus": 109.8,
-     "stance_ratio": 57.6,
-     "stride_length": 211.8,
-     "paw_lift": 26.9
+     "stance_ratio": 70.5,
+     "stride_length": 220.3,
+     "paw_lift": 18.4
     },
     "RF": {
      "rom_shoulder": 28.8,
      "rom_elbow": 38.9,
      "rom_carpus": 54.3,
-     "stance_ratio": 57.1,
-     "stride_length": 253.0,
-     "paw_lift": 24.8
+     "stance_ratio": 53.1,
+     "stride_length": 213.9,
+     "paw_lift": 22.9
     },
     "RH": {
      "rom_hip": 28.0,
      "rom_stifle": 85.2,
      "rom_tarsus": 84.5,
-     "stance_ratio": 63.0,
-     "stride_length": 230.8,
-     "paw_lift": 22.6
+     "stance_ratio": 58.6,
+     "stride_length": 253.5,
+     "paw_lift": 22.2
     }
    },
    "knee_curve": {
@@ -7909,18 +8028,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_11_23_15_11_55",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "요크셔테리어",
+    "size": "S",
+    "age": "성견"
+   },
    "video_names": [
     "aihub71878/정상/2024_11_23_15_11_55/Left",
     "aihub71878/정상/2024_11_23_15_11_55/Right"
@@ -7929,8 +8055,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 6,
-   "walk_speed": 3.16,
+   "cycles": 9,
+   "walk_speed": 3.59,
    "fps": 30.0,
    "date": "2024-11-23",
    "metrics": {
@@ -7938,7 +8064,7 @@
      "rom_shoulder": 19.3,
      "rom_elbow": 49.7,
      "rom_carpus": 75.8,
-     "stance_ratio": 63.0,
+     "stance_ratio": 53.6,
      "stride_length": 235.4,
      "paw_lift": 25.8
     },
@@ -7946,25 +8072,25 @@
      "rom_hip": 24.8,
      "rom_stifle": 29.4,
      "rom_tarsus": 24.9,
-     "stance_ratio": 57.0,
-     "stride_length": 215.5,
-     "paw_lift": 22.7
+     "stance_ratio": 63.1,
+     "stride_length": 223.5,
+     "paw_lift": 23.5
     },
     "RF": {
      "rom_shoulder": 30.3,
      "rom_elbow": 44.5,
      "rom_carpus": 61.9,
-     "stance_ratio": 62.7,
-     "stride_length": 239.6,
-     "paw_lift": 23.4
+     "stance_ratio": 72.6,
+     "stride_length": 251.8,
+     "paw_lift": 23.9
     },
     "RH": {
      "rom_hip": 36.9,
      "rom_stifle": 47.2,
      "rom_tarsus": 32.8,
-     "stance_ratio": 56.3,
-     "stride_length": 241.2,
-     "paw_lift": 26.3
+     "stance_ratio": 61.9,
+     "stride_length": 241.1,
+     "paw_lift": 24.3
     }
    },
    "knee_curve": {
@@ -9360,18 +9486,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_11_29_10_48_23",
    "source": "aihub",
    "grade": "정상",
+   "dog": {
+    "breed": "치와와",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/정상/2024_11_29_10_48_23/Left",
     "aihub71878/정상/2024_11_29_10_48_23/Right"
@@ -9380,8 +9513,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 8,
-   "walk_speed": 3.42,
+   "cycles": 6,
+   "walk_speed": 2.7,
    "fps": 30.0,
    "date": "2024-11-29",
    "metrics": {
@@ -9389,33 +9522,33 @@
      "rom_shoulder": 46.5,
      "rom_elbow": 70.8,
      "rom_carpus": 61.2,
-     "stance_ratio": 60.3,
-     "stride_length": 251.9,
-     "paw_lift": 23.2
+     "stance_ratio": 70.5,
+     "stride_length": 251.6,
+     "paw_lift": 18.8
     },
     "LH": {
      "rom_hip": 21.1,
      "rom_stifle": 53.6,
      "rom_tarsus": 30.3,
-     "stance_ratio": 60.0,
-     "stride_length": 214.4,
-     "paw_lift": 21.7
+     "stance_ratio": 68.9,
+     "stride_length": 234.7,
+     "paw_lift": 18.9
     },
     "RF": {
      "rom_shoulder": 39.8,
      "rom_elbow": 53.7,
      "rom_carpus": 55.9,
-     "stance_ratio": 59.0,
-     "stride_length": 230.4,
-     "paw_lift": 23.1
+     "stance_ratio": 69.9,
+     "stride_length": 228.1,
+     "paw_lift": 28.0
     },
     "RH": {
      "rom_hip": 28.2,
      "rom_stifle": 38.9,
      "rom_tarsus": 41.3,
-     "stance_ratio": 60.5,
-     "stride_length": 213.5,
-     "paw_lift": 24.8
+     "stance_ratio": 64.8,
+     "stride_length": 235.3,
+     "paw_lift": 23.6
     }
    },
    "knee_curve": {
@@ -10877,18 +11010,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_08_18_52_50",
    "source": "aihub",
    "grade": "1기",
+   "dog": {
+    "breed": "말티즈",
+    "size": "S",
+    "age": "성견"
+   },
    "video_names": [
     "aihub71878/1기/2024_09_08_18_52_50/Left",
     "aihub71878/1기/2024_09_08_18_52_50/Right"
@@ -10897,8 +11037,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 9,
-   "walk_speed": 3.68,
+   "cycles": 7,
+   "walk_speed": 3.43,
    "fps": 30.0,
    "date": "2024-09-08",
    "metrics": {
@@ -10906,33 +11046,33 @@
      "rom_shoulder": 41.3,
      "rom_elbow": 59.8,
      "rom_carpus": 54.1,
-     "stance_ratio": 57.0,
-     "stride_length": 199.6,
-     "paw_lift": 18.8
+     "stance_ratio": 50.4,
+     "stride_length": 204.5,
+     "paw_lift": 18.9
     },
     "LH": {
      "rom_hip": 29.4,
      "rom_stifle": 42.9,
      "rom_tarsus": 47.9,
-     "stance_ratio": 61.1,
-     "stride_length": 244.2,
-     "paw_lift": 17.3
+     "stance_ratio": 65.6,
+     "stride_length": 244.9,
+     "paw_lift": 25.2
     },
     "RF": {
      "rom_shoulder": 28.7,
      "rom_elbow": 20.2,
      "rom_carpus": 33.7,
-     "stance_ratio": 54.6,
-     "stride_length": 201.7,
-     "paw_lift": 21.2
+     "stance_ratio": 60.7,
+     "stride_length": 234.4,
+     "paw_lift": 19.2
     },
     "RH": {
      "rom_hip": 24.6,
      "rom_stifle": 22.0,
      "rom_tarsus": 25.5,
-     "stance_ratio": 59.2,
-     "stride_length": 210.2,
-     "paw_lift": 23.8
+     "stance_ratio": 56.4,
+     "stride_length": 223.6,
+     "paw_lift": 23.1
     }
    },
    "knee_curve": {
@@ -12562,18 +12702,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_10_25_11_54_55",
    "source": "aihub",
    "grade": "1기",
+   "dog": {
+    "breed": "포메라니안",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/1기/2024_10_25_11_54_55/Left",
     "aihub71878/1기/2024_10_25_11_54_55/Right"
@@ -12583,7 +12730,7 @@
     "R": 1
    },
    "cycles": 6,
-   "walk_speed": 3.74,
+   "walk_speed": 3.71,
    "fps": 30.0,
    "date": "2024-10-25",
    "metrics": {
@@ -12591,33 +12738,33 @@
      "rom_shoulder": 33.6,
      "rom_elbow": 58.2,
      "rom_carpus": 49.5,
-     "stance_ratio": 57.1,
-     "stride_length": 214.7,
-     "paw_lift": 24.0
+     "stance_ratio": 67.5,
+     "stride_length": 233.4,
+     "paw_lift": 25.1
     },
     "LH": {
      "rom_hip": 34.0,
      "rom_stifle": 40.4,
      "rom_tarsus": 39.5,
-     "stance_ratio": 55.9,
-     "stride_length": 218.6,
-     "paw_lift": 20.4
+     "stance_ratio": 69.3,
+     "stride_length": 213.5,
+     "paw_lift": 20.3
     },
     "RF": {
      "rom_shoulder": 55.3,
      "rom_elbow": 55.8,
      "rom_carpus": 52.8,
-     "stance_ratio": 60.2,
-     "stride_length": 225.7,
-     "paw_lift": 18.4
+     "stance_ratio": 57.2,
+     "stride_length": 236.3,
+     "paw_lift": 24.6
     },
     "RH": {
      "rom_hip": 29.3,
      "rom_stifle": 67.9,
      "rom_tarsus": 54.1,
-     "stance_ratio": 54.6,
-     "stride_length": 203.0,
-     "paw_lift": 23.9
+     "stance_ratio": 56.8,
+     "stride_length": 209.2,
+     "paw_lift": 17.9
     }
    },
    "knee_curve": {
@@ -13431,18 +13578,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_10_11_18_05",
    "source": "aihub",
    "grade": "2기",
+   "dog": {
+    "breed": "치와와",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/2기/2024_09_10_11_18_05/Left",
     "aihub71878/2기/2024_09_10_11_18_05/Right"
@@ -13452,7 +13606,7 @@
     "R": 1
    },
    "cycles": 11,
-   "walk_speed": 3.25,
+   "walk_speed": 3.14,
    "fps": 30.0,
    "date": "2024-09-10",
    "metrics": {
@@ -13460,33 +13614,33 @@
      "rom_shoulder": 48.3,
      "rom_elbow": 70.3,
      "rom_carpus": 75.0,
-     "stance_ratio": 52.6,
-     "stride_length": 199.6,
-     "paw_lift": 21.0
+     "stance_ratio": 66.0,
+     "stride_length": 216.4,
+     "paw_lift": 20.8
     },
     "LH": {
      "rom_hip": 31.0,
      "rom_stifle": 51.2,
      "rom_tarsus": 64.9,
-     "stance_ratio": 56.9,
-     "stride_length": 195.3,
-     "paw_lift": 17.6
+     "stance_ratio": 51.1,
+     "stride_length": 222.2,
+     "paw_lift": 16.3
     },
     "RF": {
      "rom_shoulder": 19.1,
      "rom_elbow": 64.4,
      "rom_carpus": 55.8,
-     "stance_ratio": 54.5,
-     "stride_length": 212.7,
-     "paw_lift": 21.0
+     "stance_ratio": 50.2,
+     "stride_length": 205.5,
+     "paw_lift": 22.1
     },
     "RH": {
      "rom_hip": 33.2,
      "rom_stifle": 57.4,
      "rom_tarsus": 60.9,
-     "stance_ratio": 53.4,
-     "stride_length": 218.7,
-     "paw_lift": 23.2
+     "stance_ratio": 54.1,
+     "stride_length": 220.4,
+     "paw_lift": 17.7
     }
    },
    "knee_curve": {
@@ -14300,18 +14454,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_12_01_14_24_10",
    "source": "aihub",
    "grade": "2기",
+   "dog": {
+    "breed": "포메라니안",
+    "size": "S",
+    "age": "자견"
+   },
    "video_names": [
     "aihub71878/2기/2024_12_01_14_24_10/Left",
     "aihub71878/2기/2024_12_01_14_24_10/Right"
@@ -14320,8 +14481,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 7,
-   "walk_speed": 3.31,
+   "cycles": 9,
+   "walk_speed": 3.58,
    "fps": 30.0,
    "date": "2024-12-01",
    "metrics": {
@@ -14329,33 +14490,33 @@
      "rom_shoulder": 41.5,
      "rom_elbow": 49.4,
      "rom_carpus": 43.8,
-     "stance_ratio": 51.5,
-     "stride_length": 196.6,
-     "paw_lift": 21.1
+     "stance_ratio": 66.4,
+     "stride_length": 204.1,
+     "paw_lift": 23.3
     },
     "LH": {
      "rom_hip": 36.0,
      "rom_stifle": 38.9,
      "rom_tarsus": 29.8,
-     "stance_ratio": 52.4,
-     "stride_length": 217.9,
-     "paw_lift": 16.6
+     "stance_ratio": 49.9,
+     "stride_length": 197.0,
+     "paw_lift": 20.5
     },
     "RF": {
      "rom_shoulder": 29.5,
      "rom_elbow": 57.2,
      "rom_carpus": 23.1,
-     "stance_ratio": 57.7,
-     "stride_length": 203.3,
-     "paw_lift": 15.6
+     "stance_ratio": 58.5,
+     "stride_length": 219.7,
+     "paw_lift": 16.3
     },
     "RH": {
      "rom_hip": 21.0,
      "rom_stifle": 39.1,
      "rom_tarsus": 26.8,
-     "stance_ratio": 58.4,
-     "stride_length": 210.2,
-     "paw_lift": 18.8
+     "stance_ratio": 59.6,
+     "stride_length": 191.6,
+     "paw_lift": 22.8
     }
    },
    "knee_curve": {
@@ -15313,18 +15474,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_29_05_46_00",
    "source": "aihub",
    "grade": "3기",
+   "dog": {
+    "breed": "페키니즈",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/3기/2024_09_29_05_46_00/Left",
     "aihub71878/3기/2024_09_29_05_46_00/Right"
@@ -15333,8 +15501,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 11,
-   "walk_speed": 2.62,
+   "cycles": 7,
+   "walk_speed": 2.71,
    "fps": 30.0,
    "date": "2024-09-29",
    "metrics": {
@@ -15342,33 +15510,33 @@
      "rom_shoulder": 27.5,
      "rom_elbow": 34.6,
      "rom_carpus": 65.8,
-     "stance_ratio": 52.1,
-     "stride_length": 184.6,
-     "paw_lift": 20.0
+     "stance_ratio": 62.1,
+     "stride_length": 212.8,
+     "paw_lift": 15.0
     },
     "LH": {
      "rom_hip": 34.5,
      "rom_stifle": 32.7,
      "rom_tarsus": 40.9,
      "stance_ratio": 53.2,
-     "stride_length": 196.7,
-     "paw_lift": 14.0
+     "stride_length": 192.0,
+     "paw_lift": 14.2
     },
     "RF": {
      "rom_shoulder": 39.0,
      "rom_elbow": 52.5,
      "rom_carpus": 50.0,
-     "stance_ratio": 51.1,
-     "stride_length": 201.3,
+     "stance_ratio": 56.0,
+     "stride_length": 192.2,
      "paw_lift": 17.7
     },
     "RH": {
      "rom_hip": 22.6,
      "rom_stifle": 49.5,
      "rom_tarsus": 38.9,
-     "stance_ratio": 50.5,
-     "stride_length": 199.9,
-     "paw_lift": 14.4
+     "stance_ratio": 53.5,
+     "stride_length": 181.5,
+     "paw_lift": 15.2
     }
    },
    "knee_curve": {
@@ -16452,18 +16620,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_11_16_12_07_40",
    "source": "aihub",
    "grade": "3기",
+   "dog": {
+    "breed": "말티즈",
+    "size": "S",
+    "age": "성견"
+   },
    "video_names": [
     "aihub71878/3기/2024_11_16_12_07_40/Left",
     "aihub71878/3기/2024_11_16_12_07_40/Right"
@@ -16472,8 +16647,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 6,
-   "walk_speed": 3.12,
+   "cycles": 11,
+   "walk_speed": 2.68,
    "fps": 30.0,
    "date": "2024-11-16",
    "metrics": {
@@ -16481,7 +16656,7 @@
      "rom_shoulder": 31.1,
      "rom_elbow": 41.6,
      "rom_carpus": 35.8,
-     "stance_ratio": 55.5,
+     "stance_ratio": 43.3,
      "stride_length": 220.6,
      "paw_lift": 17.6
     },
@@ -16489,7 +16664,7 @@
      "rom_hip": 24.7,
      "rom_stifle": 18.8,
      "rom_tarsus": 30.3,
-     "stance_ratio": 56.1,
+     "stance_ratio": 61.1,
      "stride_length": 184.7,
      "paw_lift": 16.4
     },
@@ -16497,17 +16672,17 @@
      "rom_shoulder": 32.4,
      "rom_elbow": 34.3,
      "rom_carpus": 52.7,
-     "stance_ratio": 53.3,
-     "stride_length": 207.4,
-     "paw_lift": 16.2
+     "stance_ratio": 55.8,
+     "stride_length": 219.3,
+     "paw_lift": 14.3
     },
     "RH": {
      "rom_hip": 39.0,
      "rom_stifle": 17.0,
      "rom_tarsus": 31.7,
-     "stance_ratio": 50.2,
-     "stride_length": 200.2,
-     "paw_lift": 20.3
+     "stance_ratio": 60.1,
+     "stride_length": 187.7,
+     "paw_lift": 17.6
     }
    },
    "knee_curve": {
@@ -17183,18 +17358,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_09_10_11_00_30",
    "source": "aihub",
    "grade": "4기",
+   "dog": {
+    "breed": "치와와",
+    "size": "S",
+    "age": "노령견"
+   },
    "video_names": [
     "aihub71878/4기/2024_09_10_11_00_30/Left",
     "aihub71878/4기/2024_09_10_11_00_30/Right"
@@ -17204,7 +17386,7 @@
     "R": 1
    },
    "cycles": 6,
-   "walk_speed": 3.77,
+   "walk_speed": 3.38,
    "fps": 30.0,
    "date": "2024-09-10",
    "metrics": {
@@ -17212,7 +17394,7 @@
      "rom_shoulder": 30.6,
      "rom_elbow": 34.6,
      "rom_carpus": 53.0,
-     "stance_ratio": 52.4,
+     "stance_ratio": 45.2,
      "stride_length": 188.4,
      "paw_lift": 17.0
     },
@@ -17220,25 +17402,25 @@
      "rom_hip": 19.3,
      "rom_stifle": 57.8,
      "rom_tarsus": 32.6,
-     "stance_ratio": 46.6,
-     "stride_length": 186.0,
-     "paw_lift": 17.7
+     "stance_ratio": 45.2,
+     "stride_length": 205.1,
+     "paw_lift": 15.6
     },
     "RF": {
      "rom_shoulder": 31.5,
      "rom_elbow": 32.2,
      "rom_carpus": 37.2,
-     "stance_ratio": 52.1,
-     "stride_length": 182.4,
-     "paw_lift": 17.1
+     "stance_ratio": 44.7,
+     "stride_length": 198.3,
+     "paw_lift": 14.7
     },
     "RH": {
      "rom_hip": 19.3,
      "rom_stifle": 51.1,
      "rom_tarsus": 31.4,
-     "stance_ratio": 53.9,
-     "stride_length": 180.4,
-     "paw_lift": 12.3
+     "stance_ratio": 47.9,
+     "stride_length": 207.7,
+     "paw_lift": 14.3
     }
    },
    "knee_curve": {
@@ -18160,18 +18342,25 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   },
   {
    "id": "2024_11_23_17_29_40",
    "source": "aihub",
    "grade": "4기",
+   "dog": {
+    "breed": "푸들",
+    "size": "S",
+    "age": "성견"
+   },
    "video_names": [
     "aihub71878/4기/2024_11_23_17_29_40/Left",
     "aihub71878/4기/2024_11_23_17_29_40/Right"
@@ -18180,8 +18369,8 @@
     "L": 1,
     "R": 1
    },
-   "cycles": 12,
-   "walk_speed": 3.01,
+   "cycles": 9,
+   "walk_speed": 3.53,
    "fps": 30.0,
    "date": "2024-11-23",
    "metrics": {
@@ -18189,33 +18378,33 @@
      "rom_shoulder": 68.4,
      "rom_elbow": 71.0,
      "rom_carpus": 24.5,
-     "stance_ratio": 46.5,
-     "stride_length": 178.5,
-     "paw_lift": 15.0
+     "stance_ratio": 59.7,
+     "stride_length": 182.3,
+     "paw_lift": 17.0
     },
     "LH": {
      "rom_hip": 31.0,
      "rom_stifle": 59.5,
      "rom_tarsus": 55.9,
-     "stance_ratio": 50.6,
-     "stride_length": 171.3,
-     "paw_lift": 12.3
+     "stance_ratio": 58.7,
+     "stride_length": 190.8,
+     "paw_lift": 12.8
     },
     "RF": {
      "rom_shoulder": 48.4,
      "rom_elbow": 63.6,
      "rom_carpus": 50.8,
-     "stance_ratio": 52.6,
-     "stride_length": 196.6,
-     "paw_lift": 18.8
+     "stance_ratio": 55.9,
+     "stride_length": 203.6,
+     "paw_lift": 14.8
     },
     "RH": {
      "rom_hip": 46.2,
      "rom_stifle": 96.6,
      "rom_tarsus": 119.0,
-     "stance_ratio": 51.0,
-     "stride_length": 185.6,
-     "paw_lift": 13.1
+     "stance_ratio": 55.9,
+     "stride_length": 206.8,
+     "paw_lift": 16.5
     }
    },
    "knee_curve": {
@@ -19299,13 +19488,15 @@
     }
    },
    "synthetic": [
-    "stance_ratio",
     "stride_length",
     "paw_lift",
     "walk_speed",
     "gait_cycles",
     "knee_curve"
-   ]
+   ],
+   "sampled": {
+    "stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"
+   }
   }
  ]
 }

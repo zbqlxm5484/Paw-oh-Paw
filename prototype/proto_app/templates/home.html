@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_modals.html" as m %}
+{% import "_vital.html" as vt_ %}
 {% block title %}홈 · Paw oh Paw{% endblock %}
 {% block content %}
 {% set tone = {'surg': ('#FCEEE3', '#A8481A'), 'diag': ('#EEF1F6', '#4A5A78'), 'warn': ('#FAF1DF', '#9A6A12'),
@@ -55,7 +56,27 @@
 
   <div style="display:flex;gap:18px;align-items:flex-start">
     <div style="flex:1;min-width:0;border-radius:18px;background:#fff;border:1px solid #ECE8E2;overflow-x:auto">
-      {% if view == 'analyses' %}
+      {% if view == 'today' %}
+      {% set cols = "70px minmax(190px,1.4fr) minmax(170px,1.3fr) minmax(220px,1.6fr) minmax(120px,.8fr) 110px" %}
+      <div style="min-width:900px">
+        <div style="display:grid;grid-template-columns:{{ cols }};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A">
+          <span>시각</span><span>반려견</span><span>병명</span><span>오늘 한 것</span><span>담당</span><span>진료 기록</span>
+        </div>
+        {% for r in hv.rows %}
+        <div class="hv-row" data-href="/dogs/{{ r.id }}" style="display:grid;grid-template-columns:{{ cols }};gap:12px;padding:12px 20px;border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }};align-items:center;cursor:pointer;background:#fff">
+          <b style="font-size:15px;font-variant-numeric:tabular-nums">{{ r.time }}</b>
+          <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+            <span style="font-size:12px;color:#8E949C;font-variant-numeric:tabular-nums">{{ r.no }}</span>
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:15.5px">{{ r.name }}</b> <span style="font-size:13.5px;color:#5B6472">({{ r.breed }})</span></span>
+          </span>
+          <span style="font-size:14.5px;font-weight:600;color:#3A4250;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.dx }}">{{ r.dx }}</span>
+          <span style="display:flex;gap:5px;flex-wrap:wrap">{% for s in r.steps %}<span style="padding:3px 9px;border-radius:7px;background:{{ s.bg }};color:{{ s.c }};font-size:12.5px;font-weight:700">{{ s.t }}</span>{% endfor %}</span>
+          <span style="font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.who }}</span>
+          <span>{% if r.todo %}<a class="lk" href="/dogs/{{ r.id }}?v={{ today_iso }}" style="padding:4px 10px;border-radius:8px;border:1px solid #D2601A;color:#B4501A;font-size:12.5px;font-weight:700;white-space:nowrap">{{ r.todo }} ›</a>{% else %}<span style="font-size:13px;color:#2E7A4F;font-weight:700">작성함</span>{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% elif view == 'analyses' %}
       {% set cols = "104px minmax(190px,1.5fr) minmax(170px,1.4fr) 66px 128px 96px minmax(100px,.8fr)" %}
       <div style="min-width:900px">
         <div style="display:grid;grid-template-columns:{{ cols }};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A">
@@ -88,7 +109,7 @@
           <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600">{{ r.breed }}</span><span style="font-size:13px;color:#5B6472">{{ r.size }}</span></div>
           <div style="display:grid;grid-template-columns:repeat(4,auto);justify-content:start;column-gap:12px;row-gap:2px;font-variant-numeric:tabular-nums">
             {% for k in ['체중', '체온', '심박', '혈압'] %}<span style="font-size:11.5px;color:#8E949C">{{ k }}</span>{% endfor %}
-            {% for v in [r.v.kg, r.v.temp, r.v.hr, r.v.bp] %}<b style="font-size:14px">{{ v }}</b>{% endfor %}
+            {% for key in ['kg', 'temp', 'hr', 'bp'] %}{{ vt_.vv(r.v[key], r.v.f[key], 14) }}{% endfor %}
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:5px;min-width:0">
             {% set bs = r.badges|rejectattr('kind', 'equalto', 'warn')|list %}
@@ -114,7 +135,7 @@
         {% endfor %}
       </div>
       {% endif %}
-      {% if not hv.rows %}<div style="padding:48px 20px;text-align:center;font-size:15px;color:#5B6472">조건에 맞는 {{ '분석이' if view == 'analyses' else ('반려견이' if view == 'dogs' else '담당자가') }} 없어요.</div>{% endif %}
+      {% if not hv.rows %}<div style="padding:48px 20px;text-align:center;font-size:15px;color:#5B6472">{{ '오늘 온 반려견이 없어요. 진료 기록이나 바이탈을 남기면 여기에 떠요.' if view == 'today' else '조건에 맞는 ' ~ ('분석이' if view == 'analyses' else ('반려견이' if view == 'dogs' else '담당자가')) ~ ' 없어요.' }}</div>{% endif %}
     </div>
 
   </div>

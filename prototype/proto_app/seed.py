@@ -174,8 +174,16 @@ def _gen_dog(rng: random.Random, i: int, recent: bool) -> tuple[Dog, list]:
     """가상 환자 한 마리와 그 회차들. recent=False 면 모든 기록이 8일 이상 전이라 '변동 있음'에 안 걸린다."""
     diag, surg, sites, sizes = rng.choice(CONDITIONS)
     size = rng.choice(sizes)
-    pool = [b for b in config.BREEDS if config.auto_size(b, 0 if b != "믹스견" else 15) == size] or config.BREEDS
-    breed = rng.choice(pool)
+    pop = real.population()
+    real_breeds = pop.get("breeds", {}).get(size)
+    if real_breeds:    # 견종은 체급 안에서 AI-Hub 71878 실제 분포대로(대형견은 71878 에 없어 예전 목록)
+        breed = rng.choices(list(real_breeds), weights=list(real_breeds.values()))[0]
+    else:
+        pool = [b for b in config.BREEDS if config.auto_size(b, 0 if b != "믹스견" else 15) == size] or config.BREEDS
+        breed = rng.choice(pool)
+    ages = pop.get("ages") or {"성견": 1}
+    age = rng.choices(list(ages), weights=list(ages.values()))[0]   # 나이대도 71878 분포(자견·성견·노령견)
+    born = date.today().year - {"자견": rng.randint(0, 1), "노령견": rng.randint(8, 14)}.get(age, rng.randint(2, 7))
     lo, hi = WEIGHTS[size]
     kg = round(rng.uniform(lo, hi), 1)
     site = rng.choice(sites)
@@ -184,7 +192,7 @@ def _gen_dog(rng: random.Random, i: int, recent: bool) -> tuple[Dog, list]:
         stage = "rehab"
     floor = 0 if recent else 8              # 이 날보다 최근 기록은 만들지 않는다
     dr = rng.choice(STAFF[:3])              # 담당 수의사
-    d = Dog(f"g{i:03d}", rng.choice(NAMES), breed, str(rng.randint(2012, 2024)), str(kg),
+    d = Dog(f"g{i:03d}", rng.choice(NAMES), breed, str(born), str(kg),
             rng.choice(list(config.SEX)), size=size, focus=site if site in config.LIMB else None,
             no=f"{rng.randint(2016, 2026)}{rng.randint(1000, 9999)}",
             owner=rng.choice(SURNAMES) + rng.choice(GIVEN), phone=f"010-{rng.randint(1000, 9999)}-{rng.randint(1000, 9999)}",
@@ -284,12 +292,35 @@ def _fill_visit_vitals(d: Dog, results: list, rng: random.Random) -> None:
             | {h.day: h.by or h.author for h in d.history} | {im.day: im.author for im in d.images})
     kg = float(d.kg or 10)
     hr = HR.get(d.size or "M", HR["M"])
-    for day, who in days.items():
+    for day, who in sorted(days.items()):
         if day in have:
             continue
-        d.vitals.append(Vital(day, f"{kg + rng.uniform(-0.6, 0.6):.1f}", f"{rng.uniform(37.9, 39.1):.1f}",
-                              str(rng.randint(*hr)), str(rng.randint(118, 160)), str(rng.randint(68, 92)), who or rng.choice(STAFF[3:])))
+        kg *= 1 + rng.uniform(-0.02, 0.02)          # 방문 사이 체중은 조금씩만 바뀐다
+        fever = rng.random() < 0.04                  # 가끔 열(39.3 이상) · 혈압 높음 — 차트 H 표시 시연
+        high_bp = rng.random() < 0.08
+        d.vitals.append(Vital(day, f"{kg:.1f}", f"{rng.uniform(39.4, 39.9) if fever else rng.uniform(38.0, 39.1):.1f}",
+                              str(rng.randint(*hr)), str(rng.randint(150, 172) if high_bp else rng.randint(110, 138)),
+                              str(rng.randint(85, 98) if high_bp else rng.randint(62, 85)), who or rng.choice(STAFF[3:])))
     d.vitals.sort(key=lambda v: v.day, reverse=True)
+
+
+def _today_visits(dogs: list, rng: random.Random) -> None:
+    """홈 '오늘' 탭 시연: 오늘 온 반려견 몇 마리. 바이탈은 모두 재고, 일부는 진료 기록까지, 일부는 아직 기록 전."""
+    today = date.today().isoformat()
+    pick = [d for d in dogs if d.id in ("d2", "d4")] + rng.sample([d for d in dogs if d.id.startswith("g") and d.stage == "rehab"], 5)
+    for i, d in enumerate(pick):
+        hm = f"{9 + i:02d}:{rng.choice(['05', '20', '35', '50'])}"
+        kg = float(d.vitals[0].kg if d.vitals else d.kg or 10)
+        hr = HR.get(d.size or "M", HR["M"])
+        who = rng.choice(STAFF[3:])
+        d.vitals = [v for v in d.vitals if v.day != today]
+        d.vitals.insert(0, Vital(today, f"{kg * (1 + rng.uniform(-0.01, 0.01)):.1f}", f"{rng.uniform(38.1, 39.0):.1f}",
+                                 str(rng.randint(*hr)), str(rng.randint(112, 136)), str(rng.randint(64, 84)), who))
+        if i % 2 == 0:      # 절반은 진료 기록까지 썼다
+            dr = next((h.by for h in reversed(d.history) if h.by), STAFF[1])
+            d.notes[:0] = _soap(new_id("note"), f"{today} {hm}", dr, "", rng.choice(SUBJ), rng.choice(PROGRESS), "", rng.choice(PLAN))
+        else:               # 나머지는 바이탈만 재고 진료 기록 전(접수 메모 하나)
+            d.notes.insert(0, Note(new_id("note"), f"{today} {hm}", who, "예약", "재활 후 보행 측정 예정"))
 
 
 def demo_account() -> Account:
@@ -308,6 +339,7 @@ def demo_account() -> Account:
     for d in dogs:
         d.size = d.size or config.auto_size(d.breed, d.kg)
         _fill_visit_vitals(d, [r for r in results if r.dog == d.id], rng)
+    _today_visits(dogs, rng)
     real.fill(results)   # 회차 수치는 실측 회차로 (이름·날짜·측정자는 지어낸 값)
     real.showcase(results, "d1")   # 시연: 대표 반려견은 오른쪽 뒷다리 절뚝임이 회차마다 나아지는 극단 합성(3D 와 같은 다리)
     acct.dogs = dogs

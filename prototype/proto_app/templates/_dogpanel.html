@@ -1,3 +1,4 @@
+{% import "_vital.html" as vt_ %}
 {# 메모 = 환자에 붙는 짧은 특이사항. 차트 위 고정 줄과 분석 결과 오른쪽 칸에서 같은 모양으로 바로 쓴다(인쇄에서는 빠짐). #}
 
 {# 메모 한 장: 분류 색 태그, 2줄까지, 아래에 날짜·작성자. edit_url 이 있으면 눌러서 고친다 #}
@@ -42,7 +43,7 @@
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;row-gap:2px;font-variant-numeric:tabular-nums">
     {% for k in ['체중', '체온', '심박', '혈압'] %}<span style="font-size:11.5px;color:#8E949C">{{ k }}</span>{% endfor %}
-    {% for v in [panel.v.kg, panel.v.temp, panel.v.hr, panel.v.bp] %}<b style="font-size:15px">{{ v }}</b>{% endfor %}
+    {% for key in ['kg', 'temp', 'hr', 'bp'] %}{{ vt_.vv(panel.v[key], panel.v.f[key], 15) }}{% endfor %}
   </div>
   {% if panel.badges %}<div style="display:flex;flex-wrap:wrap;gap:5px">{% for b in panel.badges %}<span style="padding:4px 9px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:12.5px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}</div>{% endif %}
 

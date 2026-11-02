@@ -23,6 +23,8 @@ from .config import (
     ST,
     STAGE,
     SYM_CHANGE,
+    VITAL_REF,
+    WEIGHT_CHANGE,
     auto_size,
 )
 from .store import Account, Dog, Result, Vital
@@ -367,12 +369,56 @@ def latest_vital(d: Dog) -> Optional[Vital]:
     return d.vitals[0] if d.vitals else None
 
 
-def vital_line(v: Optional[Vital]) -> dict:
-    """체중 · 체온 · 심박 · 혈압. 재지 않은 값은 '—'."""
+def _num(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def vital_flags(v: Vital, size: str = "M", prev: Optional[Vital] = None) -> dict:
+    """바이탈 이상값 표시(EMR 의 H/L). 참고 범위는 config.VITAL_REF(일반 성견). 체중은 직전 방문 대비 변화율."""
+    red, amber, ok = "#C2412D", "#9A6A12", ""
+    out = {k: {"m": "", "c": ok, "ref": ""} for k in ("kg", "temp", "hr", "bp")}
+    lo, hi = VITAL_REF["temp"]
+    t = _num(v.temp)
+    out["temp"]["ref"] = f"참고 {lo}~{hi}℃"
+    if t is not None and not lo <= t <= hi:
+        out["temp"].update(m="H" if t > hi else "L", c=red)
+    lo, hi = VITAL_REF["hr"].get(size or "M", VITAL_REF["hr"]["M"])
+    h = _num(v.hr)
+    out["hr"]["ref"] = f"참고 {lo}~{hi}회/분({SIZE.get(size or 'M', '')})"
+    if h is not None and not lo <= h <= hi:
+        out["hr"].update(m="H" if h > hi else "L", c=red)
+    low, border, high = VITAL_REF["sbp"]
+    s = _num(v.sbp)
+    out["bp"]["ref"] = f"수축기 참고 {low}~{border - 1}, {border}~{high - 1} 경계, {high} 이상 높음"
+    if s is not None:
+        if s >= high or s < low:
+            out["bp"].update(m="H" if s >= high else "L", c=red)
+        elif s >= border:
+            out["bp"].update(m="경계", c=amber)
+    k, pk = _num(v.kg), _num(prev.kg) if prev else None
+    if k is not None and pk:
+        ch = (k - pk) / pk * 100
+        out["kg"]["ref"] = f"직전 방문 {prev.kg}kg 대비 {ch:+.1f}%"
+        if abs(ch) > WEIGHT_CHANGE:
+            out["kg"].update(m=f"{'▲' if ch > 0 else '▼'}{abs(ch):.0f}%", c=red)
+    return out
+
+
+def vital_line(v: Optional[Vital], size: str = "M", prev: Optional[Vital] = None) -> dict:
+    """체중 · 체온 · 심박 · 혈압. 재지 않은 값은 '—'. f = 이상값 표시"""
     if not v:
-        return {"kg": "—", "temp": "—", "hr": "—", "bp": "—", "when": "기록 없음"}
+        return {"kg": "—", "temp": "—", "hr": "—", "bp": "—", "when": "기록 없음", "f": {}}
     return {"kg": f"{v.kg}kg" if v.kg else "—", "temp": f"{v.temp}℃" if v.temp else "—",
-            "hr": v.hr or "—", "bp": f"{v.sbp}/{v.dbp}" if v.sbp else "—", "when": short_day(v.day)}
+            "hr": v.hr or "—", "bp": f"{v.sbp}/{v.dbp}" if v.sbp else "—", "when": short_day(v.day),
+            "f": vital_flags(v, size, prev)}
+
+
+def prev_vital(d: Dog, v: Vital) -> Optional[Vital]:
+    """v 바로 전 방문의 바이탈(체중 변화 비교용)."""
+    return next((x for x in d.vitals if x.day < v.day and x.kg), None)
 
 
 def short_day(day: str) -> str:
@@ -456,7 +502,7 @@ def patient_row(acct: Account, d: Dog, live: set) -> dict:
     return {
         "id": d.id, "no": d.no or "—", "name": d.name, "init": d.name[0],
         "breed": d.breed or "견종 미입력", "size": SIZE.get(d.size, ""), "age": age(d), "sex": SEX.get(d.sex, ""),
-        "v": vital_line(latest_vital(d)), "badges": badges(d),
+        "v": vital_line(latest_vital(d), d.size, prev_vital(d, latest_vital(d)) if d.vitals else None), "badges": badges(d),
         "owner": d.owner or "—", "phone4": d.phone[-4:] if d.phone else "",
         "last": f"{short(last.date)} · {last.by.split(' ')[0]}" if last else "측정 전", "tr": trend(acct, d),
         "stage": st_label, "st_bg": st_bg, "st_c": st_c, "live": d.id in live,
@@ -500,6 +546,36 @@ def diagnosis(d: Dog) -> str:
     return h.title.split(" (")[0] if h else "—"
 
 
+def today_rows(acct: Account, dogs: list) -> list:
+    """홈 '오늘' 탭(EMR 의 오늘 접수 목록): 오늘 바이탈·진료 기록·메모·보행 측정이 있거나 지금 분석 중인 반려견.
+    시각 = 오늘 처음 남긴 기록 시각. 진료 기록(SOAP)이 아직 없으면 '기록 전'."""
+    today = date.today().isoformat()
+    live = {j.dog: j for j in acct.active_jobs()}
+    out = []
+    for d in dogs:
+        notes = [n for n in d.notes if n.at.startswith(today)]
+        res = [r for r in acct.results if r.dog == d.id and r.day == today]
+        vit = next((v for v in d.vitals if v.day == today), None)
+        if not (notes or res or vit or d.id in live):
+            continue
+        times = [n.at[11:16] for n in notes] + [r.time for r in res]
+        steps = []
+        if vit:
+            steps.append(("바이탈", "#E7EEFB", "#3B5BA9"))
+        if any(n.cat in SOAP for n in notes):
+            steps.append(("진료 기록", "#E3F1E7", "#2E7A4F"))
+        if d.id in live:
+            steps.append(("분석 중", "#FCEEE3", "#A8481A"))
+        for r in res:
+            steps.append((("재촬영 필요" if r.st == "fail" else "보행 측정"), "#FBE0D9" if r.st == "fail" else "#F1ECE5", "#C2412D" if r.st == "fail" else "#5B6472"))
+        done = any(n.cat in SOAP for n in notes)
+        out.append({**patient_row(acct, d, set(live)), "time": min(times) if times else "—",
+                    "steps": [{"t": t, "bg": bg, "c": c} for t, bg, c in steps], "dx": diagnosis(d),
+                    "who": next((n.author for n in sorted(notes, key=lambda n: n.at)), "") or (live[d.id].by if d.id in live else "") or (vit.author if vit else ""),
+                    "todo": "" if done else "진료 기록 전"})
+    return sorted(out, key=lambda r: r["time"])
+
+
 def staff_rows(acct: Account, rs: list) -> list:
     by = {}
     for r in rs:
@@ -523,7 +599,10 @@ def home_view(acct: Account, view: str, q: str, dog: str, by: str, changed: bool
     rs = [r for r in acct.results if acct.dog(r.dog)]
     counts = {"dogs": len(acct.dogs), "changed": sum(1 for v in ch.values() if v[0]),
               "retake": sum(1 for v in ch.values() if any("재촬영" in c["t"] and c["tone"] == "bad" for c in v[0]))}
-    if view == "dogs":
+    counts["today"] = len(today_rows(acct, acct.dogs))
+    if view == "today":
+        rows = today_rows(acct, dogs)
+    elif view == "dogs":
         rows = [{**patient_row(acct, d, set()), "n": sum(1 for r in rs if r.dog == d.id)} for d in dogs]
         if changed:
             rows.sort(key=lambda r: r["ch_day"], reverse=True)
@@ -596,7 +675,7 @@ def visits(acct: Account, d: Dog) -> list:
                     "n_soap": len(x["soap"]), "today": day == date.today().isoformat(),
                     "res": [{"id": r.id, "no": f"{sess_no(acct, r)}회차", "time": r.time, "by": r.by, "fail": r.st == "fail",
                              "sym": r.sym, "rom": r.rom, "sL": r.sL, "sR": r.sR, **st_chip(r.st), **sym_view(acct, r)} for r in res],
-                    "vital": vital_line(x["vital"]) if x["vital"] else None, "vital_by": x["vital"].author if x["vital"] else "",
+                    "vital": vital_line(x["vital"], d.size, prev_vital(d, x["vital"])) if x["vital"] else None, "vital_by": x["vital"].author if x["vital"] else "",
                     "soap": x["soap"], "hist": x["hist"],
                     "imgs": [{"id": im.id, "path": im.path, "caption": im.caption, "kind": IMG_KIND.get(im.kind, im.kind), "by": im.author}
                              for im in x["imgs"]]})
@@ -730,8 +809,23 @@ def soap_entries(d: Dog, acct: Optional[Account] = None) -> list:
     return sorted(groups.values(), key=lambda g: (g["imp"], g["at"]), reverse=True)
 
 
+def kg_trend(d: Dog, n: int = 8) -> dict:
+    """차트 위 고정 줄의 체중 추이(최근 n번 방문). 세로 폭은 최소 ±0.5kg 로 잡아 작은 흔들림이 크게 보이지 않게 한다."""
+    kg = [(v.day, _num(v.kg)) for v in reversed(d.vitals) if _num(v.kg)][-n:]
+    if len(kg) < 2:
+        return {"has": False}
+    vals = [k for _, k in kg]
+    mid, half = (max(vals) + min(vals)) / 2, max(0.5, (max(vals) - min(vals)) / 2 * 1.15)
+    W, H = 72, 22
+    pts = [(2 + i * (W - 4) / (len(kg) - 1), H - 3 - (k - (mid - half)) / (2 * half) * (H - 6)) for i, (_, k) in enumerate(kg)]
+    ch = (vals[-1] - vals[0]) / vals[0] * 100
+    return {"has": True, "W": W, "H": H, "line": " ".join(f"{x:.1f},{y:.1f}" for x, y in pts), "last": pts[-1],
+            "text": f"{vals[0]:g}→{vals[-1]:g}kg", "ch": f"{ch:+.1f}%", "n": len(kg), "since": short_day(kg[0][0]),
+            "c": "#C2412D" if abs(ch) > WEIGHT_CHANGE else "#5B6472"}
+
+
 def vital_rows(d: Dog) -> dict:
-    rows = [{"day": v.day, **vital_line(v), "author": v.author} for v in d.vitals]
+    rows = [{"day": v.day, **vital_line(v, d.size, prev_vital(d, v)), "author": v.author} for v in d.vitals]
     kg = [(v.day, float(v.kg)) for v in reversed(d.vitals) if v.kg]
     spark = ""
     if len(kg) > 1:

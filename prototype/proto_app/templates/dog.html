@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "_modals.html" as m %}
 {% import "_dogpanel.html" as dp %}
+{% import "_vital.html" as vt_ %}
 {% block title %}{{ cur.name }} · Paw oh Paw{% endblock %}
 {% block content %}
 {% set tone = {'surg': ('#FCEEE3', '#A8481A'), 'diag': ('#EEF1F6', '#4A5A78'), 'warn': ('#FAF1DF', '#9A6A12')} %}
@@ -23,7 +24,8 @@
     </section>
     <section class="cs-card">
       <span class="cs-lb">바이탈</span>
-      <div class="cs-vit">{% for k, x in [('체중', row.v.kg), ('체온', row.v.temp), ('심박', row.v.hr), ('혈압', row.v.bp)] %}<span><span class="cs-lb">{{ k }}</span><b>{{ x }}</b></span>{% endfor %}</div>
+      <div class="cs-vit">{% for k, key in [('체중', 'kg'), ('체온', 'temp'), ('심박', 'hr'), ('혈압', 'bp')] %}<span><span class="cs-lb">{{ k }}</span>{{ vt_.vv(row.v[key], row.v.f[key], 17) }}</span>{% endfor %}</div>
+      {% if kgt.has %}<span title="최근 {{ kgt.n }}번 방문 체중({{ kgt.since }}부터)" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#5B6472;white-space:nowrap"><span class="cs-lb" style="font-weight:600">체중 추이</span><svg width="{{ kgt.W }}" height="{{ kgt.H }}" viewBox="0 0 {{ kgt.W }} {{ kgt.H }}"><polyline points="{{ kgt.line }}" fill="none" stroke="#D2601A" stroke-width="1.8" stroke-linejoin="round"></polyline><circle cx="{{ kgt.last[0] }}" cy="{{ kgt.last[1] }}" r="2.6" fill="#D2601A"></circle></svg><span style="font-variant-numeric:tabular-nums">{{ kgt.text }} <b style="color:{{ kgt.c }}">{{ kgt.ch }}</b></span></span>{% endif %}
       <span style="font-size:12px;color:#A0A7B2">{{ row.v.when }} 측정{% if cur.vitals %} · {{ cur.vitals[0].author }}{% endif %}</span>
     </section>
     <section class="cs-card" style="min-width:0">
@@ -144,7 +146,7 @@
       {% if sel and sel.vital and v != today_iso %}
       <div class="v-sec">
         <b class="v-h">바이탈</b>
-        <div style="display:flex;gap:22px;flex-wrap:wrap;font-variant-numeric:tabular-nums">{% for k, x in [('체중', sel.vital.kg), ('체온', sel.vital.temp), ('심박', sel.vital.hr), ('혈압', sel.vital.bp)] %}<span style="display:flex;flex-direction:column"><span class="cs-lb">{{ k }}</span><b style="font-size:16px">{{ x }}</b></span>{% endfor %}<span style="align-self:flex-end;font-size:12.5px;color:#8E949C">{{ sel.vital_by }}</span></div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;font-variant-numeric:tabular-nums">{% for k, key in [('체중', 'kg'), ('체온', 'temp'), ('심박', 'hr'), ('혈압', 'bp')] %}<span style="display:flex;flex-direction:column"><span class="cs-lb">{{ k }}</span>{{ vt_.vv(sel.vital[key], sel.vital.f[key]) }}</span>{% endfor %}<span style="align-self:flex-end;font-size:12.5px;color:#8E949C">{{ sel.vital_by }}</span></div>
       </div>
       {% endif %}
 
@@ -243,7 +245,7 @@
     {% if vt.kg_spark %}<div style="display:flex;align-items:center;gap:12px"><span style="font-size:13px;color:#5B6472">체중 추이</span><svg width="200" height="40" viewBox="0 0 200 40"><polyline points="{{ vt.kg_spark }}" fill="none" stroke="#D2601A" stroke-width="2"></polyline></svg><b style="font-size:14px">{{ vt.kg_range }}</b></div>{% endif %}
     <div style="display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:13px;font-weight:700;color:#7A808A;padding-bottom:8px;border-bottom:1px solid #ECE8E2"><span>날짜</span><span>체중</span><span>체온</span><span>심박</span><span>혈압</span><span>기록</span></div>
     {% for v in vt.rows %}
-    <div style="display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums"><span style="color:#7A808A">{{ v.day }}</span><b>{{ v.kg }}</b><span>{{ v.temp }}</span><span>{{ v.hr }}</span><span>{{ v.bp }}</span><span style="font-size:13px;color:#8E949C">{{ v.author }}</span></div>
+    <div style="display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums"><span style="color:#7A808A">{{ v.day }}</span>{% for key in ['kg', 'temp', 'hr', 'bp'] %}<span>{{ vt_.vv(v[key], v.f[key], 14.5) }}</span>{% endfor %}<span style="font-size:13px;color:#8E949C">{{ v.author }}</span></div>
     {% endfor %}
     {% if not vt.rows %}<span style="font-size:14px;color:#A0A7B2">기록이 없어요.</span>{% endif %}
   </div>
