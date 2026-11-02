@@ -536,7 +536,7 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 
 - `pass_counts`: 회차의 전체 통과(`measured`), 그중 쓴 것(`used`)과 뺀 것(`excluded`). `exclude_summary`는 뺀 이유별 개수이고 많은 순서다.
 - `shot_counts`: 촬영 수, 그중 실패(FAILED)와 무효(INVALID) 수.
-- `gaits`: 보행 유형별 묶음(WALK, TROT, OTHER 순서, 값이 있는 유형만). OTHER에는 보행 유형을 아직 판별하지 못한 유효 통과가 들어간다. `metrics`는 10.4 표 순서, 같은 수치 안에서는 LF·RF·LH·RH 순서다.
+- `gaits`: 보행 유형별 묶음(WALK, TROT, OTHER 순서, 값이 있는 유형만). OTHER에는 보행 유형을 아직 판별하지 못한 유효 통과가 들어간다. `metrics`는 10.4 표 순서, 같은 수치 안에서는 LF·RF·LH·RH 순서다. 분석이 끝났는데 유효 통과가 하나도 없으면 `gaits`는 빈 배열이고 `pass_counts.used`는 0이다. 화면은 빈 표 대신 `exclude_summary`와 다시 촬영 안내를 보여 준다.
 - **측정 불가**는 `value`가 `null`이고 `measurable`이 false이며 사유가 `unmeasurable_reason`에 온다. 0으로 그리지 말고 "측정 불가 + 사유"로 보여 준다.
 - `limb_compare`(다리 비교 요약): 앞다리 쌍(FORE: LF·RF)과 뒷다리 쌍(HIND: LH·RH)의 좌우 차이다. `diff` = 왼쪽 − 오른쪽, `symmetry_index`는 좌우 차이 비율(%)이다. **`symmetry_index`가 큰 순서로 정렬해서 오므로 맨 위가 "차이가 가장 큰 다리"다.** 그다음에 비교는 되지만 `symmetry_index`가 `null`인 항목(왼쪽 + 오른쪽이 0일 때)이 오고, 비교할 수 없는 항목(`comparable`이 false)은 맨 뒤에 `reason`과 함께 온다.
 - 서버는 "아프다", "좋아졌다" 같은 판단 단어를 내지 않는다. 화면도 쓰지 않는다.
