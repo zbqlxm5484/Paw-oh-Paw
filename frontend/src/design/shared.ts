@@ -10,7 +10,7 @@ const SMALLB = ['말티즈', '푸들', '토이 푸들', '포메라니안', '시�
 const LARGEB = ['골든 리트리버', '래브라도 리트리버', '사모예드', '시베리안 허스키', '저먼 셰퍼드', '말라뮤트', '알래스칸 말라뮤트', '풍산개']
 /** 디자인의 체급 미리보기(견종 → 체중). 저장은 서버가 체중으로 정한다 */
 export const autoSize = (breed: string, kg: string): DSize => (SMALLB.includes(breed) ? 'S' : LARGEB.includes(breed) ? 'L' : BREEDS.includes(breed) && breed !== '믹스견' ? 'M' : +kg ? (+kg < 10 ? 'S' : +kg < 25 ? 'M' : 'L') : 'M')
-export const SEX = { m: '수컷', f: '암컷', mn: '중성화 수컷', fs: '중성화 암컷' } as const
+export const SEX = { m: '수컷', f: '암컷', mn: '수컷(중성화)', fs: '암컷(중성화)' } as const
 export const SIZE = { S: '소형', M: '중형', L: '대형' } as const
 export const LIMB = { LF: '왼앞', RF: '오른앞', LH: '왼뒤', RH: '오른뒤' } as const
 export type PetForm = { name: string; breed: string; birth: string; kg: string; sex: keyof typeof SEX; size: DSize | null; rehab: string; focus: keyof typeof LIMB | null; memo: string; base: string | null }
