@@ -45,7 +45,7 @@
 | `id` | 문자열 | 작업 ID. 형식을 해석하지 않는다 (지금은 UUID) | 검토 답변 Q2 |
 | `shot_id` | 문자열·null | 등록할 때 `meta`로 받은 값을 그대로 | |
 | `model.name`·`model.version` | 문자열 | 팀 서비스가 `shot.model_name`·`model_version`(각 50자)에 저장. 다르면 회차 비교에서 MODEL_CHANGED | PR-F07-05, REQ-OP-006 |
-| `model.weights_sha256` | 문자열 | 가중치 전체 해시. JSON 원본에만 남긴다 | |
+| `model.weights_sha256` | 문자열·null | 가중치 전체 해시. JSON 원본에만 남긴다. 분석 API에 가중치 해시(`ANALYSIS_WEIGHTS_SHA256`)를 넣지 않았으면 null이고, `model.version` 끝은 `unknown`이다 | |
 | `versions` | 객체 | 엔진 부분별 정의 버전. 정의가 다른 결과끼리 비교하지 않기 위해 | |
 | `input` | 객체 | 입력 영상 사양 | PR-F07-05 |
 | `validity` | `valid`·`partial`·`invalid` | 촬영 판정 | F-03 |
@@ -114,7 +114,7 @@
 
 기업 무효 사유(이 중 하나가 붙은 통과가 있으면 촬영 전체 `invalid`): `GAIT_PACE`, `RUNNING`, `TURNED`, `STOPPED`, `SITTING`, `PARTIAL_PASS`, `OVERLAP`.
 
-분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `INTERNAL`. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
+분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERNAL`. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
 
 ## 5. 관절점 파일 (`GET /analyses/{id}/files/keypoints`)
 
