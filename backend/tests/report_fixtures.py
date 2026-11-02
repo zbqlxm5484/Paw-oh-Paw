@@ -111,3 +111,35 @@ def sample_input(edition: str = "OWNER", previous: dict | None = None, **overrid
     }
     data.update(overrides)
     return data
+
+
+class FakeExecutor:
+    """가짜 프로세스 풀(test_render_worker와 같은 모양).
+
+    "run"이면 submit 때 바로 돌려 끝난 Future, "hang"이면 끝나지 않은 Future, 예외 객체면 그 예외로 끝난 Future다.
+    """
+
+    def __init__(self, behavior: Any = "run") -> None:
+        from concurrent.futures import Future  # noqa: PLC0415
+
+        self._future_type = Future
+        self.behavior = behavior
+        self.calls: list[tuple[Any, tuple[Any, ...], dict[str, Any]]] = []
+        self.futures: list[Any] = []
+        self.closed = False
+
+    def submit(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        future = self._future_type()
+        self.calls.append((fn, args, kwargs))
+        if isinstance(self.behavior, BaseException):
+            future.set_exception(self.behavior)
+        elif self.behavior == "run":
+            try:
+                future.set_result(fn(*args, **kwargs))
+            except BaseException as error:
+                future.set_exception(error)
+        self.futures.append(future)
+        return future
+
+    def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+        self.closed = True

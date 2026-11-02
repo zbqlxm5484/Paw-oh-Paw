@@ -36,5 +36,11 @@ PyJWT==2.15.1
 # headless: 창을 띄우는 GUI 라이브러리가 없어 서버(python:3.11-slim)에서 추가 OS 패키지 없이 import된다
 opencv-python-headless==5.0.0.93
 
+# 보고서(8절): HTML 템플릿, 차트, PDF. WeasyPrint는 시스템 라이브러리(Pango·Cairo. python:3.11-slim은 libpango-1.0-0
+# libpangoft2-1.0-0, Windows는 GTK 런타임)가 있어야 import된다. 없으면 HTML까지만 되고 PDF는 REPORT_FAILED다
+jinja2==3.1.6
+matplotlib==3.11.2
+weasyprint==70.0
+
 # 테스트
 pytest==9.1.1
