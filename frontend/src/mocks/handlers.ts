@@ -66,15 +66,15 @@ export const handlers = [
   http.post(`${BASE}/auth/login`, async ({ request }) => {
     await delay(400)
     const body = (await request.json()) as LoginIn
-    if (!body.institution_code || !body.login_id || !body.password) {
+    if (!body.login_id || !body.password) {
       return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', {
-        fields: ['institution_code', 'login_id', 'password'].filter((k) => !body[k as keyof LoginIn]).map((field) => ({ field, type: 'missing' })),
+        fields: ['login_id', 'password'].filter((k) => !body[k as keyof LoginIn]).map((field) => ({ field, type: 'missing' })),
       })
     }
     // 가짜 규칙: 비밀번호가 "wrong" 이면 실패, "disabled" 면 중지 계정. 그 밖에는 모두 통과
-    if (body.password === 'wrong') return err(401, 'LOGIN_FAILED', '기관 코드, 아이디 또는 비밀번호가 맞지 않습니다.')
+    if (body.password === 'wrong') return err(401, 'LOGIN_FAILED', '아이디 또는 비밀번호가 맞지 않습니다.')
     if (body.password === 'disabled') return err(403, 'ACCOUNT_DISABLED', '사용이 중지된 계정입니다.')
-    const staff = { ...MOCK_STAFF, login_id: body.login_id, institution: { ...MOCK_STAFF.institution, code: body.institution_code } }
+    const staff = { ...MOCK_STAFF, login_id: body.login_id }   // 기관은 계정에 묶여 있어 로그인 본문에 없다(인증 설계 v0.3)
     return HttpResponse.json({
       access_token: TOKEN,
       token_type: 'bearer',

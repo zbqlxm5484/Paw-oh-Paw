@@ -255,7 +255,7 @@ export class AppProto extends DCLogic<Props, any> {
         if (!(s.li.code.length >= 1 && s.li.id.length >= 1 && s.li.pw.length >= 1)) return this.toast('기관 코드·아이디·비밀번호를 입력해 주세요')
         if (s.busy) return
         this.setState({ busy: true })
-        try { await this.props.auth.login({ institution_code: s.li.code.trim(), login_id: s.li.id.trim(), password: s.li.pw }); this.setState({ li: { code: '', id: '', pw: '' }, q: '', viaTab: true }); this.props.nav(this.props.query.get('from') || '/', { replace: true }) }
+        try { await this.props.auth.login({ login_id: s.li.id.trim(), password: s.li.pw }); this.setState({ li: { code: '', id: '', pw: '' }, q: '', viaTab: true }); this.props.nav(this.props.query.get('from') || '/', { replace: true }) }
         catch (e) { this.toast(errMsg(e, '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')) }
         finally { this.setState({ busy: false }) }
       },
