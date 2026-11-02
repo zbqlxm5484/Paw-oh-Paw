@@ -58,7 +58,7 @@ select {
 select::-ms-expand { display: none; }
 
 /* 반려견 차트(11-02, EMR 처럼): 위 고정 줄 = 환자 정보 · 바이탈 · 메모 · 담당, 아래 = 방문 목록 | 방문 기록 | 진단 이력 */
-.chart-strip { position:sticky; top:76px; z-index:10; display:grid; grid-template-columns:minmax(230px,1.1fr) minmax(250px,1fr) minmax(0,2.4fr) minmax(170px,.8fr); background:#fff; border:1px solid #ECE8E2; border-radius:16px; box-shadow:0 6px 18px rgba(27,36,51,.06); }
+.chart-strip { position:sticky; top:76px; z-index:10; display:grid; grid-template-columns:minmax(230px,1.1fr) minmax(max-content,1fr) minmax(0,2.4fr) minmax(170px,.8fr);   /* 바이탈 칸은 값이 다 들어가는 너비 아래로 줄지 않는다 */ background:#fff; border:1px solid #ECE8E2; border-radius:16px; box-shadow:0 6px 18px rgba(27,36,51,.06); }
 .cs-card { display:flex; flex-direction:column; gap:4px; padding:12px 16px; min-width:0; }
 .cs-card + .cs-card { border-left:1px solid #F0ECE6; }
 .cs-lb { font-size:12px; line-height:18px; color:#8E949C; font-weight:600; }

@@ -206,10 +206,10 @@ export default function Report() {
                   })}
                 </div>
 
-                {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 여기서 둘째 쪽 */}
+                {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 바로 위 안내 상자에서, 수의사용은 여기서 둘째 쪽 */}
                 {kind === 'g' ? <OwnerGuideBox bm={bm} /> : null}
 
-                <div style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
+                <div className={kind === 'v' ? 'rep-p2' : undefined} style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
                   <b>측정 품질</b>
                   <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
                   {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
