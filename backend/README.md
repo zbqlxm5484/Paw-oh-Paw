@@ -106,6 +106,7 @@ python -m app.worker.main
 - 모드를 mock ↔ http로 바꿀 때는 진행 중(SUBMITTED·ANALYZING) 촬영이 없을 때 한다. DB에 남은 작업 ID가 다른 쪽 API에는 없어 상태 조회가 계속 실패하다 `ANALYSIS_TIMEOUT`으로 끝난다.
 - 분석이 끝나면 결과 JSON을 촬영 키의 `analysis.json`으로 보관하고 촬영 판정·사유와 통과 행(`walk_pass`)을 넣어 DONE이 된다(6절). 결과 JSON을 읽을 수 없거나 분석 API가 작업이 없다고 답하면(404·410) `ANALYSIS_FAILED`다. 저장 중 오류는 그 촬영만 건너뛰고 다음 바퀴에 다시 한다. 회차 집계·보고서는 다음 작업에서 더한다.
 - 결과 영상(12.4 "무거운 일 나누기"): DONE이 된 촬영은 `video_status`가 PENDING이고, 주 반복이 바퀴마다 빈 자리(`WORKER_RENDER_CONCURRENCY`, 기본 1)만큼 `analyzed_at` 순으로 자식 프로세스(spawn 풀)에 맡긴다. 자식은 `app/video/render.py`만 부른다: 원본의 프레임마다 사람 얼굴을 찾아 모자이크로 가리고(MediaPipe BlazeFace를 OpenCV DNN으로, 검출이 끊겨도 0.5초는 그 자리를 계속 가림), 분석 API의 관절점 파일(`get_keypoints`)로 골격을 그린 뒤(OpenCV. 프레임의 `camera_side`에 따라 등 가운데·엉덩이 위와 카메라 쪽 귀·다리만, 반대쪽 귀·다리는 그리지 않는다) ffmpeg로 H.264(yuv420p, faststart, 소리 없음) MP4를 만든다. 작업 폴더는 `UPLOAD_TMP_DIR/worker/{촬영 ID}/`이고 끝나면 지운다. 성공이면 `result.mp4`를 저장소에 넣고 조건을 건 UPDATE로 READY·`result_key`·`video_ready_at`을 붙이며, 그사이 촬영이 지워졌으면 파일을 지운다. 골격 그리기·인코딩 실패, 관절점을 받을 수 없음(작업 없음·거부), 자식 프로세스 종료는 FAILED(`VIDEO_RENDER_FAILED`)이고 판정 결과는 그대로다. 주 반복은 자식을 기다리지 않으므로 결과 영상이 밀려 있어도 분석 제출·조회는 2초 주기대로 돈다. 얼굴 검출 모델(`app/video/models/`, MIT)은 패키지에 들어 있어 설정할 것이 없다.
+- 결과 영상 처리 시간: 1080p 60fps 8초 1건이 이 PC에서 약 20초(얼굴 검출 0.05초 간격), 골격만이면 3초다. 측정 방법·표는 `docs/report/renderTiming.md`, 다시 재려면 `python -m scripts.measure_render <영상.mp4>`(관절점 파일이 없으면 합성한다).
 - Ctrl+C(SIGINT)나 SIGTERM을 받으면 하던 바퀴를 끝내고 멈춘다. 상태가 DB에 있어 다시 켜면 이어서 한다.
 
 ## 테스트
