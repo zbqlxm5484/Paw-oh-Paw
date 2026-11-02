@@ -10,7 +10,7 @@
 
 | 항목 | v1 |
 | --- | --- |
-| 엎드리기 사유 | `SITTING`에 포함. `LYING`은 두지 않는다 (백엔드 API 명세 11.3) |
+| 엎드리기 사유 | `SITTING`에 포함. `LYING`은 두지 않는다 (백엔드 명세 14.3) |
 | `validity_reason` | 유효 판별 규칙 v1 4.2절대로 (`docs/engine/validityRules.md`, `engine/validity.py`) |
 | `model.version` | `{분석 API 버전}/{각도 정의}/{가중치 해시 앞 8자}` (예: `0.4.0/v1/a4261a10`) |
 | 수치 키 | 앞·뒷발 접미사 `_front`·`_hind`, `stifle_cycle_rom`, `paw_slope_median_*` 그대로 (견본·백엔드 fixtures와 같음) |
@@ -104,7 +104,7 @@
 
 ## 4. 사유 코드
 
-백엔드 API 명세 11.3과 같다.
+백엔드 명세(`backend/docs/backend-spec.md`) 14.3과 같다.
 
 | 어디에 | 코드 |
 | --- | --- |
