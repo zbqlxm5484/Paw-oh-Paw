@@ -13,13 +13,16 @@ import { EMPTY_PET, LIMB, LINES, PREP, SEX, SIZE, autoSize, baseOf as baseOf_, c
 import { AppView } from './AppView'
 import './app-view.css'
 
+/** 409 DOG_MODIFIED: 다른 담당자가 먼저 고쳤다. 목록은 다시 불러온 상태다(useDesignActions.updateDog) */
+const DOG_MODIFIED_MSG = '다른 담당자가 먼저 수정했어요. 최신 내용을 다시 불러왔으니 확인한 뒤 다시 저장해 주세요'
+
 type Props = ProtoProps & { rootStyle?: React.CSSProperties }
 
 export class AppProto extends DCLogic<Props, any> {
   static View = AppView
   state: any = {
     splash: false, joint: false, line: 0, sheet: null, toast: '', viaTab: true,
-    li: { code: '', id: '', pw: '' }, so: { org: '', loc: '', dev: '', id: '', pw: '', pw2: '' }, to: [false, false, false, false],
+    li: { id: '', pw: '' }, so: { org: '', loc: '', dev: '', id: '', pw: '', pw2: '' }, to: [false, false, false, false],
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
     capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0,
   }
@@ -174,7 +177,7 @@ export class AppProto extends DCLogic<Props, any> {
         rows: [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력', sub: '' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택', sub: '' },
           { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '보고서에는 넣지 않아요' }],
         hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차 · ${r.date}`, sub: r.st === 'fail' ? `체중 ${r.w}kg · 쓸 수 있는 통과 없음` : `체중 ${r.w}kg · 유효 통과 ${r.ps[1]} · 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
-          setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id }); this.toast(`${r.date} 회차를 기준으로 정했어요`) } catch (err) { this.toast(errMsg(err, '기준 회차를 바꾸지 못했어요')) } },
+          setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id, version: D.raw.version }); this.toast(`${r.date} 회차를 기준으로 정했어요`) } catch (err) { this.toast(err instanceof ApiError && err.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : errMsg(err, '기준 회차를 바꾸지 못했어요')) } },
           st: stt[0], bg: stt[1], c: stt[2], bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) } }),
         has: all.length > 0, none: !all.length, count: all.length + '회차',
         edit: () => this.nav('petNew', `/dogs/${D.id}/edit`),
@@ -249,17 +252,17 @@ export class AppProto extends DCLogic<Props, any> {
       jointOp: s.joint ? 1 : 0, jointTr: s.joint ? 'opacity 0.5s ease-out' : 'none', replaySplash: () => this.startSplash(),
       lines: LINES.map((t, i) => ({ t, op: i === s.line ? 1 : 0, ty: i === s.line ? 0 : (i < s.line ? -14 : 14) })),
       goStory: () => this.nav('story'), openStart: () => this.nav('signupOrg'), goLogin: () => this.nav('login'),
-      fLoginCode: s.li.code, fLoginId: s.li.id, fLoginPw: s.li.pw, onLoginCode: setLi('code'), onLoginId: setLi('id'), onLoginPw: setLi('pw'),
-      loginBg: s.li.code.length >= 1 && s.li.id.length >= 1 && s.li.pw.length >= 1 ? '#D2601A' : '#C3C8CF',
+      fLoginId: s.li.id, fLoginPw: s.li.pw, onLoginId: setLi('id'), onLoginPw: setLi('pw'),
+      loginBg: s.li.id.length >= 1 && s.li.pw.length >= 1 ? '#D2601A' : '#C3C8CF',
       doLogin: async () => {
-        if (!(s.li.code.length >= 1 && s.li.id.length >= 1 && s.li.pw.length >= 1)) return this.toast('기관 코드·아이디·비밀번호를 입력해 주세요')
+        if (!(s.li.id.length >= 1 && s.li.pw.length >= 1)) return this.toast('아이디·비밀번호를 입력해 주세요')
         if (s.busy) return
         this.setState({ busy: true })
-        try { await this.props.auth.login({ login_id: s.li.id.trim(), password: s.li.pw }); this.setState({ li: { code: '', id: '', pw: '' }, q: '', viaTab: true }); this.props.nav(this.props.query.get('from') || '/', { replace: true }) }
+        try { await this.props.auth.login({ login_id: s.li.id.trim(), password: s.li.pw }); this.setState({ li: { id: '', pw: '' }, q: '', viaTab: true }); this.props.nav(this.props.query.get('from') || '/', { replace: true }) }
         catch (e) { this.toast(errMsg(e, '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')) }
         finally { this.setState({ busy: false }) }
       },
-      loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '가입할 때 만든 아이디', loginCodeLabel: '기관 코드', loginCodePh: '예) HANBIT',
+      loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '가입할 때 만든 아이디',
       orgFields: [
         { label: '기관명', ph: '예) 한빛동물병원', type: 'text', val: s.so.org, on: setSo('org') },
         { label: '기관 주소', ph: '주소 검색', type: 'text', val: s.so.loc, on: setSo('loc') },
@@ -301,9 +304,9 @@ export class AppProto extends DCLogic<Props, any> {
         if (!Number.isFinite(kg) || kg <= 0) return this.toast('체중은 숫자로 입력해 주세요')
         this.setState({ busy: true })
         try {
-          if (s.petMode === 'edit') { await this.props.actions.updateDog(s.petId, petBody(s.pet)); this.back(); this.toast('저장했어요') }
+          if (s.petMode === 'edit') { const cur = this.props.data.dogs.find((x) => x.id === s.petId); await this.props.actions.updateDog(s.petId, { ...petBody(s.pet), version: cur ? cur.raw.version : 0 }); this.back(); this.toast('저장했어요') }
           else { const d = await this.props.actions.createDog(petBody(s.pet)); this.nav('dog', `/dogs/${d.id}`, true); this.toast(`${s.pet.name} 등록을 마쳤어요`) }
-        } catch (e) { this.toast(e instanceof ApiError && e.fields.length ? `${e.message} (${e.fields.map((f) => f.field).join(', ')})` : errMsg(e, '저장하지 못했어요')) }
+        } catch (e) { this.toast(e instanceof ApiError && e.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : e instanceof ApiError && e.fields.length ? `${e.message} (${e.fields.map((f) => f.field).join(', ')})` : errMsg(e, '저장하지 못했어요')) }
         finally { this.setState({ busy: false }) }
       },
 
@@ -382,7 +385,7 @@ export class AppProto extends DCLogic<Props, any> {
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',
       confirmDel: () => { this.setState({ sheet: null }); this.toast('반려견 삭제는 준비 중이에요') },
-      confirmLogout: () => { this.props.auth.logout(); this.setState({ sheet: null, li: { code: '', id: '', pw: '' } }); this.props.nav('/welcome', { replace: true }) },
+      confirmLogout: () => { this.props.auth.logout(); this.setState({ sheet: null, li: { id: '', pw: '' } }); this.props.nav('/welcome', { replace: true }) },
       toastOn: !!s.toast, toastMsg: s.toast,
       statusC: landscape ? 'transparent' : dark ? '#fff' : '#1B2433', indC: dark ? '#fff' : '#1B2433', indOp: landscape ? 0 : dark ? 0.8 : 0.25,
     }

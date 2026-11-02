@@ -97,7 +97,7 @@ export interface DogOut {
   last_measured_on: string | null
   open_session_id: string | null
   /** 낙관적 잠금. 수정할 때 읽은 값을 보내고, 어긋나면 409 DOG_MODIFIED */
-  version?: number
+  version: number
   created_at: string
   updated_at: string
 }
@@ -114,7 +114,8 @@ export interface DogCreate {
   memo?: string | null
 }
 
-export type DogUpdate = Partial<DogCreate> & { baseline_session_id?: string | null; version?: number }
+/** PATCH /dogs/{id}. version 은 필수(읽었을 때의 값, 없으면 422, 다르면 409 DOG_MODIFIED) */
+export type DogUpdate = Partial<DogCreate> & { baseline_session_id?: string | null; version: number }
 
 export interface SessionHistoryItem {
   id: string

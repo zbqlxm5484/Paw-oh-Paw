@@ -131,6 +131,7 @@ export const handlers = [
       focus_limb: body.focus_limb ?? null,
       baseline_session_id: null,
       memo: body.memo?.trim() || null,
+      version: 0,
       created_at: ts,
       updated_at: ts,
     }
@@ -152,7 +153,10 @@ export const handlers = [
     if (!row) return notFound()
     const body = (await request.json()) as DogUpdate
     const fields = validate(body, true)
+    // 낙관적 잠금(백엔드 15.5 BE-25): version 은 필수, 저장된 값과 다르면 아무것도 바꾸지 않고 409
+    if (typeof body.version !== 'number') fields.push({ field: 'version', type: 'missing' })
     if (fields.length) return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', { fields })
+    if (body.version !== row.version) return err(409, 'DOG_MODIFIED', '다른 담당자가 먼저 수정했습니다. 다시 불러온 뒤 시도해 주세요.')
 
     if ('baseline_session_id' in body) {
       if (body.baseline_session_id != null) {
@@ -179,6 +183,8 @@ export const handlers = [
         row.size_class_manual = false
       }
     }
+    row.updated_at = new Date().toISOString()
+    row.version += 1
     row.updated_at = new Date().toISOString()
     return HttpResponse.json(toDogOut(row))
   }),
