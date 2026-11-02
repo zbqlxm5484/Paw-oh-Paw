@@ -4,10 +4,14 @@
 <meta charset="utf-8">
 <title>{{ s.title }} ({{ s.edition_label }})</title>
 <style>
-  @page { size: A4; margin: 18mm 16mm; }
-  body { font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif; color: #222; font-size: 11pt; line-height: 1.5; }
+  @page {
+    size: A4; margin: 18mm 16mm 20mm 16mm;
+    @bottom-left { content: element(footer); }
+    @bottom-right { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #555; }
+  }
+  body { font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif; color: #222; font-size: 10.5pt; line-height: 1.45; }
   h1 { font-size: 18pt; margin: 0 0 2mm 0; }
-  h2 { font-size: 13pt; margin: 7mm 0 2mm 0; border-bottom: 1px solid #999; padding-bottom: 1mm; }
+  h2 { font-size: 13pt; margin: 6mm 0 2mm 0; border-bottom: 1px solid #999; padding-bottom: 1mm; }
   .edition { color: #555; font-size: 10pt; margin-bottom: 4mm; }
   .meta { color: #444; }
   table { border-collapse: collapse; width: 100%; margin: 2mm 0 3mm 0; font-size: 10pt; }
@@ -16,15 +20,18 @@
   th { background: #f0f0f0; }
   .reason { color: #8a4b00; font-size: 9pt; }
   .prev { color: #777; font-size: 9pt; }
-  .chart { margin: 2mm 0; }
-  .chart img { max-width: 100%; }
+  .chart { margin: 1mm 0 2mm 0; text-align: center; }
+  .chart img { max-width: 92%; }
   .note p { margin: 0 0 1.5mm 0; }
   .glossary dt { font-weight: bold; }
   .glossary dd { margin: 0 0 1mm 0; }
-  footer { margin-top: 8mm; padding-top: 2mm; border-top: 1px solid #999; font-size: 9pt; color: #555; }
+  footer { position: running(footer); font-size: 8.5pt; color: #555; }  /* 매 쪽 아래 여백에 놓인다 */
+  @media screen { footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 2mm 16mm; background: #fff; border-top: 1px solid #999; } body { padding-bottom: 12mm; } }
 </style>
 </head>
 <body>
+{# running 요소는 자기보다 앞 쪽에는 나오지 않으므로 본문 맨 앞에 둔다(매 쪽 아래 여백) #}
+<footer>{{ s.disclaimer }} · 템플릿 {{ template_version }}</footer>
 <h1>{{ s.title }}</h1>
 <div class="edition">{{ s.edition_label }} · 측정일 {{ session.measured_on }}{% if session.model_name %} · 분석 모델 {{ session.model_name }}{% if session.model_version %} {{ session.model_version }}{% endif %}{% endif %}</div>
 <p class="meta">{{ s.intro }}</p>
@@ -86,7 +93,5 @@
 {% for term, explanation in s.glossary %}<dt>{{ term }}</dt><dd>{{ explanation }}</dd>{% endfor %}
 </dl>
 {% endif %}
-
-<footer>{{ s.disclaimer }} · 템플릿 {{ template_version }}</footer>
 </body>
 </html>
