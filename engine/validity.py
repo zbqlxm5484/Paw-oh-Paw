@@ -27,7 +27,7 @@ NEAR_LEGS = {"right": (8, 9, 10, 11, 12, 18, 19, 20, 21), "left": (3, 4, 5, 6, 7
 # 기업 판별 기준 문서 2절의 무효 사유. 이 사유가 붙은 통과가 있으면 촬영 전체가 무효다
 SHOT_INVALID_REASONS = {"GAIT_PACE", "RUNNING", "TURNED", "STOPPED", "SITTING", "PARTIAL_PASS", "OVERLAP"}
 
-REASON_TEXT = {   # 백엔드 API 명세 11.3과 같은 문구
+REASON_TEXT = {   # 백엔드 명세(backend/docs/backend-spec.md) 14.3과 같은 문구
     "NO_DOG": "반려견이 화면에 없습니다.",
     "OCCLUDED": "몸이 가려졌습니다.",
     "NOT_SIDE_VIEW": "옆모습이 찍히지 않았습니다.",
