@@ -25,7 +25,14 @@
 | `sample` (기본) | `samples/`의 견본 결과를 돌려준다. `model.name`이 `sample-pipeline` | 팀 서비스 연동 시험. 모델·관절점 파일 없이 |
 | `track` | 미리 뽑아 둔 관절점 파일(`ANALYSIS_TRACK_FILE`, 기업 `video_kpi.py track` 형식)에서 올린 영상을 찾아 **실제 엔진**을 돌린다 | GPU·모델 없이 실제 판별 결과를 볼 때 |
 
-`track`은 올린 영상의 SHA-256과 같은 영상을 먼저 찾고, 없으면 파일 이름으로 찾는다. 둘 다 없으면 `failed` + `POSE_UNAVAILABLE`이다. 영상에서 바로 관절점을 뽑는 경로(MMPose)는 실행 환경이 정해지면 `pipeline.py`에 더한다.
+`track`은 올린 영상의 SHA-256과 같은 영상을 먼저 찾고, 없으면 파일 이름으로 찾는다. 둘 다 없으면 `failed` + `POSE_UNAVAILABLE`이다.
+
+`track`은 시연·개발용이다. 쓸 때 주의할 것:
+
+- 파일 이름으로 찾을 때는 내용을 확인하지 않는다. 서로 다른 영상이 같은 이름이면 엉뚱한 관절점으로 그럴듯한 결과가 나온다. 결과를 믿어야 할 때는 관절점을 뽑은 원본 영상 그대로 올린다(SHA-256으로 찾힘)
+- 관절점 파일은 처음 읽은 내용을 기억해 둔다. 서버를 켜 둔 채 파일을 바꾸면 서버를 다시 켜야 새 내용이 쓰인다
+
+영상에서 바로 관절점을 뽑는 경로(MMPose)는 실행 환경이 정해지면 `pipeline.py`에 더한다.
 
 지금 결과에서 비어 있는 것: `metrics`는 `{}`(걸음 길이·입각기 비율, 가동 범위 계산 뒤), `gait`는 null(보행 유형 판별 뒤), `input.codec`는 null.
 
@@ -66,7 +73,7 @@ ANALYSIS_API_KEY=
 | `ANALYSIS_POSE_SOURCE` | `sample` | 위 표 |
 | `ANALYSIS_TRACK_FILE` | 비어 있음 | `track`일 때 읽을 관절점 파일 |
 | `ANALYSIS_MODEL_NAME` | `fs-v4` | 결과 `model.name`. 관절점 파일 `meta.model.name`이 있으면 그것을 쓴다 |
-| `ANALYSIS_WEIGHTS_SHA256` | 비어 있음 | 관절점을 뽑은 가중치의 SHA-256. 앞 8자가 `model.version` 끝에 붙는다(`0.4.0/v1/a4261a10`). 비어 있으면 `unknown` |
+| `ANALYSIS_WEIGHTS_SHA256` | 비어 있음 | 관절점을 뽑은 가중치의 SHA-256. 앞 8자가 `model.version` 끝에 붙는다(`0.4.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
 
 `/health`는 Docker 상태 확인용이라 인증 없이 열려 있다.
 
