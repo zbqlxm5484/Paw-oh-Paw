@@ -12,6 +12,8 @@ import type {
 export type DSex = 'm' | 'f' | 'mn' | 'fs'
 export type DSize = 'S' | 'M' | 'L'
 export type DGait = 'walk' | 'trot'
+/** 결과 표를 만든 보행 묶음. other = 서버의 OTHER(보행 유형 판별 전에는 모든 통과가 여기로 온다) */
+export type DRowsKey = DGait | 'other'
 export type DSt = 'ok' | 'part' | 'fail'
 
 export const SEX_TO_API: Record<DSex, Sex> = { m: 'MALE', f: 'FEMALE', mn: 'MALE_NEUTERED', fs: 'FEMALE_SPAYED' }
@@ -83,7 +85,7 @@ export interface DRes {
   rom: number | null
   sL: number | null
   sR: number | null
-  rowsBy: Record<DGait, DRow[]>
+  rowsBy: Record<DRowsKey, DRow[]>
   measured_on: string
   status: SessionStatus
   isBaseline: boolean
@@ -96,9 +98,10 @@ const fmtVal = (v: number | null, unit: Unit): number => {
   return unit === 'deg' ? Math.round(v * 10) / 10 : Math.round(v)
 }
 
-function rowsOf(result: SessionResultOut, gait: DGait): DRow[] {
-  const want: GaitType = gait === 'walk' ? 'WALK' : 'TROT'
-  const g = result.gaits.find((x) => x.gait_type === want)
+const GAIT_OF: Record<DRowsKey, GaitType> = { walk: 'WALK', trot: 'TROT', other: 'OTHER' }
+
+function rowsOf(result: SessionResultOut, key: DRowsKey): DRow[] {
+  const g = result.gaits.find((x) => x.gait_type === GAIT_OF[key])
   if (!g) return []
   const order: LimbCompareOut[] = [...g.limb_compare.filter((c) => c.pair === 'HIND'), ...g.limb_compare.filter((c) => c.pair === 'FORE')]
   let lastLeg = ''
@@ -132,11 +135,13 @@ export function symOf(rows: DRow[]): number | null {
 export function toResult(h: SessionHistoryItem, dogId: string, result: SessionResultOut | null | undefined): DRes {
   const trot = result ? rowsOf(result, 'trot') : []
   const walk = result ? rowsOf(result, 'walk') : []
-  const main = trot.length ? trot : walk
+  const other = result ? rowsOf(result, 'other') : []
+  const main = trot.length ? trot : walk.length ? walk : other
   const stifle = main.find((r) => r.code === 'rom_stifle' && !r.na)
   const stride = main.find((r) => r.code === 'stride_length' && !r.na)
+  // 실패: 분석 실패이거나, 분석은 끝났지만 쓸 수 있는 통과가 0건(gaits 빈 배열·used 0)일 때 → 다시 촬영 안내
   // 일부 유효: 무효 촬영이 있거나 유효 통과가 일부뿐(FEW_VALID_PASSES)일 때
-  const st: DSt = h.status === 'FAILED' ? 'fail' : result && (result.shot_counts.invalid > 0 || result.notices.some((n) => n.code === 'FEW_VALID_PASSES')) ? 'part' : 'ok'
+  const st: DSt = h.status === 'FAILED' || (result && result.pass_counts.used === 0) ? 'fail' : result && (result.shot_counts.invalid > 0 || result.notices.some((n) => n.code === 'FEW_VALID_PASSES')) ? 'part' : 'ok'
   const vp = h.valid_passes ? h.valid_passes.LEFT + h.valid_passes.RIGHT : 0
   return {
     id: h.id, dog: dogId, date: fmtMonthDay(h.measured_on), time: timeOf(result?.completed_at ?? null), st,
@@ -147,7 +152,7 @@ export function toResult(h: SessionHistoryItem, dogId: string, result: SessionRe
     loaded: !!result || h.status === 'FAILED',
     sym: symOf(main), rom: stifle ? Math.round((stifle.l + stifle.r) / 2) : null,
     sL: stride ? stride.l : null, sR: stride ? stride.r : null,
-    rowsBy: { trot, walk }, measured_on: h.measured_on, status: h.status, isBaseline: h.is_baseline, raw: h, result: result ?? null,
+    rowsBy: { trot, walk, other }, measured_on: h.measured_on, status: h.status, isBaseline: h.is_baseline, raw: h, result: result ?? null,
   }
 }
 

@@ -108,6 +108,43 @@ describe('결과 화면·보고서 문구 (shared.resultVals)', () => {
   })
 })
 
+describe('보행 유형 미판별(OTHER)·유효 통과 0건 회차', () => {
+  const ctxOf = (R: ReturnType<typeof toResult>) => ({ results: [R], dogById: () => DOG })
+
+  it('OTHER 묶음만 있으면 그 표를 쓰고, 제목은 "보행 유형 미판별"', () => {
+    const r = result(ROWS)
+    r.gaits = [{ gait_type: 'OTHER', metrics: [], limb_compare: ROWS }]
+    const R = toResult(HIST, 'd1', r)
+    expect(R.rowsBy.other).toHaveLength(5)
+    expect(R.sym).not.toBeNull()
+    for (const g of ['trot', 'walk'] as const) {
+      const { rd } = resultVals(ctxOf(R), R, g)
+      expect(rd.rows).toHaveLength(5)
+      expect(rd.gaitName).toBe('보행 유형 미판별')
+    }
+  })
+
+  it('속보 표가 있으면 속보가 먼저', () => {
+    const r = result(ROWS)
+    r.gaits.push({ gait_type: 'OTHER', metrics: [], limb_compare: ROWS.slice(0, 1) })
+    const R = toResult(HIST, 'd1', r)
+    expect(resultVals(ctxOf(R), R, 'trot').rd.gaitName).toBe('속보')
+  })
+
+  it('유효 통과 0건이면 실패(다시 촬영)로, 제외 사유를 함께 보여 준다', () => {
+    const r = result([])
+    r.gaits = []
+    r.pass_counts = { measured: 3, used: 0, excluded: 3 }
+    const R = toResult(HIST, 'd1', r)
+    expect(R.st).toBe('fail')
+    const { rd } = resultVals(ctxOf(R), R, 'trot')
+    expect(rd.fail).toBe(true)
+    expect(rd.ok).toBe(false)
+    expect(rd.failMsg).toContain('다시 찍어 주세요')
+    expect(rd.ex).toEqual([{ n: '뛰었습니다', c: 3 }])
+  })
+})
+
 describe('경과 비교 표 (adapter.compareRows)', () => {
   const cmp = {
     dog_id: 'd1', base: { session_id: 'a', measured_on: '2026-10-01', model_version: 'v1', kind: 'BASELINE' },
