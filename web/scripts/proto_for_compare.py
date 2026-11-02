@@ -14,7 +14,6 @@ real.REAL_FILES = [real.ASSETS / "demo_sessions.json"]
 real.sessions.cache_clear()
 
 import uvicorn  # noqa: E402
-
 from proto_app.main import app  # noqa: E402
 
 if __name__ == "__main__":
