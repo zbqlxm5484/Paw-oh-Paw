@@ -748,7 +748,8 @@ def result_detail(request: Request, rid: str, type: str = "g"):
     if r.st == "fail":
         return page(request, "report.html", acct, rd=v["rd"], rp={}, kind="v", bm=None, segs=[], status="", **side)
     kind = type if type in ("g", "v") else "g"
-    return page(request, "report.html", acct, rd=v["rd"], rp=v["rp"], kind=kind, bm=views.body_map(acct, r), **side,
+    bm = views.body_map(acct, r)
+    return page(request, "report.html", acct, rd=v["rd"], rp=v["rp"], kind=kind, bm=bm, og=views.owner_guide(bm), **side,
                 segs=views.seg([("g", "보호자용"), ("v", "수의사용")], kind),
                 status=f"분석 모델 {r.model} · 템플릿 1.0")
 
