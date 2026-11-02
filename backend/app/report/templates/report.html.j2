@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>{{ s.title }} ({{ s.edition_label }})</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif; color: #222; font-size: 11pt; line-height: 1.5; }
+  h1 { font-size: 18pt; margin: 0 0 2mm 0; }
+  h2 { font-size: 13pt; margin: 7mm 0 2mm 0; border-bottom: 1px solid #999; padding-bottom: 1mm; }
+  .edition { color: #555; font-size: 10pt; margin-bottom: 4mm; }
+  .meta { color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 3mm 0; font-size: 10pt; }
+  th, td { border: 1px solid #bbb; padding: 1.2mm 2mm; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #f0f0f0; }
+  .reason { color: #8a4b00; font-size: 9pt; }
+  .prev { color: #777; font-size: 9pt; }
+  .chart { margin: 2mm 0; }
+  .chart img { max-width: 100%; }
+  .note p { margin: 0 0 1.5mm 0; }
+  .glossary dt { font-weight: bold; }
+  .glossary dd { margin: 0 0 1mm 0; }
+  footer { margin-top: 8mm; padding-top: 2mm; border-top: 1px solid #999; font-size: 9pt; color: #555; }
+</style>
+</head>
+<body>
+<h1>{{ s.title }}</h1>
+<div class="edition">{{ s.edition_label }} · 측정일 {{ session.measured_on }}{% if session.model_name %} · 분석 모델 {{ session.model_name }}{% if session.model_version %} {{ session.model_version }}{% endif %}{% endif %}</div>
+<p class="meta">{{ s.intro }}</p>
+
+<h2>요약</h2>
+<div class="note">
+{% for line in s.summary %}<p>{{ line }}</p>{% endfor %}
+{% if s.previous_note %}<p>{{ s.previous_note }}</p>{% endif %}
+</div>
+
+{% for table in tables %}
+<h2>{{ table.label }} 수치</h2>
+<div class="note">{% for line in s.gait_notes.get(table.gait_type, []) %}<p>{{ line }}</p>{% endfor %}</div>
+{% if table.rows %}
+<table>
+  <thead>
+    <tr><th>수치</th>{% for limb in table_limbs[table.gait_type] %}<th>{{ limb_labels[limb] }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for row in table.rows %}
+    <tr>
+      <td>{{ row.label }}</td>
+      {% for limb in table_limbs[table.gait_type] %}
+        {% set cell = row.cells.get(limb) %}
+        <td>{% if cell %}{{ cell.text }}{% if cell.previous %} <span class="prev">({{ cell.previous }})</span>{% endif %}{% if cell.reason %}<br><span class="reason">{{ cell.reason }}</span>{% endif %}{% else %}-{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% if charts.get(table.gait_type) %}<div class="chart"><img src="{{ charts[table.gait_type] }}" alt="가동 범위 좌우 비교"></div>{% endif %}
+{% if table.compare %}
+<table>
+  <thead><tr><th>좌우 비교</th><th>왼쪽</th><th>오른쪽</th><th>차이</th>{% if edition == "VET" %}<th>대칭 지수</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for line in table.compare %}
+    <tr>
+      <td>{{ line.pair_label }} {{ line.label }}</td>
+      <td>{{ line.left }}</td><td>{{ line.right }}</td>
+      <td>{{ line.diff }}{% if not line.comparable and line.reason %}<br><span class="reason">{{ line.reason }}</span>{% endif %}</td>
+      {% if edition == "VET" %}<td>{{ line.symmetry_index }}</td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+{% if not tables %}
+<div class="note">{% for line in s.gait_notes.get("NONE", []) %}<p>{{ line }}</p>{% endfor %}</div>
+{% endif %}
+
+<h2>참고</h2>
+<div class="note">{% for line in s.caution %}<p>{{ line }}</p>{% endfor %}</div>
+
+{% if s.glossary %}
+<h2>용어 설명</h2>
+<dl class="glossary">
+{% for term, explanation in s.glossary %}<dt>{{ term }}</dt><dd>{{ explanation }}</dd>{% endfor %}
+</dl>
+{% endif %}
+
+<footer>{{ s.disclaimer }} · 템플릿 {{ template_version }}</footer>
+</body>
+</html>
