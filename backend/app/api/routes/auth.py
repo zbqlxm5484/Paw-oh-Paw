@@ -1,4 +1,5 @@
-"""/api/v1/auth: 로그인·내 정보(BE-01), 디바이스 코드 확인·회원가입(BE-22), 비밀번호 변경·내 정보 수정(BE-26) (15.4)."""
+"""/api/v1/auth(15.4): 로그인·내 정보(BE-01), 디바이스 코드 확인·회원가입(BE-22), 비밀번호 변경·내 정보 수정(BE-26),
+비밀번호 재설정(BE-27)."""
 
 from fastapi import APIRouter, status
 
@@ -12,11 +13,14 @@ from app.schemas.auth import (
     LoginIn,
     MeUpdate,
     PasswordChangeIn,
+    PasswordResetConfirmIn,
+    PasswordResetRequestIn,
     SignupIn,
     StaffOut,
     TokenOut,
 )
 from app.services import auth as auth_service
+from app.services import password_reset as password_reset_service
 from app.services import signup as signup_service
 from app.services.auth import authenticate, refresh_snapshot, staff_out
 
@@ -71,3 +75,15 @@ def change_password(body: PasswordChangeIn, staff: CurrentStaff, db: DbSession) 
             db, staff.id, current_password=body.current_password, new_password=body.new_password
         )
     )
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_204_NO_CONTENT)
+def request_password_reset(body: PasswordResetRequestIn, db: DbSession) -> None:
+    """재설정 링크 메일(인증 없음). 계정이 있든 없든 204, SMTP가 없거나 발송에 실패하면 503 MAIL_UNAVAILABLE."""
+    password_reset_service.request_reset(db, body.login_id)
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+def confirm_password_reset(body: PasswordResetConfirmIn, db: DbSession) -> None:
+    """링크의 토큰으로 비밀번호 바꾸기(인증 없음). 틀리거나 만료됐으면 400 RESET_TOKEN_INVALID."""
+    password_reset_service.confirm_reset(db, body.token, body.new_password)

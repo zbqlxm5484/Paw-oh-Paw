@@ -106,6 +106,19 @@ class MeUpdate(BaseModel):
         return value
 
 
+class PasswordResetRequestIn(BaseModel):
+    """POST /auth/password-reset/request 요청(13.8). 없는 아이디여도 204."""
+
+    login_id: str = Field(min_length=1, max_length=50)
+
+
+class PasswordResetConfirmIn(BaseModel):
+    """POST /auth/password-reset/confirm 요청(13.8)."""
+
+    token: str = Field(min_length=1, max_length=100)
+    new_password: NewPassword
+
+
 class InstitutionOut(OutModel):
     """담당자의 기관(15.3). contract_status는 저장값이 아니라 오늘 기준 계산값이다(11.6)."""
 

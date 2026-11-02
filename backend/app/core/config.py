@@ -99,6 +99,14 @@ class Settings(DbSettings):
     AUTH_CACHE_TTL_SEC: int = Field(60, ge=0)
     # 13.6: 디바이스 코드 하나의 계정 상한으로 관리자가 줄 수 있는 최댓값
     DEVICE_CODE_MAX_ACCOUNTS: int = Field(10, ge=1)
+    # 11.6 메일(비밀번호 재설정): SMTP_HOST가 비어 있으면 보내지 않는다(요청은 503 MAIL_UNAVAILABLE). STARTTLS
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: SecretStr = SecretStr("")
+    SMTP_FROM: str = ""
+    # 15.4 재설정 링크의 앞부분
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -130,6 +138,8 @@ class Settings(DbSettings):
             raise ValueError("STORAGE_BACKEND=s3이면 S3_BUCKET이 필요합니다")
         if self.ANALYSIS_API_MODE == "http" and not self.ANALYSIS_API_BASE_URL:
             raise ValueError("ANALYSIS_API_MODE=http이면 ANALYSIS_API_BASE_URL이 필요합니다")
+        if self.SMTP_HOST and not self.SMTP_FROM:
+            raise ValueError("SMTP_HOST가 있으면 SMTP_FROM(발신 주소)이 필요합니다")
         return self
 
 

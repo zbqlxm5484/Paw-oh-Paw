@@ -25,6 +25,9 @@ def test_defaults_follow_section_16(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.CORS_ORIGINS == ["http://localhost:5173"]
     assert settings.AUTH_CACHE_TTL_SEC == 60
     assert settings.DEVICE_CODE_MAX_ACCOUNTS == 10
+    assert (settings.SMTP_HOST, settings.SMTP_PORT, settings.SMTP_USER, settings.SMTP_FROM) == ("", 587, "", "")
+    assert settings.SMTP_PASSWORD.get_secret_value() == ""
+    assert settings.FRONTEND_BASE_URL == "http://localhost:5173"
 
 
 @pytest.mark.parametrize(
@@ -39,6 +42,12 @@ def test_worker_caps_must_be_at_least_one(name: str) -> None:
 def test_device_code_max_accounts_is_at_least_one() -> None:
     with pytest.raises(ValidationError, match="DEVICE_CODE_MAX_ACCOUNTS"):
         _settings(DEVICE_CODE_MAX_ACCOUNTS=0)
+
+
+def test_smtp_host_requires_from_address() -> None:
+    with pytest.raises(ValidationError, match="SMTP_FROM"):
+        _settings(SMTP_HOST="smtp.example.com")
+    assert _settings(SMTP_HOST="smtp.example.com", SMTP_FROM="no-reply@example.com").SMTP_HOST == "smtp.example.com"
 
 
 def test_auth_cache_ttl_cannot_be_negative() -> None:
