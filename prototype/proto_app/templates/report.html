@@ -77,7 +77,6 @@
       <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#DCEFE2;border:1px solid #B8B0A4;vertical-align:-1px"></span> 좌우 비슷 (차이 5% 미만)</span>
       <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#F7D6AE;border:1px solid #B8B0A4;vertical-align:-1px"></span> 조금 덜 씀 (5~10%)</span>
       <span><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#F2A898;border:1px solid #B8B0A4;vertical-align:-1px"></span> 많이 덜 씀 (10% 이상)</span>
-      <span>위가 머리 쪽, 왼쪽이 반려견의 왼쪽</span>
     </div>
 
     {# 다리 한 쌍씩 한 줄 설명 #}
@@ -136,18 +135,14 @@
         <span><span style="display:inline-block;width:16px;border-top:2px solid #3B6FE0;vertical-align:middle;margin-right:5px"></span>왼쪽</span>
         <span><span style="display:inline-block;width:16px;border-top:2px dashed #E5604D;vertical-align:middle;margin-right:5px"></span>오른쪽</span>
         <span><span style="display:inline-block;width:16px;height:9px;background:#E9E6E1;vertical-align:middle;margin-right:5px"></span>정상 참고 범위</span>
-        <span style="color:#B0561A">시제품: {{ kc.src }} (반려견 정보는 예시)</span>
-      </div>
-      <div style="font-size:11.5px;color:#8E949C;margin-top:2px">참고 범위: {{ kc.ref_src }}
       </div>
     </div>
-    <div style="font-size:13px;line-height:1.65;color:#5B6472">{{ rp.cond }}</div>
     {% endif %}
     <div style="flex:1"></div>
     <span style="font-size:12px;color:#A0A7B2">보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
   </div>
   {% endif %}
 </div>
-{% if panel %}{{ dp.dog_panel(panel, note_cats, '/results/' ~ rd.id ~ ('?type=' ~ kind if not rd.fail else '')) }}{% endif %}
+{% if panel %}{{ dp.dog_panel(panel, '/results/' ~ rd.id ~ ('?type=' ~ kind if not rd.fail else '')) }}{% endif %}
 </main>
 {% endblock %}

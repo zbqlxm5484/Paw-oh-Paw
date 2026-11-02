@@ -204,7 +204,7 @@ def test_set_base_and_delete(client):
     "/home?view=dogs&changed=1", "/home?q=보리", "/home?view=dogs&stage=pre", "/home?view=staff", "/home?page=99",
     "/home?dog=d1", "/home?by=박민준 테크니션", "/home?view=dogs&q=입질",
     "/dogs/d1", "/dogs/d1?tab=history", "/dogs/d1?tab=vitals", "/dogs/d1?tab=notes", "/dogs/d1?tab=gait",
-    "/dogs/d2?tab=summary", "/dogs/d1?tab=notes&edit=n1", "/results/r1/3d", "/results/r5/3d",
+    "/dogs/d2?tab=summary", "/dogs/d1?tab=notes&edit=n1O", "/dogs/d1?tab=progress", "/dogs/d1?tab=dx", "/dogs/d1?edit=n2", "/results/r1/3d", "/results/r5/3d",
 ])
 def test_patient_pages(client, url):
     login(client)
@@ -222,13 +222,40 @@ def test_home_views_search_and_memo_panel(client):
     assert "탄이" in client.get("/home?view=dogs&q=입질").text   # 메모 내용으로 찾기
     assert "박민준 테크니션" in client.get("/home?view=staff").text
     assert client.get("/home?dog=d1", follow_redirects=False).headers["location"] == "/dogs/d1"   # 반려견은 차트로
-    panel = client.get("/results/r1").text   # 분석 결과 오른쪽에 반려견 칸
-    assert "넥카라" in panel and "이번 회차 기록" in panel and "진료 기록 작성" in panel
-    r = client.post("/dogs/d1/notes", data={"author": "최지우 수의사", "text": "홈에서 쓴 메모", "next_url": "/results/r1", "rid": "r1"},
+    panel = client.get("/results/r1").text   # 분석 결과 오른쪽: 메모(바로 쓰기)와 이 회차 진료 기록
+    assert "넥카라" in panel and "이 회차 진료 기록" in panel and "TPLO 후 회복 순조" in panel
+    r = client.post("/dogs/d1/notes", data={"author": "최지우 수의사", "cat": "주의", "text": "결과 화면에서 쓴 메모", "next_url": "/results/r1"},
                     follow_redirects=False)
     n = acct.dog("d1").notes[0]
-    assert r.headers["location"] == "/results/r1" and n.text == "홈에서 쓴 메모" and n.rid == "r1"
-    assert "홈에서 쓴 메모" in client.get("/dogs/d1?tab=notes").text   # 차트 메모 탭에도 회차 메모로 보인다
+    assert r.headers["location"] == "/results/r1" and n.text == "결과 화면에서 쓴 메모" and n.cat == "주의"
+    assert "결과 화면에서 쓴 메모" in client.get("/dogs/d1?tab=dx").text   # 메모는 차트 위 고정 줄에 어느 탭에서든 보인다
+
+
+def test_chart_visits_soap_and_dx(client):
+    """차트 = 방문 목록 + 그날 진료 기록(SOAP), 오른쪽 진단 이력. 메모는 위 고정 줄"""
+    from datetime import date, timedelta
+    login(client)
+    acct = store.get("demo")
+    html = client.get("/dogs/d1").text
+    assert "TPLO 후 회복 순조" in html and "진단 이력" in html and "진행중" in html and "+ 오늘 진료 기록" in html
+    op = (date.today() - timedelta(days=71)).isoformat()   # 수술한 날 방문: 수술·진료 기록·방사선
+    html = client.get(f"/dogs/d1?v={op}").text
+    assert "TPLO 시행" in html and "xray_demo/body_lateral.jpg" in html
+    today = date.today().isoformat()
+    form = {"author": "최지우 수의사", "visit": "1", "s": "산책 잘 함", "a": "호전", "next_url": f"/dogs/d1?v={today}"}
+    client.post("/dogs/d1/notes", data=form)
+    assert not [n for n in acct.dog("d1").notes if n.text == "산책 잘 함"]   # 바이탈 없이는 안 남는다
+    r = client.post("/dogs/d1/notes", data={**form, "kg": "28.0", "temp": "38.5", "hr": "90", "sbp": "140", "dbp": "82"},
+                    follow_redirects=False)
+    assert r.headers["location"] == f"/dogs/d1?v={today}"
+    assert acct.dog("d1").vitals[0].day == today and acct.dog("d1").vitals[0].kg == "28.0"
+    days = {v.day for v in acct.dog("d1").vitals}   # 방문마다 바이탈이 있다
+    assert {r.day for r in acct.results if r.dog == "d1"} | {h.day for h in acct.dog("d1").history} <= days
+    assert "xray_demo/pelvis_vd.jpg" in client.get("/dogs/d1?tab=progress").text   # 환자 단위 영상 모아 보기
+    soap = [n for n in acct.dog("d1").notes if n.at.startswith(today) and n.cat in ("S", "A")]
+    assert len(soap) == 2 and len({n.at for n in soap}) == 1
+    html = client.get("/dogs/d1").text   # 오늘 방문이 맨 위로 생긴다
+    assert "산책 잘 함" in html and "오늘 방문" in html
 
 
 def test_landing_redirects_when_logged_in(client):

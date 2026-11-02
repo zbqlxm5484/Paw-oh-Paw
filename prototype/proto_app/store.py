@@ -50,11 +50,11 @@ class Vital:
 
 @dataclass
 class Note:
-    """동물 메모(차팅). 지우지 않고, 고치면 이전 내용을 revs 에 남긴다."""
+    """메모·진료 기록 한 줄. 지우지 않고, 고치면 이전 내용을 revs 에 남긴다."""
     id: str
     at: str                   # YYYY-MM-DD HH:MM
     author: str
-    cat: str                  # 경과 | 특이사항 | 처치 | 전달
+    cat: str                  # 진료 기록 S | O | A | P, 메모 주의 | 보호자 | 예약 | 기타 (config.NOTE_CAT)
     text: str
     important: bool = False   # 홈 특이사항 배지에 올린다
     revs: list = field(default_factory=list)   # [(at, author, text)] 오래된 것부터
@@ -66,7 +66,7 @@ class Image:
     """방사선·사진 한 장."""
     id: str
     day: str                  # YYYY-MM-DD 촬영일
-    kind: str                 # pre | post | photo
+    kind: str                 # pre | post | xray | photo (config.IMG_KIND)
     caption: str
     path: str
     author: str = ""

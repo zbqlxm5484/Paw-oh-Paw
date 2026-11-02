@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, views
+from . import config, real, views
 from .analysis import finish_due_jobs, start_job
 from .seed import DEMO_CODE, DEMO_ID, DEMO_STAFF, demo_account, seed
 from .store import (
@@ -433,25 +433,32 @@ def home(request: Request, view: str = "analyses", q: str = "", dog: str = "", b
                 changed=changed, stage=stage, qs=qs, modal=modal, today=views.fmt_date(date.today().isoformat()))
 
 
-CHART_TABS = [("summary", "차트 요약"), ("history", "히스토리"), ("vitals", "방문 · 바이탈"), ("notes", "진료 기록"),
-              ("gait", "보행 측정")]
+# EMR 처럼: 진료 기록 = 왼쪽 방문 목록 + 가운데 그날 기록, 오른쪽 진단 이력. 경과 = 그래프·측정 이력·바이탈 표(11-02)
+CHART_TABS = [("visits", "진료 기록"), ("progress", "경과"), ("dx", "진단 이력")]
+_OLD_TABS = {"summary": "progress", "gait": "progress", "vitals": "visits", "notes": "visits", "history": "dx"}   # 예전 주소
 
 
 @app.get("/dogs/{dog_id}")
-def dog_chart(request: Request, dog_id: str, tab: str = "summary", edit: str = ""):
+def dog_chart(request: Request, dog_id: str, tab: str = "visits", edit: str = "", v: str = ""):
     acct = current(request)
     if not acct:
         return need_login()
     cur = acct.dog(dog_id)
     if not cur:
         return redirect("/home", "반려견을 찾을 수 없어요")
-    tab = tab if tab in dict(CHART_TABS) else "summary"
+    tab = _OLD_TABS.get(tab, tab)
+    tab = tab if tab in dict(CHART_TABS) else "visits"
+    vis = views.visits(acct, cur)
+    today = date.today().isoformat()
+    if v != today and not any(x["day"] == v for x in vis):
+        v = vis[0]["day"] if vis else today      # 고른 방문이 없으면 가장 최근 방문
     latest = next((r for r in acct.results if r.dog == cur.id), None)
     live = {j.dog for j in acct.active_jobs()}
     return page(request, "dog.html", acct, nav="home", cur=cur, dd=views.dog_detail(acct, cur), tab=tab, tabs=CHART_TABS,
-                row=views.patient_row(acct, cur, live), sm=views.chart_summary(acct, cur), notes=views.note_rows(cur, acct), soap=views.soap_entries(cur, acct), soap_def=config.SOAP,
-                panel=views.memo_panel(acct, cur),
-                vt=views.vital_rows(cur), edit=edit, note_cats=config.NOTE_CAT, today_iso=date.today().isoformat(),
+                row=views.patient_row(acct, cur, live), sm=views.chart_summary(acct, cur), soap_def=config.SOAP,
+                memos=views.memos(cur), memo_cat=config.MEMO_CAT, team=views.care_team(acct, cur),
+                visits=vis, sel=next((x for x in vis if x["day"] == v), None), v=v, dx=views.dx_history(acct, cur), imgs=views.image_list(cur),
+                vt=views.vital_rows(cur), edit=edit, today_iso=today,
                 latest=views.result_view(acct, latest, home=True)["rd"] if latest else None)
 
 
@@ -462,17 +469,28 @@ def _now() -> str:
 @app.post("/dogs/{dog_id}/notes")
 def note_add(request: Request, dog_id: str, author: str = Form(""), cat: str = Form("O"), text: str = Form(""),
              important: str = Form(""), note_id: str = Form(""), next_url: str = Form(""), rid: str = Form(""),
-             s: str = Form(""), o: str = Form(""), a: str = Form(""), p: str = Form("")):
+             s: str = Form(""), o: str = Form(""), a: str = Form(""), p: str = Form(""), visit: str = Form(""),
+             kg: str = Form(""), temp: str = Form(""), hr: str = Form(""), sbp: str = Form(""), dbp: str = Form("")):
     """메모 쓰기·고치기. 공용 계정이라 작성자는 사람이 적는다. 고치면 이전 내용을 revs 에 남기고 지우지 않는다."""
     acct = current(request)
     if not acct:
         return need_login()
     d = acct.dog(dog_id)
-    back = next_url if next_url.startswith(("/results/", "/dogs/")) else f"/dogs/{dog_id}?tab=notes"   # 쓴 화면으로 돌아간다
+    back = next_url if next_url.startswith(("/results/", "/dogs/")) else f"/dogs/{dog_id}"   # 쓴 화면으로 돌아간다
     if not d:
         return redirect("/home")
     author, text = author.strip(), text.strip()   # 작성자는 로그인한 사람 이름이 기본, 고칠 수 있다
     soap = [(k, v.strip()) for k, v in (("S", s), ("O", o), ("A", a), ("P", p)) if v.strip()]
+    if visit and not note_id:     # 오늘 방문 기록: 바이탈은 방문마다 반드시 잰다(11-02). 오늘 이미 잰 값이 있으면 바꾼다
+        vals = [x.strip() for x in (kg, temp, hr, sbp, dbp)]
+        if not all(vals):
+            return redirect(back, "바이탈(체중·체온·심박·혈압)을 모두 적어 주세요")
+        today = date.today().isoformat()
+        d.vitals = [x for x in d.vitals if x.day != today]
+        d.vitals.insert(0, Vital(today, *vals, author))
+        d.kg = vals[0]
+        if not soap:
+            return redirect(back, "바이탈을 기록했어요")
     if soap and not note_id:      # SOAP 칸으로 쓴 진료 기록: 채운 칸마다 한 줄, 같은 시각으로 묶인다
         r = acct.result(rid)
         at = _now()
@@ -482,16 +500,16 @@ def note_add(request: Request, dog_id: str, author: str = Form(""), cat: str = F
         return redirect(back, "기록을 남겼어요")
     if not text:
         return redirect(back, "내용을 적어 주세요")
-    cat = cat if cat in config.NOTE_CAT else "O"
+    cat = cat if cat in config.NOTE_CAT else "기타"
     n = next((x for x in d.notes if x.id == note_id), None)
     if n:
         if n.text != text:
             n.revs.append((n.at, n.author, n.text))
             n.at, n.author, n.text = _now(), author, text
-        return redirect(back, "메모를 고쳤어요. 이전 내용은 이력에 남아요")
+        return redirect(back, "고쳤어요. 이전 내용은 이력에 남아요")
     r = acct.result(rid)
     d.notes.insert(0, Note(new_id("note"), _now(), author, cat, text, bool(important), rid=r.id if r and r.dog == d.id else ""))
-    return redirect(back, "메모를 남겼어요")
+    return redirect(back, "메모를 남겼어요" if cat in config.MEMO_CAT else "기록을 남겼어요")
 
 
 def _vital_from_form(day, kg, temp, hr, sbp, dbp, author) -> Optional[Vital]:
@@ -508,7 +526,7 @@ def vital_add(request: Request, dog_id: str, day: str = Form(""), kg: str = Form
     if not acct:
         return need_login()
     d = acct.dog(dog_id)
-    back = f"/dogs/{dog_id}?tab=vitals"
+    back = f"/dogs/{dog_id}?v={day or date.today().isoformat()}"
     if not d:
         return redirect("/home")
     if not author.strip():
@@ -531,7 +549,7 @@ def history_add(request: Request, dog_id: str, day: str = Form(""), kind: str = 
     if not acct:
         return need_login()
     d = acct.dog(dog_id)
-    back = f"/dogs/{dog_id}?tab=history"
+    back = f"/dogs/{dog_id}?tab=dx"
     if not d:
         return redirect("/home")
     if not (author.strip() and title.strip()):
@@ -544,7 +562,7 @@ def history_add(request: Request, dog_id: str, day: str = Form(""), kind: str = 
         d.stage, d.stage_day = stage, day
     if kind == "재활" and not d.rehab:
         d.rehab = day
-    return redirect(back, "히스토리에 남겼어요")
+    return redirect(back, "진단 이력에 남겼어요")
 
 
 def _pet_from_form(name, breed, kg, birth, sex, size, rehab, focus, memo) -> dict:
@@ -726,7 +744,7 @@ def result_detail(request: Request, rid: str, type: str = "g"):
         return redirect("/home", "회차를 찾을 수 없어요")
     v = views.result_view(acct, r)
     d = acct.dog(r.dog)
-    side = {"panel": views.memo_panel(acct, d, r.id) if d else None, "note_cats": config.NOTE_CAT}
+    side = {"panel": views.memo_panel(acct, d, r.id) if d else None}
     if r.st == "fail":
         return page(request, "report.html", acct, rd=v["rd"], rp={}, kind="v", bm=None, segs=[], status="", **side)
     kind = type if type in ("g", "v") else "g"
@@ -758,8 +776,13 @@ def gait_3d(request: Request, rid: str):
     # 이 회차에서 잰 다리별 관절 가동 범위: 3D 측정 걸음의 다리 뼈 배율(좌우 중 큰 쪽 대비)에 쓴다
     codes = {"어깨": "rom_shoulder", "팔꿈치": "rom_elbow", "앞발목": "rom_carpus", "고관절": "rom_hip", "무릎": "rom_stifle", "뒷발목": "rom_tarsus"}
     roms = {leg: {j: (r.m.get(leg) or {}).get(c) for j, c in codes.items() if (r.m.get(leg) or {}).get(c)} for leg in ("LF", "RF", "LH", "RH")} if r.m else {}
-    return page(request, "gait3d.html", acct, nav="results", rd=views.result_view(acct, r)["rd"], bm=bm, legs=legs,
-                overall=overall, model_url=str(request.url_for("static", path=model)), roms=roms,
+    stance = {leg: (r.m.get(leg) or {}).get("stance_ratio") for leg in ("LF", "RF", "LH", "RH")} if r.m else {}
+    s = real.session(r.src)
+    speed = min(1.3, max(0.7, s["walk_speed"] / views.MEDIAN_SPEED)) if s and s.get("walk_speed") else 1   # 재생 빠르기(시연 회차 중앙값 대비)
+    return page(request, "gait3d.html", acct, nav="results", rd=views.result_view(acct, r)["rd"], bm=bm, legs=legs, view=views.best_view(bm),
+                overall=overall, model_url=str(request.url_for("static", path=model)), roms=roms, stance=stance, speed=speed,
+                rom_ref=views.ROM_REF,
+                gait_src=(f"{real.source_name(s)} 회차 수치(AI-Hub 라벨 관절점 + 합성)" if s else "시연용 합성 수치(실제 개의 값이 아님)"),
                 # 측정 걸음: 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성). 회사 데이터는 쓰지 않는다
                 gait_url=str(request.url_for("static", path="assets/dog3d/gait_demo.json")))
 

@@ -63,6 +63,14 @@
 {% endif %}
 
 <script>window.PP = { toast: {{ toast|tojson }}, pollNotices: {{ 'true' if has_active and not job_id else 'false' }}, breeds: {{ breeds|tojson }}, dogs: {{ dogs_data|tojson }}, openPet: {{ 'true' if modal == 'pet' else 'false' }} };</script>
+<div id="lightbox" class="pp-modal no-print" style="position:fixed;inset:0;background:rgba(14,18,23,.82);z-index:60;display:none;align-items:center;justify-content:center;padding:32px">
+  <div style="position:relative;display:flex;flex-direction:column;gap:10px;max-width:min(1100px,94vw);max-height:92vh">
+    <img src="" alt="" style="max-width:100%;max-height:calc(92vh - 60px);object-fit:contain;border-radius:12px;background:#0E1217;display:block;margin:0 auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff"><b class="lb-cap" style="font-size:15px"></b>
+      <span style="display:flex;gap:8px"><a class="lb-orig lk" target="_blank" rel="noopener" style="height:36px;padding:0 14px;border-radius:9px;border:1px solid rgba(255,255,255,.4);color:#fff;display:flex;align-items:center;font-size:13.5px;font-weight:600">원본 열기</a><button type="button" class="bt" data-close style="height:36px;padding:0 16px;border-radius:9px;background:#fff;color:#1B2433;font-size:13.5px;font-weight:700">닫기</button></span>
+    </div>
+  </div>
+</div>
 <script src="{{ url_for('static', path='app.js') }}?v={{ ASSET_V }}"></script>
 {% block scripts %}{% endblock %}
 </body>

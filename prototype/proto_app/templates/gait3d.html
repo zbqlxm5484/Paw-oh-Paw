@@ -21,6 +21,12 @@
         <button class="bt" id="walk" type="button" style="height:36px;padding:0 18px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700">걷기</button>
         <button class="bt" id="stop" type="button" style="height:36px;padding:0 18px;border-radius:9px;border:1px solid #D2601A;background:#D2601A;color:#fff;font-size:14px;font-weight:700">멈춤</button>
       </div>
+      {# 보는 각도: 추천 각도에 표시, 누르면 그 방향으로 카메라를 옮긴다 #}
+      <div style="position:absolute;right:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)">
+        {% for k, label in [('left', '왼쪽 옆'), ('right', '오른쪽 옆'), ('back', '뒤'), ('front', '앞'), ('top', '위')] %}
+        <button class="bt view-btn" type="button" data-view="{{ k }}" style="height:34px;padding:0 11px;border-radius:9px;border:1px solid {{ '#D2601A' if k == view.main else '#E2DCD3' }};background:#fff;color:{{ '#B4501A' if k == view.main else '#1B2433' }};font-size:13px;font-weight:700">{{ label }}{% if k == view.main %} ★{% elif k == view.sub %} ☆{% endif %}</button>
+        {% endfor %}
+      </div>
       <span style="position:absolute;left:14px;bottom:12px;font-size:12.5px;color:#8E949C">끌어서 돌리기 · 휠로 확대 · 다리에 마우스를 올리면 수치</span>
       <div id="tip" style="position:absolute;display:none;pointer-events:none;min-width:200px;padding:10px 12px;border-radius:12px;background:rgba(27,36,51,.94);color:#fff;font-size:13px;line-height:1.55;box-shadow:0 8px 24px rgba(27,36,51,.25)"></div>
     </div>
@@ -31,12 +37,17 @@
         <span style="font-size:14px">좌우 대칭 지수 <b>{{ bm.sym }}%</b></span>
       </div>
       <div style="padding:18px;border-radius:16px;background:#fff;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:12px;background:#FFF6EE;border:1px solid #F3DCC8">
+          <b style="font-size:14px;color:#B4501A">★ {{ view.label }}에서 보세요 <span style="font-weight:600;color:#8E949C">· 함께 보기 ☆ {{ view.sub_label }}</span></b>
+          <span style="font-size:13.5px;line-height:1.55;color:#3A4250">{{ view.why }}</span>
+          <span style="display:flex;gap:6px"><button class="bt view-btn" type="button" data-view="{{ view.main }}" style="height:32px;padding:0 12px;border-radius:8px;background:#D2601A;color:#fff;font-size:13px;font-weight:700">{{ view.label }}으로 보기</button><button class="bt view-btn" type="button" data-view="{{ view.sub }}" style="height:32px;padding:0 12px;border-radius:8px;border:1px solid #E2DCD3;background:#fff;font-size:13px;font-weight:700">{{ view.sub_label }}에서 보기</button></span>
+        </div>
         {% for part, label in [('front', '앞다리'), ('hind', '뒷다리')] %}
         {% set p = bm.legs[part] %}
         <div style="display:flex;flex-direction:column;gap:3px"><span style="display:flex;justify-content:space-between;font-size:13px;font-weight:700"><span>{{ label }}</span><span style="color:{{ p.c }}">{{ p.level }}</span></span><span style="font-size:14.5px;line-height:1.5">{{ p.say }}</span></div>
         {% endfor %}
-        <span id="gait-note" style="font-size:12px;color:#8E949C;line-height:1.5">측정 걸음은 3D 모델의 걷기 동작에 관절 굽힘 곡선을 입혀요. 다리마다 관절을 굽히는 폭(좌우 평균보다 덜 굽히면 덜 움직임)을 곡선에서 가져오고, 보기 쉽게 일반 걸음과 같은 속도로 재생해요. 일반 걸음은 모델에 들어 있는 예시 동작 그대로예요.</span>
-        <span style="font-size:12px;color:#B0561A;line-height:1.5">시제품: 측정 걸음은 아직 이 반려견이 아니라 예시 걸음(<span id="gait-src">-</span>)이에요.</span>
+        <span id="gait-note" style="font-size:12px;color:#8E949C;line-height:1.5">측정 걸음은 이 회차에서 잰 수치로 움직여요. 다리마다 관절 가동 범위만큼 굽히고(작을수록 덜 움직임), 입각기 비율만큼 땅을 딛고, 보행 속도에 맞춰 빠르기를 바꿔요. 일반 걸음은 모델에 들어 있는 기본 걷기 동작이에요.</span>
+        <span style="font-size:12px;color:#8E949C;line-height:1.5">수치 출처: <span id="gait-src">-</span></span>
       </div>
     </aside>
   </div>
@@ -51,7 +62,11 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const MODEL = {{ model_url|tojson }};
 const LEGS = {{ legs|tojson }};
-const ROMS = {{ roms|tojson }};   // 이 회차 다리별 관절 가동 범위(°). 있으면 3D 배율을 이 값으로 정한다   // {LF: {label, weak, dot, mets:[{n,v,other,lower}]}, ...}
+const ROMS = {{ roms|tojson }};
+const STANCE = {{ stance|tojson }};   // 이 회차 다리별 입각기 비율(%). 디딤 구간 길이를 다리마다 바꾼다
+const SPEED = {{ speed|tojson }};     // 재생 빠르기(시연 회차 보행 속도 중앙값 대비, 0.7~1.3)
+const ROM_REF = {{ rom_ref|tojson }}; // 관절별 기준 가동 범위(°). 두 다리 모두 이보다 작으면 둘 다 덜 움직인다
+const MODEL_STANCE = 0.6;             // 모델 걷기 동작의 디딤 비율 가정   // 이 회차 다리별 관절 가동 범위(°). 있으면 3D 배율을 이 값으로 정한다   // {LF: {label, weak, dot, mets:[{n,v,other,lower}]}, ...}
 const OVERALL = {{ overall|tojson }};
 const GAIT_URL = {{ gait_url|tojson }};
 // 측정 걸음: 모양은 모델 걷기 동작, 다리 뼈마다 움직임 폭을 실측 관절 굽힘 폭(좌우 평균 대비)에 맞춘다.
@@ -109,6 +124,15 @@ controls.target.set(0, 0.42, 0);
 controls.update();
 
 let mixer, walkAction, meshes = [], hovered = '';
+let VIEW_DIR = null;
+// 보는 각도: 정한 방향에서 몸 높이 조금 위로. 위 = 바로 위에서 내려다봄
+function setView(k) {
+  const t = new THREE.Vector3(0, 0.42, 0);
+  if (k === 'top') camera.position.set(0.001, 3.2, 0.001);
+  else if (VIEW_DIR && VIEW_DIR[k]) camera.position.copy(t).addScaledVector(VIEW_DIR[k], 2.9).setY(0.75);
+  controls.target.copy(t); controls.update();
+}
+document.querySelectorAll('.view-btn[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
 let gait = null, mode = 'gen', walking = false, phase = 0;
 const gaitBones = {}, side = new THREE.Vector3(1, 0, 0), dq = new THREE.Quaternion();
 new GLTFLoader().load(MODEL, (gltf) => {
@@ -121,6 +145,13 @@ new GLTFLoader().load(MODEL, (gltf) => {
   const b2 = new THREE.Box3().setFromObject(model, true), c = b2.getCenter(new THREE.Vector3());
   model.position.sub(new THREE.Vector3(c.x, b2.min.y, c.z));
   scene.add(model);
+  // 몸 방향 재기: 앞다리 - 뒷다리 = 앞, 오른 다리 - 왼 다리 = 오른쪽 → 보기 버튼의 카메라 위치
+  const at = (nm) => { const o = model.getObjectByName(clean(nm)); return o ? o.getWorldPosition(new THREE.Vector3()) : null; };
+  const avg = (names) => { const ps = names.map(at).filter(Boolean); return ps.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, ps.length)); };
+  const fwd = avg(['FrontShoulder.L', 'FrontShoulder.R']).sub(avg(['BackShoulder.L', 'BackShoulder.R'])).setY(0).normalize();
+  const right = avg(['FrontShoulder.R', 'BackShoulder.R']).sub(avg(['FrontShoulder.L', 'BackShoulder.L'])).setY(0).normalize();
+  if (fwd.lengthSq() > 0.5 && right.lengthSq() > 0.5) VIEW_DIR = { left: right.clone().negate(), right, back: fwd.clone().negate(), front: fwd };
+  setView({{ view.main|tojson }});
 
   // 꼭짓점마다 어느 다리에 붙었는지(뼈 가중치 합 0.5 넘는 다리) 미리 정해 둔다 → 색칠·마우스 판별에 쓴다
   model.traverse((o) => {
@@ -189,8 +220,8 @@ new GLTFLoader().load(MODEL, (gltf) => {
   fetch(GAIT_URL).then((r) => (r.ok ? r.json() : null)).then((g) => {
     if (g) {
       gait = g;
-      // 다리별 관절 굽힘 폭 ÷ 같은 관절 좌우 중 큰 쪽 = 그 다리 뼈의 움직임 배율.
-      // 잘 쓰는 다리는 1(모델 걷기 동작 그대로), 덜 쓰는 다리만 줄인다. 1 을 넘기면 회전을 늘려 그려 발이 꺾여 보인다(11-02)
+      // 다리별 관절 가동 범위 ÷ max(기준 가동 범위, 같은 관절 좌우 중 큰 쪽) = 그 다리 뼈의 움직임 배율.
+      // 수치가 기준 이상이면 1(모델 걷기 동작 그대로), 작을수록 줄인다. 1 을 넘기면 회전을 늘려 그려 발이 꺾여 보인다(11-02)
       const amp = (code, j) => {
         if (ROMS[code] && ROMS[code][j]) return ROMS[code][j];        // 이 회차 실측 가동 범위
         const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null;   // 없으면 시연 곡선
@@ -198,9 +229,9 @@ new GLTFLoader().load(MODEL, (gltf) => {
       for (const [code, bones] of Object.entries(gaitBones)) bones.forEach((x) => {
         if (!x) return;
         const mine = amp(code, x.joint), pair = [amp('L' + code[1], x.joint), amp('R' + code[1], x.joint)].filter((v) => v);
-        if (mine && pair.length) x.scale = Math.min(1, Math.max(0.12, mine / Math.max(...pair)));
+        if (mine && pair.length) x.scale = Math.min(1, Math.max(0.12, mine / Math.max(ROM_REF[x.joint] || 0, ...pair)));
       });
-      document.getElementById('gait-src').textContent = g.label || ('영상 ' + g.videos + '개 · 다리마다 ' + Math.min(...Object.values(g.legs).map((L) => L.strides)) + '걸음 이상 평균');
+      document.getElementById('gait-src').textContent = {{ gait_src|tojson }};
     }
     setMode(gait ? 'real' : 'gen');
   }).catch(() => setMode('gen'));
@@ -283,9 +314,13 @@ function syncBody() {
 const ID = new THREE.Quaternion(), qa = new THREE.Quaternion();
 function applyGait() {
   if (!gait) return;
-  const x0 = (((phase % 1) + 1) % 1) * N_WALK, k = Math.floor(x0) % N_WALK, f = x0 - Math.floor(x0);
-  for (const bones of Object.values(gaitBones)) bones.forEach((x) => {
+  const p = ((phase % 1) + 1) % 1;
+  for (const [code, bones] of Object.entries(gaitBones)) bones.forEach((x) => {
     if (!x) return;
+    // 이 다리의 입각기 비율만큼 디딤 구간을 늘리거나 줄여 모델 동작의 걸음 위치로 바꾼다
+    const b = STANCE[code] ? Math.min(0.8, Math.max(0.35, STANCE[code] / 100)) : MODEL_STANCE;
+    const q = p < b ? p / b * MODEL_STANCE : MODEL_STANCE + (p - b) / (1 - b) * (1 - MODEL_STANCE);
+    const x0 = q * N_WALK, k = Math.floor(x0) % N_WALK, f = x0 - Math.floor(x0);
     qa.slerpQuaternions(x.dqs[k], x.dqs[(k + 1) % N_WALK], f);          // 이 순간 걷기 동작의 평균 대비 회전
     dq.slerpQuaternions(ID, qa, x.scale);                                 // 실측 배율만큼 줄임(0~1, 늘리지는 않는다)
     x.b.quaternion.copy(dq).multiply(x.q0);
@@ -297,7 +332,7 @@ renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
   if (mode === 'gen') { if (mixer) mixer.update(dt); }
   else if (gait) {
-    if (walking) phase += dt / (walkAction ? walkAction.getClip().duration : 1);   // 일반 걸음과 같은 속도(실측 속도는 너무 빨라 차이가 안 보인다)
+    if (walking) phase += dt * SPEED / (walkAction ? walkAction.getClip().duration : 1);   // 일반 걸음 속도 × 이 회차 빠르기(실측 속도 그대로는 너무 빨라 차이가 안 보인다)
     syncBody();
   }
   controls.update(); renderer.render(scene, camera);

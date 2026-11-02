@@ -18,12 +18,28 @@
   // 모달: data-open="id" 로 열고, 배경 · X · data-close 로 닫는다
   window.ppOpen = function (id) { var m = document.getElementById(id); if (m) m.style.display = 'flex'; };
   window.ppClose = function (el) { var m = el.closest('.pp-modal'); if (m) m.style.display = 'none'; };
+  document.addEventListener('keydown', function (e) {
+    var box = document.getElementById('lightbox');
+    if (e.key === 'Escape' && box && box.style.display === 'flex') box.style.display = 'none';
+  });
   document.addEventListener('click', function (e) {
     var o = e.target.closest('[data-open]');
     if (o) { e.preventDefault(); window.ppOpen(o.dataset.open); return; }
     var c = e.target.closest('[data-close]');
     if (c) { e.preventDefault(); window.ppClose(c); return; }
     if (e.target.classList && e.target.classList.contains('pp-modal')) e.target.style.display = 'none';
+    // 영상·사진: 누르면 화면 가운데 크게. 배경·닫기·Esc 로 닫는다
+    var lb = e.target.closest('[data-lightbox]');
+    if (lb) {
+      e.preventDefault();
+      var box = document.getElementById('lightbox');
+      box.querySelector('img').src = lb.getAttribute('href');
+      box.querySelector('img').alt = lb.dataset.caption || '';
+      box.querySelector('.lb-cap').textContent = lb.dataset.caption || '';
+      box.querySelector('.lb-orig').href = lb.getAttribute('href');
+      box.style.display = 'flex';
+      return;
+    }
     var t = e.target.closest('[data-toast]');
     if (t) { e.preventDefault(); window.ppToast(t.dataset.toast); return; }
     // 행 전체를 누르면 이동 (안의 버튼 · 폼은 제외)
