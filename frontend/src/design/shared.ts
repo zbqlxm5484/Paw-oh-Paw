@@ -24,8 +24,10 @@ export const errMsg = (e: unknown, fallback: string) => (e instanceof ApiError ?
 export const PREP = '이 기능은 준비 중이에요'
 /** 다리 비교 요약 제목에 붙는 보행 묶음 이름. OTHER 묶음은 '기타 보행'이 아니라 아직 유형을 가르지 않은 통과들이다 */
 export const GAIT_GROUP_NAME: Record<DRowsKey, string> = { walk: '평보', trot: '속보', other: '보행 유형 미판별' }
-/** 쓸 수 있는 통과가 0건인 회차의 안내(분석 실패 사유가 따로 오면 그 문구를 쓴다) */
+/** 분석은 끝났지만 쓸 수 있는 통과가 0건인 회차(DONE·used 0)의 촬영 안내 */
 export const NO_VALID_MSG = '쓸 수 있는 통과가 없었어요. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'
+/** 서버 쪽 실패(FAILED, 예: 집계 오류). 반려견 탓이 아니므로 촬영 안내를 하지 않는다 */
+export const SERVER_FAIL_MSG = '분석에 실패했어요. 잠시 후 다시 시도해 주세요.'
 export const r1 = (v: number) => Math.round(v * 10) / 10
 export const num = (v: number | null | undefined) => (v == null ? '—' : v)
 export const desc = (d: DDog) => [d.breed || '견종 미입력', d.birth ? d.birth + '년생' : null, d.kg ? d.kg + 'kg' : null].filter(Boolean).join(' · ')
@@ -69,7 +71,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   if (!R) return { rd, rp }
   const d = ctx.dogById(R.dog) || ({ name: '-', breed: '', birth: '', kg: '' } as DDog), stt = ST[R.st]
   rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · 체중 ${R.w}kg`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
-    failMsg: R.result?.fail_reason?.message || NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
+    failMsg: R.status === 'FAILED' ? R.result?.fail_reason?.message || SERVER_FAIL_MSG : NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
   if (R.st === 'fail') return { rd, rp }
   const vv = valid(ctx, R.dog), idx = vv.findIndex((x) => x.id === R.id), P = vv[idx + 1]
   // 고른 보행에 표가 없으면 속보 → 평보 → 미판별(OTHER) 순으로 있는 표를 쓴다. gaitKey 는 실제로 보여 준 묶음
