@@ -38,6 +38,8 @@ export default function My() {
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px 26px')}>
           <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:10px')}><b style={css('font-size:20px;letter-spacing:-0.4px')}>등록 반려견 <span style={css('color:#A0A7B2;font-weight:600;font-size:16px')}>{dogs.length}마리</span></b><span data-pet="new" style={css('height:38px;padding:0 14px;border-radius:10px;background:#FCEEE3;color:#B4501A;display:flex;align-items:center;font-size:14px;font-weight:700;cursor:pointer')}>+ 반려견 추가</span></div>
+          {/* 한 번에 다섯 마리(줄 높이 76px × 5)까지 보이고 나머지는 스크롤 */}
+          <div className="dog-scroll" style={css('max-height:380px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px')}>
           {dogs.map((d) => (
             <div key={d.id} style={css(`display:flex;align-items:center;gap:14px;min-height:76px;border-top:${d.bt}`)}>
               <div style={css('width:46px;height:46px;border-radius:50%;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none')}>{d.init}</div>
@@ -51,6 +53,7 @@ export default function My() {
                 style={css('height:36px;padding:0 12px;border-radius:9px;display:flex;align-items:center;font-size:14px;font-weight:600;color:#C2412D;cursor:pointer')}>삭제</span>
             </div>
           ))}
+          </div>
           {dogs.length === 0 && <div style={css('font-size:15px;color:#5B6472;padding:20px 0')}>등록된 반려견이 없어요.</div>}
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:8px 22px;display:flex;flex-direction:column')}>

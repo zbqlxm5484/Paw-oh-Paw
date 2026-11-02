@@ -28,8 +28,6 @@ function GuestBar() {
   )
 }
 
-const ROW = 'display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr'
-
 export default function About() {
   useTitle('서비스 소개 · Paw oh Paw')
   const { acct, me, toast } = usePage()
@@ -44,15 +42,6 @@ export default function About() {
     const steps = Array.from(document.querySelectorAll<HTMLElement>('.sc-step'))
     const N = 5
     const cl = (v: number) => Math.max(0, Math.min(1, v))
-
-    // 보고서 카드의 곡선 (고정값)
-    const pts = (amp: number, ph: number) => {
-      const a: string[] = []
-      for (let i = 0; i <= 40; i++) a.push(24 + i * 7.15 + ',' + (75 - amp * Math.sin((i / 40) * Math.PI * 4 - ph)).toFixed(1))
-      return a.join(' ')
-    }
-    $('kL').setAttribute('points', pts(48, 0))
-    $('kR').setAttribute('points', pts(40, 0.5))
 
     const apply = (P: number) => {
       const sm = (a: number, b: number) => {
@@ -190,23 +179,8 @@ export default function About() {
               <div className="sc-layer" style={css('position:absolute;inset:0;clip-path:inset(100% 0 0 0);background:#F3EFE8')}>
                 <div className="sc-scale" style={css('position:absolute;inset:0;transform-origin:50% 40%')}>
                   <div style={css('position:absolute;left:0;right:0;top:30vh;bottom:0;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 28px);mask-image:linear-gradient(180deg,transparent 0,#000 28px)')}><div id="repScroll" style={css('position:absolute;left:50%;top:20px;transform:translate(-50%,0px);width:min(960px,92%);')}>
-                    <div id="repCard" style={css('background:#fff;border-radius:16px;box-shadow:0 30px 70px -30px rgba(27,36,51,.35);padding:48px 52px 56px;display:flex;flex-direction:column;gap:26px;font-size:17px')}>
-                      <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={`${img}logo.png`} alt="" style={css('width:26px;height:26px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>보행 분석 리포트</span></div>
-                      <div style={css('height:3px;width:40px;background:#D2601A')}></div>
-                      <div><div style={css('font-size:26px;font-weight:800;letter-spacing:-0.6px')}>보리의 걸음 리포트</div><div style={css('font-size:14px;color:#5B6472;margin-top:4px')}>10월 14일 측정 · 골든 리트리버 · 7살</div></div>
-                      <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
-                        <div style={css('background:#FAF6F0;border-radius:12px;padding:14px')}><div style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>좌우 대칭</div><div style={css('font-size:26px;font-weight:800;margin-top:4px')}>92<span style={css('font-size:14px;color:#5B6472')}>%</span></div></div>
-                        <div style={css('background:#FAF6F0;border-radius:12px;padding:14px')}><div style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>뒷무릎 가동 범위</div><div style={css('font-size:26px;font-weight:800;margin-top:4px')}>48<span style={css('font-size:14px;color:#5B6472')}>°</span></div></div>
-                        <div style={css('background:#FAF6F0;border-radius:12px;padding:14px')}><div style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>보폭 왼 / 오</div><div style={css('font-size:26px;font-weight:800;margin-top:4px')}>41<span style={css('color:#A0A7B2;font-weight:500')}> / </span>38<span style={css('font-size:14px;color:#5B6472')}>cm</span></div></div>
-                      </div>
-                      <div style={css('border:1px solid #ECE8E2;border-radius:8px;overflow:hidden')}>
-                        <div style={css(`${ROW};background:#1B2433;color:#fff;font-weight:700`)}><span style={css('padding:9px 12px')}>지표</span><span style={css('padding:9px 8px')}>왼쪽</span><span style={css('padding:9px 8px')}>오른쪽</span><span style={css('padding:9px 8px')}>차이</span></div>
-                        <div style={css(`${ROW};background:#FAF8F5`)}><span style={css('padding:9px 12px;font-weight:600')}>무릎 ROM</span><span style={css('padding:9px 8px')}>66°</span><span style={css('padding:9px 8px')}>58°</span><span style={css('padding:9px 8px;font-weight:700')}>8°</span></div><div style={css(ROW)}><span style={css('padding:9px 12px;font-weight:600')}>고관절 ROM</span><span style={css('padding:9px 8px')}>44°</span><span style={css('padding:9px 8px')}>41°</span><span style={css('padding:9px 8px;font-weight:700')}>3°</span></div><div style={css(`${ROW};background:#FAF8F5`)}><span style={css('padding:9px 12px;font-weight:600')}>팔꿈치 ROM</span><span style={css('padding:9px 8px')}>52°</span><span style={css('padding:9px 8px')}>50°</span><span style={css('padding:9px 8px;font-weight:700')}>2°</span></div><div style={css(ROW)}><span style={css('padding:9px 12px;font-weight:600')}>보폭</span><span style={css('padding:9px 8px')}>41cm</span><span style={css('padding:9px 8px')}>38cm</span><span style={css('padding:9px 8px;font-weight:700')}>7%</span></div>
-                      </div>
-                      <div><b style={css('font-size:15px')}>뒷무릎 각도 · 보행 주기</b>{' '}
-                        <svg viewBox="0 0 320 150" style={css('width:100%;display:block;margin-top:8px')}><g stroke="#ECE8E2" strokeDasharray="3 4"><line x1="24" y1="20" x2="310" y2="20"></line><line x1="24" y1="75" x2="310" y2="75"></line><line x1="24" y1="130" x2="310" y2="130"></line></g><polyline id="kL" fill="none" stroke="#3B6FE0" strokeWidth="2.5"></polyline><polyline id="kR" fill="none" stroke="#E5604D" strokeWidth="2.5" strokeDasharray="6 5"></polyline></svg>
-                      </div>
-                    </div>
+                    {/* 실제 수의사용 보고서 화면(시연 데이터 r1, 프로토타입에서 찍음). 아래 스크립트가 이 높이로 스크롤 길이를 정한다 */}
+                    <div id="repCard" style={css('background:#fff;border-radius:16px;box-shadow:0 30px 70px -30px rgba(27,36,51,.35);overflow:hidden')}><img src={`${img}about-report-vet.jpg`} alt="Paw oh Paw 보행 분석 보고서 수의사용 예시: 좌우 대칭 지수, 다리별 관절 가동 범위, 지표 표, 뒷무릎 각도 그래프" style={css('width:100%;display:block')} /></div>
                   </div></div>
                 </div>
                 <div className="sc-dark" style={css('position:absolute;inset:0;background:#1B2433;opacity:0;pointer-events:none')}></div>
