@@ -3,7 +3,7 @@
 import json
 import statistics
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.clients.analysis import MockAnalysisClient, load_fixture
 from app.core.config import get_settings
 from app.core.dates import today_local
-from app.models import MeasureSession, Report, SessionMetric, Shot
+from app.models import Institution, MeasureSession, Report, SessionMetric, Shot
 from app.report import TEMPLATE_VERSION
 from app.services import aggregation
 from app.services.aggregation import METRICS, PassMetrics, build_metric_rows
@@ -458,6 +458,27 @@ def test_result_needs_login(client: TestClient, db: Session, dog, staff) -> None
     session = _session(db, dog, staff, status="DONE")
 
     assert client.get(_result_url(session.id)).status_code == 401
+
+
+def test_expired_contract_blocks_complete_and_result(
+    client: TestClient, db: Session, dog, staff, auth_headers: dict
+) -> None:
+    measuring = _session(db, dog, staff, status="MEASURING")
+    _shot(db, measuring, 1)
+    done = _session(db, dog, staff, status="DONE")
+    db.execute(
+        update(Institution)
+        .where(Institution.id == staff.institution_id)
+        .values(contract_ends_at=today_local() - timedelta(days=1))
+    )
+
+    complete = client.post(f"/api/v1/sessions/{measuring.id}/complete", headers=auth_headers)
+    result = client.get(_result_url(done.id), headers=auth_headers)
+
+    assert complete.status_code == 403 and complete.json()["error"]["code"] == "CONTRACT_EXPIRED"
+    assert result.status_code == 403 and result.json()["error"]["code"] == "CONTRACT_EXPIRED"
+    db.expire_all()
+    assert db.get(MeasureSession, measuring.id).status == "MEASURING"
 
 
 def test_end_to_end_with_mock_client(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
