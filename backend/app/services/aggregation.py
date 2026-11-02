@@ -9,7 +9,8 @@ session_metric 행과 회차 DONE, 보고서 PENDING 행을 한 트랜잭션에 
 - stifle_cv는 모든 통과의 보행 주기별 무릎 가동 범위를 모아 표본 표준편차 ÷ 평균 × 100으로 계산한다.
 - 잴 유효 통과가 없는 다리는 NO_PASS_FOR_LIMB, 통과들이 모두 측정 불가면 가장 많은 사유로 측정 불가 행을 넣는다.
   통과들이 그 수치를 아예 보내지 않았으면 행을 넣지 않는다(결과 조회에서 NO_DATA).
-- 집계는 WALK·TROT만 한다(15.7). 유효 통과가 하나도 없는 회차도 오류가 아니라 수치 행 없는 DONE이다.
+- 집계는 WALK·TROT·OTHER만 한다(15.7). gait가 null인 유효 통과는 "아직 판별 못 함"이라 빼지 않고
+  OTHER로 묶는다(분석 결과 JSON v1 2절). 유효 통과가 하나도 없는 회차도 오류가 아니라 수치 행 없는 DONE이다.
 """
 
 from __future__ import annotations
@@ -38,7 +39,8 @@ from app.storage.base import StorageError, StorageService
 
 logger = logging.getLogger(__name__)
 
-AGGREGATED_GAITS = (GaitType.WALK.value, GaitType.TROT.value)
+# 결과 조회의 보행 유형 순서도 이 순서다(15.7)
+AGGREGATED_GAITS = (GaitType.WALK.value, GaitType.TROT.value, GaitType.OTHER.value)
 FORE_LIMBS = (Limb.LF.value, Limb.RF.value)
 HIND_LIMBS = (Limb.LH.value, Limb.RH.value)
 ALL_LIMBS = FORE_LIMBS + HIND_LIMBS

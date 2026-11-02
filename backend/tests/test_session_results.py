@@ -398,7 +398,7 @@ def test_stifle_cv_keeps_the_reason_the_engine_sent() -> None:
     assert row.unmeasurable_reason == "LOW_CONFIDENCE"
 
 
-def test_only_valid_walk_and_trot_passes_are_aggregated(db: Session, dog, staff) -> None:
+def test_only_valid_walk_trot_and_undecided_passes_are_aggregated(db: Session, dog, staff) -> None:
     session = _session(db, dog, staff)
     _done_shot(
         db,
@@ -410,6 +410,8 @@ def test_only_valid_walk_and_trot_passes_are_aggregated(db: Session, dog, staff)
             _pass(2, "right", gait="trot", rom_stifle=_value(20.0)),
             _pass(3, "right", gait="pace", rom_stifle=_value(30.0)),
             _pass(4, "right", gait=None, reason="RUNNING", rom_stifle=_value(40.0)),
+            _pass(5, "right", gait=None, rom_stifle=_value(50.0)),
+            _pass(6, "right", gait="other", rom_stifle=_value(60.0)),
         ),
     )
 
@@ -422,7 +424,12 @@ def test_only_valid_walk_and_trot_passes_are_aggregated(db: Session, dog, staff)
             SessionMetric.limb == "RH",
         )
     ).all()
-    assert {row.gait_type: row.value for row in rows} == {"WALK": Decimal("10.0000"), "TROT": Decimal("20.0000")}
+    assert {row.gait_type: row.value for row in rows} == {
+        "WALK": Decimal("10.0000"),
+        "TROT": Decimal("20.0000"),
+        "OTHER": Decimal("55.0000"),
+    }
+    assert {row.gait_type: row.n_passes for row in rows}["OTHER"] == 2
 
 
 # ---- 회차 결과 조회 (BE-14) ----
@@ -603,7 +610,7 @@ def test_metrics_follow_table_order_then_limb_order(
     assert codes.index("rom_stifle") < codes.index("paw_lift") < codes.index("walk_speed")
 
 
-def test_walk_comes_before_trot(client: TestClient, db: Session, dog, staff, auth_headers: dict) -> None:
+def test_gaits_are_walk_then_trot_then_other(client: TestClient, db: Session, dog, staff, auth_headers: dict) -> None:
     session = _session(db, dog, staff)
     _done_shot(
         db,
@@ -611,15 +618,42 @@ def test_walk_comes_before_trot(client: TestClient, db: Session, dog, staff, aut
         dog,
         1,
         _result(
-            _pass(1, "right", gait="trot", rom_stifle=_value(40.0)),
-            _pass(2, "right", gait="walk", rom_stifle=_value(30.0)),
+            _pass(1, "right", gait=None, rom_stifle=_value(50.0)),
+            _pass(2, "right", gait="trot", rom_stifle=_value(40.0)),
+            _pass(3, "right", gait="walk", rom_stifle=_value(30.0)),
         ),
     )
     _aggregate(db)
 
     body = client.get(_result_url(session.id), headers=auth_headers).json()
 
-    assert [gait["gait_type"] for gait in body["gaits"]] == ["WALK", "TROT"]
+    assert [gait["gait_type"] for gait in body["gaits"]] == ["WALK", "TROT", "OTHER"]
+
+
+def test_real_result_before_gait_detection_still_shows_numbers(
+    client: TestClient, db: Session, dog, staff, auth_headers: dict
+) -> None:
+    """분석 결과 JSON v1: 보행 유형을 아직 판별하지 못한 유효 통과(gait null)도 수치에 쓴다."""
+    session = _session(db, dog, staff)
+    _done_shot(
+        db,
+        session,
+        dog,
+        1,
+        _result(
+            _pass(1, "right", gait=None, rom_stifle=_value(38.2)),
+            _pass(2, "left", gait=None, rom_stifle=_value(31.0)),
+        ),
+    )
+    _aggregate(db)
+
+    body = client.get(_result_url(session.id), headers=auth_headers).json()
+
+    assert body["pass_counts"] == {"measured": 2, "used": 2, "excluded": 0}
+    assert [gait["gait_type"] for gait in body["gaits"]] == ["OTHER"]
+    gait = body["gaits"][0]
+    assert _metric(gait, "rom_stifle", "RH")["value"] == 38.2
+    assert _compare(gait, "rom_stifle", "HIND")["symmetry_index"] == 20.81
 
 
 def test_counts_and_exclude_summary(client: TestClient, db: Session, dog, staff, auth_headers: dict) -> None:
