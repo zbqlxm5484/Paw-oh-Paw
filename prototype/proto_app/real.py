@@ -8,6 +8,7 @@ static/assets/company_sample.json: 회사 데이터(제니) 1회차. 시연에 �
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -78,13 +79,20 @@ def apply(r, s: dict) -> None:
     r.ex = [("방향·관절점 부족", len(s["video_names"]) - used)] if len(s["video_names"]) > used else []
 
 
+def _id_key(rid: str) -> tuple:
+    """같은 날·같은 시각 회차의 순서: id 의 앞글자, 그다음 숫자 크기. 문자열로 견주면 res998 이 res1000 뒤로 가서,
+    id 를 새로 만들 때마다(시연 기관 다시 만들기) 자릿수가 바뀌는 곳에서 순서가 뒤바뀐다"""
+    m = re.match(r"(\D*)(\d*)", rid)
+    return (m.group(1), int(m.group(2) or 0), rid)
+
+
 def fill(results: list) -> None:
     """실패가 아닌 예시 회차에 실측 회차를 차례로 붙인다(오래된 회차부터)."""
     ss = sessions()
     if not ss:
         return
     i = 0
-    for r in sorted(results, key=lambda r: (r.day, r.time, r.id)):
+    for r in sorted(results, key=lambda r: (r.day, r.time, *_id_key(r.id))):
         if r.st != "fail":
             apply(r, ss[i % len(ss)])
             i += 1

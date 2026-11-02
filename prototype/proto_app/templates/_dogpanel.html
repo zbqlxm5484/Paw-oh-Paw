@@ -47,7 +47,7 @@
   </div>
   {% if panel.badges %}<div style="display:flex;flex-wrap:wrap;gap:5px">{% for b in panel.badges %}<span style="padding:4px 9px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:12.5px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}</div>{% endif %}
 
-  <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #F2EFEA">
+  <div class="memo-col" style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #F2EFEA">
     <b style="font-size:14px">메모 <span style="color:#8E949C;font-weight:600">{{ panel.memos|length }}</span></b>
     {{ memo_form(panel.id, next_url, panel.memo_cat) }}
     {% for x in panel.memos %}{{ memo_card(x) }}{% endfor %}

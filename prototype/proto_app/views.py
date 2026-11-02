@@ -682,6 +682,50 @@ def visits(acct: Account, d: Dog) -> list:
     return out
 
 
+# 보호자용 "알아 두면 좋은 점"(11-02): 덜 쓰는 다리가 있을 때 걸음에 생기는 일, 집에서 보일 수 있는 모습, 도와줄 일.
+# 병명·질환 가능성·정상 범위는 말하지 않는다(PR-F08-11). 문구는 수의사 검토 전 초안이다.
+_PLAIN = {"팔꿈치 가동 범위": "팔꿈치를 굽히는 폭", "무릎 가동 범위": "무릎을 굽히는 폭", "고관절 가동 범위": "엉덩이 관절이 움직이는 폭",
+          "걸음 길이": "한 걸음 길이", "입각기 비율": "발을 딛고 있는 시간"}
+_URGENT = ["다리를 전혀 딛지 않을 때", "만지면 아파하거나, 붓거나, 열감이 있을 때", "며칠 사이 갑자기 더 절 때"]
+
+
+def owner_guide(bm: dict) -> dict:
+    """첫 쪽 주요 소견 한 문장과 둘째 쪽 보호자 안내. 덜 쓰는 쪽은 대칭 지수 차이가 더 큰 쌍(앞·뒤)에서 고른다."""
+    fr, hd = bm["legs"]["front"], bm["legs"]["hind"]
+    part = "hind" if hd["si"] >= fr["si"] else "front"
+    p = bm["legs"][part]
+    fh = "H" if part == "hind" else "F"
+    weak = next((s + fh for s in "LR" if bm["legs"][s + fh]["weak"]), None)
+    if p["si"] < 5 or not weak:
+        return {"weak": False, "summary": "앞다리·뒷다리 모두 양쪽을 비슷하게 써요.",
+                "what": "왼쪽·오른쪽 다리에 몸무게를 비슷하게 싣고 걸어요.",
+                "look": [], "help": ["지금처럼 꾸준히 산책해 주세요", "미끄러운 바닥에는 매트를 깔아 주세요"], "urgent": _URGENT}
+    side = "왼쪽" if weak[0] == "L" else "오른쪽"
+    other = "오른쪽" if side == "왼쪽" else "왼쪽"
+    leg = "뒷다리" if part == "hind" else "앞다리"
+    m = next((x for x in bm["legs"][weak]["mets"] if x["n"] == p["metric"]), bm["legs"][weak]["mets"][0])
+    plain = _PLAIN.get(m["n"], m["n"])
+    josa = "이" if (ord(plain[-1]) - 0xAC00) % 28 else "가"   # 받침 있으면 이, 없으면 가
+    summary = f"{side} {leg}를 덜 써요. {plain}{josa} {side} {m['v']}, {other} {m['other']}예요."
+    what = f"{side} {leg}에 몸무게를 덜 싣고 걸어요. 그만큼 {other} {leg}" + ("와 앞다리가" if part == "hind" else "와 뒷다리가") + " 몸무게를 더 받아요."
+    if part == "hind":
+        look = [f"{side} 뒷다리를 디딜 때 엉덩이가 들썩이거나, 몸이 {other}으로 기울어 보일 수 있어요",
+                f"앉을 때 {side} 뒷다리를 옆으로 빼고 앉을 수 있어요",
+                "계단을 오르거나 소파·차에 뛰어오를 때 머뭇거릴 수 있어요"]
+        help_ = ["미끄러운 바닥에는 매트를 깔아 주세요",
+                 "계단·점프는 담당 수의사가 괜찮다고 할 때까지 줄여 주세요",
+                 "산책은 평지에서 짧게, 자주 하는 것이 좋아요",
+                 f"양쪽 허벅지 굵기를 가끔 손으로 견줘 보세요. {side}이 가늘어지면 다음 진료 때 알려 주세요"]
+    else:
+        look = [f"{side} 앞다리를 디딜 때 고개가 위로 들리며 끄덕이듯 걸을 수 있어요",
+                f"서 있을 때 {side} 앞발을 살짝 들거나 짧게 디딜 수 있어요",
+                "계단을 내려가거나 높은 곳에서 뛰어내릴 때 머뭇거릴 수 있어요"]
+        help_ = ["미끄러운 바닥에는 매트를 깔아 주세요",
+                 "계단 내려가기·높은 곳에서 뛰어내리기는 담당 수의사가 괜찮다고 할 때까지 줄여 주세요",
+                 "산책은 평지에서 짧게, 자주 하는 것이 좋아요"]
+    return {"weak": True, "summary": summary, "what": what, "look": look, "help": help_, "urgent": _URGENT}
+
+
 def best_view(bm: dict) -> dict:
     """3D 에서 좌우 차이가 가장 잘 보이는 각도. 이 3D 는 다리마다 관절을 굽히는 폭·딛는 시간을 바꾸므로
     (엉덩이 높이·머리 끄덕임은 흉내 내지 않는다) 기본은 덜 쓰는 다리 쪽 옆모습이고, 두 다리를 한 화면에서 견줄 때는

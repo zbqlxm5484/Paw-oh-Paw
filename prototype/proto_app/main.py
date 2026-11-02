@@ -748,7 +748,8 @@ def result_detail(request: Request, rid: str, type: str = "g"):
     if r.st == "fail":
         return page(request, "report.html", acct, rd=v["rd"], rp={}, kind="v", bm=None, segs=[], status="", **side)
     kind = type if type in ("g", "v") else "g"
-    return page(request, "report.html", acct, rd=v["rd"], rp=v["rp"], kind=kind, bm=views.body_map(acct, r), **side,
+    bm = views.body_map(acct, r)
+    return page(request, "report.html", acct, rd=v["rd"], rp=v["rp"], kind=kind, bm=bm, og=views.owner_guide(bm), **side,
                 segs=views.seg([("g", "보호자용"), ("v", "수의사용")], kind),
                 status=f"분석 모델 {r.model} · 템플릿 1.0")
 
@@ -774,9 +775,11 @@ def gait_3d(request: Request, rid: str):
     overall = {"sym": bm["sym"], "front": bm["legs"]["front"]["say"], "hind": bm["legs"]["hind"]["say"]}
     model = "assets/dog3d/" + ("husky.glb" if d and d.size == "L" else "shiba.glb")
     # 이 회차에서 잰 다리별 관절 가동 범위: 3D 측정 걸음의 다리 뼈 배율(좌우 중 큰 쪽 대비)에 쓴다
-    codes = {"어깨": "rom_shoulder", "팔꿈치": "rom_elbow", "앞발목": "rom_carpus", "고관절": "rom_hip", "무릎": "rom_stifle", "뒷발목": "rom_tarsus"}
-    roms = {leg: {j: (r.m.get(leg) or {}).get(c) for j, c in codes.items() if (r.m.get(leg) or {}).get(c)} for leg in ("LF", "RF", "LH", "RH")} if r.m else {}
-    stance = {leg: (r.m.get(leg) or {}).get("stance_ratio") for leg in ("LF", "RF", "LH", "RH")} if r.m else {}
+    roms, stance = _leg_nums(r)
+    # 겹쳐 보기: 이 반려견의 기준 회차(없으면 가장 오래된 유효 회차). 이 회차가 그 회차면 겹칠 것이 없다
+    bid = views.base_of(acct, d) if d else None
+    br = acct.result(bid) if bid and bid != r.id else None
+    ghost = dict(zip(("roms", "stance"), _leg_nums(br)), label=f"{br.date} 기준 회차") if br and br.m else None
     s = real.session(r.src)
     speed = min(1.3, max(0.7, s["walk_speed"] / views.MEDIAN_SPEED)) if s and s.get("walk_speed") else 1   # 재생 빠르기(시연 회차 중앙값 대비)
     return page(request, "gait3d.html", acct, nav="results", rd=views.result_view(acct, r)["rd"], bm=bm, legs=legs, view=views.best_view(bm),
@@ -785,7 +788,19 @@ def gait_3d(request: Request, rid: str):
                 gait_src=(f"{real.source_name(s)} 회차 · 관절 가동 범위는 AI-Hub 71878 라벨 관절점, 입각기 비율은 공개 논문(PLOS ONE 2018) 실측 분포, 보행 속도는 합성"
                           if s else "시연용 합성 수치(실제 개의 값이 아님)"),
                 # 측정 걸음: 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성). 회사 데이터는 쓰지 않는다
-                gait_url=str(request.url_for("static", path="assets/dog3d/gait_demo.json")))
+                gait_url=str(request.url_for("static", path="assets/dog3d/gait_demo.json")), ghost=ghost)
+
+
+_JOINT_CODES = {"어깨": "rom_shoulder", "팔꿈치": "rom_elbow", "앞발목": "rom_carpus", "고관절": "rom_hip", "무릎": "rom_stifle", "뒷발목": "rom_tarsus"}
+
+
+def _leg_nums(r):
+    """회차의 다리별 관절 가동 범위(°)·입각기 비율(%). 3D 측정 걸음의 다리 뼈 배율·디딤 길이에 쓴다"""
+    if not r.m:
+        return {}, {}
+    roms = {leg: {j: (r.m.get(leg) or {}).get(c) for j, c in _JOINT_CODES.items() if (r.m.get(leg) or {}).get(c)} for leg in ("LF", "RF", "LH", "RH")}
+    stance = {leg: (r.m.get(leg) or {}).get("stance_ratio") for leg in ("LF", "RF", "LH", "RH")}
+    return roms, stance
 
 
 # ── 경과 비교 ──
