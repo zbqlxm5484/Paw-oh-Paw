@@ -144,7 +144,7 @@ def test_shot_status_and_progress_follow_the_worker(client: TestClient, db: Sess
         ("RIGHT", False),
     ]
     excluded = newest["passes"][2]
-    assert excluded["exclude_reason"]["code"] == "PARTIAL_PASS" and excluded["exclude_reason"]["message"]
+    assert excluded["exclude_reason"]["code"] == "NOT_SIDE_VIEW" and excluded["exclude_reason"]["message"]
     assert excluded["gait_type"] == "OTHER"
     assert body["progress"] == {
         "LEFT": {"valid_passes": 3, "recommended": recommended},
