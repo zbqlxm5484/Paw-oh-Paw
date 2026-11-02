@@ -10,7 +10,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from app.core.dates import today_local
 from app.models.enums import FocusLimb, Sex, SizeClass
@@ -58,8 +58,12 @@ class DogCreate(BaseModel):
 
 
 class DogUpdate(BaseModel):
-    """PATCH /dogs/{dog_id} 요청. 보낸 필드만 바꾼다. 값을 비우려면 null. name·breed·weight_kg은 비울 수 없다(13.2)."""
+    """PATCH /dogs/{dog_id} 요청. 보낸 필드만 바꾼다. 값을 비우려면 null. name·breed·weight_kg은 비울 수 없다(13.2).
 
+    version은 필수다(15.5 BE-25): 읽었을 때의 값을 보내고, 저장된 값과 다르면 409 DOG_MODIFIED. 없으면 422.
+    """
+
+    version: int = Field(ge=0)
     name: Name50 | None = None
     breed: Name50 | None = None
     weight_kg: Weight | None = None
@@ -105,6 +109,7 @@ class DogOut(OutModel):
     focus_limb: str | None
     baseline_session_id: uuid.UUID | None
     memo: str | None
+    version: int
     session_count: int = 0
     last_measured_on: date | None = None
     open_session_id: uuid.UUID | None = None

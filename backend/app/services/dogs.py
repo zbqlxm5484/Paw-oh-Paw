@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCode
@@ -165,9 +166,15 @@ def update_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, data: 
     - size_class 값을 보내면 그 값 + manual=TRUE. null을 보내면 manual=FALSE로 돌리고 저장된 체중으로 다시 분류.
     - weight_kg를 바꾸면 manual=FALSE일 때만 새 체중으로 다시 분류. breed는 체급과 상관없다.
     - weight_kg와 size_class가 함께 오면 size_class가 이긴다.
+    낙관적 잠금(12.5, BE-25): 보낸 version이 저장된 값과 다르면 409 DOG_MODIFIED이고 아무것도 바뀌지 않는다.
+    읽은 뒤 flush 사이에 다른 요청이 먼저 저장해도 ORM의 WHERE version = :old가 빈손으로 끝나므로(StaleDataError)
+    같은 409다.
     """
     dog = get_dog(db, institution_id, dog_id)
+    if data.version != dog.version:
+        raise AppError(ErrorCode.DOG_MODIFIED)
     changes = data.model_dump(exclude_unset=True)
+    changes.pop("version")
 
     if "baseline_session_id" in changes:
         session_id = changes.pop("baseline_session_id")
@@ -191,6 +198,9 @@ def update_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, data: 
     elif weight_changed and not dog.size_class_manual:
         dog.size_class = classify(dog.weight_kg)
 
-    db.flush()
+    try:
+        db.flush()
+    except StaleDataError:
+        raise AppError(ErrorCode.DOG_MODIFIED) from None
     db.refresh(dog)
     return dog

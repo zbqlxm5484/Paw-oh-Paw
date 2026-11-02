@@ -78,7 +78,7 @@ def test_server_defaults(db: Session) -> None:
     for row in (staff, dog, shot):
         db.refresh(row)
 
-    assert staff.role == StaffRole.STAFF
+    assert staff.role == StaffRole.CLIENT
     assert staff.is_active is True
     assert dog.size_class_manual is False
     assert dog.weight_kg == Decimal("3.25")
@@ -101,7 +101,7 @@ def test_server_defaults_without_orm(db: Session) -> None:
         ),
         {"id": uuid.uuid4(), "institution_id": institution.id},
     ).one()
-    assert row.role == "STAFF"
+    assert row.role == "CLIENT"
     assert row.is_active is True
     assert row.created_at is not None and row.updated_at is not None
 

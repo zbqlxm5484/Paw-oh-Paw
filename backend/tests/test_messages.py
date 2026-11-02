@@ -1,6 +1,9 @@
 """문구 파일(14.5): 14절의 모든 코드가 messages/ko.yaml에 있다(17.1)."""
 
 from app.core.errors import HTTP_STATUS, ErrorCode, all_code_values, message_for, messages, reason_payload
+from app.services.password_reset import MAIL_BODY_KEY, MAIL_SUBJECT_KEY
+
+MAIL_KEYS = {MAIL_SUBJECT_KEY, MAIL_BODY_KEY}
 
 
 def test_every_code_in_section_14_has_a_message() -> None:
@@ -8,8 +11,17 @@ def test_every_code_in_section_14_has_a_message() -> None:
 
 
 def test_message_file_has_no_unknown_codes() -> None:
-    """오타로 생긴 키를 잡는다. 코드를 더하면 errors.py의 StrEnum에도 더한다."""
-    assert set(messages()) - all_code_values() == set()
+    """오타로 생긴 키를 잡는다. 코드를 더하면 errors.py의 StrEnum에도 더한다. 점이 든 키는 메일 문구(11.6)다."""
+    assert set(messages()) - all_code_values() - MAIL_KEYS == set()
+
+
+def test_mail_texts_exist_and_have_placeholders() -> None:
+    assert MAIL_KEYS <= set(messages())
+    body = message_for(MAIL_BODY_KEY, {"name": "김담당", "link": "https://x/reset-password?token=t", "ttl_min": 30})
+    assert "김담당" in body
+    assert "token=t" in body
+    assert "30분" in body
+    assert "{" not in body
 
 
 def test_every_response_error_code_has_http_status() -> None:

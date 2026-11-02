@@ -10,6 +10,7 @@ Oct 19, 2026 · @조영운
 | v1.9 | 2026-10-27 | 기관별 동시 처리 상한 구현(작업 단위 6 마무리, S15P31A404-141): 12.4 기관별 상한 줄을 "후보 조회가 기관별 남은 자리만큼만 뽑고(row_number) 전체는 LIMIT, 메모리 개수는 안전망"으로 정리(141 검토 반영). 11.7 워커 세션은 바퀴당 하나, 16절 두 상한의 최솟값 1, 17.6 "바로 SUBMITTED"는 전체 자리가 남아 있을 때 |
 | v1.10 | 2026-10-29 | 128 리뷰 반영(S15P31A404-128): 7절 결과 영상 1번에 `camera_side`별로 몸통(등 가운데·엉덩이 위)과 카메라 쪽 귀·다리만 그리는 규칙(세부명세서 PR-F01-04, 반대쪽 귀도 뺌)과 관절점 프레임 번호 기준(0부터, `VideoCapture.read()` 순서) |
 | v1.11 | 2026-10-30 | 결과 영상 얼굴 가리기 구현(작업 단위 7, S15P31A404-150): 7절 결과 영상 만들기에 검출 모델(Google MediaPipe BlazeFace full range, Apache-2.0, ONNX로 바꿔 OpenCV DNN, `app/video/models/`에 동봉, 환경 변수 없음)과 가리는 방법(폭 1920 이하로 줄여 4x3 타일 검출·점수 0.5·0.05초 간격 검출, 상자 30% 확장, 3칸 모자이크 + 흐림, 검출이 끊겨도 0.5초 유지, 골격보다 먼저)을 적음. 라이선스 줄에 고른 이유와 YuNet(학습 데이터 비상업 표기)·Haar 제외 이유, 137 조사 `docs/report/faceDetectorLicense.md`, 10절 Q24 |
+| v1.12 | 2026-10-30 | 회원가입·역할·계약 설계(10-30 설계 초안 v0.3을 옮김. 티켓 S15P31A404-192, 11-02): 1절 10-15 결정 줄, 3절 인증 캐시 확장 줄, 4절 BE-01 수정·BE-22\~27, 10절 Q11 답·Q25\~Q31, 11.2 `auth_cache.py`·`mail.py`, 11.3 캐시 예외, 11.6 전체(아이디 로그인, 역할 `ADMIN`·`STAFF`·`CLIENT`와 계산값 `GUEST`, 계약 검사, 인증 캐시, 메일), 11.8 로그 금지 목록, 12.2 `device_code` 테이블·`institution.contract_ends_at`·`staff` 역할 CHECK·아이디 전역 유일·`device_code_id`·`email`·재설정 두 칸·`dog.version`(마이그레이션 0003), 12.5 규칙 3개, 13.4\~13.8, 14.1 오류 10행, 15.1\~15.5·15.9·15.10(엔드포인트 27\~41), 16절 8행, 17.1·17.2, 18.1 작업 단위 12\~16 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -54,7 +55,7 @@ Oct 19, 2026 · @조영운
 | 보고서 개선 순서: 사용자별 맞춤 설명 > 결과 해석 > 시각화 > 지표 구성 | 10-18 | 8절 |
 | 카메라 쪽 다리만 안정적으로 추적하면 된다 | 2차 Q1, 10-18 | 5절 비교 규칙 |
 | 촬영 앱·웹 서비스·서버 저장은 기업에 이미 있다. 분석 대상은 개로 한정 | 1차 멘토링 | 2절 |
-| 회원가입 없이 미리 만든 계정만 접근, 기관 코드(B2B) 방식 검토 | 10-15 회의 | 4절 BE-01 |
+| 회원가입 없이 미리 만든 계정만 접근, 기관 코드(B2B) 방식 검토 → 10-30 설계에서 디바이스 코드 가입과 아이디+비밀번호 로그인으로 바꿈(팀 합의 전, 10절 Q25) | 10-15 회의, 10-30 설계 | 4절 BE-01·BE-22, 11.6 |
 | 반려견 프로필에 들어가 영상을 올리거나 바로 촬영(4초) | 10-15 회의 | 4절 BE-05 |
 | 1차 결과물은 10-26 오전 9시까지 제출하고, 기업 검증 후 그 주 미팅에서 이야기한다 | 10-18 | 9절 |
 
@@ -124,6 +125,7 @@ Oct 19, 2026 · @조영운
 | 한 기관의 대량 업로드 | 기관별 상한: 한 기관이 동시에 맡기는 촬영은 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`개까지라, 한 기관이 전체 자리를 다 차지하지 못한다 | 넣는다(12.4) | 같은 규칙을 큐에서 쓴다 |
 | 결과 영상·PDF를 만드는 CPU | 결과 영상 동시 처리 수 제한, 보고서 전용 프로세스, 워커 CPU 상한 | 넣는다(12.4, 16절) | 결과 영상 워커를 따로 늘린다. 더 많아지면 화면에서 열 때만 만든다 |
 | API 서버 한 대 | API는 상태를 갖지 않는다. 로그인은 JWT, 파일은 `StorageService`다 | 서버 한 대 | 저장소를 `s3`로 두고 로드 밸런서 뒤에 여러 대 띄운다 |
+| 인증 조회 | 담당자 스냅샷을 프로세스 메모리에 60초 둔다(11.6 인증 캐시). 요청마다 하던 담당자 조회가 없어진다 | 프로세스 캐시(`core/auth_cache.py`) | 프로세스 사이에서 공유해야 하면 이 모듈만 Redis로 바꾼다 |
 | 워커 한 대 | 상태는 조건을 건 UPDATE로만 바꿔 같은 일을 두 번 하지 않는다 | 워커 한 대(12.4) | 결과 영상·보고서에 "만드는 중" 상태와 맡은 워커·시각(임대) 컬럼을 더하고, 일감은 `SELECT … FOR UPDATE SKIP LOCKED`로 가져가면서 임대 컬럼에 기록하도록 바꿔 여러 대 띄운다. 분석·결과 영상·보고서 워커를 나눈다 |
 | 화면 조회 | 회차 조회 한 번에 화면 전체를 준다(N+1 금지, 15.1) | 있음 | 조회를 읽기 전용 DB 복제본으로 보낸다 |
 | 저장 용량 | 용량 한도가 없는 AWS S3. 오래된 원본은 수명 주기 규칙으로 바로 읽히는 싼 등급(Standard-IA, Glacier Instant Retrieval)으로 옮긴다 | 팀 EC2 디스크(`local`) | `s3`. S3는 키 앞부분(prefix)마다 초당 쓰기 3,500건을 받고 prefix 수에는 제한이 없다. 키가 기관 ID로 시작해 부하가 기관별로 퍼진다 |
@@ -133,7 +135,7 @@ Oct 19, 2026 · @조영운
 
 ## 4. 기능 명세
 
-기능은 21개이며, 유저플로우의 화면 S1\~S8 순서로 묶었다. 우선순위는 팀 시연 기준이다(필수 = 시연에 꼭 필요, 권장 = 시간이 되면).
+기능은 27개이며, 유저플로우의 화면 S1\~S8 순서로 묶었다. BE-22\~27은 10-30 회원가입·역할·계약 설계(팀 합의 전)다. 우선순위는 팀 시연 기준이다(필수 = 시연에 꼭 필요, 권장 = 시간이 되면).
 
 **최소 시연 범위**: BE-01·02·04\~09·11\~14·17·18·21. 이것만으로 "등록 → 업로드 → 판별 → 회차 결과 → 다리 비교·재활 비교"가 끝까지 돈다. 기업이 서비스보다 모델 성능 개선을 우선하라고 했으므로(2차 멘토링 Q4·Q5, 10-18), 이 범위를 먼저 끝내고 보고서 자동 생성(BE-15·16)과 나머지를 그 뒤에 붙인다.
 
@@ -141,9 +143,14 @@ Oct 19, 2026 · @조영운
 
 | ID | 기능 | 하는 일 | 왜 필요한가 | 근거 |
 | --- | --- | --- | --- | --- |
-| BE-01 | 로그인·기관 분리 (필수) | 기관 코드·아이디·비밀번호로 로그인하고, 모든 조회를 자기 기관 데이터로 제한한다. 회원가입 없이 관리자가 미리 만든 계정만 쓴다 | 보고서는 미리 확인된 사람만 봐야 한다. 결과 화면을 만들면 기관별 데이터 분리가 조건부 필수다 | PR-F09-04, 10-15 회의 |
+| BE-01 | 로그인·기관 분리 (필수) | 아이디·비밀번호로 로그인하고, 모든 조회를 자기 기관 데이터로 제한한다. 역할은 `ADMIN`·`STAFF`(크림오프)·`CLIENT`(고객). 계정은 디바이스 코드 가입(BE-22, `CLIENT`) 또는 `scripts/seed.py`로 만든다 | 보고서는 미리 확인된 사람만 봐야 한다. 결과 화면을 만들면 기관별 데이터 분리가 조건부 필수다 | PR-F09-04, 10-15 회의, 10-30 설계 |
 | BE-02 | 반려견 등록·수정 (필수) | 이름·견종·체중, 선택으로 생년·성별, 재활 정보(재활 시작일·관심 다리·내부 메모). 체급(소·중·대)은 기업 자료에 따로 없어서 등록 체중으로 자동 분류하고(박규원 체급 기준: 10 kg 미만 소형, 25 kg 미만 중형, 25 kg 이상 대형), 담당자가 고칠 수 있다 | 보고서 설명이 이름·체중·견종·체급에 따라 바뀐다. 보호자 이름·연락처는 쓰는 곳이 없어 받지 않는다 | PR-F08-02, REQ-CM-002 |
 | BE-03 | 반려견 목록·검색 (필수) | 이름 검색, 마지막 측정일, 회차 수, 진행 중 회차 표시 | 하루 여러 마리를 재므로 바로 찾아 들어가야 한다 | 4.1 측정 담당자 |
+| BE-22 | 디바이스 코드 가입 (필수) | 디바이스 코드 확인 → 기관명 표시 → 아이디·비밀번호·이름·이메일로 가입. 코드의 기관에 `CLIENT` 계정을 만든다. 코드별 활성 계정 상한 | 밤·주말에 가입해도 관리자 없이 바로 쓸 수 있어야 한다. 기관은 코드가 정하므로 가입자가 기관을 잘못 고를 수 없다 | 10-30 설계 |
+| BE-23 | 계약 만료 차단 (필수) | 기관 계약 종료일이 지나면 그 기관 `CLIENT`는 `GUEST`로 계산되어 로그인·`/auth/me` 말고는 403 `CONTRACT_EXPIRED`. 요청마다 계산하고 60초 캐시를 둔다 | B2B 계약 기간 동안만 쓰게 한다. 역할을 자동으로 바꾸는 작업을 두지 않아 깨질 곳이 없고, 화면은 GUEST를 보고 만료 안내를 띄운다 | 10-30 설계 |
+| BE-25 | 반려견 동시 수정 보호 (권장) | 반려견 수정에 `version`을 받아 다른 담당자가 먼저 고쳤으면 409 `DOG_MODIFIED` | 같은 기관의 담당자 여럿이 같은 반려견을 고칠 수 있다 | 10-30 설계 |
+| BE-26 | 비밀번호 변경·내 정보 수정 (필수) | 로그인한 담당자가 현재 비밀번호를 확인하고 새 비밀번호로 바꾼다. 이름·이메일도 고친다 | 비밀번호와 연락처는 본인이 관리한다 | 10-30 설계 |
+| BE-27 | 비밀번호 재설정 (필수) | 아이디를 넣으면 등록된 이메일로 1회용 링크를 보내고, 링크의 토큰과 새 비밀번호로 바꾼다. 크림오프가 끼어들지 않는다 | 가입처럼 밤·주말에도 스스로 해결해야 한다 | 10-30 설계 |
 
 ### 회차 측정 (S3·S4)
 
@@ -182,6 +189,7 @@ Oct 19, 2026 · @조영운
 | --- | --- | --- | --- | --- |
 | BE-19 | 자료 파기 (필수) | 반려견·기관·전체 단위로 DB 행과 파일을 지우고 지운 기록을 남긴다 | 과제가 끝나면 파기하고 확인서를 내야 한다 | REQ-CM-002, D-13 |
 | BE-20 | 상태 확인·로그 (권장) | /health, 요청 로그. 로그에 반려견 이름·파일 경로를 남기지 않는다 | 시연 중 문제를 빨리 찾되 식별 정보는 남기지 않는다 | PR-C-02 |
+| BE-24 | 기관·코드·계정 관리 (필수, 크림오프) | 기관 만들기·계약일 수정, 코드 발급·상한 수정·회수, 계정 중지·재개, 목록. 쓰기는 `ADMIN`, 조회는 `ADMIN`·`STAFF` | 코드 발급과 계약 연장을 운영자가 화면에서 해야 한다. 임시 스태프는 보기만 한다 | 10-30 설계 |
 
 ## 5. 재활 포커스 기능
 
@@ -377,7 +385,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 | Q8 | 조유진 | 상태는 조회(폴링)만 되는가, 완료 알림(콜백)도 되는가? | 워커 동작 방식 |  |
 | Q9 | 조유진 | 골격 그린 결과 영상을 분석 API가 주는가, 팀 서비스가 관절점으로 그리는가? | 결과 영상 작업량과 처리 시간 |  |
 | Q10 | 장준환 | JSON 필드 snake\_case, 2\~3초 폴링으로 괜찮은가? 4주차부터 Mock으로 화면을 붙일 수 있는가? | 화면 연결 시점 |  |
-| Q11 | 팀 전체 | 로그인은 "기관 코드 + 계정"(이 명세)으로 가는가, "기기 하나에 계정 귀속"으로 가는가? | 10-15 회의에서 멘토링 후 확정으로 남겼다 |  |
+| Q11 | 팀 전체 | 로그인은 "기관 코드 + 계정"(이 명세)으로 가는가, "기기 하나에 계정 귀속"으로 가는가? | 10-15 회의에서 멘토링 후 확정으로 남겼다 | 제안(10-30 설계): 둘 다 아니다. 디바이스 코드로 가입하고 아이디+비밀번호로 로그인한다(Q25, 11.6). 팀 합의 전 |
 | Q12 | 팀 전체 | DB는 PostgreSQL로 간다(10-20 팀 결정, 세부명세서 9절). Redis는 이 설계에서 쓰지 않는데, 기술스택 페이지에서 빼도 되는가? | 이 설계는 Redis 없이 돈다 |  |
 | Q13 | 팀 전체 | 역할표와 기술스택 페이지의 팀 서비스를 Spring → FastAPI로, DB를 MySQL → PostgreSQL로 고친다 | 문서 일치 |  |
 | Q14 | 팀 전체 | 재활 중심이면 "측정 이력·재측정 비교"를 빼는 순서에서 뒤로 미룬다(5절) | 일정이 밀릴 때의 기준 |  |
@@ -391,6 +399,13 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 | Q22 | 허정원 | 팀 서버(EC2)의 CPU·메모리·디스크는? (`nproc`, `free -h`, `df -h /`) | 워커 동시 처리 수, CPU 상한, 저장 용량 계산의 기준이다(3절, 7절) |  |
 | Q23 | 팀 전체 | 팀 서비스를 기업 환경에 설치할 수 있게 만드는 방향(1절)으로 가는가? 역할표에는 "기업 서버에 설치하지 않음"으로 되어 있다 | 설치 절차(D-09)와 설정값 작업이 늘지만, D-06을 실제로 넘길 수 있다 |  |
 | Q24 | 팀장·조영운 | 결과 영상 얼굴 가리기 모델에도 세부명세서 7.1의 학습 데이터 조건을 적용하는가? 처음 고른 YuNet은 모델 파일이 MIT지만 WIDER FACE(홈페이지 라이선스 cc by-nc-nd)로 학습한 가중치였다 | 팀 서비스는 기본적으로 납품 대상이 아니지만(회사에 자체 서비스가 있음) 회사가 프론트와 함께 가져갈 수 있다 | 결정(10-30 조영운): 만약을 대비해 애초에 7.1에 걸릴 것이 없는 모델로 바꾼다. MediaPipe BlazeFace(Apache-2.0, 구글 동의 데이터)로 교체했고 회사 프레임 20장에서 사람 얼굴 24/24를 확인했다. 11-03 멘토링에는 보고만 한다. 근거 `docs/report/faceDetectorLicense.md` |
+| Q25 | 팀 전체 | 10-15의 "회원가입 없이 미리 만든 계정만"을 디바이스 코드 가입으로 바꾸고, 로그인을 아이디+비밀번호로 줄이는가? (Q11의 답) | 가입 화면·로그인 화면·DB가 바뀐다 | 제안: 바꾼다. 밤·주말 가입을 관리자 없이 처리하고, 매일 치는 입력을 줄인다. 이 문서 v1.12는 그 전제로 썼다 |
+| Q26 | 박규원·장준환 | 가입 화면(코드 확인 → 인증됨 → 가입, 이메일 포함), 비밀번호 찾기·재설정 화면, 계약 만료 안내, 반려견 수정 409 처리, 크림오프 관리 화면을 화면 범위에 넣을 수 있는가? 시점은? | 백엔드만 있으면 가입이 안 된다 | 제안: 가입·재설정·만료 안내·409 처리는 필수, 관리 화면은 가능하면(없으면 관리자 API를 Swagger로 쓴다) |
+| Q27 | 팀 전체 | 계약이 끝난 기관의 자료는 얼마나 보관하고 누가 파기하는가? | REQ-CM-002(보호자 동의·파기)와 연결 | 제안: 자동 파기 없음. 재계약을 기다려 보관하고, 파기는 지금 있는 관리자 파기(BE-19)로 한다 |
+| Q28 | 팀 전체 | 인증 캐시 60초: 계정 중지·계약 만료가 최대 60초 뒤에 반영되는 것을 받아들이는가? | 즉시 차단이 필요한 서비스가 아니다 | 제안: 받아들인다(10-30 조영운 결정, 기록용) |
+| Q29 | 팀 전체 | 비밀번호 찾기·변경은 이번 범위에 넣는가? | 가입이 생기면 잊은 비밀번호가 생긴다 | 제안: 넣는다. 로그인 상태의 변경(BE-26)과 이메일 링크 재설정(BE-27). 관리자가 끼는 경로는 두지 않는다 |
+| Q30 | 팀 전체·허정원 | 가입 때 이메일을 받고 재설정 메일을 보내는가? 어떤 발신 계정·주소를 쓰는가? | 발송 인프라(SMTP 계정·발신 도메인, 허정원 몫), 납품 때 기업 메일 설정이 D-09에 추가(PR-C-07), 직원 이메일 수집·파기 범위 | 제안: 받는다(인증 메일은 없음). 발신 계정은 팀 메일 하나로 시작하고 납품 때 기업 계정으로 바꾼다(환경 변수만) |
+| Q31 | 팀 전체 | 크림오프 쪽 계정(`ADMIN`·`STAFF`)이 고객 기관의 반려견·회차·보고서를 열람하는가? | 기관별 분리(PR-F09-04)와 부딪힌다. 운영·지원에는 필요할 수 있다 | 제안: 이번에는 안 한다. 관리자 API는 기관·코드·계정 메타데이터까지만. 필요해지면 기관 ID를 지정하는 조회 API를 따로 둔다 |
 
 # 2부. 구현 명세
 
@@ -434,6 +449,9 @@ backend/
 │  │  ├─ config.py           # 환경 변수 읽기 (pydantic-settings, 16절)
 │  │  ├─ db.py               # 엔진, 세션, Base
 │  │  ├─ security.py         # 비밀번호 해시, JWT, 서명 URL
+│  │  ├─ auth_cache.py       # 담당자 스냅샷(AuthStaff) 60초 캐시 (11.6 인증 캐시)
+│  │  ├─ mail.py             # 재설정 메일 보내기, 표준 smtplib (11.6 메일)
+│  │  ├─ dates.py            # APP_TIMEZONE 기준 오늘 (13.2, 15.6, 계약 검사)
 │  │  └─ errors.py           # AppError, 오류 코드(14절), 예외 처리기
 │  ├─ models/                # SQLAlchemy 테이블 (테이블 1개 = 파일 1개, 12절)
 │  ├─ schemas/               # Pydantic 요청·응답 모델 (15절)
@@ -479,7 +497,7 @@ backend/
 - Pydantic은 v2 문법(`model_config`, `field_validator`, `model_dump()`)만 쓴다.
 - 모든 함수에 타입 힌트를 붙인다.
 - **파일은 `StorageService`로만 다룬다.** `open()`·`os.remove()`·`shutil`로 저장소 경로를 직접 열거나 지우지 않는다. 그래야 설정값만 바꿔 서버 디스크에서 S3로 옮길 수 있다(11.11). 결과 영상·PDF를 내보내는 local 파일 API 두 곳만 예외다(11.11).
-- **API 프로세스 메모리에 상태를 두지 않는다.** 로그인은 JWT로 확인하고, 요청마다 달라지는 값이나 캐시를 전역 변수에 담지 않는다. 설정·견종표처럼 바뀌지 않는 값을 읽어 두는 것은 괜찮다. 그래야 API를 여러 대로 늘릴 수 있다(3절).
+- **API 프로세스 메모리에 상태를 두지 않는다.** 로그인은 JWT로 확인하고, 요청마다 달라지는 값이나 캐시를 전역 변수에 담지 않는다. 설정·견종표처럼 바뀌지 않는 값을 읽어 두는 것은 괜찮다. 그래야 API를 여러 대로 늘릴 수 있다(3절). 예외는 담당자 스냅샷 캐시(11.6 인증 캐시) 하나다. DB 값의 60초 늦은 사본일 뿐이라 어느 프로세스에서 읽어도 같은 답이 나오고, 지워져도 다시 읽으면 된다.
 
 ### 11.4 이름·형식 규칙
 
@@ -524,12 +542,19 @@ backend/
 
 ### 11.6 인증과 기관 분리
 
-- **로그인**: `institution_code`, `login_id`, `password`를 받아 JWT를 돌려준다. 이후 모든 요청은 `Authorization: Bearer <token>` 헤더를 붙인다.
-- **JWT 내용**: `sub`(담당자 ID), `inst`(기관 ID), `role`(`ADMIN` 또는 `STAFF`), `exp`. 알고리즘 HS256, 만료는 설정값(기본 12시간).
-- **계정**: 회원가입 API는 없다. 기관·계정은 `scripts/seed.py`로 만든다. 비밀번호는 bcrypt 해시로만 저장한다. "기기 하나에 계정 귀속" 방식은 10절 Q11에서 정한다.
+- **로그인**: `login_id`, `password`를 받아 JWT를 돌려준다. `institution_code`는 받지 않는다(v1.12. 아이디는 전역 유일, 12.2 `uq_staff_login`). 이후 모든 요청은 `Authorization: Bearer <token>` 헤더를 붙인다. 아이디가 없어도 가짜 해시로 bcrypt 비교를 한 번 한다(15.4). 계약이 끝난 `CLIENT`도 로그인은 된다(응답의 `effective_role`이 `GUEST`).
+- **JWT 내용**: `sub`(담당자 ID), `inst`(기관 ID), `role`, `exp`. 알고리즘 HS256, 만료는 설정값(기본 12시간). 기관 ID와 역할은 토큰이 아니라 담당자 스냅샷(캐시 또는 DB)에서 가져온다. 토큰은 담당자 ID를 믿을 근거일 뿐이다.
+- **역할**(저장, 12.2 `staff.role`): `ADMIN` = 크림오프 직원·사장, `/admin/*` 전부. `STAFF` = 크림오프 임시 스태프, `/admin/*` 조회만. `CLIENT` = 고객 기관 담당자. 가입으로 만들어지는 계정은 모두 `CLIENT`이고, `ADMIN`·`STAFF`는 `scripts/seed.py`로만 만든다. `ADMIN`·`STAFF`는 크림오프 자체 기관(계약 종료일 NULL)에 속한다. v1.11까지의 `STAFF`(기관 담당자)는 마이그레이션에서 `CLIENT`가 된다.
+- **유효 역할** `effective_role`(계산, DB에 없다): `role`이 `CLIENT`이고 기관 계약이 `EXPIRED`면 `GUEST`, 아니면 `role` 그대로. 응답(`StaffOut`)에 들어가고 화면은 이 값으로 분기한다. `GUEST`를 저장하지 않는 이유: 역할은 사람의 권한이고 계약은 기관의 날짜다. 저장하면 날짜가 지날 때 바꾸는 작업(스케줄러)과 재계약 때 되돌리는 작업이 생기는데, 계산하면 기관의 날짜 하나로 즉시 반영된다. Spring Security가 `getAuthorities()`와 `isAccountNonExpired()`를 따로 두는 것과 같다.
+- **계약 종료일** `institution.contract_ends_at`(날짜, 당일 포함, NULL은 기한 없음)과 **계약 상태** `contract_status`(계산): 종료일이 없거나 `core/dates.py`의 `today_local()`(`APP_TIMEZONE`) 이후면 `ACTIVE`, 아니면 `EXPIRED`. 연장은 날짜만 고친다.
+- **계정 만들기**: 두 길이다. 디바이스 코드 가입(`POST /auth/signup`, `CLIENT`만, 15.4)과 `scripts/seed.py`(`--role ADMIN|STAFF|CLIENT`, `device_code_id`는 NULL). 비밀번호는 bcrypt 해시로만 저장한다. 관리자 계정을 만드는 API는 없다.
 - **기관 분리**: 한 서버를 여러 병원·재활 센터(기관)가 함께 쓰므로, 담당자는 자기 기관의 반려견만 봐야 한다(PR-F09-04). 모든 조회·수정은 `api/deps.py`의 `get_current_staff()`가 꺼낸 기관 ID로 거른다. 예를 들어 A병원 담당자가 주소를 고치거나 잘못 받은 링크를 열어 B병원 반려견 ID로 요청하면, 404 `NOT_FOUND`로 답해 그 자료가 있는지도 알려 주지 않는다. 병원을 옮긴 반려견의 이력을 넘기는 일은 이 규칙에 예외를 두지 않고, 보호자 동의를 받는 별도 이전 기능으로 다룬다(10절 Q17).
 - **영상·PDF 주소(서명 URL)**: 화면의 `<video>`·`<iframe>` 태그는 주소만으로 파일을 불러와서 로그인 토큰을 헤더에 붙이지 못한다. 그렇다고 파일 주소를 공개하면 주소를 아는 누구나 영상을 본다. 그래서 조회 API는 "이 파일 하나를 5분 동안만 열 수 있다"는 서명이 붙은 주소를 내려 준다. 예: `/api/v1/shots/{shot_id}/video?exp=1792369800&sig=9f2c...` `exp`는 만료 시각, `sig`는 서버만 아는 비밀키로 만든 값(HMAC-SHA256(비밀키, 경로 + exp))이다. 주소를 고치거나 5분이 지나면 열리지 않고, 화면은 필요할 때 조회 API를 다시 불러 새 주소를 받는다. 저장소가 S3면 이 서명 대신 S3의 presigned URL을 준다(11.11).
-- **관리자 전용**: `/api/v1/admin/*`는 `role`이 `ADMIN`이 아니면 403 `FORBIDDEN`이다.
+- **역할 검사**: `api/deps.py`의 `require_admin`(`ADMIN`만)과 `require_creamoff`(`ADMIN`·`STAFF`) 두 의존성. `/api/v1/admin/*`의 쓰기(POST·PATCH)는 앞, 조회(GET)는 뒤를 쓰고, 아니면 403 `FORBIDDEN`이다. 그 밖의 라우트는 역할을 보지 않는다(기관 필터만).
+- **요청마다 하는 검사**(`get_current_staff`): ① 토큰을 풀어 담당자 ID를 얻는다(없거나 잘못됨 401 `AUTH_REQUIRED`, 만료 401 `AUTH_EXPIRED`). ② 캐시에서 스냅샷을 찾고, 없거나 지났으면 DB에서 담당자 + 기관을 읽어 캐시에 넣는다(담당자 행이 없으면 401 `AUTH_REQUIRED`). ③ `is_active`가 FALSE면 403 `ACCOUNT_DISABLED`. ④ `effective_role`이 `GUEST`면 403 `CONTRACT_EXPIRED`. `GET /auth/me`만 ④를 뺀 `CurrentStaffAny`를 쓴다. `ADMIN`·`STAFF`는 계약을 검사하지 않는다. ⑤ 경로 권한(위 역할 검사). 통과하면 스냅샷 `AuthStaff`를 돌려주고 모든 조회는 그 `institution_id`로 거른다. 토큰이 살아 있어도 ③·④에서 막히므로 로그아웃을 안 해도 다음 요청부터 차단된다(캐시 때문에 최대 60초 늦을 수 있다).
+- **`/auth/me`와 로그인**: 캐시를 거치지 않고 DB를 읽고, 읽은 값으로 캐시를 갱신한다. 화면이 "새로 고침"으로 최신 상태를 볼 수 있는 자리다.
+- **메일**: `core/mail.py`의 `send_mail(to, subject, body)`. 파이썬 표준 `smtplib`(STARTTLS)로 보내고 라이브러리를 더하지 않는다(D-11 행이 늘지 않는다). `SMTP_HOST`가 비어 있으면 보내지 않고 `MailUnavailable`을 낸다(API는 503 `MAIL_UNAVAILABLE`). 제목·본문은 `messages/ko.yaml`(`mail.password_reset.subject`·`.body`)에 둔다. 테스트는 가짜 발송기를 끼운다.
+- **로그**: 11.8 금지 목록에 디바이스 코드, 재설정 토큰, 이메일 주소를 더한다. 가입·확인·재설정 요청의 본문과 오류 로그에 남지 않는다.
 
 **서명 계산**: 서명할 문자열은 `{경로}` + 줄바꿈 문자 하나 + `{exp}`다. 경로는 `/api/v1`부터 쓴 전체 경로이고 쿼리는 넣지 않는다. `exp`는 Unix 초(정수)를 10진수로 쓴다. `sig`는 HMAC-SHA256 결과의 소문자 16진수(64자)다. `download`는 서명에 넣지 않고, 비교는 `hmac.compare_digest`로 한다. 함수는 `core/security.py`의 `make_signed_url(path)`과 `verify_signed_url(path, exp, sig)` 두 개다. make\_signed\_url은 주소와 만료 시각(exp)을 함께 돌려준다.
 
@@ -541,6 +566,14 @@ sig:  71dc0ee5f533d3459657e501b062aefcaec8867af045a52eaab5b75bb3c98b95
 ```
 
 위 값은 테스트에 그대로 넣어, 서명을 만드는 쪽과 확인하는 쪽이 같은 값을 내는지 확인한다.
+
+**인증 캐시**(`app/core/auth_cache.py`): 요청마다 읽던 담당자 행을 프로세스 메모리에 `AUTH_CACHE_TTL_SEC`(기본 60초) 동안 둔다.
+
+- **무엇을**: `AuthStaff`(frozen dataclass): `id`, `institution_id`, `login_id`, `name`, `email`, `role`, `is_active`, `institution_code`, `institution_name`, `contract_ends_at`. `effective_role`과 `contract_status`는 프로퍼티로 계산한다. ORM 객체를 넣지 않는다. 세션이 닫힌 뒤에도 쓰는 값이기 때문이다. `CurrentStaff`의 타입은 `Staff`(ORM)가 아니라 `AuthStaff`다. 라우트·서비스는 `staff.id`·`staff.institution_id`·`staff.role`만 쓰므로 호출 코드는 그대로다(`measure_session.staff_id`에 넣는 값도 같다).
+- **어디에**: 프로세스 메모리의 `dict[staff_id, (만료 시각, AuthStaff)]` + `threading.Lock`. 외부 라이브러리를 더하지 않는다. 조회 때 만료된 항목은 버리고, 넣을 때 항목이 1,000개를 넘으면 만료분을 모두 치운다. 담당자 수는 기관 수 × 10 이하라 메모리는 문제가 안 된다.
+- **TTL**: `AUTH_CACHE_TTL_SEC`가 0이면 캐시를 끈다(요청마다 DB). 테스트는 0으로 두고, 캐시 자체 테스트만 켠다.
+- **무효화**: 같은 프로세스에서 담당자·기관을 바꾸는 API(`PATCH /admin/staff/{id}`, `PATCH /admin/institutions/{id}`, `PATCH /auth/password`, `PATCH /auth/me`, `POST /auth/password-reset/confirm`)는 바꾼 뒤 그 담당자(기관이면 그 기관의 담당자 전부)를 캐시에서 지운다. 다른 프로세스(uvicorn 워커가 여럿이거나 서버가 여럿)는 TTL이 지나야 반영된다. 워커 프로세스는 인증을 쓰지 않으므로 해당 없다.
+- **대가**: 계정 중지·계약 만료·역할 변경이 최대 TTL만큼 늦게 반영된다(10절 Q28). 토큰 만료(12시간)와 `AUTH_REQUIRED`는 캐시와 상관없이 즉시다. 서버를 늘려 프로세스 사이에서 캐시를 공유해야 하면 이 모듈만 Redis로 바꾼다(3절).
 
 ### 11.7 DB 사용 규칙
 
@@ -577,7 +610,7 @@ DbSession = Annotated[Session, Depends(get_db, scope="function")]
 ### 11.8 로그와 감시
 
 - 표준 `logging`을 쓴다. 한 줄에 시각, 레벨, 요청 ID, 메시지를 남긴다. 요청 ID는 미들웨어가 만들고 응답 헤더 `X-Request-ID`로도 돌려준다.
-- 로그에 남기지 않는 것: 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로(PR-C-02).
+- 로그에 남기지 않는 것: 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로(PR-C-02), 디바이스 코드, 재설정 토큰, 이메일 주소(v1.12).
 - (선택) `/metrics`로 요청 수·처리 시간을 Prometheus 형식으로 낸다. 수집 방식은 허정원과 정한다.
 
 **로그로 새지 않게**: uvicorn 접근 로그는 끈다(`--no-access-log`). 쿼리 문자열에 반려견 이름(`q`)과 서명(`sig`)이 들어가기 때문이다. 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID(UUID4 16진수 32자)만 남긴다. SQLAlchemy 엔진은 `hide_parameters=True`로 만들어 오류 메시지에 값이 찍히지 않게 한다.
@@ -637,13 +670,13 @@ def get_storage() -> StorageService:
 
 ## 12. 데이터 모델
 
-테이블은 9개다. 기관 → 반려견 → 회차 → 촬영 → 통과로 한 줄로 내려가고, 회차 수치와 보고서는 회차에 붙는다. 아래 DDL이 기준이다. SQLAlchemy 모델은 이 DDL과 똑같이 만들고, 실제 테이블은 Alembic으로 만든다.
+테이블은 10개다. 기관 → 반려견 → 회차 → 촬영 → 통과로 한 줄로 내려가고, 회차 수치와 보고서는 회차에 붙는다. 디바이스 코드는 기관에 붙고 담당자가 어느 코드로 가입했는지 가리킨다(v1.12). 아래 DDL이 기준이다. SQLAlchemy 모델은 이 DDL과 똑같이 만들고, 실제 테이블은 Alembic으로 만든다.
 
 ### 12.1 ERD
 
 [embedded content: 테이블 9개의 관계\]
 
-purge\_log는 파기 기록이라 다른 테이블과 연결하지 않는다. 파기 대상을 지울 때 기록까지 같이 지워지면 안 되기 때문이다.
+purge\_log는 파기 기록이라 다른 테이블과 연결하지 않는다. 파기 대상을 지울 때 기록까지 같이 지워지면 안 되기 때문이다. 그림에 없는 `device_code`(v1.12)는 institution → device\_code → staff(`device_code_id`, NULL 가능)로 붙는다.
 
 ### 12.2 테이블 정의 (PostgreSQL DDL)
 
@@ -653,31 +686,53 @@ purge\_log는 파기 기록이라 다른 테이블과 연결하지 않는다. �
 -- updated_at은 DB가 바꾸지 않는다. SQLAlchemy 모델의 onupdate가 채운다(12.5).
 -- 외래키에 ON DELETE CASCADE를 쓰지 않는다(12.5 삭제 순서).
 
--- 기관(병원·재활 센터)
+-- 기관(병원·재활 센터). 크림오프 자체 기관도 한 행이다(계약 종료일 NULL)
 CREATE TABLE institution (
-  id          UUID          NOT NULL,
-  code        VARCHAR(20)   NOT NULL,  -- 로그인할 때 입력하는 기관 코드
-  name        VARCHAR(100)  NOT NULL,
-  created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  id                UUID          NOT NULL,
+  code              VARCHAR(20)   NOT NULL,  -- 관리 화면 표시용 식별 코드. v1.12부터 로그인에 쓰지 않는다
+  name              VARCHAR(100)  NOT NULL,
+  contract_ends_at  DATE          NULL,      -- 계약 마지막 날(당일 포함). NULL = 기한 없음(11.6)
+  created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
   CONSTRAINT uq_institution_code UNIQUE (code)
 );
 
--- 담당자 계정. 회원가입 없이 scripts/seed.py로 만든다
-CREATE TABLE staff (
+-- 디바이스 코드. 크림오프가 기관에 발급하고 가입 때만 쓴다(11.6, 13.5)
+CREATE TABLE device_code (
   id              UUID          NOT NULL,
   institution_id  UUID          NOT NULL,
-  login_id        VARCHAR(50)   NOT NULL,
-  password_hash   VARCHAR(100)  NOT NULL,  -- bcrypt 해시
-  name            VARCHAR(50)   NOT NULL,
-  role            VARCHAR(20)   NOT NULL DEFAULT 'STAFF',
-  is_active       BOOLEAN       NOT NULL DEFAULT TRUE,  -- FALSE면 로그인 불가
+  code            VARCHAR(32)   NOT NULL,  -- 20자, 하이픈 없이 저장
+  max_accounts    SMALLINT      NOT NULL DEFAULT 3,  -- 상한은 설정값 DEVICE_CODE_MAX_ACCOUNTS로 API가 막는다
+  revoked_at      TIMESTAMPTZ   NULL,      -- 회수 시각. NULL이면 쓸 수 있다
+  note            VARCHAR(100)  NULL,      -- 운영 메모(예: "2호기")
   created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
-  CONSTRAINT uq_staff_login UNIQUE (institution_id, login_id),
-  CONSTRAINT ck_staff_role CHECK (role IN ('ADMIN', 'STAFF')),
-  CONSTRAINT fk_staff_institution FOREIGN KEY (institution_id) REFERENCES institution (id)
+  CONSTRAINT uq_device_code UNIQUE (code),
+  CONSTRAINT ck_device_code_max CHECK (max_accounts >= 1),
+  CONSTRAINT fk_device_code_institution FOREIGN KEY (institution_id) REFERENCES institution (id)
+);
+
+-- 담당자 계정(크림오프 쪽 ADMIN·STAFF와 고객 CLIENT 모두). 디바이스 코드 가입 또는 scripts/seed.py로 만든다
+CREATE TABLE staff (
+  id                         UUID          NOT NULL,
+  institution_id             UUID          NOT NULL,
+  login_id                   VARCHAR(50)   NOT NULL,  -- 전역 유일(v1.12)
+  password_hash              VARCHAR(100)  NOT NULL,  -- bcrypt 해시
+  name                       VARCHAR(50)   NOT NULL,
+  role                       VARCHAR(20)   NOT NULL DEFAULT 'CLIENT',  -- GUEST는 저장하지 않는다(11.6)
+  is_active                  BOOLEAN       NOT NULL DEFAULT TRUE,  -- FALSE면 로그인 불가
+  device_code_id             UUID          NULL,  -- 어느 코드로 가입했는지. seed.py로 만든 계정은 NULL
+  email                      VARCHAR(254)  NULL,  -- 가입 계정은 필수(13.5). seed 계정은 비울 수 있다. 소문자로 저장
+  password_reset_hash        CHAR(64)      NULL,  -- 재설정 토큰의 SHA-256. 쓰거나 만료되면 NULL(15.4)
+  password_reset_expires_at  TIMESTAMPTZ   NULL,
+  created_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (id),
+  CONSTRAINT uq_staff_login UNIQUE (login_id),
+  CONSTRAINT ck_staff_role CHECK (role IN ('ADMIN', 'STAFF', 'CLIENT')),
+  CONSTRAINT fk_staff_institution FOREIGN KEY (institution_id) REFERENCES institution (id),
+  CONSTRAINT fk_staff_device_code FOREIGN KEY (device_code_id) REFERENCES device_code (id)
 );
 
 -- 반려견. 보호자 이름·연락처는 받지 않는다
@@ -695,6 +750,7 @@ CREATE TABLE dog (
   focus_limb           VARCHAR(20)   NULL,  -- 관심 다리: 왼앞·오른앞·왼뒤·오른뒤
   baseline_session_id  UUID          NULL,  -- 기준 회차
   memo                 TEXT          NULL,  -- 내부 메모. 보고서에 넣지 않는다
+  version              INTEGER       NOT NULL DEFAULT 0,  -- 낙관적 잠금(12.5). 수정할 때마다 1 는다
   created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
@@ -901,7 +957,7 @@ CREATE TABLE purge_log (
 ### 12.5 데이터 규칙
 
 - **이름**: 회차 테이블은 `measure_session`, 모델 클래스는 `MeasureSession`이다. SQLAlchemy의 DB 세션(`Session`)과 이름이 겹치면 AI가 둘을 헷갈린 코드를 만들기 때문이다. API 주소와 JSON에서는 그대로 `sessions`, `session_id`를 쓴다.
-- **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`.
+- **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`. 기관을 지우는 기능은 없으므로 `device_code`는 지우지 않고 회수(`revoked_at`)만 한다.
 - **측정 불가**: `value`는 NULL, `measurable`은 FALSE, 사유는 `unmeasurable_reason`에 넣는다. 0을 넣지 않는다. 0은 측정값으로 오해되기 때문이다(PR-F02-05).
 - **체급 분류**: 체급은 등록 체중만으로 나눈다(박규원의 체급 기준 자료, 10-22. v1.3까지는 견종 기준이었다). 세부명세서가 체급을 쓰는 곳은 소형견이 화면에 작게 찍히는 문제(RK-09), 체급별 권장 통과 수(D-14), 보고서 맞춤 설명(PR-F08-02)인데, 분석 쪽의 체급별 KPI 집계(KPI-08·25·26)와 개 보행 임상 연구(압력 매트)가 같은 체중 경계를 쓴다. 백엔드가 견종으로 나누면 분석 쪽 집계와 보고서의 체급이 어긋나므로 같은 규칙을 쓴다. 규칙은 다음과 같다.
   1. 등록 체중이 10 kg 미만이면 SMALL, 25 kg 미만이면 MEDIUM, 25 kg 이상이면 LARGE다. 경계값은 설정값(16절)이고, 경계에 있는 값은 위 구간에 든다(10.00 kg은 MEDIUM, 25.00 kg은 LARGE).
@@ -912,6 +968,9 @@ CREATE TABLE purge_log (
   6. 회차에는 시작 시점의 체급을 따로 저장한다(`measure_session.size_class`, 팀 회의 10-22). 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(`weight_kg`, 없으면 등록 체중)으로 계산한다. 그 뒤 반려견 체중·체급이 바뀌어도 지난 회차의 체급은 그대로이고, 집계·보고서는 회차의 체급을 쓴다. 대형견도 새끼일 때는 소형 구간에 들고, 감량한 개는 그 뒤 회차부터 중형이 된다. 측정 수치는 체급과 상관없이 그대로이고 체급별 기준 문장만 회차의 체급을 따른다.
 - **기준 회차**: `baseline_session_id`가 비어 있으면 그 반려견의 가장 이른 DONE 회차를 기준으로 쓴다. 회차 순서는 언제나 (measured\_on, created\_at) 오름차순이고, 가장 이른·가장 최근·바로 앞 회차를 모두 이 순서로 정한다. 측정일을 직접 고를 수 있고 같은 날 회차가 둘일 수 있어서다.
 - **촬영 순번**: `seq_no`는 같은 회차의 가장 큰 값 + 1이다. 동시에 올려도 겹치지 않도록 업로드는 회차 행을 SELECT … FOR UPDATE로 잠근 뒤 순번을 매긴다(12.4). 그런데도 겹치면(`uq_shot_seq` 위반) 잠금이 빠진 버그이므로 500으로 끝내고 로그를 남긴다.
+- **활성 계정 수**(v1.12): 디바이스 코드 하나로 가입했고 `is_active`가 TRUE인 계정 수다. `SELECT count(*) FROM staff WHERE device_code_id = :id AND is_active`. 가입은 `device_code` 행을 `SELECT … FOR UPDATE`로 잠근 뒤 세고 넣는다. 동시에 가입해도 상한(`max_accounts`)을 넘지 않게 하기 위해서다(촬영 순번과 같은 방식). 퇴사자를 중지하면 자리가 돌아온다.
+- **반려견 `version`**(v1.12): 수정할 때마다 1 늘고, 수정 요청은 읽었을 때의 `version`을 보내야 한다. SQLAlchemy `version_id_col`로 ORM이 `WHERE version = :old`를 붙이고, 어긋나면 `StaleDataError`를 409 `DOG_MODIFIED`로 바꾼다. JPA `@Version`과 같다. 회차·촬영은 이미 행 잠금으로 지키므로(12.4) 자유 수정이 있는 행은 반려견뿐이다.
+- **재설정 토큰**(v1.12): 계정당 하나다. 새로 요청하면 이전 토큰은 덮어써서 무효가 된다. 서버가 `secrets.token_urlsafe(32)`로 만들어 메일로 보내고, DB에는 SHA-256 해시와 만료 시각(발급 30분 뒤)만 둔다. 쓰면 지운다.
 - **도구**: PostgreSQL 17, SQLAlchemy 2(테이블을 Python 클래스로 정의), pg8000(Python에서 PostgreSQL에 접속하는 드라이버), Alembic(테이블 변경 이력을 파일로 남겨 팀원 누구나 같은 DB를 만든다. Spring의 Flyway와 같은 역할).
 - **상태·종류 값**: PostgreSQL의 ENUM 타입을 쓰지 않고 `VARCHAR(20)` + CHECK 제약으로 둔다. ENUM 타입은 값을 빼거나 이름을 바꾸기 어렵고 Alembic 마이그레이션도 번거롭다. 모델에서는 `String(20)` 컬럼에 `__table_args__`의 `CheckConstraint`로 DDL과 같은 이름(`ck_…`)을 준다. 값 목록은 Python `StrEnum` 하나에서 가져와 코드와 제약이 어긋나지 않게 한다.
 - **updated\_at**: PostgreSQL에는 MySQL의 `ON UPDATE CURRENT_TIMESTAMP`가 없다. 모델에 `onupdate=func.now()`를 두어 SQLAlchemy가 채우게 하고, 행을 바꾸는 UPDATE는 ORM이나 `update()`로만 쓴다. `text()`로 쓴 SQL로 바꾸면 `updated_at`이 그대로다. 보고서 작업 순서(12.4)가 이 값을 쓴다.
@@ -993,14 +1052,50 @@ CREATE TABLE purge_log (
 
 | 입력 | 규칙 |
 | --- | --- |
-| `institution_code` | 1\~20자 |
 | `login_id` | 1\~50자 |
 | `password` | 8자 이상, UTF-8로 72바이트 이하(한글 한 글자는 3바이트). bcrypt 5.0은 72바이트를 넘으면 오류를 낸다. 이 규칙은 seed.py로 계정을 만들 때 검사한다. 로그인에서는 길이를 검사하지 않고, 72바이트를 넘으면 bcrypt를 부르지 않고 401 LOGIN\_FAILED로 답한다 |
 | `page` | 1 이상 |
 | `size` | 1\~100 (기본 20) |
 | `q`(검색어) | 최대 50자. 반려견 이름에 포함되면 찾는다 |
 
-로그인이 틀리면 기관 코드·아이디·비밀번호 중 무엇이 틀렸는지 알려 주지 않고 항상 401 `LOGIN_FAILED` 하나로 답한다. 어느 쪽이 맞았는지 힌트를 주지 않기 위해서다. 기관 코드와 아이디는 대소문자를 구분해 입력 그대로 비교한다.
+로그인이 틀리면 아이디·비밀번호 중 무엇이 틀렸는지 알려 주지 않고 항상 401 `LOGIN_FAILED` 하나로 답한다. 어느 쪽이 맞았는지 힌트를 주지 않기 위해서다. 아이디는 대소문자를 구분해 입력 그대로 비교한다. 요청에 `institution_code`가 있어도 무시한다(v1.11까지의 화면).
+
+### 13.5 디바이스 코드·가입
+
+| 입력 | 규칙 |
+| --- | --- |
+| `code` | 하이픈·공백을 지우고 대문자로 바꾼 뒤 20자이고 모두 코드 글자(`ABCDEFGHJKMNPQRSTUVWXYZ23456789`, 혼동되는 0·O·1·I·L을 뺀 32종)여야 한다. 아니면 DB를 보지 않고 404 `DEVICE_CODE_INVALID`. 화면에는 `XXXXX-XXXXX-XXXXX-XXXXX`로 보여 준다 |
+| `login_id` | 4\~50자, 영문 소문자·숫자·`.`·`_`·`-`만. 대문자를 넣으면 422(가입에서 소문자만 받아 로그인의 "입력 그대로 비교"와 부딪히지 않게 한다) |
+| `password` | 13.4 규칙(8자 이상, 72바이트 이하). 비밀번호 확인은 화면만 한다 |
+| `name` | 1\~50자, 앞뒤 공백은 지운다 |
+| `email` | 필수. 앞뒤 공백을 지우고 소문자로 바꿔 저장. 5\~254자, `@`가 하나이고 그 뒤에 `.`이 있어야 한다(정규식, 라이브러리 없음). 인증 메일은 보내지 않는다 |
+
+### 13.6 관리자
+
+| 입력 | 규칙 |
+| --- | --- |
+| 기관 `code` | 1\~20자, 유일. 비우면 서버가 `INST-` + 6자(코드 글자)로 만든다 |
+| 기관 `name` | 1\~100자 |
+| `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
+| `max_accounts` | 1 \~ `DEVICE_CODE_MAX_ACCOUNTS` |
+| `note` | 최대 100자 |
+| `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
+
+### 13.7 비밀번호 변경·내 정보
+
+| 입력 | 규칙 |
+| --- | --- |
+| `current_password` | 길이를 검사하지 않는다(로그인과 같다). 틀리면 400 `PASSWORD_MISMATCH` |
+| `new_password` | 13.4 규칙(8자 이상, 72바이트 이하). 현재 비밀번호와 같으면 422(`fields: new_password`) |
+| `name`, `email`(`PATCH /auth/me`) | 13.5와 같다. 보낸 필드만 바꾼다 |
+
+### 13.8 비밀번호 재설정
+
+| 입력 | 규칙 |
+| --- | --- |
+| `login_id`(request) | 1\~50자. 없는 아이디여도 204 |
+| `token`(confirm) | 1\~100자. 해시가 맞고 `password_reset_expires_at`이 지나지 않아야 한다. 아니면 400 `RESET_TOKEN_INVALID` |
+| `new_password`(confirm) | 13.4 규칙 |
 
 ## 14. 오류 코드
 
@@ -1019,13 +1114,17 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `VIDEO_DURATION` | 400 | 영상 길이는 {min\_sec}\~{max\_sec}초여야 합니다. | 13.1 |
 | `BASELINE_INVALID` | 400 | 기준 회차는 이 반려견의 완료된 회차여야 합니다. | 13.2 |
 | `COMPARE_INVALID` | 400 | 비교할 수 없는 회차입니다. | 13.3 |
+| `PASSWORD_MISMATCH` | 400 | 현재 비밀번호가 맞지 않습니다. | 13.7 |
+| `RESET_TOKEN_INVALID` | 400 | 재설정 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요. | 13.8 |
 | `AUTH_REQUIRED` | 401 | 로그인이 필요합니다. | 토큰이 없거나 잘못됨 |
 | `AUTH_EXPIRED` | 401 | 로그인 시간이 지났습니다. 다시 로그인해 주세요. | 토큰 만료 |
-| `LOGIN_FAILED` | 401 | 기관 코드, 아이디 또는 비밀번호가 맞지 않습니다. | 13.4 |
+| `LOGIN_FAILED` | 401 | 아이디 또는 비밀번호가 맞지 않습니다. | 13.4 |
 | `ACCOUNT_DISABLED` | 403 | 사용이 중지된 계정입니다. | `is_active`=FALSE |
+| `CONTRACT_EXPIRED` | 403 | 기관의 이용 계약이 만료되었습니다. 크림오프에 문의해 주세요. | `GUEST`(계약이 끝난 `CLIENT`)가 `/auth/me` 말고 다른 API를 부름(11.6) |
 | `FORBIDDEN` | 403 | 이 기능을 사용할 권한이 없습니다. | 관리자 전용 기능 |
 | `FILE_LINK_EXPIRED` | 403 | 링크가 만료되었습니다. 화면을 새로 불러와 주세요. | 서명 URL 만료·변조 |
 | `NOT_FOUND` | 404 | 요청한 정보를 찾을 수 없습니다. | 없거나 다른 기관의 자료 |
+| `DEVICE_CODE_INVALID` | 404 | 유효한 디바이스 코드가 아닙니다. | 13.5: 형식 오류, 없음, 회수됨, 기관 계약 만료. 모두 같은 응답 |
 | `SESSION_CLOSED` | 409 | 측정이 끝난 회차입니다. | 13.1, 13.3 |
 | `SESSION_ALREADY_OPEN` | 409 | 이 반려견은 이미 측정 중인 회차가 있습니다. | 13.3 |
 | `SESSION_EMPTY` | 409 | 촬영이 1건 이상 있어야 측정을 끝낼 수 있습니다. | 13.3 |
@@ -1033,9 +1132,14 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `SHOT_IN_PROGRESS` | 409 | 분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요. | 13.3 |
 | `SHOT_NOT_FAILED` | 409 | 실패한 촬영만 다시 분석할 수 있습니다. | 13.3 |
 | `REPORT_IN_PROGRESS` | 409 | 보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요. | 13.3 |
+| `DEVICE_CODE_FULL` | 409 | 이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요. | 활성 계정 수 ≥ `max_accounts`(12.5) |
+| `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 가입 때 아이디 중복(다른 기관이어도) |
+| `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | `version` 불일치(12.5) |
+| `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | `ADMIN`이 자기 `is_active`를 false로 |
 | `VIDEO_TOO_LARGE` | 413 | 영상 파일이 너무 큽니다. 최대 {max\_mb} MB까지 올릴 수 있습니다. | 13.1 |
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | 필드 형식·범위 오류. `detail.fields`에 필드별 사유 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | 예상하지 못한 오류 |
+| `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | SMTP 미설정 또는 발송 실패(15.4) |
 
 ### 14.2 처리 실패 사유
 
@@ -1113,12 +1217,12 @@ STOPPED: "중간에 멈췄습니다."
 
 ## 15. API 상세
 
-엔드포인트는 26개이고 주소는 모두 `/api/v1`로 시작한다. 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
+엔드포인트는 41개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
 
 ### 15.1 공통 약속
 
-- **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF)를 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). `/health`와 `/metrics`도 다른 API처럼 `/api/v1` 아래에 둔다(`/api/v1/health`, `/api/v1/metrics`).
-- **공통 오류**: 아래 오류는 인증이 필요한 모든 API에서 날 수 있어 엔드포인트마다 다시 적지 않는다. 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED`(로그인 뒤에 계정이 막힘), 404 `NOT_FOUND`(ID가 없거나 다른 기관의 것), 422 `VALIDATION_ERROR`, 500 `INTERNAL_ERROR`.
+- **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF), 디바이스 코드 확인·가입(27·28), 비밀번호 재설정 둘(40·41)을 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). `GUEST`(계약이 끝난 `CLIENT`)가 부를 수 있는 것은 1·2뿐이다. `/admin/*`(29\~37) 중 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만이다. `/health`와 `/metrics`도 다른 API처럼 `/api/v1` 아래에 둔다(`/api/v1/health`, `/api/v1/metrics`).
+- **공통 오류**: 아래 오류는 인증이 필요한 모든 API에서 날 수 있어 엔드포인트마다 다시 적지 않는다. 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED`(로그인 뒤에 계정이 막힘), 403 `CONTRACT_EXPIRED`(기관 계약이 끝난 `CLIENT`, `/auth/me` 제외), 404 `NOT_FOUND`(ID가 없거나 다른 기관의 것), 422 `VALIDATION_ERROR`, 500 `INTERNAL_ERROR`.
 - **ID로 찾기**: 주소에 든 ID뿐 아니라 쿼리·본문으로 받은 ID(`base`, `target`, `baseline_session_id`, `target_id`)도 자기 기관 안에서만 찾는다. 반려견에 딸린 회차는 `WHERE id = :id AND dog_id = :dog_id`로 찾는다. 없는 ID와 다른 기관·다른 반려견의 ID는 똑같이 404 `NOT_FOUND`로 답해, 다른 기관에 그 자료가 있는지 알 수 없게 한다. `baseline_session_id`만 예외로 400 `BASELINE_INVALID`다(13.2).
 - **ID 형식**: 주소·쿼리·본문의 ID는 `uuid.UUID`로 받는다. 주소(경로)의 ID가 UUID 형식이 아니면 404 NOT\_FOUND(11.5), 쿼리·본문의 ID는 DB까지 가지 않고 422 `VALIDATION_ERROR`다. PostgreSQL은 UUID 컬럼을 UUID 형식이 아닌 문자열과 비교하면 오류를 내므로(그대로 두면 500), 문자열로 받은 ID를 그대로 쿼리에 넣지 않는다.
 - **페이지 목록**: 11.5의 `{items, total, page, size}` 모양은 반려견 목록과 측정 이력 두 곳에만 쓴다. 회차의 촬영, 보고서 판본처럼 수가 정해진 묶음은 객체 안의 배열로 준다.
@@ -1131,12 +1235,12 @@ STOPPED: "중간에 멈췄습니다."
 
 | # | 메서드·주소 | 하는 일 | 기능 | 성공 | 이 API의 오류 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `POST /auth/login` | 로그인, 토큰 발급 | BE-01 | 200 | 401 `LOGIN_FAILED`, 403 `ACCOUNT_DISABLED` |
-| 2 | `GET /auth/me` | 로그인한 담당자·기관 | BE-01 | 200 | — |
+| 1 | `POST /auth/login` | 로그인(아이디·비밀번호), 토큰 발급 | BE-01 | 200 | 401 `LOGIN_FAILED`, 403 `ACCOUNT_DISABLED` |
+| 2 | `GET /auth/me` | 내 정보(`effective_role` 포함. `GUEST`도 된다) | BE-01 | 200 | — |
 | 3 | `GET /dogs` | 반려견 목록·검색 (S1) | BE-03 | 200 | — |
 | 4 | `POST /dogs` | 반려견 등록 (S2) | BE-02 | 201 | — |
 | 5 | `GET /dogs/{dog_id}` | 반려견 상세 (S2·S7) | BE-02 | 200 | — |
-| 6 | `PATCH /dogs/{dog_id}` | 반려견 수정, 기준 회차 지정 | BE-02 | 200 | 400 `BASELINE_INVALID` |
+| 6 | `PATCH /dogs/{dog_id}` | 반려견 수정, 기준 회차 지정(`version` 필수) | BE-02·25 | 200 | 400 `BASELINE_INVALID`, 409 `DOG_MODIFIED` |
 | 7 | `POST /dogs/{dog_id}/sessions` | 회차 시작 (S3) | BE-04 | 201 | 409 `SESSION_ALREADY_OPEN` |
 | 8 | `GET /dogs/{dog_id}/sessions` | 측정 이력 (S7) | BE-17 | 200 | — |
 | 9 | `GET /sessions/{session_id}` | 회차 상태·방향별 진행·촬영 목록 (S3, 2\~3초마다) | BE-07·09 | 200 | — |
@@ -1157,20 +1261,60 @@ STOPPED: "중간에 멈췄습니다."
 | 24 | `POST /admin/purge` | 자료 파기 (관리자) | BE-19 | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS` |
 | 25 | `GET /health` | 서버 상태 | BE-20 | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | BE-20 | 200 | — |
+| 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (인증 없음) | BE-22 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
+| 28 | `POST /auth/signup` | 회원가입(`CLIENT`, 인증 없음) | BE-22 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL`·`LOGIN_ID_TAKEN` |
+| 29 | `GET /admin/institutions` | 기관 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 30 | `POST /admin/institutions` | 기관 만들기 (`ADMIN`) | BE-24 | 201 | 403 `FORBIDDEN`, 422 `VALIDATION_ERROR`(기관 코드 중복은 `fields: code`) |
+| 31 | `PATCH /admin/institutions/{id}` | 기관 이름·계약 종료일 수정 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 32 | `GET /admin/institutions/{id}/device-codes` | 코드 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 33 | `POST /admin/institutions/{id}/device-codes` | 코드 발급 (`ADMIN`) | BE-24 | 201 | 403 `FORBIDDEN` |
+| 34 | `PATCH /admin/device-codes/{id}` | 상한·메모 수정 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 35 | `POST /admin/device-codes/{id}/revoke` | 코드 회수, 멱등 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 36 | `GET /admin/institutions/{id}/staff` | 기관의 계정 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 37 | `PATCH /admin/staff/{id}` | 계정 중지·재개 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN`, 409 `SELF_DISABLE` |
+| 38 | `PATCH /auth/password` | 비밀번호 변경 | BE-26 | 200 | 400 `PASSWORD_MISMATCH` |
+| 39 | `PATCH /auth/me` | 이름·이메일 수정 | BE-26 | 200 | — |
+| 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (인증 없음) | BE-27 | 204 | 503 `MAIL_UNAVAILABLE` |
+| 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (인증 없음) | BE-27 | 204 | 400 `RESET_TOKEN_INVALID` |
 
 ### 15.3 공통 객체
 
 여러 API가 같은 모양으로 돌려주는 객체다. 값은 예시이고, `"…"`는 UUID다. 필드 이름은 12.2 DDL의 컬럼 이름과 같다. 다른 객체가 통째로 들어가는 자리는 "\<ShotOut>"처럼 객체 이름만 적었다.
 
-**StaffOut** — 로그인한 담당자
+**StaffOut** — 로그인한 담당자. `effective_role`은 `ADMIN`·`STAFF`·`CLIENT`·`GUEST` 중 하나이고 화면은 `role`이 아니라 이 값으로 분기한다(`GUEST`면 만료 안내, `ADMIN`·`STAFF`면 관리 화면 진입). `contract_status`는 `ACTIVE` 또는 `EXPIRED`다(11.6).
 
 ```json
 {
   "id": "…",
   "login_id": "kim01",
   "name": "김담당",
-  "role": "STAFF",
-  "institution": {"id": "…", "code": "CREAM01", "name": "크림 재활센터"}
+  "email": "kim01@example.com",
+  "role": "CLIENT",
+  "effective_role": "CLIENT",
+  "institution": {
+    "id": "…", "code": "INST-7F3K2Q", "name": "크림 재활센터",
+    "contract_ends_at": "2027-10-30", "contract_status": "ACTIVE"
+  }
+}
+```
+
+**DeviceCodeOut** — 디바이스 코드(크림오프 관리자 API). 코드 전체가 든 자리는 발급 응답과 코드 목록뿐이다.
+
+```json
+{
+  "id": "…", "code": "7F3K2-QW9PA-X2M8N-H4CDE", "institution_id": "…",
+  "max_accounts": 3, "active_accounts": 2, "revoked_at": null,
+  "note": null, "created_at": "2026-10-30T02:00:00Z"
+}
+```
+
+**InstitutionAdminOut** — 기관(크림오프 관리자 API)
+
+```json
+{
+  "id": "…", "code": "INST-7F3K2Q", "name": "크림 재활센터",
+  "contract_ends_at": "2027-10-30", "contract_status": "ACTIVE",
+  "staff_count": 2, "device_code_count": 1, "created_at": "…"
 }
 ```
 
@@ -1190,6 +1334,7 @@ STOPPED: "중간에 멈췄습니다."
   "focus_limb": "RH",
   "baseline_session_id": null,
   "memo": null,
+  "version": 0,
   "session_count": 3,
   "last_measured_on": "2026-10-20",
   "open_session_id": null,
@@ -1299,7 +1444,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ```json
 // 요청
-{"institution_code": "CREAM01", "login_id": "kim01", "password": "…"}
+{"login_id": "kim01", "password": "…"}
 
 // 응답 200
 {
@@ -1310,11 +1455,77 @@ STOPPED: "중간에 멈췄습니다."
 }
 ```
 
-- 기관 코드·아이디·비밀번호 중 하나라도 틀리면 401 `LOGIN_FAILED` 하나로 답한다(13.4). 아이디가 없어도 가짜 해시로 bcrypt 비교를 한 번 해서, 응답 시간으로 아이디가 있는지 알 수 없게 한다.
-- 비밀번호까지 맞고 `is_active`가 FALSE면 403 `ACCOUNT_DISABLED`다.
+- 아이디·비밀번호 중 하나라도 틀리면 401 `LOGIN_FAILED` 하나로 답한다(13.4). 순서는 아이디 없음(가짜 해시 비교) → 비밀번호 틀림 → `is_active` FALSE(403 `ACCOUNT_DISABLED`)다. 아이디가 없어도 가짜 해시로 bcrypt 비교를 한 번 해서, 응답 시간으로 아이디가 있는지 알 수 없게 한다.
+- 계약이 끝난 `CLIENT`도 로그인되고 `staff.effective_role`이 `GUEST`다. 화면은 그 값을 보고 만료 안내로 보낸다. 로그인은 DB를 직접 읽고 캐시를 갱신한다(11.6).
 - `expires_at`은 토큰 만료 시각이다. 화면은 이 시각이나 401 `AUTH_EXPIRED`를 보고 로그인 화면으로 보낸다.
 
-**`GET /auth/me`** — 로그인한 담당자. 응답 200 **StaffOut**.
+**`GET /auth/me`** — 내 정보. 응답 200 **StaffOut**. DB를 직접 읽고 캐시를 갱신한다. `GUEST`도 된다(계약 검사를 뺀 `CurrentStaffAny`, 11.6).
+
+**`PATCH /auth/me`** — 이름·이메일 수정 (BE-26). 요청 `{"name"?, "email"?}`(보낸 필드만, 규칙은 13.7). 응답 200 **StaffOut**. 바꾼 뒤 자기 스냅샷을 캐시에서 지운다.
+
+**`PATCH /auth/password`** — 비밀번호 변경 (BE-26)
+
+```json
+// 요청
+{"current_password": "…", "new_password": "…"}
+
+// 응답 200 StaffOut
+```
+
+- 현재 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`. 새 비밀번호는 13.7 규칙이다. 바꾼 뒤 자기 스냅샷을 캐시에서 지운다. 이미 받은 토큰은 그대로 유효하다(토큰을 무효화하는 기능은 없다).
+
+**`POST /auth/device-codes/verify`** — 디바이스 코드 확인 (BE-22, 인증 없음)
+
+```json
+// 요청
+{"code": "7f3k2-qw9pa-x2m8n-h4cde"}
+
+// 응답 200
+{"institution": {"id": "…", "name": "크림 재활센터"}, "remaining_accounts": 1}
+```
+
+- 코드를 정리해(13.5) 찾고, `revoked_at`이 없고, 기관 계약이 `ACTIVE`여야 200이다. 아니면 404 `DEVICE_CODE_INVALID` 하나다. 응답 본문은 어느 경우든 같다.
+- `remaining_accounts` = `max_accounts` − 활성 계정 수(12.5). 0이면 409 `DEVICE_CODE_FULL`.
+- DB를 바꾸지 않는다. 몇 번 불러도 같다.
+
+**`POST /auth/signup`** — 회원가입 (BE-22, 인증 없음)
+
+```json
+// 요청
+{"code": "7F3K2-QW9PA-X2M8N-H4CDE", "login_id": "kim01", "password": "…", "name": "김담당", "email": "kim01@example.com"}
+
+// 응답 201: POST /auth/login의 응답과 같다
+```
+
+- 순서: 입력 규칙(422) → 코드 검사(verify와 같은 404·409) → `device_code` 행 잠금 → 활성 계정 수 재확인(409 `DEVICE_CODE_FULL`) → 아이디 중복(409 `LOGIN_ID_TAKEN`) → `staff` 생성(`role` = `CLIENT`, `institution_id` = 코드의 기관, `device_code_id` = 코드, `email`) → 토큰 발급. 가입 즉시 로그인된 상태다(화면이 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다).
+- `uq_staff_login` 위반이 동시에 나면(같은 아이디로 동시에 가입) IntegrityError를 409 `LOGIN_ID_TAKEN`으로 바꾼다.
+- bcrypt 해시는 DB 작업 전에 끝낸다(트랜잭션을 길게 잡지 않는다. seed.py와 같다). 이메일은 형식만 검사하고 인증 메일은 보내지 않는다.
+
+**`POST /auth/password-reset/request`** — 재설정 링크 보내기 (BE-27, 인증 없음)
+
+```json
+// 요청
+{"login_id": "kim01"}
+
+// 응답 204 (계정이 있든 없든, 이메일이 있든 없든 같다)
+```
+
+- 계정이 있고 활성이고 이메일이 있을 때만 토큰을 만들어 `password_reset_hash`(SHA-256)·`password_reset_expires_at`(now + 30분, 코드 상수 `PASSWORD_RESET_TTL_MIN`)을 저장하고 메일을 보낸다. 링크는 `{FRONTEND_BASE_URL}/reset-password?token={토큰}`이다.
+- `SMTP_HOST`가 비어 있으면 계정과 관계없이 503 `MAIL_UNAVAILABLE`. 발송이 실패해도 503이고 저장한 토큰은 지운다.
+- 응답 시간으로 계정 유무를 알 수 없게, 계정이 없어도 토큰 생성과 같은 시간이 걸리게 한다(가짜 해시 비교와 같은 생각). 요청 횟수 제한은 없다(15.10).
+- `GUEST`(계약 만료)의 계정도 보낸다. 재계약 뒤 바로 쓸 수 있어야 한다. 화면은 "등록된 이메일로 안내를 보냈습니다"를 보여 준다.
+
+**`POST /auth/password-reset/confirm`** — 토큰으로 비밀번호 바꾸기 (BE-27, 인증 없음)
+
+```json
+// 요청
+{"token": "…", "new_password": "…"}
+
+// 응답 204
+```
+
+- 토큰을 SHA-256으로 바꿔 `password_reset_hash`가 같고 `password_reset_expires_at`이 지나지 않은 활성 계정을 찾는다. 없으면 400 `RESET_TOKEN_INVALID`. 새 비밀번호 규칙은 13.4(422).
+- 바꾸면 두 칸을 NULL로 하고 그 담당자를 캐시에서 지운다. 화면은 로그인 화면으로 보낸다. 이메일을 잘못 적어 가입한 담당자는 로그인 뒤 `PATCH /auth/me`로 고친다. 로그인도 못 하고 이메일도 틀린 경우는 크림오프 `ADMIN`이 계정을 중지하고 새로 가입하게 한다(상한은 활성 계정만 세므로 자리가 난다).
 
 ### 15.5 반려견
 
@@ -1349,11 +1560,12 @@ STOPPED: "중간에 멈췄습니다."
 **`PATCH /dogs/{dog_id}`** — 반려견 수정 (BE-02)
 
 ```json
-// 요청: 바꿀 필드만 보낸다
-{"weight_kg": 27.9, "baseline_session_id": "…"}
+// 요청: version은 필수(읽었을 때의 값), 나머지는 바꿀 필드만 보낸다
+{"version": 3, "weight_kg": 27.9, "baseline_session_id": "…"}
 ```
 
 - 응답 200 **DogOut**. 보내지 않은 필드와 `null`을 보낸 필드를 구분해야 하므로 `model_dump(exclude_unset=True)`로 바꿀 값을 꺼낸다.
+- `version`(BE-25, 12.5): 저장된 값과 다르면 409 `DOG_MODIFIED`이고 아무것도 바뀌지 않는다. 응답의 `version`은 1 늘어 있다. `version`이 없으면 422.
 - `weight_kg`를 바꾸면 `size_class_manual`이 FALSE일 때만 새 체중으로 체급을 다시 정한다. `breed`를 바꿔도 체급은 그대로다(12.5).
 - `size_class`에 값을 보내면 `size_class_manual`이 TRUE가 되고, `null`을 보내면 FALSE로 돌아가 자동 분류로 다시 정한다.
 - `baseline_session_id`가 이 반려견의 DONE 회차가 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 12.5 규칙을 따른다.
@@ -1681,6 +1893,19 @@ stride_length: 2.0   # pct_body
 - `INSTITUTION`은 반려견과 그 아래 자료를 모두 지우고, 기관과 담당자 계정은 남긴다.
 - 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다.
 
+**크림오프 관리자 API** (BE-24, 11.6 역할 검사: 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`. 기관·코드·계정 메타데이터까지만 다루고 고객 자료는 열지 않는다. 10절 Q31)
+
+- **`GET /admin/institutions`** — 응답 200 `{"items": [InstitutionAdminOut, …]}`. 페이지 없이 전체다(기관 수가 작다). `name` 오름차순.
+- **`POST /admin/institutions`** — 요청 `{"code": null, "name": "크림 재활센터", "contract_ends_at": "2027-10-30"}`(규칙은 13.6). 응답 201 **InstitutionAdminOut**.
+- **`PATCH /admin/institutions/{id}`** — 요청 `{"name"?, "contract_ends_at"?}`(보낸 필드만, `null`은 기한 없음). 응답 200 **InstitutionAdminOut**. 바꾼 뒤 그 기관 담당자를 캐시에서 지운다.
+- **`GET /admin/institutions/{id}/device-codes`** — 응답 200 `{"items": [DeviceCodeOut, …]}`. 회수된 코드도 포함한다(`revoked_at`으로 구분).
+- **`POST /admin/institutions/{id}/device-codes`** — 요청 `{"max_accounts"?: 3, "note"?: "2호기"}`. 응답 201 **DeviceCodeOut**.
+- **`PATCH /admin/device-codes/{id}`** — 요청 `{"max_accounts"?, "note"?}`. 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다). 응답 200 **DeviceCodeOut**.
+- **`POST /admin/device-codes/{id}/revoke`** — 본문 없음. `revoked_at`을 now()로. 이미 회수됐으면 그대로 200. 기존 계정은 그대로 쓴다(막으려면 계정 중지). 응답 200 **DeviceCodeOut**.
+- **`GET /admin/institutions/{id}/staff`** — 응답 200 `{"items": [{id, login_id, name, email, role, is_active, device_code_id, created_at}, …]}`.
+- **`PATCH /admin/staff/{id}`** — 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`. 바꾼 뒤 그 담당자를 캐시에서 지운다. 역할을 바꾸거나 비밀번호를 건드리는 필드는 없다.
+- 없는 ID는 404 `NOT_FOUND`다. 관리자 API는 기관 필터가 없다(크림오프가 모든 기관을 본다).
+
 **`GET /health`** — 서버 상태 (BE-20)
 
 - 인증 없음. Docker 상태 검사가 부른다.
@@ -1693,6 +1918,8 @@ stride_length: 2.0   # pct_body
 ### 15.10 이번 API에 없는 것
 
 5절의 선택 기능(재분석, 영상 나란히 보기, 경과 요약)과 유저플로우의 후순위 화면(S9 기관 선택, S10 운영 설정)은 API가 없다. 모델 전환과 판정 기준은 설정 파일로 대신한다(PR-F07-04, PR-F03-07). 만들기로 하면 이 절에 먼저 추가하고 문서 버전을 올린 뒤 구현한다.
+
+회원가입·역할·계약(v1.12)에서 일부러 뺀 것: 가입 이메일 인증(디바이스 코드가 이미 고객 증명이다), 계약 만료 알림 메일, 메일 재발송 횟수 제한(토큰 30분 만료로 대신), 관리자 계정을 만드는 API(`seed.py`), 관리자가 비밀번호를 재설정하는 경로, 역할 변경 API, 병원 측 관리자 역할, 크림오프 쪽의 고객 자료 열람(10절 Q31), 휴대폰 인증, 코드 재발급(회수 + 새 발급으로 대신), 자동 역할 변경·스케줄러, 등급(`plan`), refresh token, 토큰 무효화(로그아웃은 화면이 토큰을 버리는 것), 요청 횟수 제한(코드 길이 100비트로 대신).
 
 ## 16. 환경 변수
 
@@ -1742,12 +1969,20 @@ stride_length: 2.0   # pct_body
 | `LOG_LEVEL` | `INFO` | 로그 수준 | 11.8 |
 | `METRICS_ENABLED` | `false` | `/api/v1/metrics`를 켜는지(선택) | 15.9 |
 | `API_DOCS_ENABLED` | `false` | `/docs`·`/redoc`·`/openapi.json`을 여는지. 개발 환경에서만 `true`. 공식 명세는 `docs/openapi.yaml` | 15절 |
+| `AUTH_CACHE_TTL_SEC` | `60` | 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다. 테스트는 0 | 11.6 인증 캐시 |
+| `DEVICE_CODE_MAX_ACCOUNTS` | `10` | 코드 하나의 계정 상한으로 관리자가 줄 수 있는 최댓값 | 13.6 |
+| `SMTP_HOST` | (빈 값) | 메일 서버. 비어 있으면 메일을 보내지 않는다(재설정 요청은 503) | 11.6 메일 |
+| `SMTP_PORT` | `587` | STARTTLS 포트 | 11.6 메일 |
+| `SMTP_USER` | (빈 값) | 발신 계정. 비어 있으면 인증 없이 보낸다 | 11.6 메일 |
+| `SMTP_PASSWORD` | (빈 값) | 발신 계정 비밀번호 | 11.6 메일 |
+| `SMTP_FROM` | (빈 값) | 발신 주소(예: `no-reply@…`). `SMTP_HOST`가 있으면 필수 | 11.6 메일 |
+| `FRONTEND_BASE_URL` | `http://localhost:5173` | 재설정 링크의 앞부분 | 15.4 |
 
 - **필수 값**: 비어 있거나 `JWT_SECRET`·`FILE_URL_SECRET`이 32자보다 짧으면 서버와 워커가 켜지지 않고 어느 값이 문제인지 알려 주며 멈춘다. `STORAGE_BACKEND`가 `s3`인데 `S3_BUCKET`이 비어 있어도 같다. 무작위 값은 `python -c "import secrets; print(secrets.token_urlsafe(48))"`로 만든다.
-- **비밀값**: `DATABASE_URL`, `JWT_SECRET`, `FILE_URL_SECRET`, `ANALYSIS_API_KEY`, `S3_SECRET_ACCESS_KEY`는 `SecretStr`로 선언해 로그·오류 화면에 찍히지 않게 한다. `.env`는 git에 올리지 않고, `.env.example`에 이 표의 이름과 기본값만 둔다.
+- **비밀값**: `DATABASE_URL`, `JWT_SECRET`, `FILE_URL_SECRET`, `ANALYSIS_API_KEY`, `S3_SECRET_ACCESS_KEY`, `SMTP_PASSWORD`는 `SecretStr`로 선언해 로그·오류 화면에 찍히지 않게 한다. `.env`는 git에 올리지 않고, `.env.example`에 이 표의 이름과 기본값만 둔다.
 - **CORS**: 화면(React 개발 서버)과 API의 주소가 다르면 브라우저가 요청을 막는다. FastAPI `CORSMiddleware`에 `CORS_ORIGINS`만 허용하고, `*`는 쓰지 않는다. 기본값 5173은 Vite 개발 서버 포트이며, 장준환의 개발 서버 주소에 맞춘다. 서명 URL과 S3 주소로 여는 영상·PDF는 태그가 직접 부르므로 CORS와 상관없다.
 - **토큰 만료**: 토큰을 새로 받는 기능(refresh token)은 두지 않는다. 12시간이면 하루 근무가 끝날 때까지 끊기지 않고, 지나면 다시 로그인한다.
-- **상수로 두는 값**: 세부명세서가 정한 최저 사양(640×360, 30fps, 4 Mbps), 허용 코덱, 16:9 허용 범위(±2%)는 바뀔 일이 없어 환경 변수가 아니라 코드 상수로 둔다.
+- **상수로 두는 값**: 세부명세서가 정한 최저 사양(640×360, 30fps, 4 Mbps), 허용 코덱, 16:9 허용 범위(±2%), 재설정 토큰 유효 시간(30분)은 바뀔 일이 없어 환경 변수가 아니라 코드 상수로 둔다.
 - **Docker**: PostgreSQL 컨테이너(`postgres:17-alpine`, 팀 서버 compose와 같은 이미지)의 변수(`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`)와 볼륨 경로는 `docker-compose.yml`에서 허정원과 맞춘다. 17까지는 볼륨을 `/var/lib/postgresql/data`에 붙이고, 18로 올릴 때는 `/var/lib/postgresql`로 바꾼다(18부터 데이터 폴더 구조가 달라져 예전 경로에 붙이면 컨테이너가 켜지지 않는다). 메이저 버전을 바꾸면 기존 볼륨은 읽지 못하므로 `docker compose down -v`로 지우고 다시 띄운다. db 서비스의 healthcheck는 `pg_isready`로 하고, api·worker는 db가 healthy가 된 뒤 켠다. api 컨테이너는 시작할 때 alembic upgrade head를 먼저 실행하고, `/docker-entrypoint-initdb.d/`의 초기화 스크립트로 테스트용 DB(creamoff\_test)도 만든다.
 - **워커 CPU 상한**: `docker-compose.yml`의 worker 서비스에 `cpus`를 걸어 API가 쓸 코어를 남긴다. 값은 팀 서버 사양을 보고 정한다(10절 Q22). 예를 들어 4코어면 `cpus: "3"`이다.
 
@@ -1784,14 +2019,28 @@ ANALYSIS_API_MODE=mock
 - [ ] 모든 오류 응답이 11.5 모양이고, `code`는 14절에 있으며 `message`는 `ko.yaml` 문구다.
 - [ ] 필드 형식 오류는 422 `VALIDATION_ERROR`이고 `detail.fields`에 필드 이름이 있다.
 - [ ] 14절의 모든 코드가 `ko.yaml`에 있다(14.5).
-- [ ] 로그에 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로가 남지 않는다(11.8).
+- [ ] 로그에 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로, 디바이스 코드, 재설정 토큰, 이메일 주소가 남지 않는다(11.8).
+- [ ] 계약이 만료된 기관의 `CLIENT`(`GUEST`)가 `/auth/me` 말고 인증이 필요한 어느 API를 불러도 403 `CONTRACT_EXPIRED`다.
 - [ ] 필수 환경 변수가 비면 서버가 켜지지 않고 어느 값이 문제인지 출력한다(16절).
 - [ ] 저장소: 같은 저장소 테스트가 `local`과 `s3`(moto)에서 모두 통과하고, `s3`일 때 `video_url`·`file_url`은 5분짜리 presigned URL이다. 원본 키로 만든 주소는 어느 쪽에서도 나오지 않는다(11.11).
 
 ### 17.2 계정·반려견
 
-- [ ] BE-01: 맞는 기관 코드·아이디·비밀번호로 토큰을 받고, 하나라도 틀리면 401 `LOGIN_FAILED` 하나로만 답한다.
-- [ ] BE-01: `is_active`가 FALSE인 계정은 로그인도, 이미 받은 토큰으로 부르는 것도 403 `ACCOUNT_DISABLED`다.
+- [ ] BE-01: 맞는 아이디·비밀번호로 토큰을 받고, 하나라도 틀리면 401 `LOGIN_FAILED` 하나로만 답한다. 요청에 `institution_code`가 있어도 무시된다.
+- [ ] BE-01: `is_active`가 FALSE인 계정은 로그인도, 이미 받은 토큰으로 부르는 것도 403 `ACCOUNT_DISABLED`다(테스트는 캐시 TTL 0).
+- [ ] BE-01: `STAFF`가 `/admin/*` 조회는 되고 쓰기는 403 `FORBIDDEN`, `CLIENT`는 조회도 403이다.
+- [ ] BE-22: 맞는 코드는 하이픈·공백·소문자가 섞여 있어도 200과 기관명·남은 계정 수를 돌려준다.
+- [ ] BE-22: 없는 코드, 회수된 코드, 계약이 끝난 기관의 코드, 형식이 틀린 코드는 모두 404 `DEVICE_CODE_INVALID`이고 응답 본문이 같다.
+- [ ] BE-22: 가입하면 `CLIENT`이고 코드의 기관에 속하며 이메일이 소문자로 저장되고, 응답으로 받은 토큰으로 바로 `/auth/me`를 부를 수 있다. 이메일이 없거나 형식이 틀리면 422다.
+- [ ] BE-22: 같은 코드로 `max_accounts`까지 가입되고 다음은 409 `DEVICE_CODE_FULL`이다. 계정 하나를 중지하면 다시 가입된다.
+- [ ] BE-22: 다른 기관에 있는 아이디로 가입하면 409 `LOGIN_ID_TAKEN`이다. 대문자가 든 아이디는 422다.
+- [ ] BE-23: 종료일이 어제인 기관의 `CLIENT`는 로그인되고 `effective_role`이 `GUEST`이며 `/dogs`는 403 `CONTRACT_EXPIRED`다. 종료일이 오늘이면 `CLIENT`, NULL이면 `CLIENT`, `ADMIN`·`STAFF`는 종료일이 지나도 그대로다.
+- [ ] BE-23: 캐시를 켜면 두 번째 요청은 담당자 조회 쿼리가 없고, TTL이 지나면 다시 읽으며, 관리자 API로 계정을 중지하면 같은 프로세스에서 즉시 403이다.
+- [ ] BE-24: 기관 만들기 → 코드 발급 → 가입 → 계약일 수정 → 회수 → 계정 중지가 순서대로 되고, 회수된 코드로는 가입이 안 되며 기존 계정은 로그인된다.
+- [ ] BE-24: `ADMIN`이 자기 계정을 중지하면 409 `SELF_DISABLE`이다.
+- [ ] BE-25: 읽은 `version`으로 수정하면 200이고 `version`이 1 늘며, 옛 `version`으로 다시 수정하면 409 `DOG_MODIFIED`이고 값이 바뀌지 않는다.
+- [ ] BE-26: 현재 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`, 현재와 같은 새 비밀번호는 422, 바꾸면 새 비밀번호로 로그인되고 옛 비밀번호로는 안 된다. `PATCH /auth/me`로 이메일을 바꾸면 `/auth/me`에 바로 보인다.
+- [ ] BE-27: 재설정 요청은 있는 아이디·없는 아이디·이메일 없는 계정 모두 204이고, 있는 계정에만 메일이 한 번 간다(가짜 발송기). 메일의 토큰으로 confirm하면 204이고 새 비밀번호로 로그인되며, 같은 토큰을 다시 쓰면 400 `RESET_TOKEN_INVALID`다. 만료된 토큰·틀린 토큰도 400이다. `SMTP_HOST`가 비어 있으면 요청이 503 `MAIL_UNAVAILABLE`이다. 로그에 토큰·이메일이 없다.
 - [ ] BE-02: 체급은 등록 체중으로만 정한다. 9.99 kg은 SMALL, 10.00 kg과 24.99 kg은 MEDIUM, 25.00 kg은 LARGE다. 견종은 체급에 영향을 주지 않는다.
 - [ ] BE-02: 체급을 직접 고치면 이후 체중을 바꿔도 체급이 그대로고, `size_class`에 `null`을 보내면 저장된 체중으로 자동 분류로 돌아간다.
 - [ ] BE-02: 체급을 직접 고친 적이 없으면 체중을 바꿀 때 체급이 새 체중으로 다시 정해지고, 견종을 바꿔도 체급은 바뀌지 않는다.
@@ -1865,7 +2114,7 @@ ANALYSIS_API_MODE=mock
 
 ## 18. 구현 순서와 AI 사용법
 
-일은 아래 작업 단위 11개로 나누고, 한 단위의 테스트가 통과해야 다음으로 간다. AI에는 한 번에 한 단위만 맡긴다. 단위를 크게 맡길수록 AI가 명세를 놓치고 이름을 지어내는 일이 늘기 때문이다.
+일은 아래 작업 단위 16개로 나누고(12\~16은 v1.12 회원가입·역할·계약), 한 단위의 테스트가 통과해야 다음으로 간다. AI에는 한 번에 한 단위만 맡긴다. 단위를 크게 맡길수록 AI가 명세를 놓치고 이름을 지어내는 일이 늘기 때문이다.
 
 ### 18.1 작업 단위
 
@@ -1882,6 +2131,11 @@ ANALYSIS_API_MODE=mock
 | 9 | 보고서 모듈(`report/`) 연결, 보고서 API | 8, 12.4, 14.2, 15.7 | 17.4의 BE-15·16, 17.6의 보고서 줄 두 개 | 5 |
 | 10 | 이력·비교·추이 | 5, 12.5, 15.8 | 17.5 | 5 |
 | 11 | 파기·운영, 실제 분석 API 연결, 배포, `S3Storage`(11.11), 설치 절차 초안(16절) | 6, 7, 15.9, 16 | 17.1의 저장소 줄, 17.6, 17.7 시나리오 | 6 |
+| 12 | 로그인 변경(아이디 전역 유일, `institution_code` 삭제), 역할 `ADMIN`·`STAFF`·`CLIENT`와 `effective_role`·`GUEST`, 계약 종료일, `CONTRACT_EXPIRED`, 인증 캐시, `require_creamoff`, 마이그레이션 0003(12.2의 v1.12 변경 전체) | 11.6, 12.2, 12.5, 13.4, 14.1, 15.3 StaffOut, 15.4 login·me, 16 | 17.2의 BE-01·BE-23, 17.1의 GUEST 줄 | 티켓 뒤, 먼저 |
+| 13 | 디바이스 코드 확인·가입 API(이메일 포함) | 11.6, 12.5, 13.5, 14.1, 15.4 verify·signup | 17.2의 BE-22 | 12 뒤 |
+| 14 | 관리자 API 9개(조회는 `STAFF`도), `PATCH /auth/password`·`PATCH /auth/me`, seed.py에 `--contract-ends-at`·`--email` | 11.6, 13.6, 13.7, 15.4 password·me, 15.9 | 17.2의 BE-24·BE-26 | 12 뒤, 13과 나란히 |
+| 15 | 반려견 `version`·`DOG_MODIFIED` | 12.5, 15.5 | 17.2의 BE-25 | 언제든(독립) |
+| 16 | 비밀번호 재설정: `core/mail.py`, 요청·확인 API, ko.yaml 메일 문구, SMTP 환경 변수 | 11.6 메일, 13.8, 14.1, 15.4 reset 둘, 16 | 17.2의 BE-27 | 13 뒤. 메일 계정은 허정원에게 받는다 |
 
 최소 시연 범위(4절)는 1\~8과 10이다. 일정이 밀리면 9를 뒤로 미룬다(9절). 주차는 9절 일정표와 같다.
 

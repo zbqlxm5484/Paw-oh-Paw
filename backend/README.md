@@ -1,15 +1,19 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.11. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기)이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.12. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003), 13(디바이스 코드 확인·회원가입), 14(크림오프 관리자 API 9개, 비밀번호 변경·내 정보 수정, seed 계약 종료일·이메일), 15(반려견 수정 낙관적 잠금 `version`·409 `DOG_MODIFIED`), 16(이메일 링크 비밀번호 재설정, SMTP 메일)이다. 12~16은 팀장 티켓 S15P31A404-192 "회원가입·로그인 기능 구현"이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
 | 환경 변수 읽기 (16절) | `app/core/config.py` |
 | DB 엔진·세션·오류 코드 (11.7) | `app/core/db.py` |
 | 비밀번호 해시·JWT·서명 URL (11.6, 13.4) | `app/core/security.py` |
-| 요청 DB 세션, 로그인 담당자·관리자 확인 (11.6, 11.7) | `app/api/deps.py` |
-| `POST /api/v1/auth/login`, `GET /api/v1/auth/me` (15.4) | `app/api/routes/auth.py`, `app/services/auth.py` |
-| 반려견 목록·등록·상세·수정 (13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
+| 요청 DB 세션, 로그인 담당자 스냅샷·계약 검사·역할 확인(ADMIN, 크림오프) (11.6, 11.7) | `app/api/deps.py` |
+| 담당자 스냅샷 캐시 `AuthStaff`(effective_role·contract_status 계산) (11.6 인증 캐시) | `app/core/auth_cache.py` |
+| 로그인·내 정보 `POST /auth/login`·`GET /auth/me`, 비밀번호 변경·내 정보 수정 `PATCH /auth/password`·`PATCH /auth/me` (13.4, 13.7, 15.4) | `app/api/routes/auth.py`, `app/services/auth.py`, `app/schemas/auth.py` |
+| 디바이스 코드 확인·회원가입 `POST /auth/device-codes/verify`·`POST /auth/signup`(가입 계정은 CLIENT, 코드별 활성 계정 상한) (12.5, 13.5, 15.4) | `app/services/signup.py`, `app/services/device_codes.py` |
+| 비밀번호 재설정 `POST /auth/password-reset/request`·`/confirm`(토큰 30분, 해시만 저장)과 SMTP 메일 보내기 (11.6 메일, 13.8, 15.4) | `app/services/password_reset.py`, `app/core/mail.py` |
+| 크림오프 관리자 API `/admin/*` 9개: 기관·디바이스 코드·계정 중지(조회는 ADMIN·STAFF, 쓰기는 ADMIN, 기관 필터 없음) (13.6, 15.9) | `app/api/routes/admin.py`, `app/services/admin.py`, `app/schemas/admin.py` |
+| 반려견 목록·등록·상세·수정, 수정은 `version` 낙관적 잠금 (12.5, 13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
 | 체급 분류 `classify_size`(체중 기준)와 견종 이름 목록 (12.5) | `app/services/size_class.py`, `config/breeds.yaml` |
 | "오늘"의 시간대 (16절 APP_TIMEZONE) | `app/core/dates.py` |
 | 회차 시작·상태·진행·촬영 목록·측정 취소, 회차 시점 체급 (12.5, 13.3, 15.6) | `app/api/routes/sessions.py`, `app/services/sessions.py`, `app/schemas/sessions.py` |
@@ -24,12 +28,12 @@
 | 화면 문구 (14.5) | `messages/ko.yaml` |
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
 | `GET /api/v1/health` (15.9) | `app/api/routes/health.py` |
-| 테이블 9개 모델 (12.2) | `app/models/` |
-| 마이그레이션 (0001 테이블 9개, 0002 회차 체급) | `alembic/versions/` |
+| 테이블 10개 모델 (12.2) | `app/models/` |
+| 마이그레이션 (0001 테이블 9개, 0002 회차 체급, 0003 회원가입·역할·계약: 디바이스 코드 테이블, 계약 종료일, 역할 셋, 아이디 전역 유일) | `alembic/versions/` |
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-결과 영상 재생(서명 URL 검증)·측정 종료·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`).
+결과 영상 재생(서명 URL 검증)·측정 종료·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`). 로그인은 아이디+비밀번호다(기관 코드는 받지 않는다). 기관의 계약 종료일(`institution.contract_ends_at`)이 지나면 그 기관 CLIENT는 `effective_role`이 GUEST가 되어 로그인과 `/auth/me`만 되고 나머지는 403 `CONTRACT_EXPIRED`다. 담당자 스냅샷은 `AUTH_CACHE_TTL_SEC`(기본 60초) 동안 프로세스 메모리에 두므로 계정 중지·계약 만료는 최대 60초 뒤에 반영된다(관리자 API로 바꾼 것은 같은 프로세스에서 즉시). 고객 담당자는 크림오프가 발급한 디바이스 코드(20자, 화면 표시 `XXXXX-XXXXX-XXXXX-XXXXX`)로 `POST /auth/signup`에서 스스로 가입하고(CLIENT, 이메일 필수), 비밀번호를 잊으면 `POST /auth/password-reset/request`가 `{FRONTEND_BASE_URL}/reset-password?token=…` 링크를 메일로 보낸다(`.env`의 `SMTP_HOST`가 비어 있으면 503 `MAIL_UNAVAILABLE`).
 
 ## 준비 (처음 한 번)
 
@@ -75,7 +79,7 @@ python -m scripts.seed --institution-code DEMO --institution-name "데모 병원
 ```
 
 비밀번호는 화면에서 두 번 묻는다. 8자 이상, UTF-8로 72바이트 이하(한글은 24자까지).
-같은 기관에 계정을 더할 때는 `--institution-name`을 빼도 된다.
+같은 기관에 계정을 더할 때는 `--institution-name`을 빼도 된다. `--role`은 ADMIN·STAFF(크림오프 쪽)·CLIENT(고객 기관 담당자, 기본값)이고, 아이디는 모든 기관에서 유일하다. 고객 담당자는 보통 디바이스 코드로 스스로 가입한다(`POST /auth/signup`). `--contract-ends-at 2027-10-30`은 기관 계약 종료일(당일 포함. 새 기관이면 저장, 있는 기관이면 고친다), `--email`은 재설정 메일을 받을 주소다. 디바이스 코드는 ADMIN 계정으로 `POST /admin/institutions/{id}/device-codes`에서 발급한다.
 
 ## 서버 띄우기
 
@@ -84,6 +88,7 @@ uvicorn app.main:app --no-access-log
 ```
 
 - `.env`의 `JWT_SECRET`·`FILE_URL_SECRET`(32자 이상, 서로 다른 값)이 비어 있으면 켜지지 않고 어느 값이 문제인지 출력한다(16절). 값 만들기: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+- 비밀번호 재설정 메일을 보내려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USER`·`SMTP_PASSWORD`·`SMTP_FROM`(STARTTLS)과 링크 앞부분 `FRONTEND_BASE_URL`을 적는다. `SMTP_HOST`가 비어 있으면 메일 없이 돌고 재설정 요청만 503이다. 디바이스 코드 하나의 계정 상한 최댓값은 `DEVICE_CODE_MAX_ACCOUNTS`(기본 10)다.
 - 접근 로그는 끈다(11.8). 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID를 한 줄로 남기고, 응답 헤더 `X-Request-ID`로도 돌려준다.
 - `http://localhost:8000/api/v1/health`가 `{"status": "ok", "db": "ok", "version": "1.0.0"}`이면 정상이다. DB에 못 붙으면 503이고 `status`·`db`가 `"error"`다. `storage`는 `STORAGE_ROOT`에 쓸 수 있는지 검사한 결과다.
 - 모든 오류 응답은 `{"error": {"code", "message", "detail"}}` 한 모양이다(11.5). `message`는 `messages/ko.yaml`에서 `code`로 찾는다.

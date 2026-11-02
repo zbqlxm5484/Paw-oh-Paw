@@ -1,7 +1,8 @@
-"""요청 단위 의존성(11.2 deps.py): DB 세션(11.7), 로그인 담당자(11.6), 관리자 확인, 서명 URL 검사(11.6).
+"""요청 단위 의존성(11.2 deps.py): DB 세션(11.7), 로그인 담당자·계약 검사·역할 확인(11.6), 서명 URL 검사(11.6).
 
 Spring에 빗대면 get_db는 요청 하나를 감싸는 @Transactional 경계이고,
-get_current_staff는 JWT 필터 + @AuthenticationPrincipal이다.
+get_current_staff는 JWT 필터 + @AuthenticationPrincipal, require_contract는 isAccountNonExpired() 검사,
+require_admin·require_creamoff는 @PreAuthorize("hasRole(...)")다.
 """
 
 import logging
@@ -9,13 +10,14 @@ from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Depends, Header
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
+from app.core.auth_cache import AuthStaff, auth_cache
 from app.core.db import SessionLocal
 from app.core.errors import AppError, ErrorCode
 from app.core.security import TokenError, TokenExpiredError, decode_access_token, verify_signed_url
-from app.models import Staff
-from app.models.enums import StaffRole
+from app.models.enums import EffectiveRole, StaffRole
+from app.services.auth import load_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +68,13 @@ def _bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def get_current_staff(db: DbSession, authorization: Annotated[str | None, Header()] = None) -> Staff:
-    """Authorization: Bearer <token>에서 담당자를 꺼낸다.
+def get_current_staff(db: DbSession, authorization: Annotated[str | None, Header()] = None) -> AuthStaff:
+    """Authorization: Bearer <token>에서 담당자 스냅샷을 꺼낸다(11.6 요청마다 하는 검사 ①~③).
 
-    토큰이 없거나 잘못되면 401 AUTH_REQUIRED, 만료면 401 AUTH_EXPIRED, 계정이 막혔으면 403 ACCOUNT_DISABLED(15.1, 17.2).
-    기관 ID는 토큰이 아니라 DB의 담당자 행에서 가져온다. 모든 조회는 이 담당자의 institution_id로 거른다(11.6).
+    토큰이 없거나 잘못되면 401 AUTH_REQUIRED, 만료면 401 AUTH_EXPIRED, 계정이 막혔으면 403 ACCOUNT_DISABLED.
+    기관 ID·역할은 토큰이 아니라 스냅샷(캐시, 없으면 DB의 담당자 + 기관 행)에서 가져온다.
+    캐시에 있으면 DB를 읽지 않는다.
+    계약 검사(④)는 require_contract가 한다. GET /auth/me만 이 함수를 그대로(CurrentStaffAny) 쓴다.
     """
     token = _bearer_token(authorization)
     try:
@@ -79,25 +83,46 @@ def get_current_staff(db: DbSession, authorization: Annotated[str | None, Header
         raise AppError(ErrorCode.AUTH_EXPIRED) from None
     except TokenError:
         raise AppError(ErrorCode.AUTH_REQUIRED) from None
-    staff = db.get(Staff, claims.staff_id, options=[joinedload(Staff.institution)])
-    if staff is None:
-        raise AppError(ErrorCode.AUTH_REQUIRED)
-    if not staff.is_active:
+    snapshot = auth_cache.get(claims.staff_id)
+    if snapshot is None:
+        snapshot = load_snapshot(db, claims.staff_id)
+        if snapshot is None:
+            raise AppError(ErrorCode.AUTH_REQUIRED)
+        auth_cache.put(snapshot)
+    if not snapshot.is_active:
         raise AppError(ErrorCode.ACCOUNT_DISABLED)
+    return snapshot
+
+
+CurrentStaffAny = Annotated[AuthStaff, Depends(get_current_staff)]
+
+
+def require_contract(staff: CurrentStaffAny) -> AuthStaff:
+    """④ 계약이 끝난 CLIENT(effective_role GUEST)는 403 CONTRACT_EXPIRED(11.6). ADMIN·STAFF는 계약을 보지 않는다."""
+    if staff.effective_role == EffectiveRole.GUEST:
+        raise AppError(ErrorCode.CONTRACT_EXPIRED)
     return staff
 
 
-CurrentStaff = Annotated[Staff, Depends(get_current_staff)]
+CurrentStaff = Annotated[AuthStaff, Depends(require_contract)]
 
 
-def require_admin(staff: CurrentStaff) -> Staff:
-    """/api/v1/admin/*: role이 ADMIN이 아니면 403 FORBIDDEN(11.6)."""
+def require_admin(staff: CurrentStaff) -> AuthStaff:
+    """/api/v1/admin/* 쓰기: role이 ADMIN이 아니면 403 FORBIDDEN(11.6)."""
     if staff.role != StaffRole.ADMIN:
         raise AppError(ErrorCode.FORBIDDEN)
     return staff
 
 
-AdminStaff = Annotated[Staff, Depends(require_admin)]
+def require_creamoff(staff: CurrentStaff) -> AuthStaff:
+    """/api/v1/admin/* 조회: 크림오프 쪽(ADMIN·STAFF)이 아니면 403 FORBIDDEN(11.6)."""
+    if staff.role not in (StaffRole.ADMIN, StaffRole.STAFF):
+        raise AppError(ErrorCode.FORBIDDEN)
+    return staff
+
+
+AdminStaff = Annotated[AuthStaff, Depends(require_admin)]
+CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
 
 
 # ---- 서명 URL로 여는 파일 (11.6, 15.2의 16·21번) ----
