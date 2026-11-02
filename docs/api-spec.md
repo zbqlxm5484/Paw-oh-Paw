@@ -2,13 +2,15 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 버전 | v1.0 (2026-10-20) |
-| 기준 | 백엔드 기능 명세 v1.3의 15절(API 상세), 11.5·11.6, 13·14절 |
+| 버전 | v1.1 (2026-11-02) |
+| 기준 | 백엔드 기능 명세 v1.13의 15절(API 상세), 11.5·11.6, 13·14절 |
 | 작성 | 조영운(백엔드) |
-| 읽는 사람 | 장준환(화면), 김지윤(API 시험) |
+| 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 26개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 41개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+
+v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
 ---
 
@@ -27,11 +29,13 @@
 
 ### 1.2 로그인과 토큰
 
-1. `POST /auth/login`으로 기관 코드·아이디·비밀번호를 보내면 `access_token`과 만료 시각 `expires_at`이 온다.
+1. `POST /auth/login`으로 아이디·비밀번호를 보내면 `access_token`과 만료 시각 `expires_at`이 온다. 회원가입(`POST /auth/signup`)의 응답도 같은 모양이다.
 2. 이후 모든 요청에 `Authorization: Bearer <access_token>` 헤더를 붙인다.
 3. 토큰은 기본 12시간(서버 설정값) 뒤 만료된다. 정확한 시각은 `expires_at`을 본다. 새로 받는 기능(refresh token)은 없다. `expires_at`이 지나거나 401 `AUTH_EXPIRED`가 오면 로그인 화면으로 보낸다.
 
-토큰 없이 부르는 것: 로그인, `/health`, `/metrics`, 서명 주소로 여는 결과 영상과 보고서 PDF.
+토큰 없이 부르는 것: 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 결과 영상과 보고서 PDF.
+
+역할: 화면은 `role`이 아니라 `effective_role`로 분기한다(10.3). 계약이 끝난 `CLIENT`는 `GUEST`로 계산되어 로그인과 `GET /auth/me`만 쓸 수 있고, 나머지는 403 `CONTRACT_EXPIRED`다. `/admin/*` 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만 쓸 수 있다.
 
 ### 1.3 응답 모양
 
@@ -69,6 +73,7 @@
 | --- | --- | --- |
 | 401 | `AUTH_REQUIRED`, `AUTH_EXPIRED` | 로그인 화면으로 |
 | 403 | `ACCOUNT_DISABLED` | 계정이 막혔다고 알리고 로그인 화면으로 |
+| 403 | `CONTRACT_EXPIRED` | 계약 만료 안내. `GET /auth/me`에서는 나지 않는다 |
 | 404 | `NOT_FOUND` | 없는 ID, 다른 기관의 ID, 주소에 든 ID가 UUID 형식이 아님. 셋을 구분하지 않는다 |
 | 422 | `VALIDATION_ERROR` | `detail.fields`로 틀린 입력칸 표시 |
 | 500 | `INTERNAL_ERROR` | 잠시 후 다시 시도하라고 안내 |
@@ -110,12 +115,12 @@
 
 | # | 메서드·주소 | 하는 일 | 화면 | 성공 | 이 API만의 오류 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `POST /auth/login` | 로그인, 토큰 발급 | 로그인 | 200 | 401 `LOGIN_FAILED`, 403 `ACCOUNT_DISABLED` |
-| 2 | `GET /auth/me` | 로그인한 담당자·기관 | 공통 | 200 | — |
+| 1 | `POST /auth/login` | 로그인(아이디·비밀번호), 토큰 발급 | 로그인 | 200 | 401 `LOGIN_FAILED`, 403 `ACCOUNT_DISABLED` |
+| 2 | `GET /auth/me` | 내 정보(`effective_role` 포함. `GUEST`도 된다) | 공통 | 200 | — |
 | 3 | `GET /dogs` | 반려견 목록·검색 | S1 | 200 | — |
 | 4 | `POST /dogs` | 반려견 등록 | S2 | 201 | — |
 | 5 | `GET /dogs/{dog_id}` | 반려견 상세 | S2·S7 | 200 | — |
-| 6 | `PATCH /dogs/{dog_id}` | 반려견 수정, 기준 회차 지정 | S2·S7 | 200 | 400 `BASELINE_INVALID` |
+| 6 | `PATCH /dogs/{dog_id}` | 반려견 수정, 기준 회차 지정(`version` 필수) | S2·S7 | 200 | 400 `BASELINE_INVALID`, 409 `DOG_MODIFIED` |
 | 7 | `POST /dogs/{dog_id}/sessions` | 회차 시작 | S3 | 201 | 409 `SESSION_ALREADY_OPEN` |
 | 8 | `GET /dogs/{dog_id}/sessions` | 측정 이력 | S7 | 200 | — |
 | 9 | `GET /sessions/{session_id}` | 회차 상태·방향별 진행·촬영 목록 | S3 | 200 | — |
@@ -136,8 +141,25 @@
 | 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS` |
 | 25 | `GET /health` | 서버 상태 | — | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | — | 200 | — |
+| 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (토큰 없음) | 가입 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
+| 28 | `POST /auth/signup` | 회원가입 (토큰 없음) | 가입 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL`, `LOGIN_ID_TAKEN` |
+| 29 | `GET /admin/institutions` | 기관 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 30 | `POST /admin/institutions` | 기관 만들기 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN`, 422 `VALIDATION_ERROR`(기관 코드 중복은 `fields`에 `code`) |
+| 31 | `PATCH /admin/institutions/{institution_id}` | 기관 이름·계약 종료일 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 32 | `GET /admin/institutions/{institution_id}/device-codes` | 코드 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 33 | `POST /admin/institutions/{institution_id}/device-codes` | 코드 발급 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN` |
+| 34 | `PATCH /admin/device-codes/{device_code_id}` | 상한·메모 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 35 | `POST /admin/device-codes/{device_code_id}/revoke` | 코드 회수, 멱등 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 36 | `GET /admin/institutions/{institution_id}/staff` | 기관의 계정 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 37 | `PATCH /admin/staff/{staff_id}` | 계정 중지·재개 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN`, 409 `SELF_DISABLE` |
+| 38 | `PATCH /auth/password` | 비밀번호 변경 | 내 정보 | 200 | 400 `PASSWORD_MISMATCH` |
+| 39 | `PATCH /auth/me` | 이름·이메일 수정 | 내 정보 | 200 | — |
+| 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (토큰 없음) | 재설정 | 204 | 503 `MAIL_UNAVAILABLE` |
+| 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (토큰 없음) | 재설정 | 204 | 400 `RESET_TOKEN_INVALID` |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
+
+2026-11-02 develop 기준으로 8, 17, 19~24, 26번은 아직 구현 전이다.
 
 ---
 
@@ -152,8 +174,38 @@
   "id": "…",
   "login_id": "kim01",
   "name": "김담당",
-  "role": "STAFF",
-  "institution": {"id": "…", "code": "CREAM01", "name": "크림 재활센터"}
+  "email": "kim01@example.com",
+  "role": "CLIENT",
+  "effective_role": "CLIENT",
+  "institution": {
+    "id": "…", "code": "INST-7F3K2Q", "name": "크림 재활센터",
+    "contract_ends_at": "2027-10-30", "contract_status": "ACTIVE"
+  }
+}
+```
+
+- `effective_role`: 화면은 이 값으로 분기한다. `GUEST`면 만료 안내, `ADMIN`·`STAFF`면 관리 화면 진입(10.3).
+- `contract_ends_at`: 계약 마지막 날(당일 포함). `null`은 기한 없음이다.
+
+### DeviceCodeOut — 디바이스 코드 (크림오프 관리자 API)
+
+```json
+{
+  "id": "…", "code": "7F3K2-QW9PA-X2M8N-H4CDE", "institution_id": "…",
+  "max_accounts": 3, "active_accounts": 2, "revoked_at": null,
+  "note": null, "created_at": "2026-10-30T02:00:00Z"
+}
+```
+
+- 코드 전체가 든 자리는 발급 응답과 코드 목록뿐이다.
+
+### InstitutionAdminOut — 기관 (크림오프 관리자 API)
+
+```json
+{
+  "id": "…", "code": "INST-7F3K2Q", "name": "크림 재활센터",
+  "contract_ends_at": "2027-10-30", "contract_status": "ACTIVE",
+  "staff_count": 2, "device_code_count": 1, "created_at": "…"
 }
 ```
 
@@ -173,6 +225,7 @@
   "focus_limb": "RH",
   "baseline_session_id": null,
   "memo": null,
+  "version": 0,
   "session_count": 3,
   "last_measured_on": "2026-10-20",
   "open_session_id": null,
@@ -186,6 +239,7 @@
 - `size_class_manual`: 담당자가 체급을 직접 고쳤으면 true. false면 등록 체중으로 자동 분류한 값이다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE. 견종은 보지 않는다).
 - `baseline_session_id`: 담당자가 지정한 기준 회차. `null`이면 가장 이른 완료 회차가 기준이다.
 - `memo`: 내부 메모. 담당자 화면에만 보이고 보고서에는 들어가지 않는다.
+- `version`: 수정할 때 그대로 돌려보낸다(5절 `PATCH`). 수정될 때마다 1 늘어난다.
 
 ### SessionOut — 회차
 
@@ -292,7 +346,7 @@
 
 ```json
 // 요청
-{"institution_code": "CREAM01", "login_id": "kim01", "password": "…"}
+{"login_id": "kim01", "password": "…"}
 
 // 응답 200
 {
@@ -303,14 +357,68 @@
 }
 ```
 
-- 기관 코드·아이디·비밀번호 중 무엇이 틀려도 401 `LOGIN_FAILED` 하나로 온다. 화면도 어느 칸이 틀렸는지 표시하지 않는다.
-- 기관 코드와 아이디는 대소문자를 구분한다.
+- 아이디·비밀번호 중 무엇이 틀려도 401 `LOGIN_FAILED` 하나로 온다. 화면도 어느 칸이 틀렸는지 표시하지 않는다.
+- 아이디는 대소문자를 구분한다. 기관 코드는 받지 않는다(보내도 무시한다).
 - 비밀번호까지 맞았는데 사용이 중지된 계정이면 403 `ACCOUNT_DISABLED`다.
-- 회원가입 API는 없다. 계정은 관리자가 미리 만든다.
+- 계약이 끝난 `CLIENT`도 로그인되고 `staff.effective_role`이 `GUEST`다. 화면은 이 값을 보고 만료 안내로 보낸다.
 
-### `GET /auth/me` — 로그인한 담당자
+### `GET /auth/me` — 내 정보
 
-응답 200 **StaffOut**. 새로고침 뒤 토큰이 아직 쓸 수 있는지 확인할 때도 쓴다.
+응답 200 **StaffOut**. 새로고침 뒤 토큰이 아직 쓸 수 있는지 확인할 때도 쓴다. `GUEST`도 부를 수 있다.
+
+### `PATCH /auth/me` — 이름·이메일 수정
+
+요청 `{"name"?, "email"?}`. 보낸 필드만 바꾸고 `null`은 받지 않는다(규칙은 12.7). 응답 200 **StaffOut**.
+
+### `PATCH /auth/password` — 비밀번호 변경
+
+```json
+// 요청
+{"current_password": "…", "new_password": "…"}
+
+// 응답 200 StaffOut
+```
+
+- 현재 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`다. 새 비밀번호 규칙은 12.7.
+- 이미 받은 토큰은 그대로 쓸 수 있다.
+
+### `POST /auth/device-codes/verify` — 디바이스 코드 확인 (토큰 없음)
+
+```json
+// 요청
+{"code": "7f3k2-qw9pa-x2m8n-h4cde"}
+
+// 응답 200
+{"institution": {"id": "…", "name": "크림 재활센터"}, "remaining_accounts": 1}
+```
+
+- 코드 형식이 틀렸거나, 없거나, 회수됐거나, 기관 계약이 끝났으면 모두 404 `DEVICE_CODE_INVALID` 하나로 온다.
+- 이 코드로 만들 수 있는 계정을 다 썼으면 409 `DEVICE_CODE_FULL`이다.
+- 하이픈·공백·소문자는 서버가 정리하므로 입력 그대로 보내면 된다. 몇 번 불러도 결과가 같다.
+
+### `POST /auth/signup` — 회원가입 (토큰 없음)
+
+```json
+// 요청
+{"code": "7F3K2-QW9PA-X2M8N-H4CDE", "login_id": "kim01", "password": "…", "name": "김담당", "email": "kim01@example.com"}
+
+// 응답 201: POST /auth/login의 응답과 같다
+```
+
+- 가입 계정은 모두 `CLIENT`이고 코드의 기관에 속한다. 가입 즉시 로그인된 상태다. 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다.
+- 코드 오류는 확인 API와 같고, 아이디가 겹치면(다른 기관이어도) 409 `LOGIN_ID_TAKEN`이다. 입력 규칙은 12.5.
+- 이메일은 형식만 검사하고 인증 메일은 보내지 않는다.
+
+### `POST /auth/password-reset/request` — 재설정 링크 메일 보내기 (토큰 없음)
+
+요청 `{"login_id": "kim01"}`. 응답 204(본문 없음)이고 계정이 있든 없든 같다. 화면은 "등록된 이메일로 안내를 보냈습니다"를 보여 준다.
+
+- 메일 서버가 설정되지 않았거나 발송에 실패하면 503 `MAIL_UNAVAILABLE`이다.
+- 메일의 링크는 `{화면 주소}/reset-password?token={토큰}`이고 30분 동안 쓸 수 있다. 계약이 끝난 계정에도 보낸다.
+
+### `POST /auth/password-reset/confirm` — 토큰으로 비밀번호 바꾸기 (토큰 없음)
+
+요청 `{"token": "…", "new_password": "…"}`. 응답 204(본문 없음)이고 화면은 로그인 화면으로 보낸다. 토큰이 잘못됐거나 만료되면 400 `RESET_TOKEN_INVALID`다.
 
 ---
 
@@ -354,11 +462,12 @@
 ### `PATCH /dogs/{dog_id}` — 수정, 기준 회차 지정
 
 ```json
-// 요청: 바꿀 필드만 보낸다
-{"weight_kg": 27.9, "baseline_session_id": "…"}
+// 요청: version은 필수(읽었을 때의 값), 나머지는 바꿀 필드만 보낸다
+{"version": 3, "weight_kg": 27.9, "baseline_session_id": "…"}
 ```
 
 - 응답 200 **DogOut**.
+- `version`이 저장된 값과 다르면 409 `DOG_MODIFIED`이고 아무것도 바뀌지 않는다. 다른 담당자가 먼저 고친 경우이니 다시 불러온 뒤 시도한다. `version`이 없으면 422다.
 - 보내지 않은 필드는 그대로다. 값을 비우려면 `null`을 보낸다. `name`·`breed`·`weight_kg`은 비울 수 없다.
 - `weight_kg`를 바꾸면 체급을 직접 고친 적이 없을 때만 새 체중으로 체급이 다시 정해진다. `breed`를 바꿔도 체급은 그대로다.
 - `size_class`에 값을 보내면 직접 고친 것으로 저장되고, `null`을 보내면 자동 분류로 돌아간다.
@@ -690,6 +799,20 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 - `dry_run` 기본값은 true다. 지울 양만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 보낸다.
 - 관리자가 아니면 403 `FORBIDDEN`, 분석 중인 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
 
+### 크림오프 관리자 API
+
+크림오프 쪽 화면에서만 쓴다. 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만 쓸 수 있고, 아니면 403 `FORBIDDEN`이다. 기관·코드·계정 정보만 다루고 고객 자료는 열지 않는다. 없는 ID는 404 `NOT_FOUND`다. 입력 규칙은 12.6.
+
+- **`GET /admin/institutions`**: 응답 200 `{"items": [InstitutionAdminOut, …]}`. 페이지 없이 전체이고 이름 순서다.
+- **`POST /admin/institutions`**: 요청 `{"code": null, "name": "크림 재활센터", "contract_ends_at": "2027-10-30"}`. 응답 201 **InstitutionAdminOut**. 기관 코드가 겹치면 422 `VALIDATION_ERROR`(`fields`에 `code`)다.
+- **`PATCH /admin/institutions/{institution_id}`**: 요청 `{"name"?, "contract_ends_at"?}`. 보낸 필드만 바꾸고 `contract_ends_at`의 `null`은 기한 없음이다. 응답 200 **InstitutionAdminOut**.
+- **`GET /admin/institutions/{institution_id}/device-codes`**: 응답 200 `{"items": [DeviceCodeOut, …]}`. 회수된 코드도 들어 있고 `revoked_at`으로 구분한다.
+- **`POST /admin/institutions/{institution_id}/device-codes`**: 요청 `{"max_accounts"?: 3, "note"?: "2호기"}`. 본문을 비우면 상한 3, 메모 없음이다. 응답 201 **DeviceCodeOut**.
+- **`PATCH /admin/device-codes/{device_code_id}`**: 요청 `{"max_accounts"?, "note"?}`. 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다). 응답 200 **DeviceCodeOut**.
+- **`POST /admin/device-codes/{device_code_id}/revoke`**: 본문 없음. 이미 회수됐어도 200이다. 기존 계정은 그대로 쓴다(막으려면 계정 중지). 응답 200 **DeviceCodeOut**.
+- **`GET /admin/institutions/{institution_id}/staff`**: 응답 200 `{"items": [{id, login_id, name, email, role, is_active, device_code_id, created_at}, …]}`.
+- **`PATCH /admin/staff/{staff_id}`**: 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`이다.
+
 ### `GET /health` — 서버 상태
 
 토큰 없음. 응답 200 `{"status": "ok", "db": "ok", "storage": "ok", "version": "1.0.0"}`. 문제가 있으면 503이고 실패한 항목이 `"error"`다.
@@ -736,7 +859,9 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 
 | 필드 | 값 |
 | --- | --- |
-| `role` | `ADMIN`, `STAFF` |
+| `role` | `ADMIN`, `STAFF`(크림오프), `CLIENT`(고객 기관) |
+| `effective_role` | `role`의 값 또는 `GUEST`. `role`이 `CLIENT`이고 기관 계약이 끝났으면 `GUEST`다. 화면은 이 값으로 분기한다 |
+| `contract_status` | `ACTIVE`, `EXPIRED`. 계약 종료일이 없거나 오늘(한국 날짜) 이후면 `ACTIVE`다 |
 | `size_class` | `SMALL`(소형), `MEDIUM`(중형), `LARGE`(대형) |
 | `sex` | `MALE`, `FEMALE`, `MALE_NEUTERED`(중성화 수컷), `FEMALE_SPAYED`(중성화 암컷) |
 | `focus_limb`, `limb` | `LF`(왼앞), `RF`(오른앞), `LH`(왼뒤), `RH`(오른뒤). `limb`에는 몸 전체 수치용 `NONE`도 있다 |
@@ -764,7 +889,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `walk_speed` | 보행 속도 | `body_per_sec` | NONE |
 | `gait_cycles` | 측정된 보행 주기 수 | `count` | NONE |
 
-단위: `deg`(°), `pct`(%), `pct_body`(몸통 길이 대비 %), `body_per_sec`(몸통 길이/초), `count`(회). 거리 수치는 cm가 아니라 몸통 길이 대비 값이다. 수치 이름은 분석 API 형식이 확정되면(조유진과 합의) 바뀔 수 있다.
+단위: `deg`(°), `pct`(%), `pct_body`(몸통 길이 대비 %), `body_per_sec`(몸통 길이/초), `count`(회). 거리 수치는 cm가 아니라 몸통 길이 대비 값이다.
 
 ---
 
@@ -783,13 +908,17 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `VIDEO_DURATION` | 400 | 영상 길이는 {min\_sec}~{max\_sec}초여야 합니다. | |
 | `BASELINE_INVALID` | 400 | 기준 회차는 이 반려견의 완료된 회차여야 합니다. | |
 | `COMPARE_INVALID` | 400 | 비교할 수 없는 회차입니다. | `detail.reason`으로 빈 화면 고르기(8절) |
+| `PASSWORD_MISMATCH` | 400 | 현재 비밀번호가 맞지 않습니다. | |
+| `RESET_TOKEN_INVALID` | 400 | 재설정 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요. | 재설정 요청 화면으로 |
 | `AUTH_REQUIRED` | 401 | 로그인이 필요합니다. | 로그인 화면으로 |
 | `AUTH_EXPIRED` | 401 | 로그인 시간이 지났습니다. 다시 로그인해 주세요. | 로그인 화면으로 |
-| `LOGIN_FAILED` | 401 | 기관 코드, 아이디 또는 비밀번호가 맞지 않습니다. | |
+| `LOGIN_FAILED` | 401 | 아이디 또는 비밀번호가 맞지 않습니다. | |
 | `ACCOUNT_DISABLED` | 403 | 사용이 중지된 계정입니다. | 로그인 화면으로 |
+| `CONTRACT_EXPIRED` | 403 | 기관의 이용 계약이 만료되었습니다. 크림오프에 문의해 주세요. | 만료 안내 화면으로 |
 | `FORBIDDEN` | 403 | 이 기능을 사용할 권한이 없습니다. | |
 | `FILE_LINK_EXPIRED` | 403 | 링크가 만료되었습니다. 화면을 새로 불러와 주세요. | 조회 API를 다시 불러 새 주소 받기 |
 | `NOT_FOUND` | 404 | 요청한 정보를 찾을 수 없습니다. | |
+| `DEVICE_CODE_INVALID` | 404 | 유효한 디바이스 코드가 아닙니다. | |
 | `SESSION_CLOSED` | 409 | 측정이 끝난 회차입니다. | 회차를 다시 조회 |
 | `SESSION_ALREADY_OPEN` | 409 | 이 반려견은 이미 측정 중인 회차가 있습니다. | `detail.session_id` 회차로 이동 |
 | `SESSION_EMPTY` | 409 | 촬영이 1건 이상 있어야 측정을 끝낼 수 있습니다. | |
@@ -797,9 +926,14 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `SHOT_IN_PROGRESS` | 409 | 분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요. | |
 | `SHOT_NOT_FAILED` | 409 | 실패한 촬영만 다시 분석할 수 있습니다. | |
 | `REPORT_IN_PROGRESS` | 409 | 보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요. | |
+| `DEVICE_CODE_FULL` | 409 | 이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요. | |
+| `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 아이디 칸 표시 |
+| `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | 반려견을 다시 조회 |
+| `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | |
 | `VIDEO_TOO_LARGE` | 413 | 영상 파일이 너무 큽니다. 최대 {max\_mb} MB까지 올릴 수 있습니다. | |
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | `detail.fields`로 입력칸 표시 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | |
+| `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | |
 
 `{min_sec}`처럼 중괄호가 든 문구는 서버가 값을 채워서 보낸다.
 
@@ -909,12 +1043,48 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 
 | 입력 | 규칙 |
 | --- | --- |
-| `institution_code` | 1~20자 |
 | `login_id` | 1~50자 |
 | `password` | 화면에서는 빈칸만 막는다 |
 | `page` | 1 이상 |
 | `size` | 1~100 (기본 20) |
 | `q` | 최대 50자 |
+
+### 12.5 디바이스 코드·가입
+
+| 입력 | 규칙 |
+| --- | --- |
+| `code` | 하이픈·공백을 지우고 대문자로 바꾼 뒤 20자이고 모두 코드 글자(`ABCDEFGHJKMNPQRSTUVWXYZ23456789`, 혼동되는 0·O·1·I·L을 뺀 32종)여야 한다. 아니면 404 `DEVICE_CODE_INVALID`. 화면에는 `XXXXX-XXXXX-XXXXX-XXXXX`로 보여 준다 |
+| `login_id` | 4~50자, 영문 소문자·숫자·`.`·`_`·`-`만. 대문자를 넣으면 422 |
+| `password` | 8자 이상, UTF-8로 72바이트 이하(한글 한 글자는 3바이트). 비밀번호 확인은 화면만 한다 |
+| `name` | 1~50자. 앞뒤 공백은 서버가 지운다 |
+| `email` | 필수. 5~254자, `@`가 하나이고 그 뒤에 `.`이 있어야 한다. 소문자로 저장한다 |
+
+### 12.6 관리자
+
+| 입력 | 규칙 |
+| --- | --- |
+| 기관 `code` | 1~20자, 유일. 비우면 서버가 `INST-` + 6자로 만든다 |
+| 기관 `name` | 1~100자 |
+| `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
+| `max_accounts` | 1 ~ 서버 설정값(기본 10) |
+| `note` | 최대 100자 |
+| `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
+
+### 12.7 비밀번호 변경·내 정보
+
+| 입력 | 규칙 |
+| --- | --- |
+| `current_password` | 길이를 검사하지 않는다. 틀리면 400 `PASSWORD_MISMATCH` |
+| `new_password` | 12.5의 `password` 규칙. 현재 비밀번호와 같으면 422(`fields`에 `new_password`) |
+| `name`, `email`(`PATCH /auth/me`) | 12.5와 같다. 보낸 필드만 바꾼다 |
+
+### 12.8 비밀번호 재설정
+
+| 입력 | 규칙 |
+| --- | --- |
+| `login_id`(request) | 1~50자. 없는 아이디여도 204 |
+| `token`(confirm) | 1~100자. 메일 링크의 값이고 30분 뒤 만료된다. 잘못됐거나 만료되면 400 `RESET_TOKEN_INVALID` |
+| `new_password`(confirm) | 12.5의 `password` 규칙 |
 
 ---
 
@@ -922,7 +1092,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 
 한 마리를 처음 등록해 측정하고 결과를 보는 흐름이다.
 
-1. 로그인: `POST /auth/login` → 토큰 저장
+1. 가입 또는 로그인: 처음이면 `POST /auth/device-codes/verify`로 코드를 확인하고 `POST /auth/signup`, 아니면 `POST /auth/login` → 토큰 저장. `staff.effective_role`이 `GUEST`면 만료 안내로
 2. S1 목록: `GET /dogs` (검색은 `q`)
 3. S2 등록: `POST /dogs` → 응답의 `id`로 상세
 4. S3 측정 시작: `POST /dogs/{dog_id}/sessions` (이미 열린 회차가 있으면 409의 `detail.session_id`로 이동)
