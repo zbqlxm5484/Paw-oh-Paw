@@ -32,6 +32,13 @@ def sessions() -> list:
     return [s for s in d if s["passes"]["L"] and s["passes"]["R"] and s["cycles"] >= MIN_CYCLES]
 
 
+@lru_cache(maxsize=1)
+def population() -> dict:
+    """AI-Hub 71878 라벨의 실제 견종(체급별)·나이대 분포. 없으면 빈 값(seed 가 예전 목록을 쓴다)."""
+    f = ASSETS / "demo_sessions.json"
+    return json.loads(f.read_text(encoding="utf-8")).get("population", {}) if f.exists() else {}
+
+
 def session(src: str):
     """'출처:촬영 묶음' → 실측 회차"""
     sid = src.split(":", 1)[-1] if src else ""
@@ -98,3 +105,40 @@ def rows(r) -> list:
             row.update(l=round(left), r=round(right), u=unit)
         out.append(row)
     return out
+
+
+# ── 시연용 극단 합성(11-02): 대표 반려견 한 마리는 오른쪽 뒷다리를 크게 덜 쓰다가 회차마다 나아지는 이야기 ──
+# 3D 측정 걸음(tools/build_demo_clip.py 의 LIMP)과 같은 다리라서 보고서·몸 그림·3D 가 한 방향을 가리킨다. 실제 개의 값이 아니다.
+_HEALTHY = {"F": {"rom_shoulder": 32.0, "rom_elbow": 48.0, "rom_carpus": 68.0, "stance_ratio": 60.0, "stride_length": 230.0, "paw_lift": 24.0},
+            "H": {"rom_hip": 28.0, "rom_stifle": 53.0, "rom_tarsus": 52.0, "stance_ratio": 58.0, "stride_length": 235.0, "paw_lift": 22.0}}
+
+
+def limp_metrics(f: float) -> dict:
+    """f = 오른쪽 뒷다리 가동 범위가 왼쪽의 몇 배인지(0.3 = 거의 안 굽힘, 1 = 같음)."""
+    m = {leg: dict(_HEALTHY[leg[1]]) for leg in ("LF", "RF", "LH", "RH")}
+    for code in ("rom_hip", "rom_stifle", "rom_tarsus", "paw_lift"):
+        m["RH"][code] = round(m["LH"][code] * f, 1)
+    m["RH"]["stride_length"] = round(m["LH"]["stride_length"] * (0.55 + 0.45 * f), 1)
+    m["RH"]["stance_ratio"] = round(m["LH"]["stance_ratio"] * (0.7 + 0.3 * f), 1)   # 덜 디딘다
+    m["LH"]["stance_ratio"] = round(m["LH"]["stance_ratio"] * (1.12 - 0.12 * f), 1)  # 반대쪽이 더 오래 버틴다
+    for leg in ("LF", "RF"):                                                         # 앞다리로 몸무게를 옮긴다
+        m[leg]["stance_ratio"] = round(m[leg]["stance_ratio"] * (1.08 - 0.08 * f), 1)
+    return m
+
+
+def showcase(results: list, dog_id: str, start: float = 0.22, end: float = 0.6) -> None:
+    rs = sorted((r for r in results if r.dog == dog_id and r.st != "fail"), key=lambda r: (r.day, r.time, r.id))
+    for i, r in enumerate(rs):
+        f = start + (end - start) * (i / max(1, len(rs) - 1))
+        m = limp_metrics(f)
+        r.m, r.src = m, ""      # src 를 비우면 무릎 곡선은 시연 걸음(gait_demo.json, 같은 절뚝임)을 쓴다
+
+        def pair(code, fh):
+            return [round(met(m, code, "L" + fh) or 0), round(met(m, code, "R" + fh) or 0)]
+
+        r.j = [["무릎", *pair("rom_stifle", "H")], ["고관절", *pair("rom_hip", "H")], ["팔꿈치", *pair("rom_elbow", "F")]]
+        r.sL, r.sR = pair("stride_length", "H")
+        sis = [x for x in (si(met(m, c, "L" + fh), met(m, c, "R" + fh)) for c, fh in SYM_CODES) if x is not None]
+        r.sym = max(0, round(100 - sum(sis) / len(sis))) if sis else 0
+        r.rom = round(sum(r.j[0][1:]) / 2)
+

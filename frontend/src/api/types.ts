@@ -5,7 +5,10 @@ export type Sex = 'MALE' | 'FEMALE' | 'MALE_NEUTERED' | 'FEMALE_SPAYED'
 export type Limb = 'LF' | 'RF' | 'LH' | 'RH'
 export type SessionStatus = 'MEASURING' | 'AGGREGATING' | 'DONE' | 'FAILED'
 export type ReportStatus = 'PENDING' | 'GENERATING' | 'DONE' | 'FAILED'
-export type StaffRole = 'ADMIN' | 'STAFF'
+/** 저장되는 역할. ADMIN·STAFF = 크림오프, CLIENT = 기관 담당자(회원가입 명세 v0.3) */
+export type StaffRole = 'ADMIN' | 'STAFF' | 'CLIENT'
+/** 요청 때 계산하는 역할. 계약이 끝난 CLIENT 는 GUEST */
+export type EffectiveRole = StaffRole | 'GUEST'
 
 export interface Reason {
   code: string
@@ -36,6 +39,8 @@ export interface InstitutionOut {
   id: string
   code: string
   name: string
+  contract_ends_at?: string | null
+  contract_status?: 'ACTIVE' | 'EXPIRED'
 }
 
 export interface StaffOut {
@@ -43,13 +48,29 @@ export interface StaffOut {
   login_id: string
   name: string
   role: StaffRole
+  /** 화면은 role 이 아니라 이 값으로 나눈다(GUEST 면 계약 만료 안내). 예전 서버는 안 보낼 수 있다 */
+  effective_role?: EffectiveRole
+  email?: string | null
   institution: InstitutionOut
 }
 
+/** 로그인은 아이디 + 비밀번호(기관 코드 없음, 회원가입 명세 v0.3) */
 export interface LoginIn {
-  institution_code: string
   login_id: string
   password: string
+}
+
+export interface DeviceCodeVerifyOut {
+  institution: { id: string; name: string }
+  remaining_accounts: number
+}
+
+export interface SignupIn {
+  code: string
+  login_id: string
+  password: string
+  name: string
+  email: string
 }
 
 export interface TokenOut {
@@ -75,6 +96,8 @@ export interface DogOut {
   session_count: number
   last_measured_on: string | null
   open_session_id: string | null
+  /** 낙관적 잠금. 수정할 때 읽은 값을 보내고, 어긋나면 409 DOG_MODIFIED */
+  version: number
   created_at: string
   updated_at: string
 }
@@ -91,7 +114,8 @@ export interface DogCreate {
   memo?: string | null
 }
 
-export type DogUpdate = Partial<DogCreate> & { baseline_session_id?: string | null }
+/** PATCH /dogs/{id}. version 은 필수(읽었을 때의 값, 없으면 422, 다르면 409 DOG_MODIFIED) */
+export type DogUpdate = Partial<DogCreate> & { baseline_session_id?: string | null; version: number }
 
 export interface SessionHistoryItem {
   id: string

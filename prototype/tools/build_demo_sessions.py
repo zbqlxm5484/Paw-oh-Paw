@@ -8,7 +8,10 @@
 - 사람이 찍은 관절점(라벨)으로 잰 값: 관절각(engine/angles v1), 쪽마다 프레임별 관절각, rom_*.
   라벨이 프레임마다 따로 찍혀 흔들리므로 관절각을 앞뒤 2프레임 중앙값으로 다듬고, rom_* 는 최대 − 최소 대신 p90 − p10 으로 잰다
   (최대 − 최소는 어깨 106° 처럼 부풀었고, 이렇게 하면 어깨 31°·무릎 41° 로 문헌 범위에 든다, 10-30).
-- **합성 값**(71878 은 라벨 프레임만 있고 fps 가 없어 잴 수 없음): stance_ratio·stride_length·paw_lift·walk_speed·gait_cycles,
+- 라벨 메타(dog_type·size·age)는 실제 값: 회차마다 `dog` 에 남기고, 전체 세션의 견종·체급·나이대 분포를 `population` 에 둔다
+  (seed.py 가 가상 반려견의 견종·나이를 이 분포에서 뽑는다, 11-02).
+- 입각기 비율은 공개 실측 분포(PLOS ONE 2018, tools/build_stance_reference.py → stance_ref_plos2018.json, 평보)에서 뽑는다.
+- **합성 값**(71878 은 라벨 프레임만 있고 fps 가 없어 잴 수 없음): stride_length·paw_lift·walk_speed·gait_cycles,
   무릎 한 걸음 곡선. 세션 id 로 정한 난수라 매번 같고, 기록부(pet_medical_record_info)에 표시된 다리는 등급만큼 조금 나쁘게 만든다.
   어떤 값이 합성인지 각 회차의 `synthetic` 에 적는다.
 - 사진은 쓰지 않고 좌표에서 계산한 수치만 남긴다.
@@ -43,6 +46,24 @@ ANGLE_KEY = {"어깨": "shoulder", "팔꿈치": "elbow", "앞발목": "carpus", 
 ROM_CODE = {"어깨": "rom_shoulder", "팔꿈치": "rom_elbow", "앞발목": "rom_carpus", "고관절": "rom_hip", "무릎": "rom_stifle", "뒷발목": "rom_tarsus"}
 OUT_PROTO = ROOT / "prototype" / "proto_app" / "static" / "assets" / "demo_sessions.json"
 OUT_FRONT = ROOT / "frontend" / "src" / "mocks" / "demoSessions.json"
+STANCE_REF = ROOT / "prototype" / "proto_app" / "static" / "assets" / "stance_ref_plos2018.json"
+WALK_STANCE = [s[0] for s in json.loads(STANCE_REF.read_text(encoding="utf-8"))["gaits"]["walk"]]   # 입각기 % (개 3마리 739걸음)
+SIZE_CODE = {"소형견": "S", "중형견": "M", "대형견": "L"}
+BREED_NAME = {"포메": "포메라니안", "포메라니언": "포메라니안", "포메라이언": "포메라니안", "비숑": "비숑 프리제", "비숑프리제": "비숑 프리제",
+              "꼬통": "꼬통 드 툴레아", "꼬통 드 튤레아": "꼬통 드 툴레아", "요크셔": "요크셔테리어", "장모치와와": "치와와",
+              "토이푸들": "푸들", "믹스": "믹스견", "시바": "시바견"}
+
+
+def breed_name(raw):
+    """71878 견종 표기 정리(공백·줄임말). '기타' 는 None"""
+    b = " ".join((raw or "").split())
+    return None if b in ("", "기타") else BREED_NAME.get(b, b)
+
+
+def label_meta(folder):
+    f = next((folder / "Left").glob("*.json"), None)
+    d = json.loads(f.read_text(encoding="utf-8")) if f else {}
+    return {"breed": breed_name(d.get("dog_type")), "size": SIZE_CODE.get(d.get("size")), "age": d.get("age")}
 
 
 def frame_kp(d, side):
@@ -133,19 +154,35 @@ def build(folder, grade):
                     knee[limb] = resample(a, N_PHASE)
             # 합성: 기록부에 표시된 쪽은 등급만큼 디딤 짧게·걸음 짧게·발 낮게
             hurt = ("left" if key == "L" else "right") in bad and sev > 0
-            m["stance_ratio"] = round(rng.uniform(56, 64) - (2.5 * sev if hurt else 0), 1)
+            m["stance_ratio"] = round(rng.choice(WALK_STANCE) - (2.5 * sev if hurt else 0), 1)   # 공개 실측 분포에서 뽑음
             m["stride_length"] = round(rng.uniform(210, 260) * (1 - (0.05 * sev if hurt else 0)), 1)
             m["paw_lift"] = round(rng.uniform(18, 28) * (1 - (0.08 * sev if hurt else 0)), 1)
         series[key] = ser
     return {
-        "id": sid, "source": "aihub", "grade": grade,
+        "id": sid, "source": "aihub", "grade": grade, "dog": label_meta(folder),
         "video_names": [series["L"]["video"], series["R"]["video"]],
         "passes": {"L": 1, "R": 1}, "cycles": rng.randint(6, 12), "walk_speed": round(rng.uniform(2.6, 3.8), 2),
         "fps": FPS, "date": f"{sid[:4]}-{sid[5:7]}-{sid[8:10]}",
         "metrics": metrics, "knee_curve": {k: v for k, v in knee.items() if v},
         "angle_series": series,
-        "synthetic": ["stance_ratio", "stride_length", "paw_lift", "walk_speed", "gait_cycles", "knee_curve"],
+        "synthetic": ["stride_length", "paw_lift", "walk_speed", "gait_cycles", "knee_curve"],
+        "sampled": {"stance_ratio": "PLOS ONE 2018 개 3마리 평보 입각기 분포(CC BY 4.0)에서 뽑고, 기록부 표시 다리는 등급만큼 줄임"},
     }
+
+
+def population(root):
+    """세션마다 라벨 하나에서 견종·체급·나이대를 읽어 센다(실제 분포)."""
+    breeds, ages = defaultdict(lambda: defaultdict(int)), defaultdict(int)
+    for split, lab in (("Training", "TL"), ("Validation", "VL")):
+        base = root / split / "02.라벨링데이터" / lab
+        for s in sorted(base.glob("*/*")) if base.exists() else []:
+            m = label_meta(s) if (s / "Left").exists() else {}
+            if m.get("size"):
+                if m["breed"]:
+                    breeds[m["size"]][m["breed"]] += 1
+                ages[m["age"]] += 1
+    return {"source": "AI-Hub 71878 라벨(dog_type·size·age), 세션마다 하나", "breeds": {k: dict(v) for k, v in breeds.items()},
+            "ages": dict(ages)}
 
 
 def candidates(root):
@@ -176,7 +213,7 @@ def main():
     sessions = [build(s, g) for g, s in picks]
     doc = {"note": "AI-Hub 71878 라벨 관절점으로 잰 관절각·가동 범위 + 합성 값(각 회차 synthetic). 회사 데이터 없음. "
                    "prototype/tools/build_demo_sessions.py",
-           "angle_def": ANGLE_DEF, "n_phase": N_PHASE, "sessions": sessions}
+           "angle_def": ANGLE_DEF, "n_phase": N_PHASE, "population": population(a.root), "sessions": sessions}
     for out in (OUT_PROTO, OUT_FRONT):
         out.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(len(sessions), "회차:", ", ".join(f"{g} {sum(1 for x, _ in picks if x == g)}" for g in GRADES))

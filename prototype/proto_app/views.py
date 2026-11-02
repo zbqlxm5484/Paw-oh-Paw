@@ -9,7 +9,24 @@ from pathlib import Path
 from typing import Optional
 
 from . import real
-from .config import CHANGE_DAYS, LIMB, PAGE_SIZE, SEX, SITE, SIZE, ST, STAGE, SYM_CHANGE, auto_size
+from .config import (
+    CHANGE_DAYS,
+    IMG_KIND,
+    LIMB,
+    MEMO_CAT,
+    NOTE_CAT,
+    PAGE_SIZE,
+    SEX,
+    SITE,
+    SIZE,
+    SOAP,
+    ST,
+    STAGE,
+    SYM_CHANGE,
+    VITAL_REF,
+    WEIGHT_CHANGE,
+    auto_size,
+)
 from .store import Account, Dog, Result, Vital
 
 
@@ -112,18 +129,55 @@ GAIT_FILE = Path(__file__).parent / "static" / "assets" / "dog3d" / "gait_demo.j
 REF_FILE = GAIT_FILE.with_name("gait_ref_plos.json")
 
 
-def knee_chart(src: str = "") -> dict:
+def _median(vals, default):
+    v = sorted(x for x in vals if x)
+    return v[len(v) // 2] if v else default
+
+
+# 3D 움직임 기준: 시연 회차들의 관절별 가동 범위 중앙값(°). 두 다리 모두 이보다 작으면 둘 다 덜 움직인다
+_JOINT_CODES = {"어깨": "rom_shoulder", "팔꿈치": "rom_elbow", "앞발목": "rom_carpus", "고관절": "rom_hip", "무릎": "rom_stifle", "뒷발목": "rom_tarsus"}
+ROM_REF = {j: round(_median([real.met(s["metrics"], c, leg) for s in real.sessions() for leg in ("LF", "RF", "LH", "RH")],
+                            real._HEALTHY["F" if c in ("rom_shoulder", "rom_elbow", "rom_carpus") else "H"][c]), 1)
+           for j, c in _JOINT_CODES.items()}
+MEDIAN_SPEED = _median([s.get("walk_speed") for s in real.sessions()], 1)
+
+
+TEMPLATE_STANCE = 60.0   # 모양 틀(공개 논문 속보 평균 곡선)의 입각기 비율 가정(%)
+
+
+def fit_curve(base: list, rom, stance) -> list:
+    """모양 틀 곡선을 이 회차 수치에 맞춘다: 굽힘 폭 = 가동 범위(°), 디딤 구간 길이 = 입각기 비율(%).
+    입각기 비율이 틀보다 길면 디딤 구간(곡선 앞쪽)을 늘리고 나머지를 줄인다. 값이 없으면 그 항목은 틀 그대로."""
+    n, mean, amp = len(base), sum(base) / len(base), (max(base) - min(base)) or 1
+    k = (rom / amp) if rom else 1
+    c = [mean + (v - mean) * k for v in base]
+    if not stance:
+        return [round(v, 1) for v in c]
+    a, b = TEMPLATE_STANCE / 100, min(0.8, max(0.35, stance / 100))
+    out = []
+    for i in range(n):
+        p = i / n
+        q = p / b * a if p < b else a + (p - b) / (1 - b) * (1 - a)   # 이 회차의 걸음 위치 → 틀의 걸음 위치
+        x = q * n
+        j, f = int(x) % n, x - int(x)
+        out.append(round(c[j] * (1 - f) + c[(j + 1) % n] * f, 1))
+    return out
+
+
+def knee_chart(r) -> dict:
     """보고서 "뒷무릎 각도 · 보행 주기" 그래프. x = 한 걸음(같은 뒷발 착지 → 다음 착지) 0~100%, y = 무릎 각도(°, engine/angles.py v1).
-    회차에 시연 회차가 붙어 있으면 그 회차의 다리별 무릎 곡선, 없으면 시연 걸음(공개 논문 속보 평균, tools/build_demo_clip.py)."""
-    s = real.session(src)
+    회차에 실측 곡선(AI-Hub 라벨 관절점)이 붙어 있으면 그 곡선, 없으면 공개 논문 속보 평균 모양을 이 회차의
+    다리별 무릎 가동 범위·입각기 비율에 맞춰 만든다(반려견마다·회차마다 다르다)."""
+    s = real.session(r.src)
     if s and {"LH", "RH"} <= set(s["knee_curve"]):
         L, R = s["knee_curve"]["LH"], s["knee_curve"]["RH"]
         label = (f"AI-Hub 라벨 관절점({real.source_name(s)}) 근사 곡선" if s["source"] == "aihub"
                  else f"실측 영상 {len(s['video_names'])}개({real.source_name(s)}) 걸음 평균")
     else:
         g = json.loads(GAIT_FILE.read_text(encoding="utf-8"))
-        L, R = (g["legs"][k]["joint"]["무릎"] for k in ("LH", "RH"))
-        label = g["label"]
+        base = g["legs"]["LH"]["joint"]["무릎"]      # 틀은 덜 쓰지 않는 쪽 곡선
+        L, R = (fit_curve(base, real.met(r.m, "rom_stifle", leg), real.met(r.m, "stance_ratio", leg)) for leg in ("LH", "RH"))
+        label = "이 회차 무릎 가동 범위·입각기 비율로 만든 합성 곡선(모양은 공개 논문 속보 평균)"
     # 정상 참고 범위: 공개 데이터 건강한 대형견 6마리 속보 무릎(tools/build_plos_reference.py)
     ref = json.loads(REF_FILE.read_text(encoding="utf-8"))["gaits"]["trot"]["무릎"]
     allv = L + R + ref["min"] + ref["max"]
@@ -174,7 +228,7 @@ def result_view(acct: Account, r: Result, gait: str = "trot", home: bool = False
                   "lv": "" if x.get("na") else f"{x['l']}{x['u']}", "rv": "" if x.get("na") else f"{x['r']}{x['u']}",
                   "dv": "" if x.get("na") else f"{abs(x['l'] - x['r'])}{x['u']}"} for x in rows],
         "pm": r.ps[0], "pu": r.ps[1], "px": r.ps[0] - r.ps[1], "ex": r.ex, "model": f"pga-pose {r.model}",
-        "kc": knee_chart(r.src), "n_videos": len(r.videos) or 16,
+        "kc": knee_chart(r), "n_videos": len(r.videos) or 16,
     })
     k0 = rows_t[0]
     rp = {
@@ -315,12 +369,56 @@ def latest_vital(d: Dog) -> Optional[Vital]:
     return d.vitals[0] if d.vitals else None
 
 
-def vital_line(v: Optional[Vital]) -> dict:
-    """체중 · 체온 · 심박 · 혈압. 재지 않은 값은 '—'."""
+def _num(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def vital_flags(v: Vital, size: str = "M", prev: Optional[Vital] = None) -> dict:
+    """바이탈 이상값 표시(EMR 의 H/L). 참고 범위는 config.VITAL_REF(일반 성견). 체중은 직전 방문 대비 변화율."""
+    red, amber, ok = "#C2412D", "#9A6A12", ""
+    out = {k: {"m": "", "c": ok, "ref": ""} for k in ("kg", "temp", "hr", "bp")}
+    lo, hi = VITAL_REF["temp"]
+    t = _num(v.temp)
+    out["temp"]["ref"] = f"참고 {lo}~{hi}℃"
+    if t is not None and not lo <= t <= hi:
+        out["temp"].update(m="H" if t > hi else "L", c=red)
+    lo, hi = VITAL_REF["hr"].get(size or "M", VITAL_REF["hr"]["M"])
+    h = _num(v.hr)
+    out["hr"]["ref"] = f"참고 {lo}~{hi}회/분({SIZE.get(size or 'M', '')})"
+    if h is not None and not lo <= h <= hi:
+        out["hr"].update(m="H" if h > hi else "L", c=red)
+    low, border, high = VITAL_REF["sbp"]
+    s = _num(v.sbp)
+    out["bp"]["ref"] = f"수축기 참고 {low}~{border - 1}, {border}~{high - 1} 경계, {high} 이상 높음"
+    if s is not None:
+        if s >= high or s < low:
+            out["bp"].update(m="H" if s >= high else "L", c=red)
+        elif s >= border:
+            out["bp"].update(m="경계", c=amber)
+    k, pk = _num(v.kg), _num(prev.kg) if prev else None
+    if k is not None and pk:
+        ch = (k - pk) / pk * 100
+        out["kg"]["ref"] = f"직전 방문 {prev.kg}kg 대비 {ch:+.1f}%"
+        if abs(ch) > WEIGHT_CHANGE:
+            out["kg"].update(m=f"{'▲' if ch > 0 else '▼'}{abs(ch):.0f}%", c=red)
+    return out
+
+
+def vital_line(v: Optional[Vital], size: str = "M", prev: Optional[Vital] = None) -> dict:
+    """체중 · 체온 · 심박 · 혈압. 재지 않은 값은 '—'. f = 이상값 표시"""
     if not v:
-        return {"kg": "—", "temp": "—", "hr": "—", "bp": "—", "when": "기록 없음"}
+        return {"kg": "—", "temp": "—", "hr": "—", "bp": "—", "when": "기록 없음", "f": {}}
     return {"kg": f"{v.kg}kg" if v.kg else "—", "temp": f"{v.temp}℃" if v.temp else "—",
-            "hr": v.hr or "—", "bp": f"{v.sbp}/{v.dbp}" if v.sbp else "—", "when": short_day(v.day)}
+            "hr": v.hr or "—", "bp": f"{v.sbp}/{v.dbp}" if v.sbp else "—", "when": short_day(v.day),
+            "f": vital_flags(v, size, prev)}
+
+
+def prev_vital(d: Dog, v: Vital) -> Optional[Vital]:
+    """v 바로 전 방문의 바이탈(체중 변화 비교용)."""
+    return next((x for x in d.vitals if x.day < v.day and x.kg), None)
 
 
 def short_day(day: str) -> str:
@@ -359,7 +457,9 @@ def trend(acct: Account, d: Dog) -> dict:
 
 
 def changes(acct: Account, d: Dog) -> tuple[list, str]:
-    """최근 CHANGE_DAYS 일 안의 변동 사유와 가장 최근 변동일."""
+    """최근 CHANGE_DAYS 일 안의 변동 사유와 가장 최근 변동일.
+    EMR 처럼 조치가 필요하거나 이상한 것만 띄운다(11-02): 재촬영, 보행 나빠짐·좋아짐, 수술 등록, 중요 메모.
+    새 측정·새 진단·재활 단계 변경은 기록이 생긴 사실일 뿐이라 차트 이력에서 본다."""
     out, last = [], ""
 
     def add(day, label, tone):
@@ -368,9 +468,8 @@ def changes(acct: Account, d: Dog) -> tuple[list, str]:
         last = max(last, day)
 
     for h in d.history:
-        if days_ago(h.day) <= CHANGE_DAYS:
-            add(h.day, {"수술": "수술 등록", "진단": "새 진단"}.get(h.kind, "재활 종결" if "종결" in h.title else "재활 단계 변경"),
-                "surg")
+        if h.kind == "수술" and days_ago(h.day) <= CHANGE_DAYS:
+            add(h.day, "수술 등록", "surg")
     rs = [r for r in acct.results if r.dog == d.id and r.day]
     for r in rs:
         if days_ago(r.day) > CHANGE_DAYS:
@@ -385,8 +484,6 @@ def changes(acct: Account, d: Dog) -> tuple[list, str]:
             add(r.day, f"보행 좋아짐 +{r.sym - prev.sym}%p", "good")
         elif prev and prev.sym - r.sym >= SYM_CHANGE:
             add(r.day, f"보행 나빠짐 −{prev.sym - r.sym}%p", "bad")
-        elif r.st == "ok":
-            add(r.day, "새 측정", "plain")
     for n in d.notes:
         if n.important and days_ago(n.at[:10]) <= CHANGE_DAYS:
             add(n.at[:10], "중요 메모", "warn")
@@ -405,7 +502,7 @@ def patient_row(acct: Account, d: Dog, live: set) -> dict:
     return {
         "id": d.id, "no": d.no or "—", "name": d.name, "init": d.name[0],
         "breed": d.breed or "견종 미입력", "size": SIZE.get(d.size, ""), "age": age(d), "sex": SEX.get(d.sex, ""),
-        "v": vital_line(latest_vital(d)), "badges": badges(d),
+        "v": vital_line(latest_vital(d), d.size, prev_vital(d, latest_vital(d)) if d.vitals else None), "badges": badges(d),
         "owner": d.owner or "—", "phone4": d.phone[-4:] if d.phone else "",
         "last": f"{short(last.date)} · {last.by.split(' ')[0]}" if last else "측정 전", "tr": trend(acct, d),
         "stage": st_label, "st_bg": st_bg, "st_c": st_c, "live": d.id in live,
@@ -427,8 +524,56 @@ def analysis_rows(acct: Account, rs: list) -> list:
         out.append({"id": r.id, "dog": d.id, "name": d.name, "no": d.no or "—", "breed": d.breed or "견종 미입력",
                     "when": f"{short(r.date)} {r.time}", "no_s": f"{sess_no(acct, r)}회차", **st_chip(r.st),
                     "sym": "—" if r.st == "fail" else f"{r.sym}%", "pass": "—" if r.st == "fail" else f"{r.ps[1]} / {r.ps[0]}",
-                    "by": r.by or "—", "badges": badges(d)})
+                    "by": r.by or "—", "badges": badges(d), "dx": diagnosis(d), **sym_view(acct, r)})
     return out
+
+
+def sym_view(acct: Account, r) -> dict:
+    """분석 표의 대칭 지수 배지: 수준별 색, 직전 유효 회차 대비 오르내림"""
+    if r.st == "fail":
+        return {"sym_bg": "#F2EFEA", "sym_c": "#8E949C", "sym_d": ""}
+    lv = ((90, "", "#DCEFE2", "#2E7A4F") if r.sym >= 90 else (80, "", "#FBEBC8", "#8A6100") if r.sym >= 80
+          else (0, "", "#FBE0D9", "#C2412D"))   # 회차 균형 점수 기준(다리 하나 차이 기준 _LEVEL 과 다름)
+    prev = next((x for x in acct.results if x.dog == r.dog and x.st != "fail" and (x.day, x.time) < (r.day, r.time)), None)
+    dv = r.sym - prev.sym if prev else 0
+    return {"sym_bg": lv[2], "sym_c": lv[3],
+            "sym_d": (f"▲{dv}" if dv > 0 else f"▼{-dv}") if prev and dv else "", "sym_dc": "#2E8B57" if dv > 0 else "#C2412D"}
+
+
+def diagnosis(d: Dog) -> str:
+    """병명: 히스토리의 가장 최근 진단(분석 표 칸). 괄호 설명은 뺀다"""
+    h = next((h for h in reversed(d.history) if h.kind == "진단"), None)
+    return h.title.split(" (")[0] if h else "—"
+
+
+def today_rows(acct: Account, dogs: list) -> list:
+    """홈 '오늘' 탭(EMR 의 오늘 접수 목록): 오늘 바이탈·진료 기록·메모·보행 측정이 있거나 지금 분석 중인 반려견.
+    시각 = 오늘 처음 남긴 기록 시각. 진료 기록(SOAP)이 아직 없으면 '기록 전'."""
+    today = date.today().isoformat()
+    live = {j.dog: j for j in acct.active_jobs()}
+    out = []
+    for d in dogs:
+        notes = [n for n in d.notes if n.at.startswith(today)]
+        res = [r for r in acct.results if r.dog == d.id and r.day == today]
+        vit = next((v for v in d.vitals if v.day == today), None)
+        if not (notes or res or vit or d.id in live):
+            continue
+        times = [n.at[11:16] for n in notes] + [r.time for r in res]
+        steps = []
+        if vit:
+            steps.append(("바이탈", "#E7EEFB", "#3B5BA9"))
+        if any(n.cat in SOAP for n in notes):
+            steps.append(("진료 기록", "#E3F1E7", "#2E7A4F"))
+        if d.id in live:
+            steps.append(("분석 중", "#FCEEE3", "#A8481A"))
+        for r in res:
+            steps.append((("재촬영 필요" if r.st == "fail" else "보행 측정"), "#FBE0D9" if r.st == "fail" else "#F1ECE5", "#C2412D" if r.st == "fail" else "#5B6472"))
+        done = any(n.cat in SOAP for n in notes)
+        out.append({**patient_row(acct, d, set(live)), "time": min(times) if times else "—",
+                    "steps": [{"t": t, "bg": bg, "c": c} for t, bg, c in steps], "dx": diagnosis(d),
+                    "who": next((n.author for n in sorted(notes, key=lambda n: n.at)), "") or (live[d.id].by if d.id in live else "") or (vit.author if vit else ""),
+                    "todo": "" if done else "진료 기록 전"})
+    return sorted(out, key=lambda r: r["time"])
 
 
 def staff_rows(acct: Account, rs: list) -> list:
@@ -454,7 +599,10 @@ def home_view(acct: Account, view: str, q: str, dog: str, by: str, changed: bool
     rs = [r for r in acct.results if acct.dog(r.dog)]
     counts = {"dogs": len(acct.dogs), "changed": sum(1 for v in ch.values() if v[0]),
               "retake": sum(1 for v in ch.values() if any("재촬영" in c["t"] and c["tone"] == "bad" for c in v[0]))}
-    if view == "dogs":
+    counts["today"] = len(today_rows(acct, acct.dogs))
+    if view == "today":
+        rows = today_rows(acct, dogs)
+    elif view == "dogs":
         rows = [{**patient_row(acct, d, set()), "n": sum(1 for r in rs if r.dog == d.id)} for d in dogs]
         if changed:
             rows.sort(key=lambda r: r["ch_day"], reverse=True)
@@ -469,13 +617,121 @@ def home_view(acct: Account, view: str, q: str, dog: str, by: str, changed: bool
     return {"rows": rows[(page - 1) * PAGE_SIZE: page * PAGE_SIZE], "total": total, "page": page, "pages": pages, **counts}
 
 
+def memos(d: Dog) -> list:
+    """차트 위 고정 줄의 메모 카드: 주의·보호자·예약·기타. 중요 먼저, 그 안에서 최신순. 등록할 때 적은 메모(Dog.memo)는 맨 끝."""
+    rows = [{"id": n.id, "cat": n.cat, "bg": MEMO_CAT[n.cat][0], "c": MEMO_CAT[n.cat][1], "text": n.text, "imp": n.important,
+             "at": n.at.replace("-", ".", 2)[2:], "author": n.author,
+             "revs": [{"at": a.replace("-", ".", 2)[2:], "author": w, "text": t} for a, w, t in n.revs]}
+            for n in sorted(d.notes, key=lambda n: (n.important, n.at), reverse=True) if n.cat in MEMO_CAT]
+    if d.memo:
+        rows.append({"id": "", "cat": "등록", "bg": "#F1ECE5", "c": "#5B6472", "text": d.memo, "imp": False, "at": "", "author": "", "revs": []})
+    return rows
+
+
 def memo_panel(acct: Account, d: Dog, rid: str = "") -> dict:
-    """오른쪽 반려견 칸(분석 결과·반려견 차트 공통): 신원·바이탈·특이사항, 이번 회차 메모, 반려견 메모."""
-    rows = note_rows(d, acct)
-    return {**patient_row(acct, d, set()), "rid": rid,
-            "run_notes": [n for n in rows if rid and n["rid"] == rid],
-            "dog_notes": [n for n in rows if not rid or n["rid"] != rid][:10],
-            "n_notes": len(d.notes), "n_res": sum(1 for r in acct.results if r.dog == d.id)}
+    """분석 결과 화면 오른쪽 칸: 메모를 바로 쓰고 보며, 이 회차 진료 기록을 본다."""
+    groups = soap_entries(d, acct)
+    return {**patient_row(acct, d, set()), "rid": rid, "memo_cat": MEMO_CAT, "memos": memos(d),
+            "run_soap": [g for g in groups if rid and g["rid"] == rid],
+            "n_res": sum(1 for r in acct.results if r.dog == d.id)}
+
+
+def visits(acct: Account, d: Dog) -> list:
+    """방문 목록(EMR 왼쪽 칸): 같은 날짜의 보행 측정·바이탈·진료 기록·진단/수술/재활·영상을 한 방문으로 묶는다. 최신순.
+    방문은 따로 저장하지 않고 날짜로 묶어 만든다(백엔드에 방문 엔티티 없음)."""
+    by = {}
+
+    def v(day):
+        return by.setdefault(day, {"day": day, "res": [], "vital": None, "soap": [], "hist": [], "imgs": []})
+
+    for r in acct.results:
+        if r.dog == d.id and r.day:
+            v(r.day)["res"].append(r)
+    for x in d.vitals:
+        v(x.day)["vital"] = x
+    for g in soap_entries(d, acct):
+        v("20" + g["at"][:8].replace(".", "-"))["soap"].append(g)
+    for h in d.history:
+        v(h.day)["hist"].append(h)
+    for im in d.images:
+        v(im.day)["imgs"].append(im)
+    out = []
+    for day in sorted(by, reverse=True):
+        x = by[day]
+        res = sorted(x["res"], key=lambda r: r.time)
+        tags = [{"t": h.kind, "bg": "#FCEEE3" if h.kind == "수술" else "#EEF1F6", "c": "#A8481A" if h.kind == "수술" else "#4A5A78"}
+                for h in x["hist"]]
+        if res:
+            tags.append({"t": "보행 측정", "bg": "#F1ECE5", "c": "#5B6472"})
+        if x["imgs"]:
+            tags.append({"t": f"영상 {len(x['imgs'])}", "bg": "#F1ECE5", "c": "#5B6472"})
+        a = next((p["text"] for g in x["soap"] for p in g["parts"] if p["cat"] in ("A", "S")), "")
+        title = (x["hist"][0].title.split(" (")[0] if x["hist"] else a or
+                 (f"보행 측정 · 대칭 지수 {res[-1].sym}%" if res and res[-1].st != "fail" else "보행 측정 · 재촬영 필요" if res else
+                  "바이탈 측정" if x["vital"] else ""))
+        who = next((g["author"] for g in x["soap"]), "") or next((h.by or h.author for h in x["hist"]), "") or             (res[-1].by if res else "") or (x["vital"].author if x["vital"] else "")
+        st = st_chip(res[-1].st) if res else None
+        out.append({"day": day, "date": day[2:].replace("-", "."), "tags": tags, "title": title, "who": who, "st": st,
+                    "n_soap": len(x["soap"]), "today": day == date.today().isoformat(),
+                    "res": [{"id": r.id, "no": f"{sess_no(acct, r)}회차", "time": r.time, "by": r.by, "fail": r.st == "fail",
+                             "sym": r.sym, "rom": r.rom, "sL": r.sL, "sR": r.sR, **st_chip(r.st), **sym_view(acct, r)} for r in res],
+                    "vital": vital_line(x["vital"], d.size, prev_vital(d, x["vital"])) if x["vital"] else None, "vital_by": x["vital"].author if x["vital"] else "",
+                    "soap": x["soap"], "hist": x["hist"],
+                    "imgs": [{"id": im.id, "path": im.path, "caption": im.caption, "kind": IMG_KIND.get(im.kind, im.kind), "by": im.author}
+                             for im in x["imgs"]]})
+    return out
+
+
+def best_view(bm: dict) -> dict:
+    """3D 에서 좌우 차이가 가장 잘 보이는 각도. 이 3D 는 다리마다 관절을 굽히는 폭·딛는 시간을 바꾸므로
+    (엉덩이 높이·머리 끄덕임은 흉내 내지 않는다) 기본은 덜 쓰는 다리 쪽 옆모습이고, 두 다리를 한 화면에서 견줄 때는
+    뒷다리면 뒤에서, 앞다리면 앞에서 본다."""
+    pairs = [(p, bm["legs"][p]) for p in ("hind", "front")]
+    part, x = max(pairs, key=lambda t: t[1]["si"])
+    leg_kr = "뒷다리" if part == "hind" else "앞다리"
+    if x["si"] < 5:
+        return {"main": "right", "label": "옆", "sub": "back", "sub_label": "뒤",
+                "why": "좌우 차이가 거의 없어요. 옆에서 걷는 모양을, 뒤에서 두 뒷다리가 같이 움직이는지 보세요."}
+    fh = "F" if part == "front" else "H"
+    weak = next(s + fh for s in "LR" if bm["legs"][s + fh]["weak"])
+    side = "left" if weak[0] == "L" else "right"
+    side_kr = "왼쪽" if side == "left" else "오른쪽"
+    sub, sub_kr = ("back", "뒤") if part == "hind" else ("front", "앞")
+    return {"main": side, "label": f"{side_kr} 옆", "sub": sub, "sub_label": sub_kr,
+            "why": f"{side_kr} {leg_kr}가 덜 움직여요. {side_kr} 옆에서 보면 그 다리가 관절을 덜 굽히고 짧게 딛는 게 가려지지 않고 보여요. "
+                   f"{sub_kr}에서 보면 두 {leg_kr}의 발 드는 높이를 한 화면에서 견줄 수 있어요."}
+
+
+def image_list(d: Dog) -> list:
+    """환자 단위 영상·사진 모아 보기(경과 탭): 촬영일 순(오래된 것 먼저)이라 수술 전 → 후가 왼쪽에서 오른쪽으로 놓인다."""
+    return [{"id": im.id, "day": im.day, "date": im.day[2:].replace("-", "."), "path": im.path, "caption": im.caption,
+             "kind": IMG_KIND.get(im.kind, im.kind), "pre": im.kind == "pre", "post": im.kind == "post", "by": im.author}
+            for im in sorted(d.images, key=lambda x: x.day)]
+
+
+def dx_history(acct: Account, d: Dog) -> list:
+    """진단 이력(EMR 오른쪽 칸): 진단 하나에 뒤따른 수술·재활을 묶는다. 종결 기록이 있으면 종결, 아니면 진행중.
+    회차 = 진단일 이후 보행 측정 수."""
+    eps = []
+    for h in d.history:
+        if h.kind == "진단" or not eps:
+            eps.append({"start": h.day, "title": h.title.split(" (")[0], "site": SITE.get(h.site, ""), "by": h.by or h.author, "events": []})
+        if h.kind != "진단":
+            eps[-1]["events"].append({"day": h.day[2:].replace("-", "."), "kind": h.kind, "title": h.title})
+    for i, e in enumerate(eps):
+        end = eps[i + 1]["start"] if i + 1 < len(eps) else None
+        done = any("종결" in x["title"] for x in e["events"])
+        e["done"] = done
+        e["n"] = sum(1 for r in acct.results if r.dog == d.id and r.day >= e["start"] and (not end or r.day < end))
+        e["range"] = e["start"][2:].replace("-", ".") + " ~" + (" " + next(x["day"] for x in reversed(e["events"]) if "종결" in x["title"]) if done else "")
+    return list(reversed(eps))
+
+
+def care_team(acct: Account, d: Dog) -> dict:
+    """담당: 주치의 = 최근 진단·수술한 수의사, 최근 측정 = 마지막 회차 측정자."""
+    h = next((h for h in reversed(d.history) if h.kind in ("수술", "진단") and h.by), None)
+    last = next((r for r in acct.results if r.dog == d.id), None)
+    return {"doctor": h.by if h else "—", "measurer": last.by if last and last.by else "—"}
 
 
 # ── 반려견 차트 (10-28) ──
@@ -531,12 +787,45 @@ def note_rows(d: Dog, acct: Optional[Account] = None) -> list:
 
     return [{"id": n.id, "at": n.at.replace("-", ".", 2)[2:], "author": n.author, "cat": n.cat, "text": n.text,
              "imp": n.important, "rid": n.rid, "run": run_label(n.rid),
+             "soap": SOAP.get(n.cat, ("", ""))[0],
              "revs": [{"at": a.replace("-", ".", 2)[2:], "author": w, "text": t} for a, w, t in n.revs]}
             for n in sorted(d.notes, key=lambda n: (n.important, n.at), reverse=True)]   # 중요 메모 먼저, 그 안에서 최신순
 
 
+def soap_entries(d: Dog, acct: Optional[Account] = None) -> list:
+    """차트 '진료 기록' 탭: 같은 시각·같은 사람·같은 회차로 쓴 메모를 한 기록으로 묶고 S·O·A·P 순서로 보인다(EMR 방식).
+    중요 표시가 있는 기록이 먼저, 그 안에서 최신순."""
+    groups = {}
+    for n in note_rows(d, acct):
+        if n["cat"] not in SOAP:     # 메모(주의·보호자·예약·기타)는 진료 기록이 아니다
+            continue
+        g = groups.setdefault((n["at"], n["author"], n["rid"]), {"at": n["at"], "author": n["author"], "rid": n["rid"],
+                                                                  "run": n["run"], "imp": False, "parts": []})
+        g["imp"] = g["imp"] or n["imp"]
+        g["parts"].append(n)
+    order = {k: i for i, k in enumerate(NOTE_CAT)}
+    for g in groups.values():
+        g["parts"].sort(key=lambda x: order.get(x["cat"], 9))
+    return sorted(groups.values(), key=lambda g: (g["imp"], g["at"]), reverse=True)
+
+
+def kg_trend(d: Dog, n: int = 8) -> dict:
+    """차트 위 고정 줄의 체중 추이(최근 n번 방문). 세로 폭은 최소 ±0.5kg 로 잡아 작은 흔들림이 크게 보이지 않게 한다."""
+    kg = [(v.day, _num(v.kg)) for v in reversed(d.vitals) if _num(v.kg)][-n:]
+    if len(kg) < 2:
+        return {"has": False}
+    vals = [k for _, k in kg]
+    mid, half = (max(vals) + min(vals)) / 2, max(0.5, (max(vals) - min(vals)) / 2 * 1.15)
+    W, H = 72, 22
+    pts = [(2 + i * (W - 4) / (len(kg) - 1), H - 3 - (k - (mid - half)) / (2 * half) * (H - 6)) for i, (_, k) in enumerate(kg)]
+    ch = (vals[-1] - vals[0]) / vals[0] * 100
+    return {"has": True, "W": W, "H": H, "line": " ".join(f"{x:.1f},{y:.1f}" for x, y in pts), "last": pts[-1],
+            "text": f"{vals[0]:g}→{vals[-1]:g}kg", "ch": f"{ch:+.1f}%", "n": len(kg), "since": short_day(kg[0][0]),
+            "c": "#C2412D" if abs(ch) > WEIGHT_CHANGE else "#5B6472"}
+
+
 def vital_rows(d: Dog) -> dict:
-    rows = [{"day": v.day, **vital_line(v), "author": v.author} for v in d.vitals]
+    rows = [{"day": v.day, **vital_line(v, d.size, prev_vital(d, v)), "author": v.author} for v in d.vitals]
     kg = [(v.day, float(v.kg)) for v in reversed(d.vitals) if v.kg]
     spark = ""
     if len(kg) > 1:

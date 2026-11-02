@@ -267,12 +267,6 @@ class Conv:
             return '{(' + lst + ' || []).map((' + var + ': any, ' + idx + ': number) => (<Fragment key={' + idx + '}>' + inner + '</Fragment>))}'
         if a.get('data-jump') is not None:
             return ''
-        # 로그인 화면: 아이디 칸 앞에 같은 모양의 '기관 코드' 칸을 하나 더 둔다(API 가 institution_code 를 요구)
-        if tag == 'label' and 'loginIdLabel' in self.raw_text(n) and not getattr(n, '_injected', False):
-            clone = self.clone(n, {'loginIdLabel': 'loginCodeLabel', 'fLoginId': 'fLoginCode', 'onLoginId': 'onLoginCode', 'loginIdPh': 'loginCodePh'})
-            clone._injected = True
-            n._injected = True
-            return self.node(clone, scope, depth) + self.node(n, scope, depth)
         attrs = self.attrs(n, scope, root_override)
         if tag in VOID:
             return f'<{tag}{attrs} />'

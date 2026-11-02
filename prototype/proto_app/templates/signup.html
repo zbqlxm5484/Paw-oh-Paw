@@ -1,27 +1,36 @@
 {% extends "base.html" %}
-{% block title %}기관 회원가입 · Paw oh Paw{% endblock %}
+{% block title %}회원가입 · Paw oh Paw{% endblock %}
 {% block topbar %}{% include "_authbar.html" %}{% endblock %}
 {% set inp = "height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none" %}
 {% block content %}
 <main style="max-width:560px;margin:24px auto 96px;padding:0 24px">
   <form method="post" action="/signup" id="soForm" style="background:#fff;border:1px solid #ECE8E2;border-radius:20px;padding:36px 32px;display:flex;flex-direction:column;gap:18px">
-    <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:26px;font-weight:800;letter-spacing:-0.6px">기관 회원가입</h1><p style="margin:0;font-size:15px;color:#5B6472">동물병원·재활센터용 계정이에요. 기관 정보와 로그인 정보를 입력해 주세요.</p></div>
-    <b style="font-size:16px;margin-top:4px">기관 정보</b>
-    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">기관명</span><input class="inp so" name="org" placeholder="예) 한빛동물병원" style="{{ inp }}"></label>
-    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">기관 주소</span><input class="inp so" name="loc" placeholder="주소 검색" style="{{ inp }}"></label>
-    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">디바이스 번호</span><input class="inp so" name="dev" placeholder="예) PP-2410-0381" style="{{ inp }}"><span style="font-size:13px;color:#5B6472">측정 기기 뒷면 라벨에 적혀 있어요.</span></label>
-    <b style="font-size:16px;margin-top:10px">로그인 정보</b>
-    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">아이디</span><input class="inp so" name="login_id" autocomplete="username" placeholder="영문·숫자 4~16자" style="{{ inp }}"></label>
-    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">비밀번호</span><input class="inp so" type="password" name="pw" autocomplete="new-password" placeholder="4자 이상" style="{{ inp }}"></label>
-    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">비밀번호 확인</span><input class="inp so" type="password" name="pw2" autocomplete="new-password" placeholder="한 번 더 입력" style="{{ inp }}"><span id="pwHint" style="font-size:13px;color:#C2412D;display:none">비밀번호가 달라요</span></label>
-    <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
-      <b style="font-size:16px;margin-bottom:8px">약관 동의</b>
-      <div id="allTerms" style="height:56px;border-radius:12px;background:#F2EEE8;display:flex;align-items:center;gap:14px;padding:0 18px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#C9C4BC"><use href="#w-check"></use></svg><span style="font-size:16px;font-weight:600">모두 동의합니다.</span></div>
-      {% for label in ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 및 이용', '[필수] 측정 기기 연동 및 위치정보 이용', '[선택] 마케팅 정보 수신'] %}
-      <div class="term" style="min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer"><input type="hidden" name="t{{ loop.index0 }}" value=""><svg width="20" height="20" viewBox="0 0 24 24" style="color:#C9C4BC;flex:none"><use href="#w-check"></use></svg><span style="flex:1;font-size:15px;color:#3A4250">{{ label }}</span><span class="view" data-toast="약관 전문은 준비 중이에요" style="font-size:13px;color:#A0A7B2;text-decoration:underline">보기</span></div>
-      {% endfor %}
+    <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:26px;font-weight:800;letter-spacing:-0.6px">회원가입</h1><p style="margin:0;font-size:15px;color:#5B6472">크림오프가 기관에 보내 드린 디바이스 코드로 가입해요. 같은 기관 담당자는 반려견·회차 자료를 함께 봐요.</p></div>
+
+    <b style="font-size:16px;margin-top:4px">1. 디바이스 코드 확인</b>
+    <div style="display:flex;gap:10px">
+      <input class="inp" name="code" id="soCode" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" style="{{ inp }};flex:1;letter-spacing:1px;text-transform:uppercase">
+      <button type="button" id="soVerify" style="height:52px;padding:0 20px;border-radius:12px;border:0;background:#1B2433;color:#fff;font-size:16px;font-weight:700;cursor:pointer;flex:none">확인</button>
     </div>
-    <button class="bt" type="submit" id="soBtn" style="height:56px;border-radius:14px;background:#C3C8CF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;margin-top:6px">가입하기</button>
+    <span id="soCodeMsg" style="font-size:13px;color:#5B6472;margin-top:-10px">크림오프 계약 안내 메일에 적힌 20자 코드예요. 시연용 코드: <b style="cursor:pointer;color:#D2601A" id="soDemo">{{ demo_code }}</b></span>
+    <div id="soInst" style="display:none;height:56px;border-radius:12px;background:#F2EEE8;align-items:center;gap:12px;padding:0 18px"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#2E8B57"><use href="#w-check"></use></svg><span style="font-size:13px;color:#5B6472">기관</span><b id="soInstName" style="font-size:16px"></b><span id="soLeft" style="margin-left:auto;font-size:13px;color:#5B6472"></span></div>
+
+    <fieldset id="soRest" disabled style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:18px;opacity:.45">
+      <b style="font-size:16px;margin-top:10px">2. 내 계정</b>
+      <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">이름</span><input class="inp so" name="name" autocomplete="name" placeholder="예) 정하늘" style="{{ inp }}"><span style="font-size:13px;color:#5B6472">차팅·측정 기록에 작성자로 남아요.</span></label>
+      <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">이메일</span><input class="inp so" type="email" name="email" autocomplete="email" placeholder="비밀번호를 잊었을 때 재설정 링크를 받아요" style="{{ inp }}"></label>
+      <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">아이디</span><input class="inp so" name="login_id" autocomplete="username" placeholder="영문 소문자·숫자·. _ - 4자 이상" style="{{ inp }}"><span id="idHint" style="font-size:13px;color:#C2412D;display:none">영문 소문자·숫자·. _ - 로 4~50자예요</span></label>
+      <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">비밀번호</span><input class="inp so" type="password" name="pw" autocomplete="new-password" placeholder="8자 이상" style="{{ inp }}"></label>
+      <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600">비밀번호 확인</span><input class="inp so" type="password" name="pw2" autocomplete="new-password" placeholder="한 번 더 입력" style="{{ inp }}"><span id="pwHint" style="font-size:13px;color:#C2412D;display:none">비밀번호가 달라요</span></label>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
+        <b style="font-size:16px;margin-bottom:8px">약관 동의</b>
+        <div id="allTerms" style="height:56px;border-radius:12px;background:#F2EEE8;display:flex;align-items:center;gap:14px;padding:0 18px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#C9C4BC"><use href="#w-check"></use></svg><span style="font-size:16px;font-weight:600">모두 동의합니다.</span></div>
+        {% for label in ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 및 이용', '[필수] 측정 기기 연동 및 위치정보 이용', '[선택] 마케팅 정보 수신'] %}
+        <div class="term" style="min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer"><input type="hidden" name="t{{ loop.index0 }}" value=""><svg width="20" height="20" viewBox="0 0 24 24" style="color:#C9C4BC;flex:none"><use href="#w-check"></use></svg><span style="flex:1;font-size:15px;color:#3A4250">{{ label }}</span><span class="view" data-toast="약관 전문은 준비 중이에요" style="font-size:13px;color:#A0A7B2;text-decoration:underline">보기</span></div>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <button class="bt" type="submit" id="soBtn" style="height:56px;border-radius:14px;background:#C3C8CF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;margin-top:6px">회원가입</button>
     <a class="lk" href="/login" style="align-self:center;font-size:14px;color:#5B6472">이미 계정이 있어요 · <b style="color:#1B2433">로그인</b></a>
   </form>
 </main>
@@ -30,19 +39,48 @@
 <script>
 (function () {
   var f = document.getElementById('soForm'), terms = Array.prototype.slice.call(document.querySelectorAll('.term'));
+  var code = document.getElementById('soCode'), vbtn = document.getElementById('soVerify'), msg = document.getElementById('soCodeMsg');
+  var rest = document.getElementById('soRest'), inst = document.getElementById('soInst'), verified = false;
   var v = function (n) { return f.elements[n].value; };
   var on = function (t) { return !!t.querySelector('input').value; };
+  var idOk = function () { return /^[a-z0-9._-]{4,50}$/.test(v('login_id')); };
+  var mailOk = function () { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('email').trim()); };
   function set(t, yes) { t.querySelector('input').value = yes ? '1' : ''; t.querySelector('svg').style.color = yes ? '#D2601A' : '#C9C4BC'; }
+  function ok() { return verified && on(terms[0]) && on(terms[1]) && on(terms[2]) && v('name').trim() && mailOk() && idOk() && v('pw').length >= 8 && v('pw') === v('pw2'); }
   function paint() {
-    var all = terms.every(on);
-    document.querySelector('#allTerms svg').style.color = all ? '#D2601A' : '#C9C4BC';
+    document.querySelector('#allTerms svg').style.color = terms.every(on) ? '#D2601A' : '#C9C4BC';
     document.getElementById('pwHint').style.display = v('pw2') && v('pw') !== v('pw2') ? 'block' : 'none';
-    var ok = on(terms[0]) && on(terms[1]) && on(terms[2]) && v('org') && v('dev') && v('login_id').length >= 4 && v('pw').length >= 4 && v('pw') === v('pw2');
-    document.getElementById('soBtn').style.background = ok ? '#D2601A' : '#C3C8CF';
+    document.getElementById('idHint').style.display = v('login_id') && !idOk() ? 'block' : 'none';
+    document.getElementById('soBtn').style.background = ok() ? '#D2601A' : '#C3C8CF';
   }
+  function reset() {   // 코드를 고치면 다시 확인해야 한다
+    verified = false; rest.disabled = true; rest.style.opacity = '.45'; inst.style.display = 'none';
+    vbtn.textContent = '확인'; vbtn.style.background = '#1B2433'; paint();
+  }
+  vbtn.addEventListener('click', function () {
+    if (verified) return;
+    var body = new URLSearchParams({ code: code.value });
+    fetch('/api/device-codes/verify', { method: 'POST', body: body }).then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); }).then(function (x) {
+      if (!x[0]) { msg.textContent = x[1].error; msg.style.color = '#C2412D'; return; }
+      verified = true; rest.disabled = false; rest.style.opacity = '1';
+      vbtn.textContent = '인증됨'; vbtn.style.background = '#2E8B57';
+      inst.style.display = 'flex';
+      document.getElementById('soInstName').textContent = x[1].institution.name;
+      document.getElementById('soLeft').textContent = '남은 계정 ' + x[1].remaining_accounts + '개';
+      msg.textContent = '코드가 확인됐어요. 기관은 코드로 정해져서 따로 입력하지 않아요.'; msg.style.color = '#2E8B57';
+      paint();
+    });
+  });
+  code.addEventListener('input', reset);
+  var demo = document.getElementById('soDemo');
+  if (demo) demo.addEventListener('click', function () { code.value = demo.textContent; reset(); });
   terms.forEach(function (t) { t.addEventListener('click', function (e) { if (e.target.classList.contains('view')) return; set(t, !on(t)); paint(); }); });
   document.getElementById('allTerms').addEventListener('click', function () { var all = terms.every(on); terms.forEach(function (t) { set(t, !all); }); paint(); });
   f.querySelectorAll('.so').forEach(function (i) { i.addEventListener('input', paint); });
+  f.addEventListener('submit', function (e) {
+    if (!verified) { e.preventDefault(); window.ppToast('디바이스 코드를 먼저 확인해 주세요'); return; }
+    if (!ok()) { e.preventDefault(); window.ppToast('입력하지 않은 항목이 있어요'); }
+  });
 })();
 </script>
 {% endblock %}

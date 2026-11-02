@@ -63,6 +63,6 @@
 {% block modals %}{{ m.pet_modal('/upload') }}{{ m.guide_modal() }}{% endblock %}
 {% block scripts %}
 <script>window.UPLOAD = { max: {{ MAX_SHOTS }}, demo: {{ demo }}, sample: "{{ url_for('static', path='assets/landing-walk.mp4') }}" };</script>
-<script src="{{ url_for('static', path='pet.js') }}"></script>
+<script src="{{ url_for('static', path='pet.js') }}?v={{ ASSET_V }}"></script>
 <script src="{{ url_for('static', path='upload.js') }}"></script>
 {% endblock %}

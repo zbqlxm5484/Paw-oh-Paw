@@ -107,10 +107,10 @@ export const sessions: MockSession[] = [
 type DogRow = Omit<DogOut, 'session_count' | 'last_measured_on' | 'open_session_id'>
 
 export const dogs: DogRow[] = [
-  { id: uuid(1), name: '보리', breed: '골든 리트리버', weight_kg: 28.4, size_class: 'LARGE', size_class_manual: false, birth_year: 2019, sex: 'FEMALE_SPAYED', rehab_start_date: '2026-08-18', focus_limb: 'RH', baseline_session_id: null, memo: 'TPLO 수술 후 재활 9주차. 오른뒤 체중 부하 관찰 중', created_at: now, updated_at: now },
-  { id: uuid(2), name: '콩이', breed: '말티즈', weight_kg: 3.2, size_class: 'SMALL', size_class_manual: false, birth_year: 2022, sex: 'FEMALE', rehab_start_date: null, focus_limb: null, baseline_session_id: null, memo: null, created_at: now, updated_at: now },
-  { id: uuid(3), name: '두부', breed: '비글', weight_kg: 11.2, size_class: 'MEDIUM', size_class_manual: false, birth_year: 2021, sex: 'MALE_NEUTERED', rehab_start_date: '2026-10-01', focus_limb: 'LF', baseline_session_id: null, memo: null, created_at: now, updated_at: now },
-  { id: uuid(4), name: '탄이', breed: '진돗개', weight_kg: 19.8, size_class: 'MEDIUM', size_class_manual: false, birth_year: 2017, sex: 'MALE', rehab_start_date: null, focus_limb: null, baseline_session_id: null, memo: null, created_at: now, updated_at: now },
+  { id: uuid(1), name: '보리', breed: '골든 리트리버', weight_kg: 28.4, size_class: 'LARGE', size_class_manual: false, birth_year: 2019, sex: 'FEMALE_SPAYED', rehab_start_date: '2026-08-18', focus_limb: 'RH', baseline_session_id: null, memo: 'TPLO 수술 후 재활 9주차. 오른뒤 체중 부하 관찰 중', version: 0, created_at: now, updated_at: now },
+  { id: uuid(2), name: '콩이', breed: '말티즈', weight_kg: 3.2, size_class: 'SMALL', size_class_manual: false, birth_year: 2022, sex: 'FEMALE', rehab_start_date: null, focus_limb: null, baseline_session_id: null, memo: null, version: 0, created_at: now, updated_at: now },
+  { id: uuid(3), name: '두부', breed: '비글', weight_kg: 11.2, size_class: 'MEDIUM', size_class_manual: false, birth_year: 2021, sex: 'MALE_NEUTERED', rehab_start_date: '2026-10-01', focus_limb: 'LF', baseline_session_id: null, memo: null, version: 0, created_at: now, updated_at: now },
+  { id: uuid(4), name: '탄이', breed: '진돗개', weight_kg: 19.8, size_class: 'MEDIUM', size_class_manual: false, birth_year: 2017, sex: 'MALE', rehab_start_date: null, focus_limb: null, baseline_session_id: null, memo: null, version: 0, created_at: now, updated_at: now },
 ]
 
 export function classifySize(weightKg: number): SizeClass {

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useQueries, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '../app/auth'
+import { ApiError } from '../api/client'
 import * as dogsApi from '../api/dogs'
 import { getSessionResult, resultKeys, useAllSessions, useCompare, useReports, useSessionResult, useTrends } from '../api/results'
 import * as sessApi from '../api/sessions'
@@ -116,9 +117,15 @@ export function useDesignActions() {
       return d
     },
     updateDog: async (id: string, b: DogUpdate) => {
-      const d = await dogsApi.updateDog(id, b)
-      await invDogs()
-      return d
+      try {
+        const d = await dogsApi.updateDog(id, b)
+        await invDogs()
+        return d
+      } catch (e) {
+        // 409 DOG_MODIFIED: 다른 담당자가 먼저 고쳤다 → 최신 version 을 다시 읽어 둔다(화면은 다시 불러오라는 안내)
+        if (e instanceof ApiError && e.code === 'DOG_MODIFIED') await invDogs()
+        throw e
+      }
     },
     startSession: async (dogId: string, weight: number | null) => {
       const s = await sessApi.startSession(dogId, { weight_kg: weight })

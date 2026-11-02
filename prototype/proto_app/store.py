@@ -50,11 +50,11 @@ class Vital:
 
 @dataclass
 class Note:
-    """동물 메모(차팅). 지우지 않고, 고치면 이전 내용을 revs 에 남긴다."""
+    """메모·진료 기록 한 줄. 지우지 않고, 고치면 이전 내용을 revs 에 남긴다."""
     id: str
     at: str                   # YYYY-MM-DD HH:MM
     author: str
-    cat: str                  # 경과 | 특이사항 | 처치 | 전달
+    cat: str                  # 진료 기록 S | O | A | P, 메모 주의 | 보호자 | 예약 | 기타 (config.NOTE_CAT)
     text: str
     important: bool = False   # 홈 특이사항 배지에 올린다
     revs: list = field(default_factory=list)   # [(at, author, text)] 오래된 것부터
@@ -66,7 +66,7 @@ class Image:
     """방사선·사진 한 장."""
     id: str
     day: str                  # YYYY-MM-DD 촬영일
-    kind: str                 # pre | post | photo
+    kind: str                 # pre | post | xray | photo (config.IMG_KIND)
     caption: str
     path: str
     author: str = ""
@@ -95,6 +95,7 @@ class Dog:
     vitals: list = field(default_factory=list)    # [Vital] 최신이 앞
     notes: list = field(default_factory=list)     # [Note] 최신이 앞
     images: list = field(default_factory=list)    # [Image] 최신이 앞
+    version: int = 0          # 다른 담당자가 먼저 고쳤는지 확인(낙관적 잠금)
 
 
 @dataclass
@@ -139,8 +140,51 @@ class Job:
         return min(5.0, (time.time() - self.started) / config.ANALYSIS_SEC * 5)
 
 
+CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # 혼동되는 0·O·1·I·L 제외 (회원가입 명세 v0.3 2절)
+
+
+def norm_code(raw: str) -> str:
+    """디바이스 코드 입력 정리: 하이픈·공백 제거, 대문자. 형식이 틀리면 빈 문자열."""
+    c = "".join(ch for ch in (raw or "").upper() if ch not in "- ")
+    return c if len(c) == 20 and all(ch in CODE_CHARS for ch in c) else ""
+
+
+def show_code(c: str) -> str:
+    return "-".join(c[i:i + 5] for i in range(0, 20, 5))
+
+
+@dataclass
+class DeviceCode:
+    """크림오프가 기관에 발급하는 가입용 코드. 가입 때만 쓴다."""
+    id: str
+    inst: str                 # 기관(Account) id
+    code: str                 # 20자, 하이픈 없이
+    max_accounts: int = 3
+    revoked: bool = False
+    note: str = ""
+    created: str = ""
+
+
+@dataclass
+class Staff:
+    """로그인 계정. ADMIN·STAFF = 크림오프, CLIENT = 기관 담당자(가입으로 생김). GUEST 는 저장하지 않고 계산한다."""
+    id: str
+    login_id: str
+    password: str
+    name: str
+    inst: str                 # 기관(Account) id
+    email: str = ""
+    role: str = "CLIENT"
+    active: bool = True
+    device_code: str = ""     # 가입에 쓴 DeviceCode id
+    joined: str = ""
+    reset_token: str = ""
+    reset_until: float = 0.0
+
+
 @dataclass
 class Account:
+    """기관. 반려견·회차·작업은 기관 소유라 같은 기관 담당자는 모두 함께 본다."""
     id: str
     login_id: str
     password: str
@@ -152,6 +196,11 @@ class Account:
     results: list = field(default_factory=list)   # 최신 회차가 앞
     jobs: list = field(default_factory=list)
     notif_on: bool = True
+    code: str = ""                       # 기관 식별 코드 (관리 화면 표시용)
+    contract_ends: Optional[str] = None  # YYYY-MM-DD, 당일 포함. None = 기한 없음
+
+    def contract_status(self) -> str:
+        return "EXPIRED" if self.contract_ends and self.contract_ends < date.today().isoformat() else "ACTIVE"
 
     def dog(self, dog_id) -> Optional[Dog]:
         return next((d for d in self.dogs if d.id == dog_id), None)
@@ -168,17 +217,45 @@ class Account:
 
 class Store:
     def __init__(self) -> None:
-        self.accounts: dict[str, Account] = {}
+        self.accounts: dict[str, Account] = {}   # 기관
+        self.staff: dict[str, Staff] = {}        # 로그인 계정
+        self.codes: dict[str, DeviceCode] = {}
 
     def get(self, acct_id) -> Optional[Account]:
         return self.accounts.get(acct_id or "")
 
-    def by_login(self, login_id: str) -> Optional[Account]:
-        return next((a for a in self.accounts.values() if a.login_id == login_id), None)
-
     def add(self, acct: Account) -> Account:
         self.accounts[acct.id] = acct
         return acct
+
+    def by_login(self, login_id: str) -> Optional[Staff]:
+        return next((s for s in self.staff.values() if s.login_id == login_id), None)
+
+    def add_staff(self, s: Staff) -> Staff:
+        self.staff[s.id] = s
+        return s
+
+    def staff_of(self, inst_id: str) -> list:
+        return [s for s in self.staff.values() if s.inst == inst_id]
+
+    def add_code(self, c: DeviceCode) -> DeviceCode:
+        self.codes[c.id] = c
+        return c
+
+    def codes_of(self, inst_id: str) -> list:
+        return [c for c in self.codes.values() if c.inst == inst_id]
+
+    def by_code(self, code: str) -> Optional[DeviceCode]:
+        return next((c for c in self.codes.values() if c.code == code), None)
+
+    def active_count(self, code_id: str) -> int:
+        return sum(1 for s in self.staff.values() if s.device_code == code_id and s.active)
+
+    def effective_role(self, s: Staff) -> str:
+        acct = self.get(s.inst)
+        if s.role == "CLIENT" and acct and acct.contract_status() == "EXPIRED":
+            return "GUEST"
+        return s.role
 
 
 store = Store()

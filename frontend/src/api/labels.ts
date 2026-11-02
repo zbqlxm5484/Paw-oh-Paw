@@ -4,8 +4,8 @@ import type { CameraSide, Edition, GaitType, JointCode, Judgement, Limb, MetricL
 export const SEX_LABEL: Record<Sex, string> = {
   MALE: '수컷',
   FEMALE: '암컷',
-  MALE_NEUTERED: '중성화 수컷',
-  FEMALE_SPAYED: '중성화 암컷',
+  MALE_NEUTERED: '수컷(중성화)',
+  FEMALE_SPAYED: '암컷(중성화)',
 }
 
 export const SIZE_LABEL: Record<SizeClass, string> = {

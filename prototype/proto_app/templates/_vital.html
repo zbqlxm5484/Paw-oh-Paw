@@ -1,0 +1,4 @@
+{# 바이탈 값 하나: 참고 범위를 벗어나면 빨간 글자 + H/L(EMR 검사 결과 표시와 같은 방식), 마우스를 올리면 참고 범위 #}
+{% macro vv(value, f, size=16) -%}
+<b title="{{ f.ref if f else '' }}" style="font-size:{{ size }}px;white-space:nowrap;{{ 'color:' ~ f.c if f and f.c else '' }}">{{ value }}{% if f and f.m %}<span style="margin-left:3px;padding:0 5px;border-radius:5px;background:{{ '#FBE0D9' if f.c == '#C2412D' else '#FBEBC8' }};font-size:11px;font-weight:800;vertical-align:2px">{{ f.m }}</span>{% endif %}</b>
+{%- endmacro %}
