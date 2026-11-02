@@ -38,3 +38,22 @@ form.inline { display: contents; }
   .print-paper { box-shadow: none !important; min-height: 0 !important; padding: 0 !important; }
   .print-main { padding: 0 !important; max-width: none !important; }
 }
+
+/* 선택 상자: 브라우저 기본 화살표는 테두리에 붙어 보여서 직접 그린다. 화살표와 글자의 좌우 여백을 같게 맞춘다(11-02) */
+select {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  padding-left: 16px !important; padding-right: 44px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='%231B2433' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 16px center !important; background-size: 16px 16px !important;
+  cursor: pointer;
+}
+select::-ms-expand { display: none; }
+
+/* 차트 상단 고정 줄(11-02): 칸마다 [라벨 18px · 값 34px · 보조 18px] 같은 줄 높이라 위·값·아래가 가로로 맞는다 */
+.chart-hd { position:sticky; top:86px; z-index:10; padding:16px 22px; border-radius:18px; background:#fff; border:1px solid #ECE8E2; box-shadow:0 6px 18px rgba(27,36,51,.06); display:grid; grid-template-columns:max-content max-content max-content minmax(0,1fr); align-items:start; gap:12px 44px; font-variant-numeric:tabular-nums; }
+.hd-col { display:flex; flex-direction:column; min-width:0; }
+.hd-lb { font-size:12px; line-height:18px; color:#8E949C; }
+.hd-val { display:flex; align-items:center; gap:8px; min-height:34px; line-height:1.2; }
+.hd-sub { font-size:12px; line-height:18px; color:#A0A7B2; }
+.hd-vit { display:grid; grid-template-columns:repeat(4, auto); column-gap:24px; }
+@media (max-width:1280px) { .chart-hd { grid-template-columns:max-content max-content; } }

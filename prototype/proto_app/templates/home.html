@@ -18,7 +18,7 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
     {% for label, n, href, on, warn in [
         ('전체 반려견', hv.dogs, qs(view='dogs', changed='', by='', page=''), view == 'dogs' and not changed, False),
-        ('변동 있음 · 7일', hv.changed, qs(view='dogs', changed='1', by='', page=''), view == 'dogs' and changed, False),
+        ('일주일 간 변동 발생', hv.changed, qs(view='dogs', changed='1', by='', page=''), view == 'dogs' and changed, False),
         ('재촬영 필요', hv.retake, qs(view='dogs', changed='1', by='', page=''), False, True)] %}
     <a class="lk hv-border" href="{{ href }}" style="padding:16px 18px;border-radius:16px;background:#fff;border:1.5px solid {{ '#D2601A' if on else '#ECE8E2' }};display:flex;flex-direction:column;gap:4px">
       <span style="font-size:14px;font-weight:600;color:#5B6472">{{ label }}</span>
@@ -38,7 +38,7 @@
       {% endfor %}
     </div>
     {% if q %}<input type="hidden" name="q" value="{{ q }}"><span style="height:38px;padding:0 12px;border-radius:9px;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;font-size:14px;font-weight:700">‘{{ q }}’ 검색 결과</span>{% endif %}
-    <label style="height:44px;display:flex;align-items:center;gap:6px;font-size:14.5px;cursor:pointer"><input type="checkbox" name="changed" value="1" {{ 'checked' if changed }} onchange="this.form.submit()"> 변동 있음 · 7일</label>
+    <label style="height:44px;display:flex;align-items:center;gap:6px;font-size:14.5px;cursor:pointer"><input type="checkbox" name="changed" value="1" {{ 'checked' if changed }} onchange="this.form.submit()"> 일주일 간 변동 발생</label>
     <select name="stage" onchange="this.form.submit()" style="height:44px;border-radius:12px;border:1px solid {{ '#D2601A' if stage else '#E2DCD3' }};background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit">
       {% for v, label in [('', '단계 전체'), ('pre', '수술 전'), ('rehab', '재활 중'), ('done', '종결')] %}<option value="{{ v }}" {{ 'selected' if v == stage }}>{{ label }}</option>{% endfor %}
     </select>
@@ -56,24 +56,23 @@
   <div style="display:flex;gap:18px;align-items:flex-start">
     <div style="flex:1;min-width:0;border-radius:18px;background:#fff;border:1px solid #ECE8E2;overflow-x:auto">
       {% if view == 'analyses' %}
-      {% set cols = "110px minmax(170px,1.5fr) 96px minmax(110px,.9fr) 72px 76px 80px minmax(110px,.9fr)" %}
+      {% set cols = "104px minmax(190px,1.5fr) minmax(170px,1.4fr) 66px 128px 96px minmax(100px,.8fr)" %}
       <div style="min-width:900px">
         <div style="display:grid;grid-template-columns:{{ cols }};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A">
-          <span>측정일</span><span>반려견</span><span>동물번호</span><span>견종</span><span>회차</span><span>대칭 지수</span><span>유효 통과</span><span>촬영</span>
+          <span>측정일</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 지수</span><span>상태</span><span>촬영</span>
         </div>
         {% for r in hv.rows %}
         <div class="hv-row" data-href="/results/{{ r.id }}" style="display:grid;grid-template-columns:{{ cols }};gap:12px;padding:12px 20px;border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }};align-items:center;cursor:pointer;background:#fff">
           <span style="font-size:14px;color:#5B6472;font-variant-numeric:tabular-nums">{{ r.when }}</span>
-          <span style="display:flex;flex-direction:column;gap:3px;min-width:0">
-            <span><a class="lk" href="/dogs/{{ r.dog }}" style="font-size:15.5px;font-weight:700;border-bottom:1px dashed #C9C2B8">{{ r.name }}</a></span>
-            {% set bs = r.badges|rejectattr('kind', 'equalto', 'warn')|list %}{% if bs %}<span style="display:flex;gap:4px;flex-wrap:wrap">{% for b in bs[:1] %}<span style="padding:2px 7px;border-radius:6px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:11.5px;font-weight:700;white-space:nowrap">{{ b.t }}</span>{% endfor %}</span>{% endif %}
+          <span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+            <span style="font-size:12px;color:#8E949C;font-variant-numeric:tabular-nums">{{ r.no }}</span>
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><a class="lk" href="/dogs/{{ r.dog }}" style="font-size:15.5px;font-weight:700;border-bottom:1px dashed #C9C2B8">{{ r.name }}</a> <span style="font-size:13.5px;color:#5B6472">({{ r.breed }})</span></span>
           </span>
-          <span style="font-size:14px;color:#5B6472;font-variant-numeric:tabular-nums">{{ r.no }}</span>
-          <span style="font-size:14px">{{ r.breed }}</span>
-          <span style="font-size:14px">{{ r.no_s }}</span>
-          <b style="font-size:14.5px">{{ r.sym }}</b>
-          <span style="font-size:14px;font-variant-numeric:tabular-nums">{{ r.pass }}</span>
-          <a class="lk" href="{{ qs(by=r.by, page='') }}" style="font-size:13.5px;color:#5B6472">{{ r.by }}</a>
+          <span style="font-size:14.5px;font-weight:600;color:#3A4250;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.dx }}">{{ r.dx }}</span>
+          <span style="font-size:14px;color:#5B6472">{{ r.no_s }}</span>
+          <span style="display:flex;align-items:center;gap:6px"><b style="padding:4px 10px;border-radius:8px;background:{{ r.sym_bg }};color:{{ r.sym_c }};font-size:14px;font-variant-numeric:tabular-nums">{{ r.sym }}</b>{% if r.sym_d %}<span style="font-size:12.5px;font-weight:700;color:{{ r.sym_dc }}">{{ r.sym_d }}</span>{% endif %}</span>
+          <span><span style="padding:4px 9px;border-radius:8px;background:{{ r.bg }};color:{{ r.c }};font-size:12.5px;font-weight:700;white-space:nowrap">{{ r.st }}</span></span>
+          <a class="lk" href="{{ qs(by=r.by, page='') }}" style="font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.by }}</a>
         </div>
         {% endfor %}
       </div>
@@ -81,7 +80,7 @@
       {% set cols = "minmax(140px,1fr) minmax(130px,.9fr) minmax(190px,1.2fr) minmax(200px,1.6fr) " ~ ('minmax(150px,1.1fr) ' if changed else '') ~ "110px 84px" %}
       <div style="min-width:{{ 1080 if changed else 940 }}px">
         <div style="display:grid;grid-template-columns:{{ cols }};gap:14px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A">
-          <span>반려견</span><span>견종 · 체급</span><span>체중 · 체온 · 심박 · 혈압</span><span>수술 · 진단</span>{% if changed %}<span>변동 (7일)</span>{% endif %}<span>분석</span><span>단계</span>
+          <span>반려견</span><span>견종 · 체급</span><span>체중 · 체온 · 심박 · 혈압</span><span>수술 · 진단</span>{% if changed %}<span>일주일 간 변동</span>{% endif %}<span>분석</span><span>단계</span>
         </div>
         {% for r in hv.rows %}
         <div class="hv-row" data-href="/dogs/{{ r.id }}" style="display:grid;grid-template-columns:{{ cols }};gap:14px;padding:13px 20px;border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }};align-items:center;cursor:pointer">
@@ -130,4 +129,4 @@
 </main>
 {% endblock %}
 {% block modals %}{{ m.pet_modal('/home') }}{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='pet.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='pet.js') }}?v={{ ASSET_V }}"></script>{% endblock %}

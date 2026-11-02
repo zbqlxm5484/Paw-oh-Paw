@@ -13,7 +13,7 @@
 {% set fi = "height:50px;border-radius:12px;border:1px solid #ECE8E2;padding:0 16px;font-size:16px;color:#1B2433;outline:none" %}
 {{ open_modal('petModal') }}
   <form method="post" action="/dogs" id="petForm" style="display:contents">
-    <input type="hidden" name="dog_id" value="">
+    <input type="hidden" name="dog_id" value=""><input type="hidden" name="version" value="">
     <input type="hidden" name="next_url" value="{{ next_url }}">
     <input type="hidden" name="sex" value="m"><input type="hidden" name="size" value=""><input type="hidden" name="focus" value="">
     <b id="petTitle" style="font-size:22px;letter-spacing:-0.5px">반려견 등록</b>

@@ -31,9 +31,9 @@
     if (row && !e.target.closest('form, button, a')) location.href = row.dataset.href;
   });
 
-  // 작성자 이름: 기관 계정을 여러 명이 번갈아 써서 기록마다 이름을 받는다. 이 브라우저에서 마지막에 쓴 이름을 채워 둔다
-  var AUTHOR = 'pp_author', last = '';
-  try { last = localStorage.getItem(AUTHOR) || ''; } catch (e) {}
+  // 작성자 이름: 로그인한 담당자 이름을 기본으로 채운다(고칠 수 있다). 이름이 없으면 이 브라우저에서 마지막에 쓴 이름
+  var AUTHOR = 'pp_author', last = document.body.dataset.me || '';
+  if (!last) { try { last = localStorage.getItem(AUTHOR) || ''; } catch (e) {} }
   document.querySelectorAll('input.author-inp').forEach(function (i) { if (!i.value) i.value = last; });
   document.addEventListener('submit', function (e) {
     var i = e.target.querySelector && e.target.querySelector('input.author-inp');

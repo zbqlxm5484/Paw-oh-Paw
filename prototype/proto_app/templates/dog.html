@@ -12,24 +12,25 @@
   </div>
 
   {# 항상 보이는 정보: 누가 와서 열어도 이 줄부터 본다 #}
-  <div style="position:sticky;top:86px;z-index:10;padding:16px 20px;border-radius:18px;background:#fff;border:1px solid #ECE8E2;box-shadow:0 6px 18px rgba(27,36,51,.06);display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px">
-    <div style="display:flex;flex-direction:column;gap:2px">
-      <span style="font-size:12.5px;color:#8E949C;font-variant-numeric:tabular-nums">{{ row.no }}</span>
-      <b style="font-size:24px;letter-spacing:-0.5px">{{ row.name }} <span style="padding:3px 9px;border-radius:8px;background:{{ row.st_bg }};color:{{ row.st_c }};font-size:13px;vertical-align:4px">{{ row.stage }}</span></b>
-      <span style="font-size:14px;color:#3A4250">{{ row.breed }} · {{ row.size }} · {{ row.age }} · {{ row.sex }}</span>
+  <div class="chart-hd">
+    <div class="hd-col">
+      <span class="hd-lb">{{ row.no }}</span>
+      <span class="hd-val"><b style="font-size:24px;letter-spacing:-0.5px">{{ row.name }}</b><span style="padding:3px 9px;border-radius:8px;background:{{ row.st_bg }};color:{{ row.st_c }};font-size:13px;font-weight:700">{{ row.stage }}</span></span>
+      <span class="hd-sub" style="color:#3A4250;font-size:14px">{{ row.breed }} · {{ row.size }} · {{ row.age }} · {{ row.sex }}</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,auto);column-gap:20px;row-gap:2px;font-variant-numeric:tabular-nums">
-      {% for k in ['체중', '체온', '심박', '혈압'] %}<span style="font-size:12px;color:#8E949C">{{ k }}</span>{% endfor %}
-      {% for v in [row.v.kg, row.v.temp, row.v.hr, row.v.bp] %}<b style="font-size:18px">{{ v }}</b>{% endfor %}
-      <span style="grid-column:1/-1;font-size:12px;color:#A0A7B2">{{ row.v.when }} 측정</span>
+    <div class="hd-col">
+      <span class="hd-lb hd-vit">{% for k in ['체중', '체온', '심박', '혈압'] %}<span>{{ k }}</span>{% endfor %}</span>
+      <span class="hd-val hd-vit">{% for v in [row.v.kg, row.v.temp, row.v.hr, row.v.bp] %}<b style="font-size:18px">{{ v }}</b>{% endfor %}</span>
+      <span class="hd-sub">{{ row.v.when }} 측정</span>
     </div>
-    <div style="display:flex;flex-direction:column;gap:2px">
-      <span style="font-size:12px;color:#8E949C">보호자</span>
-      <span style="font-size:15px;font-weight:600">{{ row.owner }}{% if cur.phone %} <span style="font-weight:500;color:#5B6472;font-variant-numeric:tabular-nums">{{ cur.phone }}</span>{% endif %}</span>
+    <div class="hd-col">
+      <span class="hd-lb">보호자</span>
+      <span class="hd-val" style="font-size:15px;font-weight:600">{{ row.owner }}{% if cur.phone %}<span style="font-weight:500;color:#5B6472;font-variant-numeric:tabular-nums">{{ cur.phone }}</span>{% endif %}</span>
     </div>
-    <div style="flex:1 1 260px;display:flex;flex-wrap:wrap;gap:6px">
-      {% for b in row.badges %}<span style="padding:5px 10px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:13px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}
-    </div>
+    {% if row.badges %}<div class="hd-col">
+      <span class="hd-lb">{{ '최근 수술' if row.badges[0].kind == 'surg' else '진단' }}</span>
+      <span class="hd-val" style="flex-wrap:wrap">{% for b in row.badges %}<span style="padding:5px 10px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:13px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}</span>
+    </div>{% endif %}
   </div>
 
   {# 탭 #}
@@ -120,41 +121,43 @@
   </div>
 
   {% elif tab == 'notes' %}
-  <form method="post" action="/dogs/{{ cur.id }}/notes" style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px;margin:0">
-    <b style="font-size:16px">새 메모</b>
-    <textarea class="inp" name="text" placeholder="메모 남기기" style="min-height:90px;border-radius:12px;border:1px solid #E2DCD3;padding:12px 14px;font-size:15px;line-height:1.55;font-family:inherit;outline:none;resize:vertical"></textarea>
-    <input type="hidden" class="author-inp" name="author" value="">
-    <button class="bt" type="submit" style="align-self:flex-end;height:42px;padding:0 18px;border-radius:10px;background:#1B2433;color:#fff;font-size:14.5px;font-weight:700">남기기</button>
-  </form>
-  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
-    {% for n in notes %}
-    <div style="display:flex;flex-direction:column;gap:6px;padding-top:{{ '14px' if not loop.first else '0' }};border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }}">
+  {# 새 기록은 오른쪽 '진료 기록 작성' 칸에서 쓴다(어느 탭에서든 같은 자리) #}
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:8px 24px 20px;display:flex;flex-direction:column">
+    {% for g in soap %}
+    <div style="display:flex;flex-direction:column;gap:8px;padding-top:14px;margin-top:{{ '14px' if not loop.first else '0' }};border-top:{{ '1px solid #F2EFEA' if not loop.first else 'none' }}">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:#7A808A">
-        <b style="color:#3A4250">{{ n.at }}</b>{% if n.author %}<span>{{ n.author }}</span>{% endif %}{% if n.rid %}<a class="lk" href="/results/{{ n.rid }}" style="padding:2px 8px;border-radius:6px;background:#EEF1F6;color:#4A5A78;font-weight:700">{{ n.run }} 메모</a>{% endif %}
-        {% if n.revs %}<span>· 고친 이력 {{ n.revs|length }}</span>{% endif %}
-        <a class="lk" href="/dogs/{{ cur.id }}?tab=notes&edit={{ n.id }}#{{ n.id }}" style="margin-left:auto;font-weight:600;color:#B4501A">고치기</a>
+        <b style="color:#3A4250;font-size:14px">{{ g.at }}</b>{% if g.author %}<span>{{ g.author }}</span>{% endif %}
+        {% if g.imp %}<span style="padding:2px 8px;border-radius:6px;background:#FFF4D6;color:#8A6100;font-weight:700">중요</span>{% endif %}
+        {% if g.rid %}<a class="lk" href="/results/{{ g.rid }}" style="padding:2px 8px;border-radius:6px;background:#EEF1F6;color:#4A5A78;font-weight:700">{{ g.run }} 기록</a>{% endif %}
       </div>
-      {% if edit == n.id %}
-      <form id="{{ n.id }}" method="post" action="/dogs/{{ cur.id }}/notes" style="display:flex;flex-direction:column;gap:8px;margin:0">
-        <input type="hidden" name="note_id" value="{{ n.id }}">
-        <textarea class="inp" name="text" style="min-height:80px;border-radius:12px;border:1px solid #D2601A;padding:10px 12px;font-size:15px;line-height:1.55;font-family:inherit;outline:none">{{ n.text }}</textarea>
-        <input type="hidden" class="author-inp" name="author" value="">
-        <div style="display:flex;gap:10px;align-items:center">
-          <button class="bt" type="submit" style="height:40px;padding:0 16px;border-radius:10px;background:#1B2433;color:#fff;font-size:14px;font-weight:700">고친 내용 저장</button>
-          <a class="lk" href="/dogs/{{ cur.id }}?tab=notes" style="font-size:14px;color:#7A808A">취소</a>
+      {% for n in g.parts %}
+      <div id="{{ n.id }}" style="display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start">
+        <span style="display:flex;align-items:center;gap:8px"><b style="width:26px;height:26px;border-radius:7px;background:#F1ECE5;color:#3A4250;display:flex;align-items:center;justify-content:center;font-size:13.5px">{{ n.cat }}</b><span style="font-size:13.5px;color:#5B6472">{{ n.soap }}</span></span>
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+          {% if edit == n.id %}
+          <form method="post" action="/dogs/{{ cur.id }}/notes" style="display:flex;flex-direction:column;gap:8px;margin:0">
+            <input type="hidden" name="note_id" value="{{ n.id }}">
+            <textarea class="inp" name="text" style="min-height:70px;border-radius:10px;border:1px solid #D2601A;padding:10px 12px;font-size:15px;line-height:1.55;font-family:inherit;outline:none">{{ n.text }}</textarea>
+            <input type="hidden" class="author-inp" name="author" value="">
+            <div style="display:flex;gap:10px;align-items:center">
+              <button class="bt" type="submit" style="height:38px;padding:0 16px;border-radius:10px;background:#1B2433;color:#fff;font-size:14px;font-weight:700">고친 내용 저장</button>
+              <a class="lk" href="/dogs/{{ cur.id }}?tab=notes" style="font-size:14px;color:#7A808A">취소</a>
+            </div>
+          </form>
+          {% else %}
+          <div style="display:flex;gap:10px;align-items:flex-start"><span style="flex:1;font-size:15px;line-height:1.6;white-space:pre-line;padding-top:2px">{{ n.text }}</span><a class="lk" href="/dogs/{{ cur.id }}?tab=notes&edit={{ n.id }}#{{ n.id }}" style="font-size:13px;font-weight:600;color:#B4501A;white-space:nowrap;padding-top:4px">고치기</a></div>
+          {% endif %}
+          {% if n.revs %}
+          <details style="font-size:13px;color:#7A808A"><summary style="cursor:pointer">고친 이력 {{ n.revs|length }}건</summary>
+            {% for r in n.revs|reverse %}<div style="padding:6px 0 0 12px;border-left:2px solid #ECE8E2;margin-top:6px"><span>{{ r.at }} · {{ r.author }}</span><div style="text-decoration:line-through;white-space:pre-line">{{ r.text }}</div></div>{% endfor %}
+          </details>
+          {% endif %}
         </div>
-      </form>
-      {% else %}
-      <span style="font-size:15px;line-height:1.6;white-space:pre-line">{{ n.text }}</span>
-      {% endif %}
-      {% if n.revs %}
-      <details style="font-size:13px;color:#7A808A"><summary style="cursor:pointer">이전 내용 보기</summary>
-        {% for r in n.revs|reverse %}<div style="padding:6px 0 0 12px;border-left:2px solid #ECE8E2;margin-top:6px"><span>{{ r.at }} · {{ r.author }}</span><div style="text-decoration:line-through;white-space:pre-line">{{ r.text }}</div></div>{% endfor %}
-      </details>
-      {% endif %}
+      </div>
+      {% endfor %}
     </div>
     {% endfor %}
-    {% if not notes %}<span style="font-size:14px;color:#A0A7B2">메모가 없어요.</span>{% endif %}
+    {% if not soap %}<span style="font-size:14px;color:#A0A7B2;padding-top:12px">진료 기록이 없어요.</span>{% endif %}
   </div>
 
   {% else %}
@@ -206,4 +209,4 @@
 </main>
 {% endblock %}
 {% block modals %}{{ m.pet_modal('/dogs/' ~ cur.id) }}{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='pet.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='pet.js') }}?v={{ ASSET_V }}"></script>{% endblock %}

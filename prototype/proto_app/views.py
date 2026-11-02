@@ -9,7 +9,20 @@ from pathlib import Path
 from typing import Optional
 
 from . import real
-from .config import CHANGE_DAYS, LIMB, PAGE_SIZE, SEX, SITE, SIZE, ST, STAGE, SYM_CHANGE, auto_size
+from .config import (
+    CHANGE_DAYS,
+    LIMB,
+    NOTE_CAT,
+    PAGE_SIZE,
+    SEX,
+    SITE,
+    SIZE,
+    SOAP,
+    ST,
+    STAGE,
+    SYM_CHANGE,
+    auto_size,
+)
 from .store import Account, Dog, Result, Vital
 
 
@@ -359,7 +372,9 @@ def trend(acct: Account, d: Dog) -> dict:
 
 
 def changes(acct: Account, d: Dog) -> tuple[list, str]:
-    """최근 CHANGE_DAYS 일 안의 변동 사유와 가장 최근 변동일."""
+    """최근 CHANGE_DAYS 일 안의 변동 사유와 가장 최근 변동일.
+    EMR 처럼 조치가 필요하거나 이상한 것만 띄운다(11-02): 재촬영, 보행 나빠짐·좋아짐, 수술 등록, 중요 메모.
+    새 측정·새 진단·재활 단계 변경은 기록이 생긴 사실일 뿐이라 차트 이력에서 본다."""
     out, last = [], ""
 
     def add(day, label, tone):
@@ -368,9 +383,8 @@ def changes(acct: Account, d: Dog) -> tuple[list, str]:
         last = max(last, day)
 
     for h in d.history:
-        if days_ago(h.day) <= CHANGE_DAYS:
-            add(h.day, {"수술": "수술 등록", "진단": "새 진단"}.get(h.kind, "재활 종결" if "종결" in h.title else "재활 단계 변경"),
-                "surg")
+        if h.kind == "수술" and days_ago(h.day) <= CHANGE_DAYS:
+            add(h.day, "수술 등록", "surg")
     rs = [r for r in acct.results if r.dog == d.id and r.day]
     for r in rs:
         if days_ago(r.day) > CHANGE_DAYS:
@@ -385,8 +399,6 @@ def changes(acct: Account, d: Dog) -> tuple[list, str]:
             add(r.day, f"보행 좋아짐 +{r.sym - prev.sym}%p", "good")
         elif prev and prev.sym - r.sym >= SYM_CHANGE:
             add(r.day, f"보행 나빠짐 −{prev.sym - r.sym}%p", "bad")
-        elif r.st == "ok":
-            add(r.day, "새 측정", "plain")
     for n in d.notes:
         if n.important and days_ago(n.at[:10]) <= CHANGE_DAYS:
             add(n.at[:10], "중요 메모", "warn")
@@ -427,8 +439,26 @@ def analysis_rows(acct: Account, rs: list) -> list:
         out.append({"id": r.id, "dog": d.id, "name": d.name, "no": d.no or "—", "breed": d.breed or "견종 미입력",
                     "when": f"{short(r.date)} {r.time}", "no_s": f"{sess_no(acct, r)}회차", **st_chip(r.st),
                     "sym": "—" if r.st == "fail" else f"{r.sym}%", "pass": "—" if r.st == "fail" else f"{r.ps[1]} / {r.ps[0]}",
-                    "by": r.by or "—", "badges": badges(d)})
+                    "by": r.by or "—", "badges": badges(d), "dx": diagnosis(d), **sym_view(acct, r)})
     return out
+
+
+def sym_view(acct: Account, r) -> dict:
+    """분석 표의 대칭 지수 배지: 수준별 색, 직전 유효 회차 대비 오르내림"""
+    if r.st == "fail":
+        return {"sym_bg": "#F2EFEA", "sym_c": "#8E949C", "sym_d": ""}
+    lv = ((90, "", "#DCEFE2", "#2E7A4F") if r.sym >= 90 else (80, "", "#FBEBC8", "#8A6100") if r.sym >= 80
+          else (0, "", "#FBE0D9", "#C2412D"))   # 회차 균형 점수 기준(다리 하나 차이 기준 _LEVEL 과 다름)
+    prev = next((x for x in acct.results if x.dog == r.dog and x.st != "fail" and (x.day, x.time) < (r.day, r.time)), None)
+    dv = r.sym - prev.sym if prev else 0
+    return {"sym_bg": lv[2], "sym_c": lv[3],
+            "sym_d": (f"▲{dv}" if dv > 0 else f"▼{-dv}") if prev and dv else "", "sym_dc": "#2E8B57" if dv > 0 else "#C2412D"}
+
+
+def diagnosis(d: Dog) -> str:
+    """병명: 히스토리의 가장 최근 진단(분석 표 칸). 괄호 설명은 뺀다"""
+    h = next((h for h in reversed(d.history) if h.kind == "진단"), None)
+    return h.title.split(" (")[0] if h else "—"
 
 
 def staff_rows(acct: Account, rs: list) -> list:
@@ -470,12 +500,12 @@ def home_view(acct: Account, view: str, q: str, dog: str, by: str, changed: bool
 
 
 def memo_panel(acct: Account, d: Dog, rid: str = "") -> dict:
-    """오른쪽 반려견 칸(분석 결과·반려견 차트 공통): 신원·바이탈·특이사항, 이번 회차 메모, 반려견 메모."""
-    rows = note_rows(d, acct)
-    return {**patient_row(acct, d, set()), "rid": rid,
-            "run_notes": [n for n in rows if rid and n["rid"] == rid],
-            "dog_notes": [n for n in rows if not rid or n["rid"] != rid][:10],
-            "n_notes": len(d.notes), "n_res": sum(1 for r in acct.results if r.dog == d.id)}
+    """오른쪽 진료 기록 칸(분석 결과·반려견 차트 공통): SOAP 로 바로 쓰고, 이번 회차·최근 진료 기록을 본다."""
+    groups = soap_entries(d, acct)
+    return {**patient_row(acct, d, set()), "rid": rid, "soap_def": SOAP,
+            "run_soap": [g for g in groups if rid and g["rid"] == rid],
+            "recent_soap": [g for g in groups if not rid or g["rid"] != rid][:3],
+            "n_notes": len(groups), "n_res": sum(1 for r in acct.results if r.dog == d.id)}
 
 
 # ── 반려견 차트 (10-28) ──
@@ -531,8 +561,24 @@ def note_rows(d: Dog, acct: Optional[Account] = None) -> list:
 
     return [{"id": n.id, "at": n.at.replace("-", ".", 2)[2:], "author": n.author, "cat": n.cat, "text": n.text,
              "imp": n.important, "rid": n.rid, "run": run_label(n.rid),
+             "soap": SOAP.get(n.cat, ("", ""))[0],
              "revs": [{"at": a.replace("-", ".", 2)[2:], "author": w, "text": t} for a, w, t in n.revs]}
             for n in sorted(d.notes, key=lambda n: (n.important, n.at), reverse=True)]   # 중요 메모 먼저, 그 안에서 최신순
+
+
+def soap_entries(d: Dog, acct: Optional[Account] = None) -> list:
+    """차트 '진료 기록' 탭: 같은 시각·같은 사람·같은 회차로 쓴 메모를 한 기록으로 묶고 S·O·A·P 순서로 보인다(EMR 방식).
+    중요 표시가 있는 기록이 먼저, 그 안에서 최신순."""
+    groups = {}
+    for n in note_rows(d, acct):
+        g = groups.setdefault((n["at"], n["author"], n["rid"]), {"at": n["at"], "author": n["author"], "rid": n["rid"],
+                                                                  "run": n["run"], "imp": False, "parts": []})
+        g["imp"] = g["imp"] or n["imp"]
+        g["parts"].append(n)
+    order = {k: i for i, k in enumerate(NOTE_CAT)}
+    for g in groups.values():
+        g["parts"].sort(key=lambda x: order.get(x["cat"], 9))
+    return sorted(groups.values(), key=lambda g: (g["imp"], g["at"]), reverse=True)
 
 
 def vital_rows(d: Dog) -> dict:

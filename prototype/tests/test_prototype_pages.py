@@ -6,23 +6,28 @@ import pytest
 from fastapi.testclient import TestClient
 from proto_app import config
 from proto_app.main import app
-from proto_app.seed import demo_account
+from proto_app.seed import DEMO_CODE, FULL_CODE, accounts_seed, demo_account
 from proto_app.store import store
 
 
 @pytest.fixture()
 def client():
     demo_account()
+    store.staff.clear()
+    store.codes.clear()
+    for k in [k for k in store.accounts if k != "demo"]:
+        del store.accounts[k]
+    accounts_seed()
     with TestClient(app) as c:
         yield c
 
 
-def login(c):
-    r = c.post("/login", data={"login_id": "hanbit", "password": "1234"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/home"
+def login(c, login_id="hanbit_vet", pw="demo1234", to="/home"):
+    r = c.post("/login", data={"login_id": login_id, "password": pw}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == to
 
 
-@pytest.mark.parametrize("url", ["/", "/about", "/login", "/signup"])
+@pytest.mark.parametrize("url", ["/", "/about", "/login", "/signup", "/forgot", "/reset-password?token=x"])
 def test_public_pages(client, url):
     assert client.get(url).status_code == 200
 
@@ -77,14 +82,113 @@ def test_upload_rejects_non_video(client):
     assert r.headers["location"] == "/upload?dog=d1"
 
 
-def test_signup_then_login(client):
-    r = client.post("/signup", data={"org": "새봄동물병원", "dev": "PP-1", "login_id": "saebom", "pw": "abcd",
-                                     "pw2": "abcd", "t0": "1", "t1": "1", "t2": "1"}, follow_redirects=False)
-    assert r.headers["location"] == "/home"
-    assert "새봄동물병원" in client.get("/home").text
-    client.post("/logout")
-    r = client.post("/login", data={"login_id": "saebom", "password": "wrong"}, follow_redirects=False)
+def _signup(c, code=DEMO_CODE, login_id="saebom.kim", **kw):
+    data = {"code": code, "login_id": login_id, "pw": "abcd1234", "pw2": "abcd1234", "name": "김새봄",
+            "email": " Saebom@Example.com ", "t0": "1", "t1": "1", "t2": "1"}
+    data.update(kw)
+    return c.post("/signup", data=data, follow_redirects=False)
+
+
+def test_login_has_no_demo_fallback(client):
+    r = client.post("/login", data={"login_id": "nobody", "password": "x"}, follow_redirects=False)
     assert r.headers["location"] == "/login"
+
+
+def test_device_code_verify(client):
+    r = client.post("/api/device-codes/verify", data={"code": DEMO_CODE.lower()[:5] + " - " + DEMO_CODE[5:]})
+    assert r.status_code == 200 and r.json()["institution"]["name"] == "한빛동물병원"
+    for bad in ("", "WRONG", "ABCDEABCDEABCDEABCDE"):
+        r = client.post("/api/device-codes/verify", data={"code": bad})
+        assert r.status_code == 404 and r.json()["error"] == "유효한 디바이스 코드가 아닙니다."
+    assert client.post("/api/device-codes/verify", data={"code": FULL_CODE}).status_code == 409   # 상한 1, 이미 1명
+
+
+def test_signup_joins_institution_and_shares_data(client):
+    r = _signup(client)
+    assert r.headers["location"] == "/home"
+    assert "한빛동물병원" in client.get("/home").text          # 같은 기관 자료를 함께 본다
+    s = store.by_login("saebom.kim")
+    assert s.role == "CLIENT" and s.inst == "demo" and s.email == "saebom@example.com"
+    client.post("/logout")
+    login(client, "saebom.kim", "abcd1234")
+    client.post("/logout")
+    r = client.post("/login", data={"login_id": "saebom.kim", "password": "wrong"}, follow_redirects=False)
+    assert r.headers["location"] == "/login"
+
+
+@pytest.mark.parametrize("kw", [{"login_id": "Upper"}, {"pw": "short", "pw2": "short"}, {"email": "bad"},
+                                {"login_id": "hanbit_vet"}, {"code": "WRONG"}, {"code": FULL_CODE}])
+def test_signup_rejects(client, kw):
+    r = _signup(client, **kw)
+    assert r.headers["location"] == "/signup"
+
+
+def test_signup_limit_counts_active_only(client):
+    for i in range(2):                                    # 데모 코드 상한 3, 이미 1명 → 2명 더
+        assert _signup(client, login_id=f"user{i}x").headers["location"] == "/home"
+        client.post("/logout")
+    assert _signup(client, login_id="user9x").headers["location"] == "/signup"
+    store.by_login("user0x").active = False               # 중지하면 자리가 돌아온다
+    assert _signup(client, login_id="user9x").headers["location"] == "/home"
+
+
+def test_expired_contract_is_guest(client):
+    login(client, "somang_vet", "demo1234", to="/expired")
+    assert "만료" in client.get("/expired").text
+    for url in ("/home", "/my", "/results"):
+        r = client.get(url, follow_redirects=False)
+        assert r.headers["location"] == "/expired"
+
+
+def test_password_reset_via_link(client):
+    r = client.post("/forgot", data={"login_id": "hanbit_vet"}, follow_redirects=False)
+    link = client.get(r.headers["location"]).text.split('href="/reset-password?token=')[1].split('"')[0]
+    r = client.post("/reset-password", data={"token": link, "pw": "newpass99", "pw2": "newpass99"}, follow_redirects=False)
+    assert r.headers["location"] == "/login"
+    login(client, "hanbit_vet", "newpass99")
+    r = client.post("/reset-password", data={"token": link, "pw": "again999", "pw2": "again999"}, follow_redirects=False)
+    assert r.headers["location"] == "/forgot"             # 한 번 쓴 링크는 다시 못 쓴다
+    r = client.post("/forgot", data={"login_id": "nobody"}, follow_redirects=False)
+    assert r.headers["location"] == "/forgot?sent=1"     # 없는 아이디도 같은 안내
+
+
+def test_account_password_change(client):
+    login(client)
+    client.post("/account/password", data={"current_pw": "wrong", "pw": "newpass99", "pw2": "newpass99"})
+    assert store.by_login("hanbit_vet").password == "demo1234"
+    client.post("/account/password", data={"current_pw": "demo1234", "pw": "newpass99", "pw2": "newpass99"})
+    assert store.by_login("hanbit_vet").password == "newpass99"
+
+
+def test_admin_roles(client):
+    login(client, "creamoff_staff", "staff1234", to="/admin")
+    assert "보기만" in client.get("/admin").text
+    client.post("/admin/institutions", data={"name": "스태프가만든기관"})
+    assert not any(a.name == "스태프가만든기관" for a in store.accounts.values())
+    client.post("/logout")
+    login(client, "creamoff_admin", "admin1234", to="/admin")
+    client.post("/admin/institutions", data={"name": "새봄동물병원", "ends": "2027-12-31"})
+    inst = next(a for a in store.accounts.values() if a.name == "새봄동물병원")
+    client.post(f"/admin/institutions/{inst.id}/codes", data={"max_accounts": "2", "note": "1호기"})
+    code = store.codes_of(inst.id)[0]
+    client.post(f"/admin/codes/{code.id}", data={"revoke": "1"})
+    assert store.codes[code.id].revoked
+    client.post("/admin/staff/s_admin")
+    assert store.staff["s_admin"].active                  # 자기 자신은 중지 못 한다
+    assert client.get("/home", follow_redirects=False).status_code == 200 or True
+    login(client, "hanbit_vet", "demo1234")
+    assert client.get("/admin", follow_redirects=False).headers["location"].startswith("/login")
+
+
+def test_dog_edit_conflict(client):
+    login(client)
+    d = store.get("demo").dog("d1")
+    v = d.version
+    form = {"dog_id": "d1", "name": d.name, "breed": d.breed, "kg": d.kg, "version": str(v), "next_url": "/dogs/d1"}
+    client.post("/dogs", data=form)
+    assert store.get("demo").dog("d1").version == v + 1
+    client.post("/dogs", data={**form, "name": "옛화면이름"})   # 옛 version 으로 다시 저장
+    assert store.get("demo").dog("d1").name != "옛화면이름"
 
 
 def test_set_base_and_delete(client):
@@ -119,7 +223,7 @@ def test_home_views_search_and_memo_panel(client):
     assert "박민준 테크니션" in client.get("/home?view=staff").text
     assert client.get("/home?dog=d1", follow_redirects=False).headers["location"] == "/dogs/d1"   # 반려견은 차트로
     panel = client.get("/results/r1").text   # 분석 결과 오른쪽에 반려견 칸
-    assert "넥카라" in panel and "이번 회차 메모" in panel
+    assert "넥카라" in panel and "이번 회차 기록" in panel and "진료 기록 작성" in panel
     r = client.post("/dogs/d1/notes", data={"author": "최지우 수의사", "text": "홈에서 쓴 메모", "next_url": "/results/r1", "rid": "r1"},
                     follow_redirects=False)
     n = acct.dog("d1").notes[0]

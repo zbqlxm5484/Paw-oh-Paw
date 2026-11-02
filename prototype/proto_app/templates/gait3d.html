@@ -50,7 +50,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const MODEL = {{ model_url|tojson }};
-const LEGS = {{ legs|tojson }};   // {LF: {label, weak, dot, mets:[{n,v,other,lower}]}, ...}
+const LEGS = {{ legs|tojson }};
+const ROMS = {{ roms|tojson }};   // 이 회차 다리별 관절 가동 범위(°). 있으면 3D 배율을 이 값으로 정한다   // {LF: {label, weak, dot, mets:[{n,v,other,lower}]}, ...}
 const OVERALL = {{ overall|tojson }};
 const GAIT_URL = {{ gait_url|tojson }};
 // 측정 걸음: 모양은 모델 걷기 동작, 다리 뼈마다 움직임 폭을 실측 관절 굽힘 폭(좌우 평균 대비)에 맞춘다.
@@ -188,12 +189,16 @@ new GLTFLoader().load(MODEL, (gltf) => {
   fetch(GAIT_URL).then((r) => (r.ok ? r.json() : null)).then((g) => {
     if (g) {
       gait = g;
-      // 다리별 관절 굽힘 폭 ÷ 같은 관절 좌우 평균 = 그 다리 뼈의 움직임 배율
-      const amp = (code, j) => { const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null; };
+      // 다리별 관절 굽힘 폭 ÷ 같은 관절 좌우 중 큰 쪽 = 그 다리 뼈의 움직임 배율.
+      // 잘 쓰는 다리는 1(모델 걷기 동작 그대로), 덜 쓰는 다리만 줄인다. 1 을 넘기면 회전을 늘려 그려 발이 꺾여 보인다(11-02)
+      const amp = (code, j) => {
+        if (ROMS[code] && ROMS[code][j]) return ROMS[code][j];        // 이 회차 실측 가동 범위
+        const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null;   // 없으면 시연 곡선
+      };
       for (const [code, bones] of Object.entries(gaitBones)) bones.forEach((x) => {
         if (!x) return;
         const mine = amp(code, x.joint), pair = [amp('L' + code[1], x.joint), amp('R' + code[1], x.joint)].filter((v) => v);
-        if (mine && pair.length) x.scale = mine / (pair.reduce((s, v) => s + v, 0) / pair.length);
+        if (mine && pair.length) x.scale = Math.min(1, Math.max(0.12, mine / Math.max(...pair)));
       });
       document.getElementById('gait-src').textContent = g.label || ('영상 ' + g.videos + '개 · 다리마다 ' + Math.min(...Object.values(g.legs).map((L) => L.strides)) + '걸음 이상 평균');
     }
@@ -282,7 +287,7 @@ function applyGait() {
   for (const bones of Object.values(gaitBones)) bones.forEach((x) => {
     if (!x) return;
     qa.slerpQuaternions(x.dqs[k], x.dqs[(k + 1) % N_WALK], f);          // 이 순간 걷기 동작의 평균 대비 회전
-    dq.slerpQuaternions(ID, qa, x.scale);                                 // 실측 배율만큼 늘이거나 줄임
+    dq.slerpQuaternions(ID, qa, x.scale);                                 // 실측 배율만큼 줄임(0~1, 늘리지는 않는다)
     x.b.quaternion.copy(dq).multiply(x.q0);
   });
 }

@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Paw oh Paw{% endblock %}</title>
 <link rel="icon" href="{{ url_for('static', path='assets/logo.png') }}">
-<link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v={{ ASSET_V }}">
 {% block head %}{% endblock %}
 </head>
-<body{% block body_attr %}{% endblock %}>
+<body data-me="{{ me.name if me else '' }}"{% block body_attr %}{% endblock %}>
 <svg width="0" height="0" style="position:absolute">
   <defs>
     <g id="w-chev"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></g>
@@ -63,7 +63,7 @@
 {% endif %}
 
 <script>window.PP = { toast: {{ toast|tojson }}, pollNotices: {{ 'true' if has_active and not job_id else 'false' }}, breeds: {{ breeds|tojson }}, dogs: {{ dogs_data|tojson }}, openPet: {{ 'true' if modal == 'pet' else 'false' }} };</script>
-<script src="{{ url_for('static', path='app.js') }}"></script>
+<script src="{{ url_for('static', path='app.js') }}?v={{ ASSET_V }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

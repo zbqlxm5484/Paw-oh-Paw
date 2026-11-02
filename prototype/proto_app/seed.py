@@ -13,9 +13,27 @@ import time
 from datetime import date, timedelta
 
 from . import config, real
-from .store import Account, Dog, History, Job, Note, Result, Vital, kdate, new_id, store
+from .store import (
+    Account,
+    DeviceCode,
+    Dog,
+    History,
+    Job,
+    Note,
+    Result,
+    Staff,
+    Vital,
+    kdate,
+    new_id,
+    store,
+)
 
 DEMO_ID = "demo"
+DEMO_STAFF = "s_demo"                 # 데모 기관 담당자(바로가기·둘러보기 로그인)
+# 시연용 디바이스 코드(화면 확인용으로 가입 화면에 적어 둔다). 실제 서비스에서는 크림오프 관리 화면에서 발급한다
+DEMO_CODE = "HNB7K" "QW9PA" "X2M8N" "H4CDE"
+FULL_CODE = "FUZZ2" "QW9PA" "X2M8N" "H4CDE"     # 계정 상한이 찬 코드
+EXPIRED_CODE = "EXPR3" "QW9PA" "X2M8N" "H4CDE"  # 계약이 끝난 기관의 코드
 N_DOGS = 120
 STAFF = ["이서연 원장", "최지우 수의사", "한도윤 수의사", "박민준 테크니션", "정하늘 테크니션"]
 
@@ -45,15 +63,15 @@ def _design_dogs() -> tuple[list, list]:
             vitals=[Vital(iso(3), "28.1", "38.6", "92", "142", "84", "박민준 테크니션"),
                     Vital(iso(16), "28.3", "38.4", "88", "138", "80", "정하늘 테크니션"),
                     Vital(iso(71), "29.4", "38.9", "104", "150", "88", "이서연 원장")],
-            notes=[Note("n1", f"{iso(3)} 14:40", "최지우 수의사", "경과",
+            notes=[Note("n1", f"{iso(3)} 14:40", "최지우 수의사", "O",
                         "오른뒤 체중 부하 늘었음. 계단 오르기는 아직 피하도록 보호자에게 안내", False),
-                   Note("n2", f"{iso(71)} 18:10", "이서연 원장", "특이사항",
+                   Note("n2", f"{iso(71)} 18:10", "이서연 원장", "P",
                         "수술 부위 핥음 → 넥카라 착용 유지", True)]),
         Dog("d2", "콩이", "말티즈", "2022", "3.2", "f", no="20220715", owner="이도윤", phone="010-5532-1048",
             stage="pre", stage_day=iso(30),
             history=[History(iso(30), "진단", "슬개골 내측 탈구 2기", "LH", "한도윤 수의사", "한도윤 수의사")],
             vitals=[Vital(iso(30), "3.2", "38.8", "128", "", "", "정하늘 테크니션")],
-            notes=[Note("n3", f"{iso(30)} 16:35", "한도윤 수의사", "특이사항",
+            notes=[Note("n3", f"{iso(30)} 16:35", "한도윤 수의사", "O",
                         "겁이 많아 보호자 동반 촬영", True)]),
         Dog("d3", "두부", "비글", "2021", "11.2", "mn", rehab=iso(27), focus="LF", no="20210303", owner="박서윤",
             phone="010-7714-2295", stage="rehab", stage_day=iso(27),
@@ -62,14 +80,14 @@ def _design_dogs() -> tuple[list, list]:
                      History(iso(27), "재활", "재활 시작", "LF", "", "최지우 수의사")],
             vitals=[Vital(iso(2), "11.0", "38.7", "104", "136", "78", "박민준 테크니션"),
                     Vital(iso(33), "11.4", "38.5", "110", "", "", "최지우 수의사")],
-            notes=[Note("n4", f"{iso(2)} 17:55", "박민준 테크니션", "전달",
+            notes=[Note("n4", f"{iso(2)} 17:55", "박민준 테크니션", "P",
                         "오늘 촬영 중 4번 영상에서 다리 가려짐. 다음 측정 때 오른쪽에서 다시 찍기", False, rid="r2")]),
         Dog("d4", "탄이", "진돗개", "2017", "19.8", "m", no="20170921", owner="최지호", phone="010-3390-6621",
             stage="rehab", stage_day=iso(9), focus="LH",
             history=[History(iso(12), "진단", "퇴행성 관절염 (양측 고관절)", "LH", "이서연 원장", "이서연 원장"),
                      History(iso(9), "재활", "보존 치료 · 수중 재활 시작", "LH", "", "이서연 원장")],
             vitals=[Vital(iso(2), "19.6", "38.9", "84", "148", "90", "정하늘 테크니션")],
-            notes=[Note("n5", f"{iso(2)} 11:20", "정하늘 테크니션", "특이사항",
+            notes=[Note("n5", f"{iso(2)} 11:20", "정하늘 테크니션", "O",
                         "입질 있음, 입마개 착용 후 촬영", True)]),
     ]
     results = [
@@ -211,10 +229,10 @@ def _gen_dog(rng: random.Random, i: int, recent: bool) -> tuple[Dog, list]:
     # 메모: 특이사항(중요) 일부, 경과·전달 몇 개
     if rng.random() < 0.35:
         t = rng.randint(floor, t_diag)
-        d.notes.append(Note(new_id("note"), f"{iso(t)} {_hm(rng)}", rng.choice(STAFF), "특이사항", rng.choice(CAUTIONS), True))
+        d.notes.append(Note(new_id("note"), f"{iso(t)} {_hm(rng)}", rng.choice(STAFF), "O", rng.choice(CAUTIONS), True))
     for _ in range(rng.randint(0, 3)):
         t = rng.randint(floor, t_diag)
-        cat, text = rng.choice([("경과", rng.choice(PROGRESS)), ("전달", rng.choice(HANDOFF))])
+        cat, text = rng.choice([("O", rng.choice(PROGRESS)), ("P", rng.choice(HANDOFF))])
         d.notes.append(Note(new_id("note"), f"{iso(t)} {_hm(rng)}", rng.choice(STAFF), cat, text))
     d.notes.sort(key=lambda n: n.at, reverse=True)
     return d, results
@@ -231,7 +249,8 @@ def _hm(rng: random.Random) -> str:
 def demo_account() -> Account:
     """데모 계정을 처음 상태로 (다시) 만든다."""
     acct = Account(id=DEMO_ID, login_id="hanbit_vet", password="demo", name="한빛동물병원",
-                   loc="서울 마포구 월드컵북로", dev="PP-2410-0381")
+                   loc="서울 마포구 월드컵북로", dev="PP-2410-0381", code="INST-HANBIT",
+                   contract_ends=(date.today() + timedelta(days=362)).isoformat())
     dogs, results = _design_dogs()
     rng = random.Random(20261028)
     n_gen = N_DOGS - len(dogs)
@@ -243,6 +262,7 @@ def demo_account() -> Account:
     for d in dogs:
         d.size = d.size or config.auto_size(d.breed, d.kg)
     real.fill(results)   # 회차 수치는 실측 회차로 (이름·날짜·측정자는 지어낸 값)
+    real.showcase(results, "d1")   # 시연: 대표 반려견은 오른쪽 뒷다리 절뚝임이 회차마다 나아지는 극단 합성(3D 와 같은 다리)
     acct.dogs = dogs
     acct.results = sorted(results, key=lambda r: (r.day, r.time), reverse=True)
     # 콩이는 로그인할 때 분석이 절반쯤 진행 중이다 (홈의 '측정 중' 표시, 끝나면 알림)
@@ -250,6 +270,31 @@ def demo_account() -> Account:
     return store.add(acct)
 
 
+def accounts_seed() -> None:
+    """로그인 계정·디바이스 코드·크림오프 운영 기관(회원가입 명세 v0.3). 데모 기관 데이터와 따로 다시 만든다."""
+    if "creamoff" not in store.accounts:
+        store.add(Account(id="creamoff", login_id="", password="", name="크림오프", code="INST-CREAM", joined="2026년 10월 1일"))
+        store.add_staff(Staff("s_admin", "creamoff_admin", "admin1234", "김운영", "creamoff", "ops@creamoff.example",
+                              role="ADMIN", joined="2026년 10월 1일"))
+        store.add_staff(Staff("s_temp", "creamoff_staff", "staff1234", "이스태프", "creamoff", "staff@creamoff.example",
+                              role="STAFF", joined="2026년 10월 20일"))
+    if not store.by_code(DEMO_CODE):
+        store.add_code(DeviceCode("c_demo", DEMO_ID, DEMO_CODE, 3, note="1호기", created="2026-10-02"))
+        store.add_code(DeviceCode("c_full", DEMO_ID, FULL_CODE, 1, note="2호기(상한 1)", created="2026-10-20"))
+    if not store.by_login("hanbit_vet"):
+        store.add_staff(Staff(DEMO_STAFF, "hanbit_vet", "demo1234", "정하늘", DEMO_ID, "hanbit@example.com",
+                              device_code="c_demo", joined="2026년 10월 2일"))
+        store.add_staff(Staff("s_full", "hanbit_desk", "demo1234", "박데스크", DEMO_ID, "desk@example.com",
+                              device_code="c_full", joined="2026년 10월 21일"))
+    if "expired" not in store.accounts:   # 계약이 끝난 기관: 로그인하면 GUEST 로 만료 안내
+        store.add(Account(id="expired", login_id="", password="", name="소망동물병원", code="INST-SOMANG",
+                          contract_ends=(date.today() - timedelta(days=3)).isoformat(), joined="2025년 10월 1일"))
+        store.add_code(DeviceCode("c_exp", "expired", EXPIRED_CODE, 3, created="2025-10-01"))
+        store.add_staff(Staff("s_exp", "somang_vet", "demo1234", "최소망", "expired", "somang@example.com",
+                              device_code="c_exp", joined="2025년 10월 1일"))
+
+
 def seed() -> None:
     if DEMO_ID not in store.accounts:
         demo_account()
+    accounts_seed()

@@ -65,6 +65,7 @@
     var d = id && id !== 'new' ? DOGS[id] : null;
     form.reset();
     el('dog_id').value = d ? d.id : '';
+    el('version').value = d ? d.version : '';
     ['name', 'breed', 'kg', 'birth', 'rehab', 'memo'].forEach(function (n) { el(n).value = d ? (d[n] || '') : ''; });
     el('sex').value = d ? (d.sex || 'm') : 'm';
     el('size').value = d && d.size_manual ? d.size : '';
