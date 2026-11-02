@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.report import TEMPLATE_VERSION, ReportCheckError, ReportError, ReportInputError
+from app.report import pdf as pdf_module
 from app.report.checks import DISCLAIMER, check_texts
 from app.report.generate import generate_report, render
 from app.report.inputs import parse_input
@@ -199,3 +200,30 @@ def test_real_weasyprint_makes_a_pdf(tmp_path: Path) -> None:
     output = tmp_path / "report.pdf"
     result = generate_report(_write_input(tmp_path, sample_input(edition="VET")), output)
     assert output.read_bytes().startswith(b"%PDF") and result.pdf_bytes > 1000
+
+
+# ---- Windows GTK 경로 ----
+
+
+def test_windows_gtk_bin_is_put_into_the_dll_env_only_when_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pdf_module.sys, "platform", "win32")
+    monkeypatch.delenv(pdf_module.DLL_DIRS_ENV, raising=False)
+    bin_dir = tmp_path / "GTK3-Runtime Win64" / "bin"
+    monkeypatch.setattr(pdf_module, "gtk_candidates", lambda: [bin_dir])
+    assert pdf_module.prepare_windows_dlls() is None and pdf_module.DLL_DIRS_ENV not in pdf_module.os.environ
+
+    bin_dir.mkdir(parents=True)
+    (bin_dir / pdf_module.GTK_MARKER_DLL).write_bytes(b"")
+    assert pdf_module.prepare_windows_dlls() == bin_dir
+    assert pdf_module.os.environ[pdf_module.DLL_DIRS_ENV] == str(bin_dir)
+    # 이미 있으면 건드리지 않는다
+    monkeypatch.setenv(pdf_module.DLL_DIRS_ENV, "elsewhere")
+    assert pdf_module.prepare_windows_dlls() is None and pdf_module.os.environ[pdf_module.DLL_DIRS_ENV] == "elsewhere"
+
+
+def test_non_windows_never_touches_the_dll_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pdf_module.sys, "platform", "linux")
+    monkeypatch.delenv(pdf_module.DLL_DIRS_ENV, raising=False)
+    assert pdf_module.prepare_windows_dlls() is None and pdf_module.DLL_DIRS_ENV not in pdf_module.os.environ
