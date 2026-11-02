@@ -1,6 +1,6 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.12. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003), 13(디바이스 코드 확인·회원가입), 14(크림오프 관리자 API 9개, 비밀번호 변경·내 정보 수정, seed 계약 종료일·이메일), 15(반려견 수정 낙관적 잠금 `version`·409 `DOG_MODIFIED`), 16(이메일 링크 비밀번호 재설정, SMTP 메일)이다. 12~16은 팀장 티켓 S15P31A404-192 "회원가입·로그인 기능 구현"이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.13. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 8(측정 종료·회차 집계·회차 결과), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003), 13(디바이스 코드 확인·회원가입), 14(크림오프 관리자 API 9개, 비밀번호 변경·내 정보 수정, seed 계약 종료일·이메일), 15(반려견 수정 낙관적 잠금 `version`·409 `DOG_MODIFIED`), 16(이메일 링크 비밀번호 재설정, SMTP 메일)이다. 12~16은 팀장 티켓 S15P31A404-192 "회원가입·로그인 기능 구현"이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
@@ -33,7 +33,7 @@
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 
-결과 영상 재생(서명 URL 검증)·측정 종료·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`). 로그인은 아이디+비밀번호다(기관 코드는 받지 않는다). 기관의 계약 종료일(`institution.contract_ends_at`)이 지나면 그 기관 CLIENT는 `effective_role`이 GUEST가 되어 로그인과 `/auth/me`만 되고 나머지는 403 `CONTRACT_EXPIRED`다. 담당자 스냅샷은 `AUTH_CACHE_TTL_SEC`(기본 60초) 동안 프로세스 메모리에 두므로 계정 중지·계약 만료는 최대 60초 뒤에 반영된다(관리자 API로 바꾼 것은 같은 프로세스에서 즉시). 고객 담당자는 크림오프가 발급한 디바이스 코드(20자, 화면 표시 `XXXXX-XXXXX-XXXXX-XXXXX`)로 `POST /auth/signup`에서 스스로 가입하고(CLIENT, 이메일 필수), 비밀번호를 잊으면 `POST /auth/password-reset/request`가 `{FRONTEND_BASE_URL}/reset-password?token=…` 링크를 메일로 보낸다(`.env`의 `SMTP_HOST`가 비어 있으면 503 `MAIL_UNAVAILABLE`).
+결과 영상 재생(서명 URL 검증)·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`). 로그인은 아이디+비밀번호다(기관 코드는 받지 않는다). 기관의 계약 종료일(`institution.contract_ends_at`)이 지나면 그 기관 CLIENT는 `effective_role`이 GUEST가 되어 로그인과 `/auth/me`만 되고 나머지는 403 `CONTRACT_EXPIRED`다. 담당자 스냅샷은 `AUTH_CACHE_TTL_SEC`(기본 60초) 동안 프로세스 메모리에 두므로 계정 중지·계약 만료는 최대 60초 뒤에 반영된다(관리자 API로 바꾼 것은 같은 프로세스에서 즉시). 고객 담당자는 크림오프가 발급한 디바이스 코드(20자, 화면 표시 `XXXXX-XXXXX-XXXXX-XXXXX`)로 `POST /auth/signup`에서 스스로 가입하고(CLIENT, 이메일 필수), 비밀번호를 잊으면 `POST /auth/password-reset/request`가 `{FRONTEND_BASE_URL}/reset-password?token=…` 링크를 메일로 보낸다(`.env`의 `SMTP_HOST`가 비어 있으면 503 `MAIL_UNAVAILABLE`).
 
 ## 준비 (처음 한 번)
 

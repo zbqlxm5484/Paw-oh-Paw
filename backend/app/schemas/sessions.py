@@ -77,3 +77,63 @@ class SessionDetailOut(SessionOut):
     progress: ProgressOut
     notices: list[ReasonOut]
     shots: list[ShotOut]
+
+
+class PassCountsOut(BaseModel):
+    measured: int
+    used: int
+    excluded: int
+
+
+class ShotCountsOut(BaseModel):
+    total: int
+    failed: int
+    invalid: int
+
+
+class ExcludeSummaryOut(ReasonOut):
+    """제외 사유 하나와 그 사유로 제외된 통과 수."""
+
+    count: int
+
+
+class MetricOut(BaseModel):
+    """회차 수치 한 줄(12.3). 측정 불가면 value는 null이고 사유가 있다. 0을 보내지 않는다(12.5)."""
+
+    metric_code: str
+    limb: str
+    value: float | None
+    unit: str
+    measurable: bool
+    unmeasurable_reason: ReasonOut | None
+    n_passes: int
+
+
+class LimbCompareOut(BaseModel):
+    """다리 비교 요약 한 줄(BE-21). diff는 왼쪽 − 오른쪽이다(12.3)."""
+
+    pair: str
+    metric_code: str
+    unit: str
+    left: float | None
+    right: float | None
+    diff: float | None
+    symmetry_index: float | None
+    comparable: bool
+    reason: ReasonOut | None
+
+
+class GaitResultOut(BaseModel):
+    gait_type: str
+    metrics: list[MetricOut]
+    limb_compare: list[LimbCompareOut]
+
+
+class SessionResultOut(SessionOut):
+    """GET /sessions/{id}/result(15.7): SessionOut + 통과·촬영 수, 제외 사유, 안내, 보행 유형별 수치."""
+
+    pass_counts: PassCountsOut
+    shot_counts: ShotCountsOut
+    exclude_summary: list[ExcludeSummaryOut]
+    notices: list[ReasonOut]
+    gaits: list[GaitResultOut]

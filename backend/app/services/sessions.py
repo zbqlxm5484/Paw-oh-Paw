@@ -1,8 +1,9 @@
-"""회차 시작·조회·취소(12.4, 12.5, 13.3, 15.6). 모든 조회는 기관 ID로 거른다(11.6)."""
+"""회차 시작·조회·측정 종료·취소(12.4, 12.5, 13.3, 15.6). 모든 조회는 기관 ID로 거른다(11.6)."""
 
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -81,7 +82,7 @@ def start_session(
     return session
 
 
-def _session_query(institution_id: uuid.UUID, session_id: uuid.UUID):
+def session_query(institution_id: uuid.UUID, session_id: uuid.UUID):
     return (
         select(MeasureSession)
         .join(Dog, MeasureSession.dog_id == Dog.id)
@@ -93,7 +94,7 @@ def get_session(
     db: Session, institution_id: uuid.UUID, session_id: uuid.UUID, *, for_update: bool = False
 ) -> MeasureSession:
     """없거나 다른 기관의 회차면 똑같이 404 NOT_FOUND(15.1). for_update면 회차 행을 잠근다(joinedload 없이, 11.7)."""
-    query = _session_query(institution_id, session_id)
+    query = session_query(institution_id, session_id)
     if for_update:
         query = query.with_for_update(of=MeasureSession)
     session = db.scalars(query).one_or_none()
@@ -102,12 +103,24 @@ def get_session(
     return session
 
 
+def side_counts(shots: list[Shot]) -> tuple[int, int]:
+    """DONE 촬영의 유효 통과를 보행 유형 구분 없이 camera_side별로 센다(왼쪽, 오른쪽). 15.6·15.7이 같은 기준을 쓴다."""
+    counts = {CameraSide.LEFT.value: 0, CameraSide.RIGHT.value: 0}
+    for shot in shots:
+        if shot.status != ShotStatus.DONE:
+            continue
+        for walk_pass in shot.passes:
+            if walk_pass.is_valid and walk_pass.camera_side in counts:
+                counts[walk_pass.camera_side] += 1
+    return counts[CameraSide.LEFT.value], counts[CameraSide.RIGHT.value]
+
+
 def session_detail(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID) -> SessionDetailOut:
     """GET /sessions/{id}: 회차·반려견·진행·촬영을 한 번에 준다. 딸린 행은 selectinload로 한 번에 읽는다(15.1)."""
     # populate_existing: 같은 세션이 전에 읽어 둔 촬영 목록이 있어도 DB에서 다시 채운다(2~3초마다 다시 부르는 화면용).
     session = (
         db.scalars(
-            _session_query(institution_id, session_id)
+            session_query(institution_id, session_id)
             .options(
                 joinedload(MeasureSession.dog),
                 joinedload(MeasureSession.staff),
@@ -121,15 +134,8 @@ def session_detail(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    counts = {CameraSide.LEFT.value: 0, CameraSide.RIGHT.value: 0}
-    for shot in session.shots:
-        if shot.status != ShotStatus.DONE:
-            continue
-        for walk_pass in shot.passes:
-            if walk_pass.is_valid and walk_pass.camera_side in counts:
-                counts[walk_pass.camera_side] += 1
     recommended = get_settings().RECOMMENDED_PASSES
-    left, right = counts[CameraSide.LEFT.value], counts[CameraSide.RIGHT.value]
+    left, right = side_counts(session.shots)
 
     notices: list[ReasonOut] = []
     if left >= recommended and right >= recommended:
@@ -177,6 +183,22 @@ def delete_session_tree(db: Session, session: MeasureSession, institution_id: uu
     db.execute(update(Dog).where(Dog.baseline_session_id == session.id).values(baseline_session_id=None))
     db.execute(delete(MeasureSession).where(MeasureSession.id == session.id))
     db.expunge(session)
+
+
+def complete_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID) -> MeasureSession:
+    """측정 종료(BE-13, 13.3): MEASURING이고 촬영이 1건 이상일 때만 AGGREGATING으로. 집계는 워커가 이어서 한다(12.4)."""
+    session = get_session(db, institution_id, session_id, for_update=True)
+    db.refresh(session)  # 잠근 뒤의 상태로 다시 본다
+    if session.status != SessionStatus.MEASURING:
+        raise AppError(ErrorCode.SESSION_CLOSED)
+    has_shot = db.scalar(select(Shot.id).where(Shot.session_id == session.id).limit(1))
+    if has_shot is None:
+        raise AppError(ErrorCode.SESSION_EMPTY)
+    session.status = SessionStatus.AGGREGATING.value
+    session.completed_at = datetime.now(UTC)
+    db.flush()
+    db.refresh(session)
+    return session
 
 
 def cancel_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID) -> None:
