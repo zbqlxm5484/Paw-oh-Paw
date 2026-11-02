@@ -1,0 +1,192 @@
+"""분석 파이프라인: 영상 → (결과 JSON v1, 관절점 파일). S15P31A404-180, (3/4)
+
+관절점을 어디서 얻을지는 ANALYSIS_POSE_SOURCE로 고른다.
+- sample(기본): samples/의 견본 결과를 돌려준다. 모델·엔진 없이 팀 서비스 연동을 시험할 때
+- track: 미리 뽑아 둔 관절점 파일(기업 video_kpi.py track 형식, ANALYSIS_TRACK_FILE)에서 올린 영상과
+  SHA-256이 같은 영상을 찾아 엔진을 돌린다. GPU·모델 없이 실제 엔진 결과를 낼 수 있다
+- 모델로 영상에서 바로 관절점을 뽑는 경로는 다음 단계(MMPose 실행 환경, 허정원)에서 이 자리에 더한다
+
+엔진(저장소 루트의 engine/)
+- engine.validity.judge_shot: 통과 자르기, 유효·무효 판별, 측정 구간
+- engine.angles.flexion_angle: 프레임별 카메라 쪽 다리 굽힘 각도(관절점 파일의 angles)
+형식: docs/analysisApi/resultFormat.md
+"""
+import hashlib
+import json
+import os
+import sys
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
+from typing import Optional
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+if str(ROOT) not in sys.path:   # analysis_api 폴더에서 실행해도 저장소 루트의 engine 패키지를 쓰게 한다
+    sys.path.insert(0, str(ROOT))
+
+from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle  # noqa: E402
+from engine.gait_events import EVENTS_VERSION  # noqa: E402
+from engine.validity import VALIDITY_VERSION, judge_shot, load_config  # noqa: E402
+
+API_VERSION = "0.4.0"
+SAMPLES_DIR = HERE / "samples"
+KST = timezone(timedelta(hours=9))
+CONF = 0.3
+JOINT_NAMES = {"어깨": "shoulder", "팔꿈치": "elbow", "앞발목": "carpus",
+               "고관절": "hip", "무릎": "stifle", "뒷발목": "tarsus"}
+RIGHT_SLOTS = {1, 8, 9, 10, 11, 12, 18, 19, 20, 21}
+VERSIONS = {"angle_def": ANGLE_DEF, "gait_events": EVENTS_VERSION, "validity": VALIDITY_VERSION}
+SAMPLE_MODEL = {"name": "sample-pipeline", "version": f"{API_VERSION}/{ANGLE_DEF}/sample"}
+
+
+class AnalysisFailed(Exception):
+    """분석 중 실패. code가 상태 조회의 error.code로 나간다"""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+def pose_source() -> str:
+    return os.environ.get("ANALYSIS_POSE_SOURCE", "sample")
+
+
+def current_model() -> dict:
+    """상태 조회·health에 내는 모델 정보"""
+    if pose_source() == "track":
+        weights = os.environ.get("ANALYSIS_WEIGHTS_SHA256", "")
+        name = os.environ.get("ANALYSIS_MODEL_NAME", "fs-v4")
+        return {"name": name, "version": f"{API_VERSION}/{ANGLE_DEF}/{weights[:8] or 'unknown'}"}
+    return dict(SAMPLE_MODEL)
+
+
+def _now() -> str:
+    return datetime.now(KST).isoformat(timespec="seconds")
+
+
+def sha256_of(path: Path) -> str:
+    h = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+@lru_cache(maxsize=4)
+def load_tracks(path: str) -> dict:
+    """관절점 파일 → {sha256 또는 파일 이름: 영상 하나}. 같은 파일을 여러 번 읽지 않게 기억해 둔다"""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    index = {"__meta__": data.get("meta") or {}}
+    for v in data["videos"]:
+        if v.get("sha256"):
+            index[v["sha256"]] = v
+        index.setdefault(Path(v["video"]).name, v)
+    return index
+
+
+def find_track(video_path: Path, filename: Optional[str]) -> tuple:
+    """(영상 하나의 관절점, 관절점 파일 meta). SHA-256으로 먼저 찾고, 없으면 파일 이름으로"""
+    track_file = os.environ.get("ANALYSIS_TRACK_FILE", "")
+    if not track_file or not Path(track_file).is_file():
+        raise AnalysisFailed("POSE_UNAVAILABLE", "관절점 파일(ANALYSIS_TRACK_FILE)이 없습니다")
+    index = load_tracks(track_file)
+    video = index.get(sha256_of(video_path)) or (index.get(Path(filename).name) if filename else None)
+    if video is None:
+        raise AnalysisFailed("POSE_UNAVAILABLE", "이 영상의 관절점을 찾지 못했습니다")
+    return video, index["__meta__"]
+
+
+# ---- 결과 만들기 ----
+
+
+def frame_angles(kp, side: str, head: int) -> Optional[dict]:
+    """카메라 쪽 다리 6관절의 굽힘 각도. 세 점 중 하나라도 확신도가 낮으면 그 관절은 뺀다"""
+    if kp is None:
+        return None
+    suffix = "r" if side == "right" else "l"
+    out = {}
+    for vertex, proximal, distal, name in JOINTS:
+        if (vertex in RIGHT_SLOTS) != (side == "right"):
+            continue
+        pts = [kp[vertex], kp[proximal], kp[distal]]
+        if any(p is None or len(p) < 3 or p[2] < CONF for p in pts):
+            continue
+        angle = flexion_angle(pts[0][:2], pts[1][:2], pts[2][:2], (float(head), 0.0), FLEX_SIDE[name])
+        if angle is not None:
+            out[f"{JOINT_NAMES[name]}_{suffix}"] = round(angle, 1)
+    return out
+
+
+def build_keypoints(video: dict, passes: list) -> dict:
+    """관절점 파일. 통과 안의 프레임만 camera_side와 각도를 낸다 (통과 밖은 방향을 정하지 않음)"""
+    side_of = {}
+    for p in passes:
+        head = 1 if p["heading"] == "right" else -1
+        for i in range(p["start_frame"], p["end_frame"] + 1):
+            side_of[i] = (p["camera_side"], head)
+    frames = []
+    for i, f in enumerate(video["frames"]):
+        kp = f["kp"] if f else None
+        side, head = side_of.get(i, (None, 0))
+        frames.append({
+            "frame": i,
+            "camera_side": side if kp else None,
+            "points": [[round(p[0], 1), round(p[1], 1), round(p[2], 3)] for p in kp] if kp else None,
+            "angles": frame_angles(kp, side, head) if kp and side else None,
+        })
+    return {"angle_def": ANGLE_DEF, "fps": video["fps"], "width": video["width"], "height": video["height"],
+            "keypoint_order": "PRD 6.5.3 (0-21)", "frames": frames}
+
+
+def build_result(job: dict, video: dict, judged: dict, model: dict) -> dict:
+    """결과 JSON v1. 수치(metrics)는 계산 함수(S15P31A404-183·184)가 붙기 전이라 {}"""
+    passes = []
+    for p in judged["passes"]:
+        passes.append({
+            "index": p["index"], "start_frame": p["start_frame"], "end_frame": p["end_frame"],
+            "heading": p["heading"], "camera_side": p["camera_side"], "gait": p["gait"],
+            "valid": p["valid"], "reason_code": p["reason_code"], "reason": p["reason"],
+            "measure_start": p["measure_start"], "measure_end": p["measure_end"],
+            "metrics": {}, "checks": p["checks"],
+        })
+    return {
+        "id": job["id"], "shot_id": job["shot_id"], "status": "done",
+        "model": model, "versions": VERSIONS,
+        "input": {"filename": job["filename"], "codec": None, "fps": video["fps"],
+                  "width": video["width"], "height": video["height"], "frames": len(video["frames"])},
+        "validity": judged["validity"], "validity_reason": judged["validity_reason"],
+        "summary": judged["summary"], "passes": passes,
+        "files": {"keypoints": f"/analyses/{job['id']}/files/keypoints"},
+        "created_at": _now(),
+    }
+
+
+def run_sample(job: dict) -> tuple:
+    result = json.loads((SAMPLES_DIR / "result_partial.json").read_text(encoding="utf-8"))
+    keypoints = json.loads((SAMPLES_DIR / "keypoints.json").read_text(encoding="utf-8"))
+    result.update(id=job["id"], shot_id=job["shot_id"], model=dict(SAMPLE_MODEL), versions=VERSIONS,
+                  created_at=_now())
+    result["input"]["filename"] = job["filename"]
+    result["files"]["keypoints"] = f"/analyses/{job['id']}/files/keypoints"
+    return result, keypoints
+
+
+def run_track(video_path: Path, job: dict) -> tuple:
+    video, meta = find_track(video_path, job.get("filename"))
+    if not video.get("frames") or not video.get("fps"):
+        raise AnalysisFailed("DECODE_FAILED", "영상의 프레임 정보를 읽을 수 없습니다")
+    judged = judge_shot(video, load_config())
+    model = current_model()
+    model["name"] = (meta.get("model") or {}).get("name") or model["name"]
+    model.update(angle_def=ANGLE_DEF, weights_sha256=os.environ.get("ANALYSIS_WEIGHTS_SHA256") or None)
+    return build_result(job, video, judged, model), build_keypoints(video, judged["passes"])
+
+
+def run(video_path: Path, job: dict) -> tuple:
+    """영상 → (결과 JSON, 관절점 파일). 실패는 AnalysisFailed"""
+    if Path(video_path).stat().st_size == 0:
+        raise AnalysisFailed("DECODE_FAILED", "영상을 읽을 수 없습니다")
+    if pose_source() == "track":
+        return run_track(Path(video_path), job)
+    return run_sample(job)
