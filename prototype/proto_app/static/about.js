@@ -7,15 +7,6 @@
   var N = 5;
   var cl = function (v) { return Math.max(0, Math.min(1, v)); };
 
-  // 보고서 카드의 곡선 (고정값)
-  var pts = function (amp, ph) {
-    var a = [];
-    for (var i = 0; i <= 40; i++) a.push((24 + i * 7.15) + ',' + (75 - amp * Math.sin(i / 40 * Math.PI * 4 - ph)).toFixed(1));
-    return a.join(' ');
-  };
-  $('kL').setAttribute('points', pts(48, 0));
-  $('kR').setAttribute('points', pts(40, 0.5));
-
   var last = -1;
   function frame() {
     var r = story.getBoundingClientRect(), tot = r.height - window.innerHeight;
