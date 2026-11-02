@@ -356,7 +356,7 @@ export class AppProto extends DCLogic<Props, any> {
       resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date} · ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? '다시 촬영 필요' : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) })),
       hasRes: filtDogs.length > 0, noRes: !filtDogs.length,
       rd, retake: () => { if (R) this.goCapture(R.dog) },
-      gaitSegs: seg([['walk', '평보'], ['trot', '속보']], G, (k) => this.setState({ gait: k })), gaitName: G === 'walk' ? '평보' : '속보',
+      gaitSegs: seg([['walk', '평보'], ['trot', '속보']], G, (k) => this.setState({ gait: k })), gaitName: rd.gaitName,
       openRep: () => { if (!R) return; this.setState({ repType: 'g' }); this.nav('report', `/sessions/${R.id}/report`) },
       openCompare: () => { if (!R) return; if (valid(R.dog).length < 2) return this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있어요'); this.props.setUi({ cmp: 'base' }); this.nav('compare', `/dogs/${R.dog}/compare`) },
       partMsg: R?.result?.notices?.[0]?.message || '일부 통과에서 다리가 가려지거나 뛰어서 해당 통과를 제외하고 계산했습니다.',

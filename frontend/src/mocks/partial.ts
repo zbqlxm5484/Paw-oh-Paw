@@ -4,7 +4,8 @@
  * "빈 목록" 또는 "아직 없는 기능" 오류로만 답한다. 백엔드에 생기면 여기서 한 줄씩 지운다.
  *
  * 백엔드 develop(10-29)에 있는 것: health, auth/login·me, dogs 목록·등록·상세·수정,
- * dogs/:id/sessions 시작(POST), sessions/:id 조회·취소, sessions/:id/shots 업로드, shots/:id 조회·재시도·삭제
+ * dogs/:id/sessions 시작(POST), sessions/:id 조회·취소, sessions/:id/shots 업로드, shots/:id 조회·재시도·삭제,
+ * sessions/:id/complete 측정 종료·sessions/:id/result 회차 결과(!65)
  */
 import { http, HttpResponse } from 'msw'
 
@@ -22,8 +23,6 @@ export const partialHandlers = [
     const u = new URL(request.url)
     return HttpResponse.json({ items: [], total: 0, page: Number(u.searchParams.get('page') ?? 1), size: Number(u.searchParams.get('size') ?? 100) })
   }),
-  http.post(`${BASE}/sessions/:sessionId/complete`, () => notYet('측정 종료')),
-  http.get(`${BASE}/sessions/:sessionId/result`, () => notYet('회차 결과')),
   http.get(`${BASE}/sessions/:sessionId/reports`, () => notYet('보고서')),
   http.post(`${BASE}/reports/:reportId/regenerate`, () => notYet('보고서 다시 만들기')),
   http.get(`${BASE}/reports/:reportId/file`, () => notYet('보고서 파일')),

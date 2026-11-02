@@ -3,7 +3,7 @@
  */
 import { ApiError } from '../api/client'
 import { BREEDS } from '../api/labels'
-import { ST, type DDog, type DGait, type DRes, type DRow, type DSize } from './adapter'
+import { ST, type DDog, type DGait, type DRes, type DRow, type DRowsKey, type DSize } from './adapter'
 
 export const LINES = ['반려견의 걸음을', '더욱 정확하게', 'Paw oh Paw']
 const SMALLB = ['말티즈', '푸들', '토이 푸들', '포메라니안', '시츄', '치와와', '비숑 프리제', '요크셔테리어', '닥스훈트', '미니어처 슈나우저', '퍼그', '이탈리안 그레이하운드', '잭 러셀 테리어']
@@ -22,6 +22,12 @@ const gs = (p: number, c: number, w: number) => Math.exp(-(((p - c) / w) ** 2))
 export const knee = (depth: number) => { const s: string[] = []; for (let i = 0; i <= 40; i++) { const p = i / 40; const a = 150 - 16 * gs(p, 0.12, 0.07) - depth * gs(p, 0.7, 0.11); s.push(`${(24 + p * 286).toFixed(1)},${(130 - ((a - 90) / 60) * 110).toFixed(1)}`) } return s.join(' ') }
 export const errMsg = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback)
 export const PREP = '이 기능은 준비 중이에요'
+/** 다리 비교 요약 제목에 붙는 보행 묶음 이름. OTHER 묶음은 '기타 보행'이 아니라 아직 유형을 가르지 않은 통과들이다 */
+export const GAIT_GROUP_NAME: Record<DRowsKey, string> = { walk: '평보', trot: '속보', other: '보행 유형 미판별' }
+/** 분석은 끝났지만 쓸 수 있는 통과가 0건인 회차(DONE·used 0)의 촬영 안내 */
+export const NO_VALID_MSG = '쓸 수 있는 통과가 없었어요. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'
+/** 서버 쪽 실패(FAILED, 예: 집계 오류). 반려견 탓이 아니므로 촬영 안내를 하지 않는다 */
+export const SERVER_FAIL_MSG = '분석에 실패했어요. 잠시 후 다시 시도해 주세요.'
 export const r1 = (v: number) => Math.round(v * 10) / 10
 export const num = (v: number | null | undefined) => (v == null ? '—' : v)
 export const desc = (d: DDog) => [d.breed || '견종 미입력', d.birth ? d.birth + '년생' : null, d.kg ? d.kg + 'kg' : null].filter(Boolean).join(' · ')
@@ -60,15 +66,18 @@ export function delta(a: number | null, b: number | null | undefined, unit: stri
 
 /** 회차 결과(rd)와 보고서(rp) 값. 디자인 원본의 계산을 API 표 위에서 한다 */
 export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
-  let rd: any = { ok: false, fail: false, part: false, rows: [], rank: [], ex: [], name: '', desc: '', when: '', st: '', bg: '', c: '', topTitle: '', topSub: '', failMsg: '' }
+  let rd: any = { ok: false, fail: false, part: false, rows: [], rank: [], ex: [], name: '', desc: '', when: '', st: '', bg: '', c: '', topTitle: '', topSub: '', failMsg: '', gaitName: '' }
   let rp: any = { title: '', when: '', summary: '', items: [], rows: [], cond: '' }
   if (!R) return { rd, rp }
   const d = ctx.dogById(R.dog) || ({ name: '-', breed: '', birth: '', kg: '' } as DDog), stt = ST[R.st]
-  rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · 체중 ${R.w}kg`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part', failMsg: R.result?.fail_reason?.message || '' }
+  rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · 체중 ${R.w}kg`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
+    failMsg: R.status === 'FAILED' ? R.result?.fail_reason?.message || SERVER_FAIL_MSG : NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
   if (R.st === 'fail') return { rd, rp }
   const vv = valid(ctx, R.dog), idx = vv.findIndex((x) => x.id === R.id), P = vv[idx + 1]
-  const rows: DRow[] = R.rowsBy[G].length ? R.rowsBy[G] : R.rowsBy.trot.length ? R.rowsBy.trot : R.rowsBy.walk
-  const rowsT = R.rowsBy.trot.length ? R.rowsBy.trot : R.rowsBy.walk
+  // 고른 보행에 표가 없으면 속보 → 평보 → 미판별(OTHER) 순으로 있는 표를 쓴다. gaitKey 는 실제로 보여 준 묶음
+  const gaitKey: DRowsKey = R.rowsBy[G].length ? G : R.rowsBy.trot.length ? 'trot' : R.rowsBy.walk.length ? 'walk' : 'other'
+  const rows: DRow[] = R.rowsBy[gaitKey]
+  const rowsT = R.rowsBy.trot.length ? R.rowsBy.trot : R.rowsBy.walk.length ? R.rowsBy.walk : R.rowsBy.other
   const rank = (rs: DRow[]) => rs.filter((x) => !x.na).map((x) => ({ ...x, df: r1(Math.abs(x.l - x.r)) })).sort((a, b) => b.si - a.si)
   const meas = rank(rows), top = meas[0], topT = rank(rowsT)[0]
   const sL = R.sL, sR = R.sR
@@ -76,6 +85,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   const stifle = rowsT.find((x) => x.code === 'rom_stifle')
   const model = `${R.result?.model_name ?? 'pga-pose'} ${R.model}`
   Object.assign(rd, {
+    gaitName: GAIT_GROUP_NAME[gaitKey],
     sym: num(R.sym), symD: sd[0], symDC: sd[1], rom: num(R.rom), romD: rdl[0], romDC: rdl[1], sL: num(sL), sR: num(sR),
     stD: sL == null || sR == null ? '측정 불가' : sL === sR ? '좌우 같음' : `${sL > sR ? '오른쪽' : '왼쪽'}이 ${Math.abs(sL - sR)}%p 짧음`, stC: '#5B6472',
     topTitle: top ? `${top.leg} ${top.n}에서 좌우 차이가 가장 커요` : R.loaded ? '좌우를 비교할 수 있는 항목이 없어요' : '결과를 불러오는 중이에요',
