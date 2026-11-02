@@ -38,7 +38,7 @@ def test_fixture_files_match_the_analysis_api_shape() -> None:
         result = load_fixture(f"result_{case}")
         assert result["status"] == "done" and result["validity"] == case
         assert set(result) >= {"id", "shot_id", "model", "input", "summary", "passes", "files", "created_at"}
-        assert result["model"]["version"] == "0.1.0/v1/a4261a10"
+        assert result["model"]["version"] == "0.4.0/v1/a4261a10"
         for walk_pass in result["passes"]:
             assert set(walk_pass) >= {"index", "start_frame", "end_frame", "camera_side", "valid", "reason_code"}
     failed = load_fixture("status_failed")
@@ -93,7 +93,7 @@ def test_mock_progresses_queued_running_done_by_elapsed_time(video: Path, monkey
     clock[0] += 5
     status = client.get_status(job_id)
     assert status.state == "done" and status.error_code is None
-    assert status.model_name == "fs-v4" and status.model_version == "0.1.0/v1/a4261a10"
+    assert status.model_name == "fs-v4" and status.model_version == "0.4.0/v1/a4261a10"
 
 
 def test_mock_result_is_the_fixture_tagged_with_job_and_shot(video: Path) -> None:

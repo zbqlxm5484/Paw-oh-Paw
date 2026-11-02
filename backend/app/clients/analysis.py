@@ -2,7 +2,7 @@
 
 - `AnalysisClient`: 워커가 쓰는 네 동작. submit(영상, 촬영 정보) → 작업 ID, get_status → 상태, get_result → 결과 JSON,
   get_keypoints → 관절점 파일 JSON.
-- `HttpAnalysisClient`: 조유진의 분석 API(analysis_api/, 「분석 API 초안 검토 답변」 10-22 형식)를 HTTP로 부른다.
+- `HttpAnalysisClient`: 조유진의 분석 API(analysis_api/, 결과 JSON v1 docs/analysisApi/resultFormat.md)를 HTTP로 부른다.
   개발 환경과 기업 GPU 서버는 주소(ANALYSIS_API_BASE_URL)만 다르다.
 - `MockAnalysisClient`: 분석 API 없이 견본 JSON(fixtures/)을 MOCK_ANALYSIS_DELAY_SEC 뒤 돌려준다.
   화면·워커·보고서를 먼저 만들고, 시연 날 분석 서버가 안 될 때의 대비다.
@@ -31,7 +31,9 @@ from app.models.enums import CameraSide, GaitType, Validity
 
 logger = logging.getLogger(__name__)
 
-# 견본 JSON. 조유진의 analysis_api/samples(10-22)를 그대로 복사한 것이고, result_valid.json만 같은 형식으로 더 만들었다.
+# 견본 JSON. 조유진의 analysis_api/samples(결과 JSON v1, 11-02)를 그대로 복사한 것이고,
+# result_valid.json만 같은 형식으로 더 만들었다.
+# 견본이 같은지는 tests/test_analysis_api_samples.py가 본다(S15P31A404-189).
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 MOCK_CASES = ("valid", "partial", "invalid", "failed")
 JOB_ID_PREFIX = "mock"

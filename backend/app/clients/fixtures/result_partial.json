@@ -4,10 +4,11 @@
   "status": "done",
   "model": {
     "name": "fs-v4",
-    "version": "0.1.0/v1/a4261a10",
+    "version": "0.4.0/v1/a4261a10",
     "angle_def": "v1",
     "weights_sha256": "a4261a107bc8e2f6a0418e8ffb02f510eb396c892aae1843092883b9fd63882f"
   },
+  "versions": {"angle_def": "v1", "gait_events": "v1", "validity": "v1"},
   "input": {
     "filename": "sample-main.mp4",
     "codec": "h264",
@@ -30,6 +31,8 @@
       "valid": true,
       "reason_code": null,
       "reason": null,
+      "measure_start": 52,
+      "measure_end": 191,
       "metrics": {
         "rom_shoulder": {"value": 38.2, "unit": "deg"},
         "rom_elbow": {"value": 52.6, "unit": "deg"},
@@ -56,6 +59,13 @@
         "walk_speed": {"value": 2.41, "unit": "body_per_sec"},
         "gait_cycles": {"value": 3, "unit": "count"},
         "stifle_cycle_rom": {"values": [46.1, 48.0, 47.6], "unit": "deg"}
+      },
+      "checks": {
+        "speed_body_per_s": 7.4,
+        "lateral_phase": 0.47,
+        "side_view_ratio": 1.0,
+        "inside_s": 0.8,
+        "found": []
       }
     },
     {
@@ -68,6 +78,8 @@
       "valid": true,
       "reason_code": null,
       "reason": null,
+      "measure_start": 262,
+      "measure_end": 404,
       "metrics": {
         "rom_shoulder": {"value": 39.7, "unit": "deg"},
         "rom_elbow": {"value": 54.1, "unit": "deg"},
@@ -94,6 +106,13 @@
         "walk_speed": {"value": 2.43, "unit": "body_per_sec"},
         "gait_cycles": {"value": 3, "unit": "count"},
         "stifle_cycle_rom": {"values": [47.6, 49.5, 49.1], "unit": "deg"}
+      },
+      "checks": {
+        "speed_body_per_s": 7.6,
+        "lateral_phase": 0.5,
+        "side_view_ratio": 1.0,
+        "inside_s": 0.8,
+        "found": []
       }
     },
     {
@@ -104,9 +123,18 @@
       "camera_side": "right",
       "gait": null,
       "valid": false,
-      "reason_code": "PARTIAL_PASS",
-      "reason": "측정 구간을 일부만 지나갔습니다",
-      "metrics": {}
+      "reason_code": "NOT_SIDE_VIEW",
+      "reason": "옆모습이 찍히지 않았습니다.",
+      "measure_start": null,
+      "measure_end": null,
+      "metrics": {},
+      "checks": {
+        "speed_body_per_s": 7.1,
+        "lateral_phase": null,
+        "side_view_ratio": 0.62,
+        "inside_s": 0.7,
+        "found": ["NOT_SIDE_VIEW"]
+      }
     }
   ],
   "files": {"keypoints": "/analyses/7c1f3a52-9d4e-4b8a-a2f1-0c6e5b9d1a77/files/keypoints"},

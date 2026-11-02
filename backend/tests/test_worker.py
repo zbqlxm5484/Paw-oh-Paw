@@ -588,7 +588,7 @@ def test_valid_result_is_saved_as_done_with_passes(db: Session, dog, staff) -> N
     row = _fresh(db, shot)
     assert stats.done == 1 and stats.failed == 0
     assert row.status == "DONE" and row.validity == "VALID" and row.validity_reason is None
-    assert row.model_name == "fs-v4" and row.model_version == "0.1.0/v1/a4261a10"
+    assert row.model_name == "fs-v4" and row.model_version == "0.4.0/v1/a4261a10"
     assert row.analyzed_at is not None and row.fail_reason is None
     assert row.analysis_key == analysis_key(dog.institution_id, dog.id, session.id, shot.id)
     assert json.loads(get_storage().read_bytes(row.analysis_key)) == result  # 받은 그대로 보관(6절)
@@ -607,7 +607,7 @@ def test_partial_result_keeps_null_reason_and_maps_excluded_pass(db: Session, do
     row = _fresh(db, shot)
     assert row.status == "DONE" and row.validity == "PARTIAL"
     assert row.validity_reason is None  # partial의 null = 유효 통과는 충분한데 일부 제외(14.3, 조유진 MR !30)
-    assert _pass_tuples(row)[2] == (3, "RIGHT", "OTHER", False, "PARTIAL_PASS", 470, 560)  # gait null → OTHER
+    assert _pass_tuples(row)[2] == (3, "RIGHT", "OTHER", False, "NOT_SIDE_VIEW", 470, 560)  # gait null → OTHER
     assert [p.is_valid for p in row.passes] == [True, True, False]
 
 
