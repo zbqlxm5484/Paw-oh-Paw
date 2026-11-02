@@ -1,17 +1,17 @@
-"""분석 API v0.3 — 영상 등록·상태·결과·관절점 파일 (S15P31A404-156, (2/4)).
+"""분석 API v0.4 — 영상 등록·상태·결과·관절점 파일 (S15P31A404-156 (2/4), S15P31A404-180 (3/4)).
 
 등록하면 영상을 저장소에 쓰고 바로 202를 돌려준 뒤, 분석은 응답이 나간 뒤 뒤에서 한다.
 팀 서비스는 30초(ANALYSIS_HTTP_TIMEOUT_SEC) 안에 답을 받아야 해서, 분석을 요청 안에서 돌리지 않는다.
 
-지금 분석 자리에는 견본 파이프라인(samples/의 견본 결과를 돌려줌)이 들어 있다. 모델 연결은 다음 단계에서
-run_pipeline만 바꾼다. 견본 결과의 model은 "sample-pipeline"이라 실제 분석 결과와 섞이지 않는다.
+분석 자체(관절점 → 유효 판별 → 결과 JSON)는 pipeline.py가 한다. 이 파일은 HTTP와 작업 상태만 맡는다.
 
 설정(환경변수)
 - ANALYSIS_API_KEY: 비어 있으면 인증을 끈다(로컬 개발). 있으면 X-API-Key 헤더가 같아야 한다
 - ANALYSIS_UPLOAD_MAX_MB: 영상 한 건 상한. 팀 서비스 UPLOAD_MAX_MB(100)와 맞춘다
 - ANALYSIS_STORAGE_DIR: 올린 영상을 두는 곳. 기본은 저장소의 data/analysis_api (git에 안 올라감)
+- ANALYSIS_POSE_SOURCE 등 분석 설정은 pipeline.py 참고
 
-형식 근거: 「분석 API 초안 검토 답변」 10-22, 팀 서비스 분석 클라이언트(backend/app/clients/analysis.py)
+형식 근거: docs/analysisApi/resultFormat.md (결과 JSON v1), 팀 서비스 분석 클라이언트(backend/app/clients/analysis.py)
 """
 import hmac
 import json
@@ -26,10 +26,11 @@ from typing import Optional
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pipeline import API_VERSION, AnalysisFailed, current_model
+from pipeline import run as pipeline_run
 
 KST = timezone(timedelta(hours=9))
 HERE = Path(__file__).resolve().parent
-SAMPLES_DIR = HERE / "samples"
 CHUNK_BYTES = 1024 * 1024
 
 API_KEY = os.environ.get("ANALYSIS_API_KEY", "")
@@ -37,11 +38,8 @@ MAX_BYTES = int(os.environ.get("ANALYSIS_UPLOAD_MAX_MB", "100")) * 1024 * 1024
 STORAGE_DIR = Path(os.environ.get("ANALYSIS_STORAGE_DIR", HERE.parent / "data" / "analysis_api"))
 VIDEO_SUFFIXES = {".mp4", ".mov"}
 
-# 견본 파이프라인. 모델을 연결하면 {"name": "fs-v4", "version": "엔진/각도정의/가중치 해시 8자"}로 바뀐다
-MODEL = {"name": "sample-pipeline", "version": "0.3.0/v1/sample"}
-
 # 상태값: queued(대기) → running(분석 중) → done(완료) / failed(실패)
-app = FastAPI(title="크림오프 분석 API", version="0.3.0")
+app = FastAPI(title="크림오프 분석 API", version=API_VERSION)
 JOBS: dict = {}   # 임시 저장소. 서버를 끄면 사라짐 → 결과 DB로 교체 예정 (3/4)
 _LOCK = threading.Lock()
 
@@ -51,14 +49,6 @@ class ApiError(Exception):
 
     def __init__(self, status: int, code: str, message: str):
         self.status, self.code, self.message = status, code, message
-
-
-class AnalysisFailed(Exception):
-    """분석 중 실패. code가 상태 조회의 error.code로 나간다 (DECODE_FAILED, INTERNAL)"""
-
-    def __init__(self, code: str, message: str):
-        super().__init__(message)
-        self.code, self.message = code, message
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -135,15 +125,8 @@ async def _save_video(video: UploadFile, job_id: str) -> Path:
 
 
 def run_pipeline(video_path: Path, job: dict) -> tuple:
-    """영상 → (결과 JSON, 관절점 파일 JSON). 지금은 견본을 돌려주는 자리이고, 모델 연결 때 이 함수만 바꾼다"""
-    if video_path.stat().st_size == 0:
-        raise AnalysisFailed("DECODE_FAILED", "영상을 읽을 수 없습니다")
-    result = json.loads((SAMPLES_DIR / "result_partial.json").read_text(encoding="utf-8"))
-    keypoints = json.loads((SAMPLES_DIR / "keypoints.json").read_text(encoding="utf-8"))
-    result.update(id=job["id"], shot_id=job["shot_id"], model=MODEL, created_at=_now())
-    result["input"]["filename"] = job["filename"]
-    result["files"]["keypoints"] = f"/analyses/{job['id']}/files/keypoints"
-    return result, keypoints
+    """영상 → (결과 JSON, 관절점 파일 JSON). 실제 일은 pipeline.run이 한다 (테스트에서 이 자리를 바꿔 끼운다)"""
+    return pipeline_run(video_path, job)
 
 
 def analyze(job_id: str) -> None:
@@ -159,13 +142,14 @@ def analyze(job_id: str) -> None:
         _update(job_id, status="failed",
                 error={"code": "INTERNAL", "message": "분석 중 알 수 없는 오류가 났습니다", "detail": None})
         return
-    _update(job_id, status="done", result=result, keypoints=keypoints)
+    _update(job_id, status="done", result=result, keypoints=keypoints,
+            model={k: result["model"][k] for k in ("name", "version")})
 
 
 @app.get("/health")
 def health():
     """Docker 상태 확인용이라 인증 없이 연다"""
-    return {"status": "ok", "model": MODEL}
+    return {"status": "ok", "model": current_model()}
 
 
 @app.post("/analyses", status_code=202, dependencies=[Depends(require_key)])
@@ -180,7 +164,7 @@ async def create_analysis(background: BackgroundTasks, video: UploadFile = File(
     with _LOCK:
         JOBS[job_id] = {
             "id": job_id, "shot_id": info.get("shot_id"), "status": "queued", "error": None,
-            "model": MODEL, "meta": info, "filename": video.filename, "video_path": str(path),
+            "model": current_model(), "meta": info, "filename": video.filename, "video_path": str(path),
             "created_at": now, "updated_at": now, "result": None, "keypoints": None,
         }
     background.add_task(analyze, job_id)

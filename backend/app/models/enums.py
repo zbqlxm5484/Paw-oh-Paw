@@ -11,8 +11,27 @@ from sqlalchemy import CheckConstraint
 
 
 class StaffRole(StrEnum):
+    """저장하는 역할(11.6). ADMIN·STAFF는 크림오프 쪽, CLIENT는 고객 기관 담당자. GUEST는 저장하지 않는다."""
+
     ADMIN = "ADMIN"
     STAFF = "STAFF"
+    CLIENT = "CLIENT"
+
+
+class EffectiveRole(StrEnum):
+    """계산한 역할(11.6 effective_role). 계약이 끝난 CLIENT는 GUEST. 응답과 화면 분기에만 쓰고 DB에는 없다."""
+
+    ADMIN = "ADMIN"
+    STAFF = "STAFF"
+    CLIENT = "CLIENT"
+    GUEST = "GUEST"
+
+
+class ContractStatus(StrEnum):
+    """기관 계약 상태(11.6). 저장하지 않고 contract_ends_at과 오늘(APP_TIMEZONE)로 계산한다."""
+
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
 
 
 class SizeClass(StrEnum):

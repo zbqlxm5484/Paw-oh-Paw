@@ -1,4 +1,4 @@
-"""인증·기관 분리(11.6, 13.4, 15.4, 17.1·17.2 BE-01)와 get_db(11.7)."""
+"""인증·기관 분리·역할·계약(11.6, 13.4, 15.4, 17.1·17.2 BE-01·BE-23)과 get_db(11.7)."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -10,18 +10,28 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.core.config import get_settings
+from app.core.dates import today_local
 from app.core.security import create_access_token, make_signed_url, verify_signed_url
 from app.models import Institution
 from tests.conftest import GOOD_PASSWORD, bearer
 
 LOGIN = "/api/v1/auth/login"
 ME = "/api/v1/auth/me"
+DOGS = "/api/v1/dogs"
+WHOAMI = "/api/v1/_test/whoami"
+ADMIN_ONLY = "/api/v1/_test/admin-only"
+CREAMOFF_ONLY = "/api/v1/_test/creamoff-only"
 
 
 def _login(client: TestClient, **overrides: str):
-    body = {"institution_code": "T01", "login_id": "staff1", "password": GOOD_PASSWORD}
+    body = {"login_id": "staff1", "password": GOOD_PASSWORD}
     body.update(overrides)
     return client.post(LOGIN, json=body)
+
+
+def _set_contract(db: Session, staff, ends_at) -> None:
+    staff.institution.contract_ends_at = ends_at
+    db.flush()
 
 
 # ---- 로그인 (BE-01) ----
@@ -37,8 +47,16 @@ def test_login_returns_token_and_staff(client: TestClient, staff) -> None:
         "id": str(staff.id),
         "login_id": "staff1",
         "name": "담당자",
-        "role": "STAFF",
-        "institution": {"id": str(staff.institution_id), "code": "T01", "name": "테스트 병원"},
+        "email": None,
+        "role": "CLIENT",
+        "effective_role": "CLIENT",
+        "institution": {
+            "id": str(staff.institution_id),
+            "code": "T01",
+            "name": "테스트 병원",
+            "contract_ends_at": None,
+            "contract_status": "ACTIVE",
+        },
     }
     # 만료 시각은 UTC·초 단위·Z, 지금부터 JWT_EXPIRE_HOURS 뒤
     assert body["expires_at"].endswith("Z")
@@ -54,14 +72,18 @@ def test_token_from_login_works_on_me(client: TestClient, staff) -> None:
     assert response.json()["login_id"] == "staff1"
 
 
+def test_login_ignores_institution_code(client: TestClient, staff) -> None:
+    """v1.11까지의 화면이 보내던 institution_code는 무시한다(13.4)."""
+    response = _login(client, institution_code="NOPE")
+    assert response.status_code == 200
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"institution_code": "NOPE"},
         {"login_id": "nobody"},
         {"password": "wrong-pass"},
-        {"institution_code": "t01"},  # 대소문자 구분(13.4)
-        {"login_id": "STAFF1"},
+        {"login_id": "STAFF1"},  # 대소문자 구분(13.4)
     ],
 )
 def test_any_wrong_field_is_401_login_failed_with_identical_body(client: TestClient, staff, overrides: dict) -> None:
@@ -103,9 +125,9 @@ def test_wrong_password_on_inactive_account_is_still_login_failed(client: TestCl
 
 
 def test_login_input_rules_are_422(client: TestClient, staff) -> None:
-    response = _login(client, institution_code="C" * 21)
+    response = _login(client, login_id="a" * 51)
     assert response.status_code == 422
-    assert response.json()["error"]["detail"]["fields"] == [{"field": "institution_code", "type": "string_too_long"}]
+    assert response.json()["error"]["detail"]["fields"] == [{"field": "login_id", "type": "string_too_long"}]
 
 
 # ---- 토큰 확인 (17.1 공통) ----
@@ -115,6 +137,7 @@ def test_me_returns_staff_out(client: TestClient, staff, auth_headers: dict) -> 
     response = client.get(ME, headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["institution"]["code"] == "T01"
+    assert response.json()["effective_role"] == "CLIENT"
 
 
 @pytest.mark.parametrize(
@@ -146,7 +169,7 @@ def test_expired_token_is_401_auth_expired(client: TestClient, staff) -> None:
 
 
 def test_token_of_deleted_staff_is_401(client: TestClient, staff) -> None:
-    token, _ = create_access_token(staff_id=uuid.uuid4(), institution_id=staff.institution_id, role="STAFF")
+    token, _ = create_access_token(staff_id=uuid.uuid4(), institution_id=staff.institution_id, role="CLIENT")
     response = client.get(ME, headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "AUTH_REQUIRED"
@@ -156,7 +179,7 @@ def test_token_signed_with_other_secret_is_rejected(client: TestClient, staff, m
     import jwt
 
     token = jwt.encode(
-        {"sub": str(staff.id), "inst": str(staff.institution_id), "role": "STAFF", "exp": 4102444800},
+        {"sub": str(staff.id), "inst": str(staff.institution_id), "role": "CLIENT", "exp": 4102444800},
         "another-secret-that-is-long-enough-000",
         algorithm="HS256",
     )
@@ -165,15 +188,69 @@ def test_token_signed_with_other_secret_is_rejected(client: TestClient, staff, m
     assert response.json()["error"]["code"] == "AUTH_REQUIRED"
 
 
-def test_admin_only_dependency(client: TestClient, db: Session, staff, auth_headers: dict) -> None:
-    forbidden = client.get("/api/v1/_test/admin-only", headers=auth_headers)
-    assert forbidden.status_code == 403
-    assert forbidden.json()["error"]["code"] == "FORBIDDEN"
+# ---- 계약 만료 (BE-23, 11.6) ----
 
-    staff.role = "ADMIN"
+
+def test_expired_contract_client_is_guest(client: TestClient, db: Session, staff) -> None:
+    """종료일이 어제인 기관의 CLIENT: 로그인·/auth/me는 되고 effective_role이 GUEST, 나머지는 403 CONTRACT_EXPIRED."""
+    _set_contract(db, staff, today_local() - timedelta(days=1))
+
+    login = _login(client)
+    assert login.status_code == 200
+    body = login.json()["staff"]
+    assert (body["role"], body["effective_role"]) == ("CLIENT", "GUEST")
+    assert body["institution"]["contract_status"] == "EXPIRED"
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    me = client.get(ME, headers=headers)
+    assert me.status_code == 200
+    assert me.json()["effective_role"] == "GUEST"
+
+    for url in (DOGS, WHOAMI):
+        blocked = client.get(url, headers=headers)
+        assert blocked.status_code == 403, url
+        assert blocked.json()["error"]["code"] == "CONTRACT_EXPIRED"
+
+
+@pytest.mark.parametrize("ends_at", ["today", None])
+def test_contract_ending_today_or_without_end_is_active(client: TestClient, db: Session, staff, ends_at) -> None:
+    _set_contract(db, staff, today_local() if ends_at == "today" else None)
+    headers = bearer(staff)
+    assert client.get(DOGS, headers=headers).status_code == 200
+    me = client.get(ME, headers=headers).json()
+    assert (me["effective_role"], me["institution"]["contract_status"]) == ("CLIENT", "ACTIVE")
+
+
+@pytest.mark.parametrize("role", ["ADMIN", "STAFF"])
+def test_creamoff_roles_ignore_contract(client: TestClient, db: Session, staff, role: str) -> None:
+    staff.role = role
+    _set_contract(db, staff, today_local() - timedelta(days=30))
+    headers = bearer(staff)
+    assert client.get(DOGS, headers=headers).status_code == 200
+    me = client.get(ME, headers=headers).json()
+    assert (me["effective_role"], me["institution"]["contract_status"]) == (role, "EXPIRED")
+
+
+# ---- 역할 검사 (11.6 require_admin·require_creamoff) ----
+
+
+@pytest.mark.parametrize(
+    ("role", "creamoff_status", "admin_status"),
+    [("CLIENT", 403, 403), ("STAFF", 200, 403), ("ADMIN", 200, 200)],
+)
+def test_role_dependencies(
+    client: TestClient, db: Session, staff, role: str, creamoff_status: int, admin_status: int
+) -> None:
+    staff.role = role
     db.flush()
-    allowed = client.get("/api/v1/_test/admin-only", headers=bearer(staff))
-    assert allowed.status_code == 200
+    headers = bearer(staff)
+    creamoff = client.get(CREAMOFF_ONLY, headers=headers)
+    assert creamoff.status_code == creamoff_status
+    admin = client.get(ADMIN_ONLY, headers=headers)
+    assert admin.status_code == admin_status
+    for response in (creamoff, admin):
+        if response.status_code == 403:
+            assert response.json()["error"]["code"] == "FORBIDDEN"
 
 
 # ---- 서명 URL (11.6) ----
