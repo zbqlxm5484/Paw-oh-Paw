@@ -1,12 +1,22 @@
-"""/api/v1/auth: 로그인·내 정보(BE-01), 디바이스 코드 확인·회원가입(BE-22) (15.4)."""
+"""/api/v1/auth: 로그인·내 정보(BE-01), 디바이스 코드 확인·회원가입(BE-22), 비밀번호 변경·내 정보 수정(BE-26) (15.4)."""
 
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentStaffAny, DbSession
+from app.api.deps import CurrentStaff, CurrentStaffAny, DbSession
 from app.core.auth_cache import AuthStaff
 from app.core.errors import AppError, ErrorCode
 from app.core.security import create_access_token
-from app.schemas.auth import DeviceCodeVerifyIn, DeviceCodeVerifyOut, LoginIn, SignupIn, StaffOut, TokenOut
+from app.schemas.auth import (
+    DeviceCodeVerifyIn,
+    DeviceCodeVerifyOut,
+    LoginIn,
+    MeUpdate,
+    PasswordChangeIn,
+    SignupIn,
+    StaffOut,
+    TokenOut,
+)
+from app.services import auth as auth_service
 from app.services import signup as signup_service
 from app.services.auth import authenticate, refresh_snapshot, staff_out
 
@@ -45,3 +55,19 @@ def me(staff: CurrentStaffAny, db: DbSession) -> StaffOut:
     if not fresh.is_active:
         raise AppError(ErrorCode.ACCOUNT_DISABLED)
     return staff_out(fresh)
+
+
+@router.patch("/me", response_model=StaffOut)
+def update_me(body: MeUpdate, staff: CurrentStaff, db: DbSession) -> StaffOut:
+    """이름·이메일 수정(보낸 필드만). GUEST는 403 CONTRACT_EXPIRED(조회만 된다)."""
+    return staff_out(auth_service.update_me(db, staff.id, body))
+
+
+@router.patch("/password", response_model=StaffOut)
+def change_password(body: PasswordChangeIn, staff: CurrentStaff, db: DbSession) -> StaffOut:
+    """비밀번호 변경. 현재 비밀번호가 틀리면 400 PASSWORD_MISMATCH. 이미 받은 토큰은 그대로 유효하다."""
+    return staff_out(
+        auth_service.change_password(
+            db, staff.id, current_password=body.current_password, new_password=body.new_password
+        )
+    )

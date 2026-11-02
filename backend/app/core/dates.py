@@ -8,6 +8,7 @@ from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 from app.core.config import get_settings
+from app.models.enums import ContractStatus
 
 
 @lru_cache
@@ -22,3 +23,10 @@ def local_zone() -> ZoneInfo:
 def today_local() -> date:
     """APP_TIMEZONE 기준 오늘 날짜."""
     return datetime.now(local_zone()).date()
+
+
+def contract_status(ends_at: date | None) -> str:
+    """기관 계약 상태(11.6). 종료일이 없거나 오늘(APP_TIMEZONE) 이후면 ACTIVE. 당일은 통과한다."""
+    if ends_at is None or ends_at >= today_local():
+        return ContractStatus.ACTIVE
+    return ContractStatus.EXPIRED

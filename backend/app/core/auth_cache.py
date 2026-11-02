@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from app.core.config import get_settings
-from app.core.dates import today_local
+from app.core.dates import contract_status as compute_contract_status
 from app.models.enums import ContractStatus, EffectiveRole, StaffRole
 
 # 이보다 많아지면 넣을 때 만료분을 모두 치운다. 담당자 수는 기관 수 × 10 이하라 보통 닿지 않는다
@@ -49,10 +49,8 @@ class AuthStaff:
 
     @property
     def contract_status(self) -> str:
-        """계약 상태(11.6). 종료일이 없거나 오늘(APP_TIMEZONE) 이후면 ACTIVE. 당일은 통과한다."""
-        if self.contract_ends_at is None or self.contract_ends_at >= today_local():
-            return ContractStatus.ACTIVE
-        return ContractStatus.EXPIRED
+        """계약 상태(11.6). 계산은 core/dates.contract_status 하나다(관리자 API도 같은 것을 쓴다)."""
+        return compute_contract_status(self.contract_ends_at)
 
     @property
     def effective_role(self) -> str:

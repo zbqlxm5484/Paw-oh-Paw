@@ -1,4 +1,4 @@
-"""로그인과 담당자 스냅샷(11.6, 13.4, 15.4)."""
+"""로그인, 담당자 스냅샷, 비밀번호 변경·내 정보 수정(11.6, 13.4, 13.7, 15.4)."""
 
 import uuid
 from functools import lru_cache
@@ -10,7 +10,7 @@ from app.core.auth_cache import AuthStaff, auth_cache
 from app.core.errors import AppError, ErrorCode
 from app.core.security import hash_password, verify_password
 from app.models import Staff
-from app.schemas.auth import InstitutionOut, StaffOut
+from app.schemas.auth import InstitutionOut, MeUpdate, StaffOut
 
 
 @lru_cache
@@ -70,6 +70,42 @@ def authenticate(db: Session, *, login_id: str, password: str) -> AuthStaff:
     snapshot = snapshot_of(staff)
     auth_cache.put(snapshot)
     return snapshot
+
+
+def _staff_row(db: Session, staff_id: uuid.UUID) -> Staff:
+    """로그인한 담당자의 행(기관 포함). 그 사이 지워졌으면 401 AUTH_REQUIRED."""
+    staff = db.get(Staff, staff_id, options=[joinedload(Staff.institution)])
+    if staff is None:
+        raise AppError(ErrorCode.AUTH_REQUIRED)
+    return staff
+
+
+def change_password(db: Session, staff_id: uuid.UUID, *, current_password: str, new_password: str) -> AuthStaff:
+    """비밀번호 변경(13.7, 15.4 BE-26). 현재 비밀번호가 틀리면 400 PASSWORD_MISMATCH.
+
+    새 비밀번호 규칙(8자 이상, 72바이트 이하, 현재와 다름)은 PasswordChangeIn이 422로 본다.
+    바꾼 뒤 자기 스냅샷을 캐시에서 지운다. 이미 받은 토큰은 그대로 유효하다(토큰 무효화는 없다).
+    """
+    staff = _staff_row(db, staff_id)
+    if not verify_password(current_password, staff.password_hash):
+        raise AppError(ErrorCode.PASSWORD_MISMATCH)
+    staff.password_hash = hash_password(new_password)
+    db.flush()
+    auth_cache.invalidate(staff.id)
+    return snapshot_of(staff)
+
+
+def update_me(db: Session, staff_id: uuid.UUID, data: MeUpdate) -> AuthStaff:
+    """이름·이메일 수정(13.7, 15.4 BE-26). 보낸 필드만 바꾸고 자기 스냅샷을 캐시에서 지운다."""
+    staff = _staff_row(db, staff_id)
+    changes = data.model_dump(exclude_unset=True)
+    if changes.get("name") is not None:
+        staff.name = changes["name"]
+    if changes.get("email") is not None:
+        staff.email = changes["email"]
+    db.flush()
+    auth_cache.invalidate(staff.id)
+    return snapshot_of(staff)
 
 
 def staff_out(staff: AuthStaff) -> StaffOut:

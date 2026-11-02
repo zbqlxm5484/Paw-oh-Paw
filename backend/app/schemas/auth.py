@@ -8,7 +8,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationInfo, field_validator
 
 from app.core.security import PasswordRuleError, check_password_rule
 from app.schemas.common import OutModel, UtcDateTime
@@ -76,6 +76,34 @@ class SignupIn(BaseModel):
     password: NewPassword
     name: PersonName
     email: Email
+
+
+class PasswordChangeIn(BaseModel):
+    """PATCH /auth/password 요청(13.7). 현재 비밀번호는 길이를 검사하지 않는다(로그인과 같다)."""
+
+    current_password: str
+    new_password: NewPassword
+
+    @field_validator("new_password")
+    @classmethod
+    def differs_from_current(cls, value: str, info: ValidationInfo) -> str:
+        if value == info.data.get("current_password"):
+            raise ValueError("현재 비밀번호와 같습니다")
+        return value
+
+
+class MeUpdate(BaseModel):
+    """PATCH /auth/me 요청(13.7): 이름·이메일, 보낸 필드만. null은 받지 않는다."""
+
+    name: PersonName | None = None
+    email: Email | None = None
+
+    @field_validator("name", "email")
+    @classmethod
+    def not_null(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("비울 수 없습니다")
+        return value
 
 
 class InstitutionOut(OutModel):

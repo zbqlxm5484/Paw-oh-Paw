@@ -1,5 +1,7 @@
 """scripts/seed.py: 기관·계정 만들기와 비밀번호 규칙(13.4)."""
 
+from datetime import date
+
 import pytest
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
@@ -129,3 +131,43 @@ def test_main_asks_password_twice(clean_tables: None, monkeypatch, capsys) -> No
     args = ["--institution-code", "ASK", "--institution-name", "병원", "--login-id", "a", "--name", "b"]
     assert main(args) == 1
     assert "다릅니다" in capsys.readouterr().err
+
+
+# ---- 계약 종료일·이메일 (v1.12) ----
+
+
+def test_contract_and_email_are_stored(db: Session) -> None:
+    result = _create(db, contract_ends_at=date(2027, 10, 30), email=" Admin@Example.com ")
+    staff = db.get(Staff, result.staff_id)
+    assert staff.email == "admin@example.com"
+    assert staff.institution.contract_ends_at == date(2027, 10, 30)
+
+
+def test_contract_date_updates_an_existing_institution(db: Session) -> None:
+    _create(db)
+    _create(db, institution_name=None, login_id="kim01", role="CLIENT", contract_ends_at=date(2026, 1, 1))
+    institution = db.scalars(select(Institution).where(Institution.code == "DEMO")).one()
+    assert institution.contract_ends_at == date(2026, 1, 1)
+    # 날짜를 주지 않으면 건드리지 않는다
+    _create(db, institution_name=None, login_id="kim02", role="CLIENT")
+    assert institution.contract_ends_at == date(2026, 1, 1)
+
+
+@pytest.mark.parametrize("email", ["no-at", "a@b", "a@@b.kr", "x" * 250 + "@a.kr", " "])
+def test_rejects_bad_email(db: Session, email: str) -> None:
+    with pytest.raises(SeedError, match="이메일"):
+        _create(db, email=email)
+    assert db.scalar(select(func.count()).select_from(Staff)) == 0
+
+
+def test_main_rejects_bad_date(clean_tables: None, capsys) -> None:
+    args = [
+        "--institution-code", "BAD",
+        "--institution-name", "병원",
+        "--login-id", "a",
+        "--name", "b",
+        "--password", GOOD,
+        "--contract-ends-at", "2027-13-01",
+    ]  # fmt: skip
+    assert main(args) == 1
+    assert "날짜" in capsys.readouterr().err

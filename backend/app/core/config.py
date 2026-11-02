@@ -97,6 +97,8 @@ class Settings(DbSettings):
     API_DOCS_ENABLED: bool = False
     # 11.6 인증 캐시: 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다(테스트)
     AUTH_CACHE_TTL_SEC: int = Field(60, ge=0)
+    # 13.6: 디바이스 코드 하나의 계정 상한으로 관리자가 줄 수 있는 최댓값
+    DEVICE_CODE_MAX_ACCOUNTS: int = Field(10, ge=1)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
