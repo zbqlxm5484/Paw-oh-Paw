@@ -49,7 +49,7 @@ compose-config:
   stage: check
   script:
     - cp .env.example .env
-    - docker compose config -q
+    - docker compose --profile bluegreen config -q
 
 pip-audit:
   extends: .tool
@@ -67,44 +67,37 @@ build:
   stage: build
   script:
     - cp .env.example .env
-    - docker compose build
+    # api/web 은 profiles(bluegreen) 서비스라 프로필을 켜야 빌드 대상에 포함된다
+    - docker compose --profile bluegreen build
 
 # ---------- smoke ----------
+# 배포 스크립트를 두 번 실행해 첫 배포(blue)와 blue→green 전환까지 테스트한다
 smoke:
   stage: smoke
   variables:
-    COMPOSE: docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml
+    COMPOSE_PROJECT: $SMOKE_PROJECT
+    COMPOSE_EXTRA: "-f infra/ci/compose.ci.yaml"
+    PUBLIC_URL: http://127.0.0.1:18080
   script:
     - cp .env.example .env
     # JWT_SECRET·FILE_URL_SECRET은 32자 이상이고 서로 달라야 한다(backend/app/core/config.py). 실행할 때마다 새로 만들어 저장소에 값을 두지 않는다
     - echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
     - echo "FILE_URL_SECRET=$(openssl rand -hex 32)" >> .env
-    - $COMPOSE up -d
-    - |
-      for i in $(seq 1 30); do
-        curl -fsS http://127.0.0.1:18080/api/v1/health && exit 0
-        sleep 2
-      done
-      echo "health check failed"; $COMPOSE logs --tail=50; exit 1
+    - bash infra/ci/deploy.sh      # 1회차: 첫 배포(blue)
+    - bash infra/ci/deploy.sh      # 2회차: blue→green 전환
   after_script:
-    - docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml down -v --remove-orphans
+    # profiles 서비스(api/web-blue/green)는 COMPOSE_PROFILES 없이 down 하면 안 지워진다
+    - COMPOSE_PROFILES=bluegreen docker compose -p $SMOKE_PROJECT -f compose.yaml -f infra/ci/compose.ci.yaml down -v --remove-orphans
 
 # ---------- deploy ----------
+# 무중단(blue-green) 배포 + 실패 시 자동 원복. 동작은 infra/ci/deploy.sh 참고
 deploy:
   stage: deploy
+  resource_group: creamoff-server     # 배포 동시 실행 방지
   rules:
     - if: $CI_COMMIT_BRANCH == "develop"
     - if: $CI_COMMIT_BRANCH == "master"
       when: manual
   script:
     - cp "$ENV_FILE" .env
-    - docker compose -p creamoff up -d --build --remove-orphans
-    - docker image prune -f
-    # api가 재생성되면 IP가 바뀌는데 nginx는 시작 시점의 api IP를 캐시해 502가 계속된다 → nginx 재시작
-    - docker compose -p creamoff restart nginx
-    - |
-      for i in $(seq 1 30); do
-        curl -fsS http://127.0.0.1:8080/api/v1/health && exit 0
-        sleep 2
-      done
-      echo "deploy health check failed"; docker compose -p creamoff logs --tail=50; exit 1
+    - bash infra/ci/deploy.sh
