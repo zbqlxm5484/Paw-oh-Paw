@@ -1,0 +1,50 @@
+// results.html + main.py results(): 분석 결과 목록(반려견 칩으로 거르기)
+import { Base } from '../app/Base'
+import { css } from '../app/css'
+import { usePage, useTitle } from '../app/page'
+import { dogOf } from '../store/db'
+import { avatar, sess_no, st_chip } from '../views/views'
+
+export default function Results() {
+  const { acct, me, toast, query } = usePage({ login: true })
+  useTitle('분석 결과 · Paw oh Paw')
+  if (!acct) return null
+  const dog = query.get('dog') ?? 'all'
+  const filt = dogOf(acct, dog) ? dog : 'all'
+  const chips = [{ id: 'all', init: '전체', name: '전체', breed: '', ...avatar(filt === 'all') }]
+  chips.push(...acct.dogs.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name, breed: d.breed || '견종 미입력', ...avatar(filt === d.id) })))
+  const rows = acct.results
+    .filter((r) => dogOf(acct, r.dog) && (filt === 'all' || r.dog === filt))
+    .map((r, i) => ({
+      id: r.id, name: dogOf(acct, r.dog)!.name, when: `${r.date} · ${sess_no(acct, r)}회차`,
+      ...st_chip(r.st), pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`,
+      sym: r.st === 'fail' ? '—' : `${r.sym}%`, w: `${r.w}kg`, bt: i ? '1px solid #F2EFEA' : 'none',
+    }))
+
+  return (
+    <Base acct={acct} me={me} nav="results" toast={toast}>
+      <main style={css('max-width:none;margin:0;padding:32px 80px 96px;display:flex;flex-direction:column;gap:20px')}>
+        <h1 style={css('margin:0;font-size:34px;font-weight:800;letter-spacing:-0.9px')}>분석 결과</h1>
+        <div style={css('display:flex;gap:28px;overflow-x:auto;padding:8px 6px 6px;align-items:flex-start')}>
+          {chips.map((d) => (
+            <a key={d.id} className="lk" href={`/results?dog=${d.id}`} style={css('flex:none;width:96px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center')}>
+              <div style={css(`width:80px;height:80px;border-radius:50%;background:${d.av};color:${d.avc};display:flex;align-items:center;justify-content:center;font-size:${d.id === 'all' ? 17 : 28}px;font-weight:800;box-shadow:${d.ring};transition:box-shadow .2s`)}>{d.init}</div>
+              <div style={css('display:flex;flex-direction:column;gap:2px')}><span style={css(`font-size:15px;color:${d.nc};font-weight:${d.nw}`)}>{d.name}</span>{d.breed ? <span style={css('font-size:12.5px;color:#7A808A')}>({d.breed})</span> : null}</div>
+            </a>
+          ))}
+        </div>
+        <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow-x:auto')}>
+          <div style={css('min-width:720px')}>
+            <div style={css('display:grid;grid-template-columns:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;gap:12px;padding:14px 24px;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>반려견</span><span>측정일 · 회차</span><span>상태</span><span>유효 통과</span><span>대칭 지수</span><span>체중</span><span></span></div>
+            {rows.map((r) => (
+              <a key={r.id} className="lk hv-row" href={`/results/${r.id}`} style={css(`display:grid;grid-template-columns:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;gap:12px;align-items:center;padding:16px 24px;border-top:${r.bt};font-size:15px;font-variant-numeric:tabular-nums`)}>
+                <b>{r.name}</b><span style={css('color:#5B6472')}>{r.when}</span><span><span style={css(`height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:${r.bg};color:${r.c};display:inline-flex;align-items:center`)}>{r.st}</span></span><span>{r.pass}</span><span>{r.sym}</span><span>{r.w}</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
+              </a>
+            ))}
+            {!rows.length ? <div style={css('padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px')}><b style={css('font-size:17px')}>아직 분석 결과가 없어요</b><a className="lk" href="/upload" style={css('height:46px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>보행 영상 분석하기</a></div> : null}
+          </div>
+        </div>
+      </main>
+    </Base>
+  )
+}

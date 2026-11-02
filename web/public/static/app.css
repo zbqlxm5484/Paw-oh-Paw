@@ -1,0 +1,106 @@
+/* Paw oh Paw 공통 스타일. 화면 요소의 모양은 디자인처럼 각 태그의 style 속성에 그대로 있다.
+   여기에는 글꼴, 기본값, 그리고 style 속성으로 쓸 수 없는 hover · focus · 인쇄만 둔다. */
+@font-face {
+  font-family: 'Pretendard Variable';
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+  src: url('fonts/PretendardVariable.woff2') format('woff2-variations');
+}
+body { margin: 0; background: #FAF9F6; font-family: "Pretendard Variable", Pretendard, system-ui, sans-serif; color: #1B2433; -webkit-font-smoothing: antialiased; letter-spacing: -0.2px; }
+* { box-sizing: border-box; }
+a { color: #B4501A; }
+a:hover { color: #8F3F14; }
+input, textarea, button { font-family: inherit; letter-spacing: -0.2px; }
+input::placeholder, textarea::placeholder { color: #A0A7B2; }
+
+/* 링크·버튼을 디자인의 span/div처럼 보이게 */
+a.lk, a.lk:hover { color: inherit; text-decoration: none; }
+button.bt { appearance: none; -webkit-appearance: none; border: none; margin: 0; font: inherit; letter-spacing: inherit; cursor: pointer; text-align: inherit; }
+form.inline { display: contents; }
+
+/* 디자인의 style-hover / style-focus */
+.hv-orange:hover { background: #B4501A !important; color: #fff !important; }
+.hv-row:hover { background: #FFFCF8 !important; }
+.hv-menu:hover { background: #FAF6F0 !important; }
+.hv-border:hover { border-color: #D2601A !important; }
+.hv-dark:hover { color: #1B2433 !important; }
+.inp:focus { border-color: #D2601A !important; box-shadow: 0 0 0 4px #FCEEE3 !important; outline: none; }
+
+@media (max-width: 760px) {
+  .app-nav, .acct-kind { display: none !important; }
+  main[style*="padding:"] { padding-left: 20px !important; padding-right: 20px !important; }
+}
+
+/* 인쇄 쪽 여백을 정해 둔다(브라우저 기본 여백에 따라 쪽이 다르게 잘리지 않게, 11-02). 보호자용 첫 쪽은 이 안(약 703×1032px)에 맞춘다 */
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .print-paper { box-shadow: none !important; min-height: 0 !important; padding: 0 !important; }
+  .print-main { padding: 0 !important; max-width: none !important; }
+  /* 보호자용 보고서를 A4 두 장에 맞춘다(11-02): 첫 쪽에 요약·대칭 지수·다리별 수치가 들어가게 몸 그림을 조금 줄이고,
+     둘째 쪽(측정 품질·지난 변화)은 추이 그래프를 쪽 폭에 맞춰 키운다 */
+  .print-paper { gap: 12px !important; }
+  .rep-map { width: 168px !important; height: 413px !important; margin: 0 auto; }
+  .rep-trend { max-width: none !important; }
+  .rep-p2 { break-before: page; }   /* 보호자용: 첫 쪽 = 요약·대칭 지수·다리별 수치, 둘째 쪽 = 측정 품질·지난 변화 */
+}
+
+/* 선택 상자: 브라우저 기본 화살표는 테두리에 붙어 보여서 직접 그린다. 화살표와 글자의 좌우 여백을 같게 맞춘다(11-02) */
+select {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  padding-left: 16px !important; padding-right: 44px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='%231B2433' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 16px center !important; background-size: 16px 16px !important;
+  cursor: pointer;
+}
+select::-ms-expand { display: none; }
+
+/* 반려견 차트(11-02, EMR 처럼): 위 고정 줄 = 환자 정보 · 바이탈 · 메모 · 담당, 아래 = 방문 목록 | 방문 기록 | 진단 이력 */
+.chart-strip { position:sticky; top:76px; z-index:10; display:grid; grid-template-columns:minmax(230px,1.1fr) minmax(250px,1fr) minmax(0,2.4fr) minmax(170px,.8fr); background:#fff; border:1px solid #ECE8E2; border-radius:16px; box-shadow:0 6px 18px rgba(27,36,51,.06); }
+.cs-card { display:flex; flex-direction:column; gap:4px; padding:12px 16px; min-width:0; }
+.cs-card + .cs-card { border-left:1px solid #F0ECE6; }
+.cs-lb { font-size:12px; line-height:18px; color:#8E949C; font-weight:600; }
+.cs-vit { display:grid; grid-template-columns:repeat(4, auto); justify-content:start; column-gap:18px; font-variant-numeric:tabular-nums; }
+.cs-vit > span { display:flex; flex-direction:column; }
+.cs-vit b { font-size:17px; line-height:26px; white-space:nowrap; }
+.memo-row { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:thin; }
+.memo-card { flex:0 0 210px; display:flex; flex-direction:column; justify-content:space-between; gap:6px; padding:8px 10px; border-radius:10px; background:#FAF8F5; border:1px solid #F0ECE6; color:inherit; }
+a.memo-card[href]:hover { border-color:#E2C9B4; }
+.memo-text { font-size:13px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.memo-foot { display:flex; align-items:center; gap:6px; font-size:11.5px; color:#8E949C; white-space:nowrap; overflow:hidden; }
+.memo-add > summary { list-style:none; cursor:pointer; font-size:13px; font-weight:700; color:#B4501A; padding:2px 0; }
+.memo-add > summary::-webkit-details-marker { display:none; }
+.memo-add[open] > summary { margin-bottom:6px; }
+.memo-chip { display:inline-flex; align-items:center; height:28px; padding:0 10px; border-radius:999px; border:1px solid #E2DCD3; font-size:12.5px; font-weight:700; cursor:pointer; color:#5B6472; }
+.memo-chip input { display:none; }
+.memo-chip:has(input:checked) { background:var(--bg); color:var(--c); border-color:transparent; }
+.visit-grid { display:grid; grid-template-columns:280px minmax(0,1fr) 270px; gap:14px; align-items:start; }
+.v-list, .v-dx { position:sticky; top:250px; max-height:calc(100vh - 270px); overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+.v-new { height:40px; border-radius:10px; border:1.5px dashed #D9C3AE; color:#B4501A; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; background:#fff; flex:none; }
+.v-card { display:flex; flex-direction:column; gap:5px; padding:11px 12px; border-radius:12px; background:#fff; border:1px solid #ECE8E2; color:inherit; flex:none; }
+.v-card:hover { border-color:#E2C9B4; }
+.v-card.on { border:1.5px solid #D2601A; background:#FFF8F2; }
+.v-body { background:#fff; border:1px solid #ECE8E2; border-radius:16px; padding:18px 22px; display:flex; flex-direction:column; gap:16px; min-width:0; }
+.v-sec { display:flex; flex-direction:column; gap:10px; padding-top:14px; border-top:1px solid #F2EFEA; }
+.v-h { font-size:15px; }
+.soap-k { width:24px; height:24px; flex:none; border-radius:6px; background:#1B2433; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12.5px; }
+.v-dx { background:#fff; border:1px solid #ECE8E2; border-radius:16px; padding:14px; }
+.dx-card { display:flex; flex-direction:column; gap:4px; padding:10px 11px; border-radius:12px; background:#FAF8F5; flex:none; }
+.vit-in { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:8px; padding:10px 12px; border-radius:12px; background:#FAF8F5; }
+.vit-in label { display:flex; flex-direction:column; gap:4px; min-width:0; font-size:12px; color:#5B6472; font-weight:600; }
+.vit-in input { height:40px; border-radius:9px; border:1px solid #E2DCD3; background:#fff; padding:0 10px; font-size:14.5px; font-family:inherit; outline:none; min-width:0; font-variant-numeric:tabular-nums; }
+.img-card { display:flex; flex-direction:column; gap:3px; color:inherit; }
+.img-thumb { display:block; aspect-ratio:4/3; cursor:zoom-in; border-radius:10px; overflow:hidden; background:#1B2433; }
+.img-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+@media (max-width:1280px) {
+  .chart-strip { grid-template-columns:1fr 1fr; position:static; }
+  .cs-card + .cs-card { border-left:none; border-top:1px solid #F0ECE6; }
+  .visit-grid { grid-template-columns:240px minmax(0,1fr); }
+  .v-dx { grid-column:1 / -1; position:static; max-height:none; }
+  .v-list { position:static; max-height:none; }
+}
+
+/* 분석 결과 오른쪽 칸의 메모: 세로로 쌓을 때는 가로 줄용 폭(210px)이 높이로 바뀌지 않게 */
+.memo-col > .memo-card { flex: none; }
