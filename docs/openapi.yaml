@@ -4,10 +4,12 @@ info:
   version: 1.0.0
   description: |
     크림오프 팀 서비스(결과 조회 웹 D-06)의 API.
-    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.3" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.0"에 있다.
+    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.13" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.1"에 있다.
 
     - 모든 주소는 `/api/v1`로 시작한다(servers 참고).
-    - 로그인, `/health`, `/metrics`, 서명 주소로 여는 파일 두 개를 빼고 `Authorization: Bearer <token>`이 필요하다.
+    - 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 파일 두 개를 빼고 `Authorization: Bearer <token>`이 필요하다.
+    - 계약이 끝난 CLIENT(effective_role이 GUEST)는 로그인과 `GET /auth/me`만 쓸 수 있고, 나머지는 403 CONTRACT_EXPIRED다.
+    - `/admin/*` 조회는 ADMIN·STAFF, 쓰기는 ADMIN만 쓸 수 있다.
     - 시각은 UTC ISO 8601(`Z`로 끝남), 날짜는 `YYYY-MM-DD`, ID는 UUID 문자열이다.
     - 값이 없는 필드도 키를 빼지 않고 `null`로 보낸다.
     - 오류는 모두 `{"error": {"code", "message", "detail"}}` 모양이다.
@@ -21,6 +23,7 @@ tags:
   - name: 회차 결과·보고서
   - name: 이력·비교·추이
   - name: 운영
+  - name: 크림오프 관리자
 security:
   - bearerAuth: []
 
@@ -30,7 +33,7 @@ paths:
       tags: [인증]
       operationId: login
       summary: 로그인, 토큰 발급 (BE-01)
-      description: 기관 코드·아이디·비밀번호 중 무엇이 틀려도 401 LOGIN_FAILED 하나로 답한다. 기관 코드와 아이디는 대소문자를 구분한다.
+      description: 아이디·비밀번호 중 무엇이 틀려도 401 LOGIN_FAILED 하나로 답한다. 아이디는 대소문자를 구분한다. 계약이 끝난 CLIENT도 로그인되고 staff.effective_role이 GUEST다.
       security: []
       requestBody:
         required: true
@@ -48,7 +51,7 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
-              example: {error: {code: LOGIN_FAILED, message: "기관 코드, 아이디 또는 비밀번호가 맞지 않습니다.", detail: null}}
+              example: {error: {code: LOGIN_FAILED, message: "아이디 또는 비밀번호가 맞지 않습니다.", detail: null}}
         '403': {$ref: '#/components/responses/AccountDisabled'}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
@@ -57,7 +60,7 @@ paths:
     get:
       tags: [인증]
       operationId: getMe
-      summary: 로그인한 담당자·기관 (BE-01)
+      summary: 내 정보, effective_role 포함. GUEST도 된다 (BE-01)
       responses:
         '200':
           description: 담당자
@@ -66,6 +69,165 @@ paths:
               schema: {$ref: '#/components/schemas/StaffOut'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/AccountDisabled'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    patch:
+      tags: [인증]
+      operationId: updateMe
+      summary: 이름·이메일 수정 (BE-26)
+      description: 보낸 필드만 바꾼다. null은 받지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MeUpdate'}
+      responses:
+        '200':
+          description: 바뀐 담당자
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/password:
+    patch:
+      tags: [인증]
+      operationId: changePassword
+      summary: 비밀번호 변경 (BE-26)
+      description: 이미 받은 토큰은 그대로 쓸 수 있다. 새 비밀번호가 현재 비밀번호와 같으면 422(fields에 new_password)다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordChangeIn'}
+      responses:
+        '200':
+          description: 담당자
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffOut'}
+        '400':
+          description: PASSWORD_MISMATCH
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: PASSWORD_MISMATCH, message: "현재 비밀번호가 맞지 않습니다.", detail: null}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/device-codes/verify:
+    post:
+      tags: [인증]
+      operationId: verifyDeviceCode
+      summary: 디바이스 코드 확인 (BE-22, 토큰 없음)
+      description: 코드 형식이 틀렸거나, 없거나, 회수됐거나, 기관 계약이 끝났으면 모두 404 DEVICE_CODE_INVALID 하나로 답한다. DB를 바꾸지 않아 몇 번 불러도 같다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCodeVerifyIn'}
+      responses:
+        '200':
+          description: 가입할 수 있는 코드
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeVerifyOut'}
+        '404':
+          description: DEVICE_CODE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_INVALID, message: "유효한 디바이스 코드가 아닙니다.", detail: null}}
+        '409':
+          description: DEVICE_CODE_FULL
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_FULL, message: "이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/signup:
+    post:
+      tags: [인증]
+      operationId: signup
+      summary: 회원가입 (BE-22, 토큰 없음)
+      description: 가입 계정은 모두 CLIENT이고 코드의 기관에 속한다. 응답은 로그인과 같아 가입 즉시 로그인된 상태다. 이메일은 형식만 검사하고 인증 메일은 보내지 않는다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignupIn'}
+      responses:
+        '201':
+          description: 가입 성공
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginOut'}
+        '404':
+          description: DEVICE_CODE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_INVALID, message: "유효한 디바이스 코드가 아닙니다.", detail: null}}
+        '409':
+          description: DEVICE_CODE_FULL 또는 LOGIN_ID_TAKEN(다른 기관의 아이디와 겹쳐도)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: LOGIN_ID_TAKEN, message: "이미 사용 중인 아이디입니다.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/password-reset/request:
+    post:
+      tags: [인증]
+      operationId: requestPasswordReset
+      summary: 재설정 링크 메일 보내기 (BE-27, 토큰 없음)
+      description: 계정이 있든 없든, 이메일이 있든 없든 같은 204다. 메일의 링크는 30분 동안 쓸 수 있다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordResetRequestIn'}
+      responses:
+        '204': {description: 받아들였다}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: MAIL_UNAVAILABLE(메일 서버 미설정 또는 발송 실패)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: MAIL_UNAVAILABLE, message: "지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /auth/password-reset/confirm:
+    post:
+      tags: [인증]
+      operationId: confirmPasswordReset
+      summary: 링크의 토큰으로 비밀번호 바꾸기 (BE-27, 토큰 없음)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordResetConfirmIn'}
+      responses:
+        '204': {description: 바꿨다. 화면은 로그인 화면으로 보낸다}
+        '400':
+          description: RESET_TOKEN_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: RESET_TOKEN_INVALID, message: "재설정 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
   /dogs:
@@ -135,7 +297,8 @@ paths:
       operationId: updateDog
       summary: 반려견 수정, 기준 회차 지정 (BE-02)
       description: |
-        보낸 필드만 바꾼다. 값을 비우려면 null을 보낸다(name·breed·weight_kg은 비울 수 없다).
+        version은 필수이고, 나머지는 보낸 필드만 바꾼다. 값을 비우려면 null을 보낸다(name·breed·weight_kg은 비울 수 없다).
+        version이 저장된 값과 다르면 409 DOG_MODIFIED이고 아무것도 바뀌지 않는다. 응답의 version은 1 늘어 있다.
         size_class에 null을 보내면 자동 분류로 돌아간다. baseline_session_id는 이 반려견의 DONE 회차여야 한다.
       requestBody:
         required: true
@@ -157,6 +320,12 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/AccountDisabled'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: DOG_MODIFIED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DOG_MODIFIED, message: "다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.", detail: null}}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
@@ -644,6 +813,199 @@ paths:
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
+  /admin/institutions:
+    get:
+      tags: [크림오프 관리자]
+      operationId: listInstitutions
+      summary: 기관 목록 (BE-24, ADMIN·STAFF)
+      responses:
+        '200':
+          description: 페이지 없이 전체, name 오름차순
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InstitutionListOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [크림오프 관리자]
+      operationId: createInstitution
+      summary: 기관 만들기 (BE-24, ADMIN)
+      description: 기관 코드가 겹치면 422 VALIDATION_ERROR(fields에 code)다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InstitutionCreate'}
+      responses:
+        '201':
+          description: 만든 기관
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InstitutionAdminOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/institutions/{institution_id}:
+    parameters:
+      - $ref: '#/components/parameters/InstitutionId'
+    patch:
+      tags: [크림오프 관리자]
+      operationId: updateInstitution
+      summary: 기관 이름·계약 종료일 수정 (BE-24, ADMIN)
+      description: 보낸 필드만 바꾼다. contract_ends_at의 null은 기한 없음이고 name은 비울 수 없다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InstitutionUpdate'}
+      responses:
+        '200':
+          description: 바뀐 기관
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InstitutionAdminOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/institutions/{institution_id}/device-codes:
+    parameters:
+      - $ref: '#/components/parameters/InstitutionId'
+    get:
+      tags: [크림오프 관리자]
+      operationId: listDeviceCodes
+      summary: 코드 목록 (BE-24, ADMIN·STAFF)
+      responses:
+        '200':
+          description: 회수된 코드도 포함한다(revoked_at으로 구분)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeListOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [크림오프 관리자]
+      operationId: createDeviceCode
+      summary: 코드 발급 (BE-24, ADMIN)
+      description: 본문을 비우면 상한 3, 메모 없음이다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCodeCreate'}
+      responses:
+        '201':
+          description: 발급한 코드
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/institutions/{institution_id}/staff:
+    parameters:
+      - $ref: '#/components/parameters/InstitutionId'
+    get:
+      tags: [크림오프 관리자]
+      operationId: listInstitutionStaff
+      summary: 기관의 계정 목록 (BE-24, ADMIN·STAFF)
+      responses:
+        '200':
+          description: 계정 목록
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffListOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/device-codes/{device_code_id}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceCodeId'
+    patch:
+      tags: [크림오프 관리자]
+      operationId: updateDeviceCode
+      summary: 상한·메모 수정 (BE-24, ADMIN)
+      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기이고 max_accounts는 비울 수 없다. 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCodeUpdate'}
+      responses:
+        '200':
+          description: 바뀐 코드
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/device-codes/{device_code_id}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/DeviceCodeId'
+    post:
+      tags: [크림오프 관리자]
+      operationId: revokeDeviceCode
+      summary: 코드 회수, 멱등 (BE-24, ADMIN)
+      description: 본문 없음. 기존 계정은 그대로 쓴다(막으려면 계정 중지).
+      responses:
+        '200':
+          description: 회수된 코드. 이미 회수됐으면 그대로 200
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/staff/{staff_id}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    patch:
+      tags: [크림오프 관리자]
+      operationId: updateStaff
+      summary: 계정 중지·재개 (BE-24, ADMIN)
+      description: 역할을 바꾸거나 비밀번호를 건드리는 필드는 없다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StaffUpdate'}
+      responses:
+        '200':
+          description: 바뀐 계정
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffAdminOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SELF_DISABLE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SELF_DISABLE, message: "자기 계정은 중지할 수 없습니다.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
   /health:
     get:
       tags: [운영]
@@ -712,6 +1074,27 @@ components:
       description: UUID 형식이 아니면 404 NOT_FOUND
       schema: {type: string, format: uuid}
       example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    InstitutionId:
+      name: institution_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    DeviceCodeId:
+      name: device_code_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    StaffId:
+      name: staff_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
     Page:
       name: page
       in: query
@@ -741,11 +1124,17 @@ components:
           schema: {$ref: '#/components/schemas/Error'}
           example: {error: {code: AUTH_EXPIRED, message: "로그인 시간이 지났습니다. 다시 로그인해 주세요.", detail: null}}
     AccountDisabled:
-      description: ACCOUNT_DISABLED
+      description: ACCOUNT_DISABLED, 또는 계약이 끝난 CLIENT의 CONTRACT_EXPIRED(GET /auth/me는 제외)
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
           example: {error: {code: ACCOUNT_DISABLED, message: "사용이 중지된 계정입니다.", detail: null}}
+    Forbidden:
+      description: FORBIDDEN(권한이 없는 역할), ACCOUNT_DISABLED 또는 CONTRACT_EXPIRED
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: FORBIDDEN, message: "이 기능을 사용할 권한이 없습니다.", detail: null}}
     NotFound:
       description: NOT_FOUND(없는 ID, 다른 기관의 ID, UUID 형식이 아닌 경로 ID)
       content:
@@ -779,7 +1168,16 @@ components:
       example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
     Role:
       type: string
-      enum: [ADMIN, STAFF]
+      description: ADMIN·STAFF는 크림오프, CLIENT는 고객 기관의 계정
+      enum: [ADMIN, STAFF, CLIENT]
+    EffectiveRole:
+      type: string
+      description: 화면은 이 값으로 분기한다. role이 CLIENT이고 기관 계약이 끝났으면 GUEST, 아니면 role 그대로
+      enum: [ADMIN, STAFF, CLIENT, GUEST]
+    ContractStatus:
+      type: string
+      description: 계약 종료일이 없거나 오늘(한국 날짜) 이후면 ACTIVE, 아니면 EXPIRED. 계산값이다
+      enum: [ACTIVE, EXPIRED]
     SizeClass:
       type: string
       enum: [SMALL, MEDIUM, LARGE]
@@ -832,7 +1230,7 @@ components:
       enum: [deg, pct, pct_body, body_per_sec, count]
     MetricCode:
       type: string
-      description: 백엔드 명세 12.3. 분석 API 형식이 확정되면 이름이 바뀔 수 있다.
+      description: 백엔드 명세 12.3. 분석 결과 JSON v1에 맞춰 정해졌다.
       enum:
         - rom_shoulder
         - rom_elbow
@@ -869,13 +1267,17 @@ components:
         - VIDEO_DURATION
         - BASELINE_INVALID
         - COMPARE_INVALID
+        - PASSWORD_MISMATCH
+        - RESET_TOKEN_INVALID
         - AUTH_REQUIRED
         - AUTH_EXPIRED
         - LOGIN_FAILED
         - ACCOUNT_DISABLED
+        - CONTRACT_EXPIRED
         - FORBIDDEN
         - FILE_LINK_EXPIRED
         - NOT_FOUND
+        - DEVICE_CODE_INVALID
         - SESSION_CLOSED
         - SESSION_ALREADY_OPEN
         - SESSION_EMPTY
@@ -883,9 +1285,14 @@ components:
         - SHOT_IN_PROGRESS
         - SHOT_NOT_FAILED
         - REPORT_IN_PROGRESS
+        - DEVICE_CODE_FULL
+        - LOGIN_ID_TAKEN
+        - DOG_MODIFIED
+        - SELF_DISABLE
         - VIDEO_TOO_LARGE
         - VALIDATION_ERROR
         - INTERNAL_ERROR
+        - MAIL_UNAVAILABLE
     Error:
       type: object
       required: [error]
@@ -919,9 +1326,9 @@ components:
     # ---------- 인증 ----------
     LoginRequest:
       type: object
-      required: [institution_code, login_id, password]
+      description: institution_code가 와도 무시한다.
+      required: [login_id, password]
       properties:
-        institution_code: {type: string, minLength: 1, maxLength: 20, example: CREAM01}
         login_id: {type: string, minLength: 1, maxLength: 50, example: kim01}
         password: {type: string, description: '로그인에서는 길이를 검사하지 않는다. 틀리면 401 LOGIN_FAILED', example: password1234}
     LoginOut:
@@ -934,25 +1341,170 @@ components:
         staff: {$ref: '#/components/schemas/StaffOut'}
     StaffOut:
       type: object
-      required: [id, login_id, name, role, institution]
+      required: [id, login_id, name, email, role, effective_role, institution]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         login_id: {type: string, example: kim01}
         name: {type: string, example: 김담당}
+        email: {type: [string, 'null'], example: kim01@example.com}
         role: {$ref: '#/components/schemas/Role'}
+        effective_role: {$ref: '#/components/schemas/EffectiveRole'}
         institution:
           type: object
-          required: [id, code, name]
+          required: [id, code, name, contract_ends_at, contract_status]
           properties:
             id: {$ref: '#/components/schemas/Uuid'}
-            code: {type: string, example: CREAM01}
+            code: {type: string, example: INST-7F3K2Q}
             name: {type: string, example: 크림 재활센터}
+            contract_ends_at: {type: [string, 'null'], format: date, description: 계약 마지막 날(당일 포함). null은 기한 없음, example: '2027-10-30'}
+            contract_status: {$ref: '#/components/schemas/ContractStatus'}
+    DeviceCodeVerifyIn:
+      type: object
+      required: [code]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 40, description: 하이픈·공백·소문자는 서버가 정리한다, example: 7f3k2-qw9pa-x2m8n-h4cde}
+    DeviceCodeVerifyOut:
+      type: object
+      required: [institution, remaining_accounts]
+      properties:
+        institution:
+          type: object
+          required: [id, name]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+            name: {type: string, example: 크림 재활센터}
+        remaining_accounts: {type: integer, description: 이 코드로 더 만들 수 있는 계정 수, example: 1}
+    SignupIn:
+      type: object
+      required: [code, login_id, password, name, email]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 40, example: 7F3K2-QW9PA-X2M8N-H4CDE}
+        login_id: {type: string, pattern: '^[a-z0-9._-]{4,50}$', description: '4~50자, 영문 소문자·숫자·.·_·-만. 다른 기관의 아이디와도 겹칠 수 없다', example: kim01}
+        password: {type: string, minLength: 8, description: '8자 이상, UTF-8로 72바이트 이하', example: password1234}
+        name: {type: string, minLength: 1, maxLength: 50, example: 김담당}
+        email: {type: string, minLength: 5, maxLength: 254, description: '소문자로 저장한다. 형식만 검사하고 인증 메일은 보내지 않는다', example: kim01@example.com}
+    MeUpdate:
+      type: object
+      description: 보낸 필드만 바꾼다. null은 받지 않는다.
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50, example: 김담당}
+        email: {type: string, minLength: 5, maxLength: 254, example: kim01@example.com}
+    PasswordChangeIn:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: {type: string, description: '길이를 검사하지 않는다. 틀리면 400 PASSWORD_MISMATCH', example: password1234}
+        new_password: {type: string, minLength: 8, description: '8자 이상, UTF-8로 72바이트 이하. 현재 비밀번호와 달라야 한다', example: newpassword5678}
+    PasswordResetRequestIn:
+      type: object
+      required: [login_id]
+      properties:
+        login_id: {type: string, minLength: 1, maxLength: 50, example: kim01}
+    PasswordResetConfirmIn:
+      type: object
+      required: [token, new_password]
+      properties:
+        token: {type: string, minLength: 1, maxLength: 100, description: 메일 링크의 token}
+        new_password: {type: string, minLength: 8, description: '8자 이상, UTF-8로 72바이트 이하', example: newpassword5678}
+
+    # ---------- 크림오프 관리자 ----------
+    InstitutionAdminOut:
+      type: object
+      required: [id, code, name, contract_ends_at, contract_status, staff_count, device_code_count, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        code: {type: string, example: INST-7F3K2Q}
+        name: {type: string, example: 크림 재활센터}
+        contract_ends_at: {type: [string, 'null'], format: date, description: 계약 마지막 날(당일 포함). null은 기한 없음, example: '2027-10-30'}
+        contract_status: {$ref: '#/components/schemas/ContractStatus'}
+        staff_count: {type: integer, example: 2}
+        device_code_count: {type: integer, example: 1}
+        created_at: {type: string, format: date-time, example: '2026-10-30T02:00:00Z'}
+    InstitutionListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/InstitutionAdminOut'}
+    InstitutionCreate:
+      type: object
+      required: [name]
+      properties:
+        code: {type: [string, 'null'], minLength: 1, maxLength: 20, description: '유일. 비우면 서버가 INST- + 6자로 만든다', example: null}
+        name: {type: string, minLength: 1, maxLength: 100, example: 크림 재활센터}
+        contract_ends_at: {type: [string, 'null'], format: date, description: 과거 날짜도 받는다(즉시 만료시키는 용도), example: '2027-10-30'}
+    InstitutionUpdate:
+      type: object
+      description: 보낸 필드만 바꾼다. contract_ends_at의 null은 기한 없음이고 name은 비울 수 없다.
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100, example: 크림 재활센터}
+        contract_ends_at: {type: [string, 'null'], format: date, example: '2028-10-30'}
+    DeviceCodeOut:
+      type: object
+      description: 코드 전체가 든 자리는 발급 응답과 코드 목록뿐이다.
+      required: [id, code, institution_id, max_accounts, active_accounts, revoked_at, note, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        code: {type: string, example: 7F3K2-QW9PA-X2M8N-H4CDE}
+        institution_id: {$ref: '#/components/schemas/Uuid'}
+        max_accounts: {type: integer, example: 3}
+        active_accounts: {type: integer, example: 2}
+        revoked_at: {type: [string, 'null'], format: date-time, example: null}
+        note: {type: [string, 'null'], example: null}
+        created_at: {type: string, format: date-time, example: '2026-10-30T02:00:00Z'}
+    DeviceCodeListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DeviceCodeOut'}
+    DeviceCodeCreate:
+      type: object
+      properties:
+        max_accounts: {type: integer, minimum: 1, default: 3, description: '1 ~ 서버 설정값(DEVICE_CODE_MAX_ACCOUNTS, 기본 10)', example: 3}
+        note: {type: [string, 'null'], maxLength: 100, example: 2호기}
+    DeviceCodeUpdate:
+      type: object
+      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기이고 max_accounts는 비울 수 없다.
+      properties:
+        max_accounts: {type: integer, minimum: 1, description: '1 ~ 서버 설정값(DEVICE_CODE_MAX_ACCOUNTS, 기본 10)', example: 5}
+        note: {type: [string, 'null'], maxLength: 100, example: null}
+    StaffAdminOut:
+      type: object
+      required: [id, login_id, name, email, role, is_active, device_code_id, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        login_id: {type: string, example: kim01}
+        name: {type: string, example: 김담당}
+        email: {type: [string, 'null'], example: kim01@example.com}
+        role: {$ref: '#/components/schemas/Role'}
+        is_active: {type: boolean, example: true}
+        device_code_id:
+          type: [string, 'null']
+          format: uuid
+          description: 가입에 쓴 코드. 관리자가 만든 계정은 null
+          example: null
+        created_at: {type: string, format: date-time, example: '2026-10-30T02:00:00Z'}
+    StaffListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/StaffAdminOut'}
+    StaffUpdate:
+      type: object
+      required: [is_active]
+      properties:
+        is_active: {type: boolean, description: 자기 자신을 false로 하면 409 SELF_DISABLE, example: false}
 
     # ---------- 반려견 ----------
     DogOut:
       type: object
       required: [id, name, breed, weight_kg, size_class, size_class_manual, birth_year, sex, rehab_start_date,
-                 focus_limb, baseline_session_id, memo, session_count, last_measured_on, open_session_id,
+                 focus_limb, baseline_session_id, memo, version, session_count, last_measured_on, open_session_id,
                  created_at, updated_at]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
@@ -973,6 +1525,7 @@ components:
           description: 저장된 값 그대로. null이면 가장 이른 DONE 회차가 기준.
           example: null
         memo: {type: [string, 'null'], description: 내부 메모. 보고서에 넣지 않는다., example: null}
+        version: {type: integer, description: 수정할 때 그대로 돌려보낸다(PATCH의 version), example: 0}
         session_count: {type: integer, description: 상태 상관없이 회차 수, example: 3}
         last_measured_on: {type: [string, 'null'], format: date, example: '2026-10-20'}
         open_session_id:
@@ -1010,8 +1563,10 @@ components:
         memo: {type: [string, 'null'], maxLength: 1000, example: null}
     DogUpdate:
       type: object
-      description: 보낸 필드만 바꾼다. null을 보내면 비운다. name·breed·weight_kg은 null 불가.
+      description: version은 필수이고, 나머지는 보낸 필드만 바꾼다. null을 보내면 비운다. name·breed·weight_kg은 null 불가.
+      required: [version]
       properties:
+        version: {type: integer, description: 읽었을 때의 값. 저장된 값과 다르면 409 DOG_MODIFIED, example: 3}
         name: {type: string, minLength: 1, maxLength: 50}
         breed: {type: string, minLength: 1, maxLength: 50}
         weight_kg: {type: number, minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 27.9}
@@ -1044,7 +1599,7 @@ components:
     SessionCreate:
       type: object
       properties:
-        measured_on: {type: string, format: date, description: '기본 오늘(한국 날짜). 미래 날짜 불가', example: '2026-10-20'}
+        measured_on: {type: [string, 'null'], format: date, description: '기본 오늘(한국 날짜). 미래 날짜 불가', example: '2026-10-20'}
         weight_kg: {type: [number, 'null'], minimum: 0.5, maximum: 100.0, description: 그날 체중, example: 28.1}
     SessionOut:
       type: object
@@ -1269,7 +1824,7 @@ components:
               items: {$ref: '#/components/schemas/Reason'}
             gaits:
               type: array
-              description: WALK, TROT 순서, 값이 있는 유형만
+              description: WALK, TROT, OTHER 순서, 값이 있는 유형만. OTHER에는 보행 유형을 아직 판별하지 못한 유효 통과가 들어간다. 분석이 끝났는데 유효 통과가 하나도 없으면 빈 배열이다.
               items: {$ref: '#/components/schemas/GaitResult'}
 
     # ---------- 보고서 ----------
