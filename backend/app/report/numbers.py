@@ -29,7 +29,7 @@ METRIC_LABELS: dict[str, str] = {
     "angle_median_stifle": "무릎 각도 중앙값",
     "angle_median_tarsus": "뒷발목 각도 중앙값",
     "stifle_cv": "무릎 움직임 일관성",
-    "paw_lift": "발 높이",
+    "paw_lift": "발 들림 높이",
     "paw_excursion": "발 움직임 범위",
     "stride_length": "걸음 길이",
     "stance_ratio": "입각기 비율",
