@@ -256,6 +256,17 @@ def test_every_template_sentence_passes_the_checks(edition: str) -> None:
         assert check_texts(rendered.texts, edition=edition) == []
 
 
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_a_value_of_one_hundred_percent_is_not_the_forbidden_100_percent(edition: str) -> None:
+    # 금지 표현 100%는 단정 표현을 막으려는 것이다. 보고서의 값은 소수점까지 적으므로 걸리지 않는다
+    result = sample_result()
+    result["gaits"][0]["metrics"] = [metric("stance_ratio", "LH", 100.0, unit="pct")]
+    result["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 3.0, 1.0)]  # 대칭 지수 100.0%
+    rendered = render(sample_input(edition=edition, result=result))
+    assert check_texts(rendered.texts, edition=edition) == []
+    assert ("대칭 지수 100.0%." in rendered.texts["summary"]) == (edition == "VET")
+
+
 def test_owner_glossary_explains_the_tolerance_only_when_a_sentence_uses_it() -> None:
     assert "오차 범위" in dict(render(sample_input()).sentences.glossary)
     assert "오차 범위" not in dict(render(sample_input(settings=None)).sentences.glossary)

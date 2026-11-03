@@ -14,7 +14,7 @@ Oct 19, 2026 · @조영운
 | v1.13 | 2026-11-02 | 측정 종료·회차 집계·회차 결과 구현(작업 단위 8, S15P31A404-191): 12.3에 회차 값과 측정 불가 행 규칙을 적음. 15.7 `gaits`에 OTHER를 더함(분석 결과 JSON v1: `gait`가 null인 유효 통과는 제외하지 않는다). 리뷰 반영: 10절 Q6에 답을 적고(회차 집계·대칭 지수는 팀 서비스, `stifle_cv` 식과 유효 통과 0건 처리 확인), 12.3에 `paw_slope_median_*`를 저장하지 않는다고 적고, 15.7에 유효 통과 0건일 때의 화면을 적음 |
 | v1.14 | 2026-11-02 | 보고서 검사(작업 단위 9의 7번, S15P31A404-194): 8절 7번에 금지 표현·전문 용어 목록 위치(`report/terms.yaml`), 보호자용 전문 용어 규칙(문서 안 설명 1회, 용어는 공백을 빼고 비교), 고정 문구 검사를 적음. 목록은 김지윤 초안(금지 20개, 용어 23개). `report.ReportCheckError` |
 | v1.15 | 2026-11-02 | 작업 단위 9 구현(S15P31A404-195): 보고서 모듈 `report/`(8절 입력 dict 모양은 `report/inputs.py` 머리말, 문장은 김지윤 템플릿 전 자리 표시), 보고서 풀·`services/report_input.py`(12.4), 보고서 API 19~21(15.7). 오차 범위(`settings.tolerance`)는 197에서 채운다 |
-| v1.16 | 2026-11-03 | 195 리뷰 반영(김지윤, MR !80): 8절 3번에 문장 템플릿 확정과 보호자용 요약 둘째 문장 규칙(좌우 차이도 15.8 오차 범위 표와 견줌), 8절 7번 목록은 김지윤 초안이 현재본이고 용어 설명은 명사형, 15.8에 보고서도 같은 표를 쓴다고 적음. 표 쓰임은 조영운 확인 전 |
+| v1.16 | 2026-11-03 | 195 리뷰 반영(김지윤, MR !80): 8절 3번에 문장 템플릿 확정과 보호자용 요약 둘째 문장 규칙(좌우 차이도 15.8 오차 범위 표와 견줌), 8절 7번 목록은 김지윤 초안이 현재본이고 용어 설명은 명사형, 15.8에 보고서도 같은 표를 쓴다고 적음. 표 쓰임은 조영운 확인 전. 박규원 리뷰 반영: 11.11 `file_url`의 `now`(두 주소의 만료를 맞춤), 15.7 주소 재사용과 ASCII 대체 파일 이름 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -646,7 +646,8 @@ class StorageService(Protocol):
     def delete_prefix(self, prefix: str) -> tuple[int, int]: ...
     def stat_prefix(self, prefix: str) -> tuple[int, int]: ...
     def file_url(self, key: str, api_path: str,
-                 download_name: str | None = None) -> tuple[str, datetime]: ...
+                 download_name: str | None = None, *,
+                 now: datetime | None = None) -> tuple[str, datetime]: ...
     def check_writable(self) -> None: ...
 
 def get_storage() -> StorageService:
@@ -660,7 +661,7 @@ def get_storage() -> StorageService:
 | `local_copy` | 결과 영상 그리기, 분석 API 제출처럼 저장된 파일을 로컬 경로로 읽어야 하는 곳 | 실제 경로를 그대로 준다 | `UPLOAD_TMP_DIR`에 내려받고, 닫을 때 지운다 |
 | `delete` | 파일 하나를 지우고 바이트 수를 돌려준다. 없으면 0 | 빈 폴더도 지운다 | HeadObject로 크기를 확인한 뒤 지운다 |
 | `delete_prefix`·`stat_prefix` | 접두어 아래를 지우거나 세고 (파일 수, 바이트 수)를 돌려준다. `stat_prefix`는 파기 `dry_run`에 쓴다 | 폴더를 훑는다 | 목록을 페이지마다 받는다. 1,000개씩 지우고, 응답의 `Errors`가 하나라도 있으면 예외를 내 DB 행을 지우기 전에 멈춘다 |
-| `file_url` | 화면에 줄 주소와 만료 시각(`FILE_URL_TTL_SEC` 뒤) | `make_signed_url(api_path)`이 주는 주소와 exp. `download_name`이 있으면 `&download=true`를 붙인다 | presigned GET. `download_name`이 있으면 `ResponseContentDisposition`에 첨부와 파일 이름을 넣는다 |
+| `file_url` | 화면에 줄 주소와 만료 시각(`FILE_URL_TTL_SEC` 뒤). `now`를 주면 그 시각이 기준이라 같은 파일의 두 주소가 같은 만료를 쓴다 | `make_signed_url(api_path, now=now)`이 주는 주소와 exp. `download_name`이 있으면 `&download=true`를 붙인다 | presigned GET. `download_name`이 있으면 `ResponseContentDisposition`에 첨부와 파일 이름을 넣는다 |
 | `check_writable` | `/health`의 저장소 검사 | 시험 파일을 쓰고 지운다 | 호출마다 다른 키로 `.health/` 아래에 쓰고 지운다 |
 | `path` (`LocalStorage`만) | local 파일 API(15.2의 16·21번)가 `FileResponse`에 넘길 경로 | 실제 경로 | 없음 |
 
@@ -1753,6 +1754,7 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
 
 - `reports`는 OWNER, VET 순서다. 회차가 DONE이 되기 전에는 빈 배열이다(워커가 회차를 DONE으로 바꾸는 같은 트랜잭션에서 OWNER·VET 두 행을 PENDING으로 만든다, 12.4).
 - 화면은 PENDING·GENERATING인 판본이 있는 동안 3초마다 부른다.
+- DONE 판본의 `file_url`·`download_url`은 부를 때마다 새 서명이라 주소가 바뀐다(한 응답 안의 두 주소는 만료가 같다). 화면은 판본별로 처음 받은 주소를 `url_expires_at`까지 재사용한다. 그대로 미리보기에 묶으면 3초마다 PDF를 다시 읽는다. 다시 만들기로 DONE이 아니게 되면 붙들던 주소를 버리고 다음 DONE의 새 주소를 쓴다. PDF 응답은 `Cache-Control: private, max-age=<FILE_URL_TTL_SEC>`라 같은 주소는 브라우저 캐시의 예전 PDF를 보여 줄 수 있다.
 
 **`POST /reports/{report_id}/regenerate`** — 보고서 다시 만들기 (BE-15)
 
@@ -1763,7 +1765,7 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
 
 - 서명 확인은 결과 영상과 같다. 보고서 `status`가 DONE이 아니면 404 `NOT_FOUND`다. 다시 만드는 중이거나 실패한 판본의 예전 PDF는 내보내지 않는다.
 - `Content-Type: application/pdf`. `download=true`면 `Content-Disposition: attachment`, 없으면 `inline`이다.
-- 내려받는 파일 이름은 `{반려견 이름}_{측정일}_{보호자용|수의사용}.pdf`이다. 한글이라 `filename*=UTF-8''<퍼센트 인코딩>` 형식으로 넣는다. 저장소 경로에는 여전히 이름을 쓰지 않는다(7절).
+- 내려받는 파일 이름은 `{반려견 이름}_{측정일}_{보호자용|수의사용}.pdf`이다. 한글이라 `filename*=UTF-8''<퍼센트 인코딩>` 형식으로 넣고, 이를 무시하는 PDF 뷰어·WebView를 위해 ASCII 대체 이름 `filename="report.pdf"`를 앞에 함께 넣는다(RFC 6266). 저장소 경로에는 여전히 이름을 쓰지 않는다(7절).
 - 저장소가 S3면 `file_url`·`download_url`이 S3 주소다. `download_url`은 presigned URL에 같은 `Content-Disposition`(첨부, 같은 파일 이름)을 넣어 만든다(11.11).
 
 ### 15.8 이력·비교·추이

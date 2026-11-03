@@ -6,11 +6,13 @@ import uuid
 from datetime import UTC, datetime
 from urllib.parse import parse_qs, unquote, urlsplit
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.dates import today_local
 from app.models import MeasureSession, Report
+from app.services.reports import to_report_out
 from app.storage.base import get_storage
 from app.storage.keys import report_key
 from tests.conftest import bearer
@@ -77,6 +79,26 @@ def test_reports_come_owner_first_and_only_done_has_urls(
     assert done["download_url"] == done["file_url"] + "&download=true" and done["url_expires_at"].endswith("Z")
 
 
+def test_file_and_download_urls_share_one_expiry_across_a_second_boundary(
+    db: Session, dog, staff, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class MovingClock(datetime):
+        """서명 함수가 시각을 직접 읽으면 부를 때마다 1초씩 간다."""
+
+        ticks = 0
+
+        @classmethod
+        def now(cls, tz=None):
+            cls.ticks += 1
+            return datetime(2026, 11, 3, 5, 0, cls.ticks, tzinfo=UTC)
+
+    monkeypatch.setattr("app.core.security.datetime", MovingClock)
+    session = _session(db, dog, staff)
+    out = to_report_out(_report(db, dog, session, "OWNER", status="DONE"), dog.name, session.measured_on)
+    assert out.download_url == f"{out.file_url}&download=true"
+    assert parse_qs(urlsplit(out.file_url).query)["exp"][0] == str(int(out.url_expires_at.timestamp()))
+
+
 def test_failed_report_shows_the_reason(client: TestClient, db: Session, dog, staff, auth_headers) -> None:
     session = _session(db, dog, staff)
     _report(db, dog, session, "OWNER", status="FAILED", fail_reason="REPORT_CHECK_FAILED")
@@ -134,12 +156,14 @@ def test_signed_url_opens_the_pdf_inline_and_download_as_attachment(
 
     inline = client.get(row["file_url"])  # 로그인 토큰 없이 서명으로 연다
     assert inline.status_code == 200 and inline.headers["content-type"] == "application/pdf"
-    assert inline.content == PDF and inline.headers["content-disposition"].startswith("inline; filename*=UTF-8''")
+    assert inline.content == PDF
+    assert inline.headers["content-disposition"].startswith("inline; filename=\"report.pdf\"; filename*=UTF-8''")
     assert inline.headers["cache-control"].startswith("private, max-age=")
 
     download = client.get(row["download_url"])
     disposition = download.headers["content-disposition"]
-    assert download.status_code == 200 and disposition.startswith("attachment; filename*=UTF-8''")
+    assert download.status_code == 200
+    assert disposition.startswith("attachment; filename=\"report.pdf\"; filename*=UTF-8''")
     assert unquote(disposition.split("''", 1)[1]) == f"{dog.name}_{session.measured_on}_보호자용.pdf"
 
 

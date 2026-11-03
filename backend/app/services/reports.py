@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -26,6 +27,7 @@ from app.storage.local import LocalStorage
 REPORT_API_PATH = "/api/v1/reports/{report_id}/file"
 EDITION_LABELS = {ReportEdition.OWNER.value: "보호자용", ReportEdition.VET.value: "수의사용"}
 EDITION_ORDER = {ReportEdition.OWNER.value: 0, ReportEdition.VET.value: 1}
+ASCII_FILE_NAME = "report.pdf"
 
 
 def download_name(dog_name: str, measured_on: object, edition: str) -> str:
@@ -33,9 +35,9 @@ def download_name(dog_name: str, measured_on: object, edition: str) -> str:
 
 
 def content_disposition(name: str, *, download: bool) -> str:
-    """한글 파일 이름은 RFC 5987의 filename*=UTF-8''<퍼센트 인코딩>으로 넣는다(15.7)."""
+    """한글 이름은 filename*=UTF-8''<퍼센트 인코딩>으로, 이를 무시하는 뷰어용 ASCII 이름도 넣는다(RFC 6266, 15.7)."""
     kind = "attachment" if download else "inline"
-    return f"{kind}; filename*=UTF-8''{quote(name)}"
+    return f"{kind}; filename=\"{ASCII_FILE_NAME}\"; filename*=UTF-8''{quote(name)}"
 
 
 def to_report_out(report: Report, dog_name: str, measured_on: object) -> ReportOut:
@@ -43,8 +45,10 @@ def to_report_out(report: Report, dog_name: str, measured_on: object) -> ReportO
     if report.status == ReportStatus.DONE.value and report.file_key:
         storage = get_storage()
         path = REPORT_API_PATH.format(report_id=report.id)
-        file_url, expires_at = storage.file_url(report.file_key, path)
-        download_url, _ = storage.file_url(report.file_key, path, download_name(dog_name, measured_on, report.edition))
+        now = datetime.now(UTC)  # 초가 넘어가도 두 주소의 만료가 같게 한다(15.7)
+        file_url, expires_at = storage.file_url(report.file_key, path, now=now)
+        name = download_name(dog_name, measured_on, report.edition)
+        download_url, _ = storage.file_url(report.file_key, path, name, now=now)
     return ReportOut(
         id=report.id,
         session_id=report.session_id,

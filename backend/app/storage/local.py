@@ -104,8 +104,10 @@ class LocalStorage:
 
     # ---- 주소·상태 ----
 
-    def file_url(self, key: str, api_path: str, download_name: str | None = None) -> tuple[str, datetime]:
-        url, expires_at = make_signed_url(api_path)
+    def file_url(
+        self, key: str, api_path: str, download_name: str | None = None, *, now: datetime | None = None
+    ) -> tuple[str, datetime]:
+        url, expires_at = make_signed_url(api_path, now=now)
         if download_name is not None:
             url += "&download=true"  # download는 서명에 넣지 않는다(11.6)
         return url, expires_at
