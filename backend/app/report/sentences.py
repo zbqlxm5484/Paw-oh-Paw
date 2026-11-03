@@ -71,16 +71,20 @@ def _summary(inp: ReportInput, tables: list[GaitTable]) -> list[str]:
         message = notice.get("message") if isinstance(notice, dict) else None
         if message:
             lines.append(str(message))
-    top = next((line for table in tables for line in table.compare if line.comparable), None)
-    if top is None:
+    found = next(((table, line) for table in tables for line in table.compare if line.comparable), None)
+    if found is None:
         if not lines:
             lines.append("좌우를 비교할 수 있는 수치가 없어 차이를 적지 않았습니다.")
         return lines
-    sentence = (
-        f"{top.pair_label}에서는 {top.label}의 좌우 차이가 가장 큽니다. "
-        f"왼쪽 {top.left}, 오른쪽 {top.right}(차이 {top.diff})."
-    )
-    if inp.edition == "VET" and top.symmetry_index != NO_VALUE:
+    table, top = found
+    name = f"{top.pair_label} {top.label}"
+    values = f"왼쪽 {top.left}, 오른쪽 {top.right}(차이 {top.diff})."
+    if top.symmetry_index == NO_VALUE:  # 왼쪽·오른쪽이 모두 0이면 비율이 없다(15.7)
+        lines.append(f"{table.label} 기준, 좌우 차이를 비율로 낼 수 있는 항목이 없습니다. {name}: {values}")
+        return lines
+    # 비교 줄은 대칭 지수가 큰 순서다(15.7). 단위가 달라 값의 차이끼리는 견주지 않으므로 "비율"이라고 밝힌다
+    sentence = f"{table.label} 기준, 좌우 차이를 비율로 볼 때 가장 큰 항목은 {name}입니다. {values}"
+    if inp.edition == "VET":
         sentence += f" 대칭 지수 {top.symmetry_index}."
     lines.append(sentence)
     if inp.edition == "OWNER":

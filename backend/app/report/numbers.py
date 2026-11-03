@@ -36,13 +36,8 @@ METRIC_LABELS: dict[str, str] = {
     "walk_speed": "보행 속도",
     "gait_cycles": "보행 주기 수",
 }
-UNIT_LABELS: dict[str, str] = {
-    "deg": "°",
-    "pct": "%",
-    "pct_body": "% (몸통 길이 기준)",
-    "body_per_sec": "몸통 길이/초",
-    "count": "회",
-}
+# 단위의 기준은 표 칸마다 되풀이하지 않고 수치 이름에 한 번만 적는다(metric_label)
+UNIT_NOTES: dict[str, str] = {"pct_body": "몸통 길이 기준", "body_per_sec": "몸통 길이/초"}
 LIMB_LABELS: dict[str, str] = {
     "LF": "왼쪽 앞다리",
     "RF": "오른쪽 앞다리",
@@ -116,12 +111,10 @@ class ListedNumber:
     value: float
 
 
-def metric_label(code: str) -> str:
-    return METRIC_LABELS.get(code, code)
-
-
-def unit_label(unit: str) -> str:
-    return UNIT_LABELS.get(unit, unit)
+def metric_label(code: str, unit: str = "") -> str:
+    label = METRIC_LABELS.get(code, code)
+    note = UNIT_NOTES.get(unit)
+    return f"{label}({note})" if note else label
 
 
 def gait_label(gait_type: str) -> str:
@@ -129,7 +122,7 @@ def gait_label(gait_type: str) -> str:
 
 
 def format_value(value: float | None, unit: str) -> str:
-    """숫자와 단위. 각도·비율은 소수 1자리, 횟수는 정수, 나머지는 소수 2자리."""
+    """숫자와 단위. 각도·비율은 소수 1자리, 횟수는 정수, 나머지는 소수 2자리. 기준은 수치 이름에 있다."""
     if value is None:
         return UNMEASURABLE
     if unit == "deg":
@@ -138,7 +131,11 @@ def format_value(value: float | None, unit: str) -> str:
         return f"{value:.1f}%"
     if unit == "count":
         return f"{value:.0f}회"
-    return f"{value:.2f} {unit_label(unit)}".rstrip()
+    if unit == "pct_body":
+        return f"{value:.2f}%"
+    if unit in UNIT_NOTES:
+        return f"{value:.2f}"
+    return f"{value:.2f} {unit}".rstrip()
 
 
 def _reason_text(raw: Any) -> str | None:
@@ -182,7 +179,7 @@ def build_tables(
             limb = str(metric.get("limb", "NONE"))
             unit = str(metric.get("unit", ""))
             value = _number(metric.get("value"))
-            row = rows.setdefault(code, TableRow(code, metric_label(code), unit))
+            row = rows.setdefault(code, TableRow(code, metric_label(code, unit), unit))
             prev = prior.get((gait_type, code, limb)) if prior else None
             row.cells[limb] = Cell(
                 value=value,
@@ -205,7 +202,7 @@ def build_tables(
                     pair=pair,
                     pair_label=PAIR_LABELS.get(pair, pair),
                     code=code,
-                    label=metric_label(code),
+                    label=metric_label(code, unit),
                     left=format_value(left, unit),
                     right=format_value(right, unit),
                     diff=format_value(diff, unit) if comparable else NO_VALUE,

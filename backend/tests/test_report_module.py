@@ -87,7 +87,24 @@ def test_compare_lines_keep_reasons_and_previous_values_go_into_cells() -> None:
 def test_format_value_never_prints_zero_for_missing() -> None:
     assert format_value(None, "deg") == UNMEASURABLE
     assert format_value(0.0, "deg") == "0.0°"  # 진짜 0은 0으로 적는다(값이 있을 때만)
-    assert format_value(12.345, "pct_body") == "12.35 % (몸통 길이 기준)"
+    assert format_value(12.345, "pct_body") == "12.35%"
+    assert format_value(2.41, "body_per_sec") == "2.41"
+
+
+def test_unit_basis_is_in_the_metric_name_not_in_every_cell() -> None:
+    result = sample_result()
+    result["gaits"][0]["metrics"] = [
+        metric("stride_length", "LF", 122.7, unit="pct_body"),
+        metric("walk_speed", "NONE", 2.42, unit="body_per_sec"),
+    ]
+    result["gaits"][0]["limb_compare"] = [compare("FORE", "stride_length", 122.7, 120.7, unit="pct_body")]
+    tables, _ = build_tables(result)
+    rows = {row.code: row for row in tables[0].rows}
+    assert rows["stride_length"].label == "걸음 길이(몸통 길이 기준)"
+    assert rows["stride_length"].cells["LF"].text == "122.70%"
+    assert rows["walk_speed"].label == "보행 속도(몸통 길이/초)" and rows["walk_speed"].cells["NONE"].text == "2.42"
+    line = tables[0].compare[0]
+    assert line.label == "걸음 길이(몸통 길이 기준)" and (line.left, line.diff) == ("122.70%", "2.00%")
 
 
 # ---- 문장·검사 ----
@@ -98,7 +115,27 @@ def test_sentences_pass_the_checks_for_both_editions(edition: str) -> None:
     rendered = render(sample_input(edition=edition))
     assert check_texts(rendered.texts, edition=edition) == []
     assert DISCLAIMER in rendered.sentences.disclaimer
-    assert "뒷다리에서는 무릎 가동 범위의 좌우 차이가 가장 큽니다" in rendered.texts["summary"]
+    assert "속보 기준, 좌우 차이를 비율로 볼 때 가장 큰 항목은 뒷다리 무릎 가동 범위입니다" in rendered.texts["summary"]
+
+
+def test_summary_names_the_largest_ratio_not_the_largest_absolute_difference() -> None:
+    # 비교 줄은 대칭 지수 순서로 온다(15.7). 차이 값은 앞발목(2.0°)이 더 커도 비율은 어깨가 더 크다
+    result = sample_result()
+    result["gaits"][0]["limb_compare"] = [
+        compare("FORE", "rom_shoulder", 39.9, 38.0),
+        compare("FORE", "rom_carpus", 73.0, 71.0),
+    ]
+    summary = render(sample_input(result=result)).texts["summary"]
+    assert "좌우 차이를 비율로 볼 때 가장 큰 항목은 앞다리 어깨 가동 범위입니다" in summary
+    assert "차이 1.9°" in summary and "차이가 가장" not in summary
+
+
+def test_summary_without_any_ratio_does_not_claim_a_largest_difference() -> None:
+    result = sample_result()
+    result["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 0.0, 0.0)]
+    summary = render(sample_input(result=result)).texts["summary"]
+    assert "비율로 낼 수 있는 항목이 없습니다" in summary and "뒷다리 무릎 가동 범위" in summary
+    assert "가장 큰 항목" not in summary and "덜 쓰고" not in summary
 
 
 def test_owner_edition_explains_the_jargon_it_uses_and_vet_adds_symmetry() -> None:
@@ -114,7 +151,7 @@ def test_one_side_only_notice_and_no_numbers_are_sentences_not_failures() -> Non
     result = sample_result(notices=[{"code": "ONE_SIDE_ONLY", "message": "한쪽만 찍혀 비교할 수 없습니다."}])
     result["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 47.3, None, reason="NO_DATA")]
     rendered = render(sample_input(result=result))
-    assert "한쪽만 찍혀" in rendered.texts["summary"] and "차이가 가장 큽니다" not in rendered.texts["summary"]
+    assert "한쪽만 찍혀" in rendered.texts["summary"] and "가장 큰 항목" not in rendered.texts["summary"]
     empty = render(sample_input(result=sample_result(gaits=[])))
     assert "유효한 걸음이 없어" in empty.texts["gaits"] and empty.tables == []
 
@@ -135,6 +172,7 @@ def test_html_has_title_tables_chart_glossary_and_footer() -> None:
     assert "왼쪽 뒷다리" in html and "측정 불가" in html and "NOT_ENOUGH_CYCLES 메시지" in html
     assert 'src="data:image/png;base64,' in html
     assert "용어 설명" in html and DISCLAIMER in html and f"템플릿 {TEMPLATE_VERSION}" in html
+    assert "tr { break-inside: avoid; }" in html  # 표 한 줄이 쪽 경계에서 갈라지지 않게
     assert "<script" not in html
 
 
