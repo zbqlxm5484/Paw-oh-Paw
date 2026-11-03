@@ -344,7 +344,8 @@ export type BodyMap = ReturnType<typeof body_map>
 export function body_map(acct: Account, r: Result) {
   const d = dogOf(acct, r.dog)
   const rows: Record<string, Row> = {}
-  for (const x of mrows(r, 'trot')) if (!x.na) rows[x.n] = x // 이름이 같으면 뒤의 것(파이썬 dict 그대로)
+  // 앞·뒷다리에 같은 이름(입각기 비율 등)이 있어 부위까지 붙여 모은다. 이름만 쓰면 뒷다리 카드에 앞다리 값이 들어갔다(11-03 KPI-30)
+  for (const x of mrows(r, 'trot')) if (!x.na) rows[`${x.leg}|${x.n}`] = x
   const pairs: [string, string[]][] = [['front', ['팔꿈치 가동 범위']], ['hind', ['무릎 가동 범위', '고관절 가동 범위', '걸음 길이', '입각기 비율']]]
   const word: Record<string, string> = {
     '팔꿈치 가동 범위': '팔꿈치를 굽히는 정도', '무릎 가동 범위': '무릎을 굽히는 정도',
@@ -353,7 +354,8 @@ export function body_map(acct: Account, r: Result) {
   const legs = {} as Record<string, LegSide> & { front: LegPart; hind: LegPart }
   const fills: Record<string, string> = {}
   for (const [part, names] of pairs) {
-    const mets = names.filter((n) => n in rows).map((n) => rows[n] as Row & { l: number; r: number; u: string })
+    const sec = part === 'front' ? '앞다리' : '뒷다리'
+    const mets = names.filter((n) => `${sec}|${n}` in rows).map((n) => rows[`${sec}|${n}`] as Row & { l: number; r: number; u: string })
     const sis = mets.map((m) => (Math.abs(m.l - m.r) / ((m.l + m.r) / 2)) * 100)
     const k = maxBy([...mets.keys()], (i) => sis[i])
     const worst = mets[k]

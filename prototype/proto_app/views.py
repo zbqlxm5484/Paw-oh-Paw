@@ -303,13 +303,15 @@ def _level(si: float) -> tuple:
 def body_map(acct: Account, r: Result) -> dict:
     """다리 한 쌍(앞·뒤)마다 좌우 차이를 재서, 덜 쓰는 쪽 다리를 색으로 칠한 그림과 다리별 수치."""
     d = acct.dog(r.dog)
-    rows = {x["n"]: x for x in mrows(r, "trot") if not x.get("na")}
+    # 앞·뒷다리에 같은 이름(입각기 비율 등)이 있어 부위까지 붙여 모은다. 이름만 쓰면 뒷다리 카드에 앞다리 값이 들어갔다(11-03 KPI-30)
+    rows = {(x["leg"], x["n"]): x for x in mrows(r, "trot") if not x.get("na")}
     pairs = {"front": ["팔꿈치 가동 범위"], "hind": ["무릎 가동 범위", "고관절 가동 범위", "걸음 길이", "입각기 비율"]}
     word = {"팔꿈치 가동 범위": "팔꿈치를 굽히는 정도", "무릎 가동 범위": "무릎을 굽히는 정도",
             "고관절 가동 범위": "엉덩이 관절 움직임", "걸음 길이": "한 걸음 길이", "입각기 비율": "땅을 딛고 있는 시간"}
     legs, fills = {}, {}
     for part, names in pairs.items():
-        mets = [rows[n] for n in names if n in rows]
+        sec = "앞다리" if part == "front" else "뒷다리"
+        mets = [rows[(sec, n)] for n in names if (sec, n) in rows]
         sis = [abs(m["l"] - m["r"]) / ((m["l"] + m["r"]) / 2) * 100 for m in mets]
         k = max(range(len(mets)), key=lambda i: sis[i])
         worst, si = mets[k], sis[k]
