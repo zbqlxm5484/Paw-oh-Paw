@@ -9,7 +9,7 @@ const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:
 
 export default function Account() {
   useTitle('기본 정보 · Paw oh Paw')
-  const { acct, me, toast } = usePage({ login: true })
+  const { acct, me, toast } = usePage({ login: true, creamoff: true }) // 관리자도 비밀번호·내 정보는 바꾼다
   if (!acct || !me) return null
   const ends = acct.contract_ends
   const rows: [string, string][] = [

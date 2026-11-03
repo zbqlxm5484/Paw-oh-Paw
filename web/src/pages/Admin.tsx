@@ -36,12 +36,38 @@ function admin_rows(me: Staff): InstRow[] {
     }))
 }
 
+/** 글자를 클립보드에 넣는다. https·localhost 가 아니면 navigator.clipboard 가 없어 숨긴 textarea 를 골라 복사한다 */
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // 아래 방식으로
+    }
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+  document.body.appendChild(ta)
+  ta.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  ta.remove()
+  return ok
+}
+
 // 코드 한 줄: 상한·회수 버튼이 같은 폼이라 누른 버튼(revoke=1)을 폼 값에 넣는다(FormData 는 누른 버튼을 안 담는다)
 function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
   const revoke = useRef(false)
   return (
     <div style={css(`display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${c.revoked ? '.5' : '1'}`)}>
-      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code><span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
+      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했어요' : '복사하지 못했어요. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
       <span style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{c.revoked ? '회수됨' : `계정 ${c.used} / ${c.max}`}</span>
       {can_write && !c.revoked && (
         <PostForm action={`/admin/codes/${c.id}`} style={css('display:flex;gap:6px')}
