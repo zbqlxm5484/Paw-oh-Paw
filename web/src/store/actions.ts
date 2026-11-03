@@ -1,6 +1,7 @@
 // 폼 처리(POST). prototype/proto_app/main.py 의 @app.post 함수들을 같은 주소로 옮긴다.
 // 백엔드에 있는 기능(로그인·가입·반려견·회차·촬영·관리자)은 backend.ts 를 거쳐 서버에도 보내고, 없는 기능은 이 저장소만 바꾼다.
 import type { Go } from '../app/session'
+import { herePath } from '../config'
 
 export type Handler = (params: Record<string, string>, fd: FormData) => Go | Promise<Go>
 
@@ -32,7 +33,7 @@ export async function dispatch(path: string, fd: FormData): Promise<Go> {
       return g
     }
   }
-  return { to: window.location.pathname + window.location.search, toast: `처리할 수 없는 요청: ${path}` }
+  return { to: herePath() + window.location.search, toast: `처리할 수 없는 요청: ${path}` }
 }
 
 /** FormData 에서 문자열 하나(시제품의 Form("")) */

@@ -1,11 +1,12 @@
 // 공통 틀. prototype/proto_app/templates/base.html 과 static/app.js 를 옮겼다(마크업·스타일 그대로).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { SHOW_JUMPS } from '../config'
+import { herePath, SHOW_JUMPS } from '../config'
 import { changed } from '../store/db'
 import type { Account, Staff } from '../store/types'
 import { finished_notices, hasActive } from './session'
 import { JUMPS } from './jumps'
+import { staticUrl } from './page'
 
 declare global {
   interface Window {
@@ -104,7 +105,7 @@ export function Base({ acct, me, nav = '', q = '', toast = '', jobId = '', topba
       const a = t.closest('a[href]') as HTMLAnchorElement | null
       if (a && !e.defaultPrevented && !a.target && !a.hasAttribute('download') && e.button === 0 && !e.metaKey && !e.ctrlKey) {
         let href = a.getAttribute('href') || ''
-        if (href.startsWith('?')) href = window.location.pathname + href // 같은 화면의 다른 보기(?type=v 등)
+        if (href.startsWith('?')) href = herePath() + href // 같은 화면의 다른 보기(?type=v 등)
         if (href.startsWith('/') && !href.startsWith('/static/') && !href.startsWith('/uploads/') && !href.startsWith('/api/')) {
           e.preventDefault()
           navigate(href)
@@ -201,7 +202,7 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
   return (
     <header className="no-print" style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(250,243,231,.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #ECE8E2' }}>
       <div style={{ padding: '0 25px', height: 74, display: 'flex', alignItems: 'center', gap: 28 }}>
-        <a className="lk" href="/home" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src="/static/assets/logo.png" alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
+        <a className="lk" href="/home" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
         {/* 가운데 검색: 어느 화면에서든 이름·동물번호·특이사항·메모·진단·보호자로 찾는다 */}
         <form method="get" action="/home" style={{ flex: 1, display: 'flex', justifyContent: 'center', margin: 0, minWidth: 0 }}
           onSubmit={(e) => {

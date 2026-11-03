@@ -22,7 +22,7 @@ x-api: &api
 x-web: &web
   build:
     context: .
-    dockerfile: frontend/Dockerfile
+    dockerfile: infra/docker/web.Dockerfile   # 앱(frontend/)은 /, 병원용 웹(web/)은 /web/
   restart: unless-stopped
   profiles: [bluegreen]
 

@@ -1,5 +1,6 @@
 // 주소는 웹 시제품(prototype/)과 같다. 화면마다 템플릿 하나를 옮긴 컴포넌트가 있다.
 import { useEffect } from 'react'
+import { BASE } from './config'
 import { BrowserRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { JUMPS } from './app/jumps'
 import { setLogin } from './app/session'
@@ -72,7 +73,7 @@ function Pages() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASE || undefined}>
       <Pages />
     </BrowserRouter>
   )

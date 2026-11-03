@@ -5,6 +5,7 @@ import { useDb } from '../store/db'
 import { dispatch } from '../store/actions'
 import type { Account, Staff } from '../store/types'
 import { ContractExpired, current, currentStaff, finished_notices, setToast, takeToast, type Go } from './session'
+import { BASE } from '../config'
 
 export interface PageCtx {
   acct?: Account
@@ -101,7 +102,7 @@ export function submitGet(form: HTMLFormElement, action: string, navigate: (to: 
 }
 
 /** 시제품의 url_for('static', path=...) */
-export const staticUrl = (path: string): string => `/static/${path}`
+export const staticUrl = (path: string): string => `${BASE}/static/${path}`
 
 /** 문서 제목({% block title %}) */
 export function useTitle(t: string): void {

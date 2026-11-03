@@ -40,7 +40,7 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
         <>
           <span style={css('font-size:13px;color:#5B6472')}>{m0.n}</span>
           <b style={css(`font-size:24px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${g.weak ? g.c : '#1B2433'}`)}>{m0.v}</b>
-          {READ[m0.n] ? <span style={css('font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px')}>{READ[m0.n]}. 반대쪽과 견줘 보세요</span> : null}
+          {READ[m0.n] ? <span style={css('font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px')}>{READ[m0.n]}. 반대쪽 다리와 비교해 보세요</span> : null}
         </>
       ) : (
         g.mets.map((m, i) => (
