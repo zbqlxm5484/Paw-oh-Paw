@@ -55,6 +55,7 @@ from app.services.analysis_results import ResultFormatError, apply_result, parse
 from app.storage.base import StorageError, StorageService, get_storage
 from app.storage.keys import analysis_key
 from app.worker.render import VideoRenderer, describe_error
+from app.worker.report import ReportGenerator
 
 logger = logging.getLogger("app.worker")
 
@@ -86,6 +87,9 @@ class WorkerStats:
     render_failed: int = 0  # video_status → FAILED (VIDEO_RENDER_FAILED)
     aggregated: int = 0  # 회차 AGGREGATING → DONE
     aggregation_failed: int = 0  # 회차 AGGREGATING → FAILED (AGGREGATION_FAILED)
+    report_started: int = 0  # 보고서를 자식 프로세스에 맡긴 수
+    reported: int = 0  # report.status → DONE
+    report_failed: int = 0  # report.status → FAILED (REPORT_CHECK_FAILED·REPORT_FAILED)
 
     def busy(self) -> bool:
         return any(value for value in self.__dict__.values())
@@ -454,11 +458,12 @@ def run_once(
     settings: Settings,
     storage: StorageService,
     renderer: VideoRenderer | None = None,
+    reporter: ReportGenerator | None = None,
 ) -> WorkerStats:
     """한 바퀴. 상태를 조회해 자리를 비우고 → 끝난 회차를 집계하고 → 새 촬영을 가져오고 → 가져온 것을 보내고
     → 결과 영상을 거두고 맡긴다.
 
-    renderer가 없으면 결과 영상은 건너뛴다(분석 쪽만 보는 테스트용). Worker는 늘 넘긴다.
+    renderer·reporter가 없으면 결과 영상·보고서는 건너뛴다(분석 쪽만 보는 테스트용). Worker는 늘 넘긴다.
     """
     stats = WorkerStats()
     poll_in_flight(db, client, settings, storage, stats)
@@ -467,6 +472,8 @@ def run_once(
     send_claimed(db, client, settings, storage, stats)
     if renderer is not None:
         renderer.run(db, stats)
+    if reporter is not None:
+        reporter.run(db, stats)
     return stats
 
 
@@ -485,11 +492,13 @@ class Worker:
         client: AnalysisClient | None = None,
         storage: StorageService | None = None,
         renderer: VideoRenderer | None = None,
+        reporter: ReportGenerator | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.client = client or build_analysis_client(self.settings)
         self.storage = storage or get_storage()
         self.renderer = renderer or VideoRenderer(self.settings, self.storage, self.client)
+        self.reporter = reporter or ReportGenerator(self.settings, self.storage)
         self._stop = False
 
     def stop(self, *_: object) -> None:
@@ -500,15 +509,21 @@ class Worker:
         """주 반복. 한 바퀴가 실패해도(DB 끊김 등) 로그만 남기고 다음 바퀴를 돈다. 돈 바퀴 수를 돌려준다.
 
         끝날 때 렌더 풀을 닫는다. 만들던 결과 영상은 PENDING 그대로라 다시 켜면 처음부터 다시 만든다(12.4).
+        켤 때 GENERATING 보고서를 PENDING으로 돌린다(만들던 중에 꺼진 것, 12.4).
         """
         loops = 0
+        try:
+            with SessionLocal() as db:
+                self.reporter.reset_generating(db)
+        except Exception:
+            logger.exception("could not reset generating reports; continuing")
         try:
             while not self._stop and (max_loops is None or loops < max_loops):
                 loops += 1
                 started = time.monotonic()
                 try:
                     with SessionLocal() as db:
-                        stats = run_once(db, self.client, self.settings, self.storage, self.renderer)
+                        stats = run_once(db, self.client, self.settings, self.storage, self.renderer, self.reporter)
                     if stats.busy():
                         logger.info("loop: %s", stats)
                 except Exception:
@@ -518,6 +533,7 @@ class Worker:
                 time.sleep(max(0.0, self.settings.WORKER_POLL_INTERVAL_SEC - (time.monotonic() - started)))
         finally:
             self.renderer.shutdown()
+            self.reporter.shutdown()
         return loops
 
 
