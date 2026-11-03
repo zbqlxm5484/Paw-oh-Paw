@@ -19,7 +19,10 @@ export interface PageCtx {
  * 화면마다 처음에 부른다. login=true 면 로그인 안 했을 때 로그인 화면으로 보낸다(시제품의 need_login).
  * jobId: 분석 중 화면처럼 그 작업의 완료 알림을 직접 다루는 화면이면 그 id(다른 작업 알림만 띄움).
  */
-export function usePage(opts: { login?: boolean; jobId?: string } = {}): PageCtx {
+/** 크림오프 쪽 계정(ADMIN·STAFF)은 고객 화면을 쓰지 않는다(관리 페이지만). 고객 기관 자료를 보지 않게(명세 Q31·PR-F09-04) */
+export const isCreamoff = (me?: { role?: string }): boolean => me?.role === 'ADMIN' || me?.role === 'STAFF'
+
+export function usePage(opts: { login?: boolean; jobId?: string; creamoff?: boolean } = {}): PageCtx {
   useDb()
   const navigate = useNavigate()
   const [query] = useSearchParams()
@@ -46,7 +49,7 @@ export function usePage(opts: { login?: boolean; jobId?: string } = {}): PageCtx
     else if (opts.login && !acct) {
       setToast('로그인해 주세요')
       navigate('/login', { replace: true })
-    }
+    } else if (opts.login && !opts.creamoff && isCreamoff(me)) navigate('/admin', { replace: true })
   })
   return { acct, me, toast, query, go }
 }

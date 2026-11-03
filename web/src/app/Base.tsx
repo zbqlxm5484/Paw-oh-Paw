@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { herePath, link, SHOW_JUMPS, unlink } from '../config'
 import { changed } from '../store/db'
 import type { Account, Staff } from '../store/types'
-import { currentStaff, finished_notices, hasActive } from './session'
+import { finished_notices, hasActive } from './session'
 import { JUMPS } from './jumps'
 import { staticUrl } from './page'
 
@@ -215,7 +215,6 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
             <input name="q" key={q} defaultValue={q} placeholder="반려견 이름 · 동물번호 · 특이사항 · 메모 · 진단 · 보호자" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 15, background: 'transparent', color: '#1B2433' }} />
           </label>
         </form>
-        {['ADMIN', 'STAFF'].includes(currentStaff()?.role ?? '') ? <a className="lk hv-border" href={link('/admin')} style={{ height: 42, padding: '0 16px', borderRadius: 12, border: '1px solid #E2DCD3', background: '#fff', display: 'flex', alignItems: 'center', fontSize: 15, fontWeight: 700, flex: 'none' }}>관리 페이지</a> : null}
         <a className="lk hv-orange" href={link('/upload')} style={{ height: 42, padding: '0 18px', borderRadius: 12, background: '#D2601A', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, flex: 'none' }}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>
         <a className="lk hv-border" href={link('/my')} style={{ height: 42, padding: '0 14px 0 6px', borderRadius: 21, border: '1px solid #E2DCD3', background: nav === 'my' ? '#FCEEE3' : '#fff', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}><span style={{ width: 30, height: 30, borderRadius: 15, background: '#FCEEE3', color: '#A8481A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>{acct.name.slice(0, 1)}</span><span className="acct-kind" style={{ fontSize: 13, fontWeight: 600, color: '#7A808A', whiteSpace: 'nowrap' }}>기관</span><span className="acct-name" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>{acct.name}</span></a>
       </div>
