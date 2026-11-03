@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.report.checks import DISCLAIMER, TermRules, load_rules, normalize
+from app.report.checks import DISCLAIMER, TermRules, contains_term, load_rules, normalize
 from app.report.inputs import ReportInput
 from app.report.numbers import NO_VALUE, GaitTable
 
@@ -127,8 +127,13 @@ def _caution(inp: ReportInput) -> list[str]:
 
 
 def _glossary(text: str, rules: TermRules) -> list[tuple[str, str]]:
-    normalized = normalize(text)
-    return [(j.term, j.explanation) for j in rules.jargon if j.term in normalized]
+    """쓰인 용어의 설명. 설명 문구가 또 다른 용어를 쓰면 그 설명도 넣는다(검사는 용어 설명 칸까지 본다)."""
+    seen = normalize(text)
+    used: set[str] = set()
+    while found := [j for j in rules.jargon if j.term not in used and contains_term(seen, j.term)]:
+        used.update(j.term for j in found)
+        seen += " " + " ".join(j.explanation for j in found)
+    return [(j.term, j.explanation) for j in rules.jargon if j.term in used]
 
 
 def compose(inp: ReportInput, tables: list[GaitTable], rules: TermRules | None = None) -> Sentences:

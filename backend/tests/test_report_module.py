@@ -10,11 +10,12 @@ import pytest
 
 from app.report import TEMPLATE_VERSION, ReportCheckError, ReportError, ReportInputError
 from app.report import pdf as pdf_module
-from app.report.checks import DISCLAIMER, check_texts
+from app.report.checks import DISCLAIMER, check_texts, find_unexplained_jargon, load_rules
 from app.report.generate import generate_report, render
 from app.report.inputs import parse_input
-from app.report.numbers import UNMEASURABLE, build_tables, format_value
+from app.report.numbers import UNMEASURABLE, build_tables, format_value, metric_label
 from app.report.pdf import PdfUnavailableError, pdf_available
+from app.report.sentences import _glossary
 from tests.report_fixtures import compare, metric, sample_input, sample_result
 
 # ---- 입력 ----
@@ -136,6 +137,25 @@ def test_summary_without_any_ratio_does_not_claim_a_largest_difference() -> None
     summary = render(sample_input(result=result)).texts["summary"]
     assert "비율로 낼 수 있는 항목이 없습니다" in summary and "뒷다리 무릎 가동 범위" in summary
     assert "가장 큰 항목" not in summary and "덜 쓰고" not in summary
+
+
+def test_glossary_passes_the_check_for_every_listed_term() -> None:
+    # 설명 문구가 다른 용어를 쓰는 경우(ROM → 가동 범위)와 붙여 쓴 용어도 검사를 통과해야 한다
+    rules = load_rules()
+    for rule in rules.jargon:
+        for text in (rule.term, "".join(rule.term.split())):
+            glossary = _glossary(text, rules)
+            assert rule.term in dict(glossary)
+            texts = {"body": text, "glossary": " ".join(f"{term}: {note}" for term, note in glossary)}
+            assert find_unexplained_jargon(texts, rules) == [], rule.term
+    assert "가동 범위" in dict(_glossary("ROM", rules))
+
+
+def test_every_metric_label_with_a_listed_term_gets_its_explanation() -> None:
+    assert metric_label("paw_lift", "pct_body") == "발 높이(몸통 길이 기준)"
+    rules = load_rules()
+    terms = dict(_glossary(metric_label("paw_lift", "pct_body"), rules))
+    assert "발 높이" in terms and metric_label("stride_length") == "걸음 길이"
 
 
 def test_owner_edition_explains_the_jargon_it_uses_and_vet_adds_symmetry() -> None:
