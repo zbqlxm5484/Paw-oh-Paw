@@ -9,6 +9,10 @@ PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
 - 거두기: 성공이면 PDF를 put_file로 넣고 status='DONE', file_key, generation_ms, model_version, template_version,
   fail_reason=NULL을 WHERE status='GENERATING'으로 쓴다. 바뀐 행이 0개면 방금 넣은 파일을 지운다. ReportCheckError면
   FAILED(REPORT_CHECK_FAILED), 그 밖의 예외는 FAILED(REPORT_FAILED). 키는 보고서 ID로 정해져 다시 만들면 덮어쓴다.
+- 대조(8절 7번 첫 항목, 196): 붙이기 전에 자식이 돌려준 실린 숫자 목록(ReportResult.numbers)을 DB의 session_metric 값과
+  15.7 다리 비교 계산값에 맞춘다(report/verify.compare_numbers, 기준은 services/report_numbers.reference_numbers).
+  값이 다르거나 기준에 없는 숫자가 있으면 PDF를 저장하지 않고 FAILED(REPORT_CHECK_FAILED), 기준을 읽지 못하면
+  FAILED(REPORT_FAILED). 기준에는 있는데 싣지 않은 수치는 불일치가 아니다(로그에 개수만).
 - 자식이 죽으면(BrokenProcessPool) 풀을 새로 만들고 실행 중이던 보고서는 FAILED(REPORT_FAILED).
 - 다시 켤 때: reset_generating이 GENERATING을 PENDING으로 돌린다(만들던 중에 꺼진 것).
 VideoRenderer와 같은 모양이다. Spring에 빗대면 @Async 큐 소비자 하나가 트랜잭션 밖에서 PDF를 만들고 결과만 적는 것이다.
@@ -38,7 +42,9 @@ from app.models import Dog, MeasureSession, Report
 from app.models.enums import ReportStatus
 from app.report import ReportCheckError, ReportInputError
 from app.report.generate import ReportResult, generate_report
+from app.report.verify import Verification, compare_numbers, summarize
 from app.services.report_input import build_report_input, load_report
+from app.services.report_numbers import reference_numbers
 from app.storage.base import StorageError, StorageService
 from app.storage.keys import report_key
 from app.worker.render import describe_error
@@ -58,6 +64,7 @@ GenerateFn = Callable[..., ReportResult]
 @dataclass
 class ReportJob:
     report_id: uuid.UUID
+    session_id: uuid.UUID
     file_key: str
     model_version: str | None
     future: Future
@@ -69,6 +76,7 @@ class ReportJob:
 @dataclass(frozen=True)
 class _Candidate:
     report_id: uuid.UUID
+    session_id: uuid.UUID
     file_key: str
     model_version: str | None
 
@@ -145,7 +153,7 @@ class ReportGenerator:
             self.jobs.pop(report_id)
             try:
                 if error is None:
-                    self._attach(db, job, job.future.result(), stats)
+                    self._verify_and_attach(db, job, job.future.result(), stats)
                 elif isinstance(error, ReportCheckError):
                     logger.error("report check failed report=%s: %s", report_id, error)
                     self._fail(db, report_id, FailReason.REPORT_CHECK_FAILED, stats)
@@ -181,7 +189,7 @@ class ReportGenerator:
         if self.jobs:
             query = query.where(Report.id.not_in(list(self.jobs)))
         return [
-            _Candidate(report_id, report_key(institution_id, dog_id, session_id, report_id), model_version)
+            _Candidate(report_id, session_id, report_key(institution_id, dog_id, session_id, report_id), model_version)
             for report_id, session_id, dog_id, institution_id, model_version in db.execute(query).all()
         ]
 
@@ -230,6 +238,7 @@ class ReportGenerator:
             return
         self.jobs[report_id] = ReportJob(
             report_id=report_id,
+            session_id=candidate.session_id,
             file_key=candidate.file_key,
             model_version=candidate.model_version,
             future=future,
@@ -242,7 +251,26 @@ class ReportGenerator:
 
     # ---- 거두기 ----
 
-    def _attach(self, db: Session, job: ReportJob, result: ReportResult, stats: Any) -> None:
+    def _verify_and_attach(self, db: Session, job: ReportJob, result: ReportResult, stats: Any) -> None:
+        """실린 숫자 목록을 DB와 대조하고(8절 7번 첫 항목) 맞을 때만 PDF를 붙인다."""
+        report_id = job.report_id
+        try:
+            reference = reference_numbers(db, job.session_id)
+        except Exception as error:  # 기준을 읽지 못하면 대조할 수 없으므로 DONE으로 두지 않는다
+            db.rollback()
+            logger.error("report numbers reference unavailable report=%s: %s", report_id, describe_error(error))
+            self._fail(db, report_id, FailReason.REPORT_FAILED, stats)
+            return
+        verification = compare_numbers(result.numbers, reference)
+        if not verification.ok:
+            logger.error("report numbers mismatch report=%s: %s", report_id, summarize(verification))
+            self._fail(db, report_id, FailReason.REPORT_CHECK_FAILED, stats)
+            return
+        self._attach(db, job, result, stats, verification)
+
+    def _attach(
+        self, db: Session, job: ReportJob, result: ReportResult, stats: Any, verification: Verification
+    ) -> None:
         """PDF를 먼저 넣고 조건을 건 UPDATE로 키를 붙인다. 바뀐 행이 0개면 방금 넣은 파일을 지운다(12.4)."""
         report_id = job.report_id
         try:
@@ -274,10 +302,12 @@ class ReportGenerator:
         if changed:
             stats.reported += 1
             logger.info(
-                "report ready report=%s bytes=%d generation_ms=%d in %.1fs",
+                "report ready report=%s bytes=%d generation_ms=%d numbers=%d omitted=%d in %.1fs",
                 report_id,
                 result.pdf_bytes,
                 result.generation_ms,
+                verification.checked,
+                len(verification.omitted),
                 time.monotonic() - job.started_at,
             )
         else:

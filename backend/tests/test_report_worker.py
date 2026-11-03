@@ -1,13 +1,16 @@
 """보고서 워커(12.4 "보고서 한 건", 17.4 BE-15, 17.6, S15P31A404-195).
 
-PENDING → GENERATING → DONE·FAILED, 다시 켜기, 다시 만들기.
+PENDING → GENERATING → DONE·FAILED, 다시 켜기, 다시 만들기, 실린 숫자 대조(196).
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import uuid
+from collections.abc import Callable
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -21,6 +24,7 @@ from app.models import MeasureSession, Report, SessionMetric
 from app.report import ReportCheckError
 from app.report.checks import Finding
 from app.report.generate import ReportResult
+from app.report.numbers import ListedNumber, build_tables
 from app.services import reports as report_service
 from app.storage.base import get_storage
 from app.storage.keys import report_key
@@ -90,8 +94,9 @@ def fake_generate(input_path: Path, output: Path) -> ReportResult:
     data = json.loads(input_path.read_text(encoding="utf-8"))
     body = MARK + data["edition"].encode("utf-8") + b" " + data["dog"]["name"].encode("utf-8")
     output.write_bytes(body)
+    numbers = tuple(build_tables(data["result"])[1])  # 실제 모듈처럼 입력의 수치를 그대로 싣는다(대조 통과)
     return ReportResult(
-        pdf_bytes=len(body), generation_ms=12, template_version="0.2", numbers=(), edition=data["edition"]
+        pdf_bytes=len(body), generation_ms=12, template_version="0.2", numbers=numbers, edition=data["edition"]
     )
 
 
@@ -272,3 +277,90 @@ def test_unknown_report_id_in_candidates_is_skipped_quietly(db: Session, dog, st
     settings = _settings()
     reporter = _reporter(settings, FakeExecutor())
     assert reporter._claim(db, uuid.uuid4()) is False
+
+
+# ---- 수치 대조(8절 7번 첫 항목, S15P31A404-196) ----
+
+
+def _with_numbers(
+    numbers_of: Callable[[tuple[ListedNumber, ...]], tuple[ListedNumber, ...]],
+) -> Callable[[Path, Path], ReportResult]:
+    """fake_generate가 돌려주는 실린 숫자 목록을 바꿔 끼운 생성 함수."""
+
+    def generate(input_path: Path, output: Path) -> ReportResult:
+        result = fake_generate(input_path, output)
+        return replace(result, numbers=numbers_of(result.numbers))
+
+    return generate
+
+
+def test_matching_numbers_are_verified_and_counted_in_the_log(db: Session, dog, staff, caplog) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    reporter = _reporter(settings, FakeExecutor())
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        _run(db, reporter, settings)
+        _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "DONE"
+    # 수치 2개(LH·RH) + 뒷다리 쌍 4개(왼쪽·오른쪽·차이·대칭 지수) = 6, 싣지 않은 기준값 없음
+    assert any("numbers=6 omitted=0" in message for message in caplog.messages)
+
+
+def test_a_number_that_differs_from_the_session_metric_fails_the_check_without_a_file(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+
+    def wrong(numbers: tuple[ListedNumber, ...]) -> tuple[ListedNumber, ...]:
+        return tuple(replace(n, value=n.value + 0.5) if (n.limb, n.kind) == ("LH", "metric") else n for n in numbers)
+
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=FakeExecutor, generate=_with_numbers(wrong))
+    _run(db, reporter, settings)
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, row.file_key) == ("FAILED", "REPORT_CHECK_FAILED", None)
+    assert stats.report_failed == 1 and stats.reported == 0
+    assert not get_storage().path(report_key(dog.institution_id, dog.id, session.id, row.id)).exists()
+
+
+def test_a_number_the_session_does_not_have_fails_the_check(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    extra = ListedNumber("TROT", "rom_hip", "LH", "metric", 41.9)
+    reporter = ReportGenerator(
+        settings,
+        get_storage(),
+        executor_factory=FakeExecutor,
+        generate=_with_numbers(lambda numbers: (*numbers, extra)),
+    )
+    _run(db, reporter, settings)
+    _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].fail_reason == "REPORT_CHECK_FAILED"
+
+
+def test_metrics_changed_while_the_report_was_being_made_fail_the_check(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    executor = FakeExecutor("hang")
+    reporter = _reporter(settings, executor)
+    _run(db, reporter, settings)  # 맡겼지만 아직 끝나지 않았다
+    fn, args, kwargs = executor.calls[0]
+    made = fn(*args, **kwargs)  # 자식은 맡길 때의 입력으로 만든다
+    row = db.query(SessionMetric).filter(SessionMetric.session_id == session.id, SessionMetric.limb == "LH").one()
+    row.value = Decimal("40.0")  # 그사이 회차 수치가 바뀌었다
+    db.flush()
+    db.commit()
+    executor.futures[0].set_result(made)
+    stats = _run(db, reporter, settings)
+    report = _reports(db, session)["OWNER"]
+    assert (report.status, report.fail_reason) == ("FAILED", "REPORT_CHECK_FAILED") and stats.report_failed == 1
+
+
+def test_a_report_that_lists_no_numbers_is_not_a_mismatch(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    reporter = ReportGenerator(
+        settings, get_storage(), executor_factory=FakeExecutor, generate=_with_numbers(lambda numbers: ())
+    )
+    _run(db, reporter, settings)
+    _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "DONE"
