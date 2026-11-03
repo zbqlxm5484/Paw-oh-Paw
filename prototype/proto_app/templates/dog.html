@@ -24,9 +24,8 @@
     </section>
     <section class="cs-card">
       <span class="cs-lb">바이탈</span>
-      <div class="cs-vit">{% for k, key in [('체중', 'kg'), ('체온', 'temp'), ('심박', 'hr'), ('혈압', 'bp')] %}<span><span class="cs-lb">{{ k }}</span>{{ vt_.vv(row.v[key], row.v.f[key], 17) }}</span>{% endfor %}</div>
+      <div class="cs-vit">{% for k, key in [('체중', 'kg'), ('체온', 'temp'), ('심박', 'hr'), ('혈압', 'bp')] %}<span><span class="cs-lb" style="white-space:nowrap">{{ k }}{{ vt_.vflag(row.v.f[key]) }}</span>{{ vt_.vv(row.v[key], row.v.f[key], 17, false) }}</span>{% endfor %}</div>
       {% if kgt.has %}<span title="최근 {{ kgt.n }}번 방문 체중({{ kgt.since }}부터)" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#5B6472;white-space:nowrap"><span class="cs-lb" style="font-weight:600">체중 추이</span><svg width="{{ kgt.W }}" height="{{ kgt.H }}" viewBox="0 0 {{ kgt.W }} {{ kgt.H }}"><polyline points="{{ kgt.line }}" fill="none" stroke="#D2601A" stroke-width="1.8" stroke-linejoin="round"></polyline><circle cx="{{ kgt.last[0] }}" cy="{{ kgt.last[1] }}" r="2.6" fill="#D2601A"></circle></svg><span style="font-variant-numeric:tabular-nums">{{ kgt.text }} <b style="color:{{ kgt.c }}">{{ kgt.ch }}</b></span></span>{% endif %}
-      <span style="font-size:12px;color:#A0A7B2">{{ row.v.when }} 측정{% if cur.vitals %} · {{ cur.vitals[0].author }}{% endif %}</span>
     </section>
     <section class="cs-card" style="min-width:0">
       <span class="cs-lb">메모 ({{ memos|length }})</span>

@@ -34,3 +34,10 @@ frontend/src/mocks/realSessions.json
 prototype/proto_app/static/assets/company_sample.json
 prototype/proto_app/static/assets/real_sessions.json
 prototype/proto_app/static/assets/dog3d/gait_jenny.json
+
+# React 웹(web/): 시제품 정적 파일을 그대로 쓴다. 방사선 예시(xray_demo)는 출처 불명이라 계속 로컬에만
+!web/public/static/assets/*.jpg
+!web/public/static/assets/*.png
+!web/public/static/assets/*.mp4
+web/scripts/pixel_out/
+web/src/views/__parity__/expected.json

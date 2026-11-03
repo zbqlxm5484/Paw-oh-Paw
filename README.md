@@ -97,3 +97,4 @@ S15P31A404/
 | 학습 데이터 분할, 미세조정 | [docs/training/](docs/training/) |
 | 화면 계획 | [docs/frontend/screenPlan.md](docs/frontend/screenPlan.md) |
 | 라이선스 조사(얼굴 검출 모델, 결과 영상 코덱, 백엔드 라이브러리) | [docs/report/faceDetectorLicense.md](docs/report/faceDetectorLicense.md) |
+| 결과 영상 처리 시간 측정(골격·얼굴 가리기) | [docs/report/renderTiming.md](docs/report/renderTiming.md) |
