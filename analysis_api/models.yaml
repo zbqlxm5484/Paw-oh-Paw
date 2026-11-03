@@ -1,0 +1,20 @@
+# 분석 API가 쓸 수 있는 모델 목록 (S15P31A404-182). ANALYSIS_MODEL로 하나를 고르고, 없으면 default를 쓴다.
+# 모델을 바꾸면 결과의 model.name·model.version이 바뀌어, 팀 서비스가 다른 모델로 낸 회차끼리 비교하지 않는다(MODEL_CHANGED).
+#
+# 항목
+# - config: 기업 paw_eval의 모델 설정 파일. 영상에서 바로 관절점을 뽑는 경로를 붙일 때 쓴다
+# - weights_sha256: 가중치 파일의 SHA-256. 앞 8자가 model.version 끝에 붙는다. 모르면 비워 둔다(버전 끝 unknown)
+# - track_file: ANALYSIS_POSE_SOURCE=track일 때 읽을 관절점 파일. 저장소 루트 기준 경로.
+#   기업 데이터에서 나온 파일이라 data/ 아래에 두고 git에 올리지 않는다
+
+default: fs-v4
+
+models:
+  fs-v4:
+    config: models/fs-v4.toml
+    weights_sha256: ""
+    track_file: data/tracks/fs-v4.track.json
+  fs-v4-flip:   # 좌우 뒤집은 영상도 함께 추론해 평균 (기업 파일 이름 그대로)
+    config: models/fs-v4-flip.toml
+    weights_sha256: ""
+    track_file: data/tracks/gt_videos.fs-v4-flip.track.json

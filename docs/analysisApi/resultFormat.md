@@ -89,7 +89,7 @@
 | --- | --- | --- |
 | `rom_shoulder`·`rom_elbow`·`rom_carpus`·`rom_hip`·`rom_stifle`·`rom_tarsus` | `deg` | 관절 가동 범위 (5에서 95 백분위 폭) |
 | `angle_median_<관절>` | `deg` | 위 6개 관절 각도의 중앙값 |
-| `paw_slope_median_front`·`_hind` | `deg` | 발 경사 중앙값 |
+| `paw_slope_median_front`·`_hind` | `deg` | 발 경사 중앙값. **JSON 원본에만 남고 팀 서비스는 저장하지 않는다** (기업 세부명세서 6.2.1 회차 수치에 없음, MR !65 리뷰 11-02) |
 | `paw_lift_front`·`_hind` | `pct_body` | 발 높이(최대 들림) |
 | `paw_excursion_front`·`_hind` | `pct_body` | 발 움직임 범위 |
 | `stride_length_front`·`_hind` | `pct_body` | 걸음 길이 |
@@ -114,7 +114,7 @@
 
 기업 무효 사유(이 중 하나가 붙은 통과가 있으면 촬영 전체 `invalid`): `GAIT_PACE`, `RUNNING`, `TURNED`, `STOPPED`, `SITTING`, `PARTIAL_PASS`, `OVERLAP`.
 
-분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERNAL`. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
+분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERRUPTED`(분석 중에 분석 API가 다시 시작됨), `INTERNAL`. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
 
 ## 5. 관절점 파일 (`GET /analyses/{id}/files/keypoints`)
 
