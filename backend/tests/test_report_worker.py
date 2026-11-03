@@ -154,7 +154,7 @@ def test_input_written_for_the_child_has_the_report_shape(db: Session, dog, staf
     assert captured["result"]["gaits"][0]["metrics"][0]["metric_code"] == "rom_stifle"
     assert captured["previous"] is None
     assert captured["settings"] == {"tolerance": get_tolerance(settings.TOLERANCE_FILE)}
-    assert captured["settings"]["tolerance"]["rom_stifle"] == 4.2  # config/tolerance.yaml의 임시값(통합본 9-3)
+    assert captured["settings"]["tolerance"]["rom_stifle"] == 8.0  # config/tolerance.yaml의 임시값(박규원 MR 80 답변)
 
 
 def test_previous_done_session_of_the_dog_is_included(db: Session, dog, staff, tmp_path: Path) -> None:

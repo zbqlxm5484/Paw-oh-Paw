@@ -18,10 +18,9 @@ def test_the_shipped_file_has_the_provisional_values_from_the_handover_doc() -> 
     tolerance = load_tolerance(ROOT / get_settings().TOLERANCE_FILE)
     assert tolerance == {
         "rom_shoulder": 2.5,
-        "rom_elbow": 4.4,
         "rom_carpus": 7.6,
-        "rom_hip": 3.6,
-        "rom_stifle": 4.2,
+        "rom_hip": 5.0,
+        "rom_stifle": 8.0,
         "rom_tarsus": 4.0,
         "stance_ratio": 5.0,
     }
