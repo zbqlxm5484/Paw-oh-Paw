@@ -1,7 +1,7 @@
 // 공통 틀. prototype/proto_app/templates/base.html 과 static/app.js 를 옮겼다(마크업·스타일 그대로).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { herePath, SHOW_JUMPS } from '../config'
+import { herePath, link, SHOW_JUMPS, unlink } from '../config'
 import { changed } from '../store/db'
 import type { Account, Staff } from '../store/types'
 import { finished_notices, hasActive } from './session'
@@ -104,7 +104,7 @@ export function Base({ acct, me, nav = '', q = '', toast = '', jobId = '', topba
       }
       const a = t.closest('a[href]') as HTMLAnchorElement | null
       if (a && !e.defaultPrevented && !a.target && !a.hasAttribute('download') && e.button === 0 && !e.metaKey && !e.ctrlKey) {
-        let href = a.getAttribute('href') || ''
+        let href = unlink(a.getAttribute('href') || '') // link() 로 붙인 /web 을 떼고 라우터에 넘긴다
         if (href.startsWith('?')) href = herePath() + href // 같은 화면의 다른 보기(?type=v 등)
         if (href.startsWith('/') && !href.startsWith('/static/') && !href.startsWith('/uploads/') && !href.startsWith('/api/')) {
           e.preventDefault()
@@ -179,7 +179,7 @@ export function Base({ acct, me, nav = '', q = '', toast = '', jobId = '', topba
       {SHOW_JUMPS && (
         <div className="no-print" style={{ position: 'fixed', left: 20, bottom: 20, zIndex: 70, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
           <div id="jumpMenu" style={{ width: 220, maxHeight: '60vh', overflow: 'auto', background: '#fff', border: '1px solid #E2DCD3', borderRadius: 14, boxShadow: '0 16px 40px rgba(27,36,51,.16)', padding: 6, display: jumpOpen ? 'flex' : 'none', flexDirection: 'column' }}>
-            {JUMPS.map(([label], i) => <a key={i} className="lk hv-menu" href={`/jump/${i}`} style={{ minHeight: 36, padding: '0 12px', borderRadius: 8, display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{label}</a>)}
+            {JUMPS.map(([label], i) => <a key={i} className="lk hv-menu" href={link(`/jump/${i}`)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 8, display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{label}</a>)}
           </div>
           <div id="jumpBtn" onClick={() => setJumpOpen(!jumpOpen)} style={{ height: 40, padding: '0 14px', borderRadius: 20, background: '#1B2433', color: '#fff', display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 6px 18px rgba(27,36,51,.25)' }}>화면 바로가기</div>
         </div>
@@ -202,7 +202,7 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
   return (
     <header className="no-print" style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(250,243,231,.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #ECE8E2' }}>
       <div style={{ padding: '0 25px', height: 74, display: 'flex', alignItems: 'center', gap: 28 }}>
-        <a className="lk" href="/home" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
+        <a className="lk" href={link('/home')} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
         {/* 가운데 검색: 어느 화면에서든 이름·동물번호·특이사항·메모·진단·보호자로 찾는다 */}
         <form method="get" action="/home" style={{ flex: 1, display: 'flex', justifyContent: 'center', margin: 0, minWidth: 0 }}
           onSubmit={(e) => {
@@ -215,8 +215,8 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
             <input name="q" key={q} defaultValue={q} placeholder="반려견 이름 · 동물번호 · 특이사항 · 메모 · 진단 · 보호자" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 15, background: 'transparent', color: '#1B2433' }} />
           </label>
         </form>
-        <a className="lk hv-orange" href="/upload" style={{ height: 42, padding: '0 18px', borderRadius: 12, background: '#D2601A', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, flex: 'none' }}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>
-        <a className="lk hv-border" href="/my" style={{ height: 42, padding: '0 14px 0 6px', borderRadius: 21, border: '1px solid #E2DCD3', background: nav === 'my' ? '#FCEEE3' : '#fff', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}><span style={{ width: 30, height: 30, borderRadius: 15, background: '#FCEEE3', color: '#A8481A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>{acct.name.slice(0, 1)}</span><span className="acct-kind" style={{ fontSize: 13, fontWeight: 600, color: '#7A808A', whiteSpace: 'nowrap' }}>기관</span><span className="acct-name" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>{acct.name}</span></a>
+        <a className="lk hv-orange" href={link('/upload')} style={{ height: 42, padding: '0 18px', borderRadius: 12, background: '#D2601A', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, flex: 'none' }}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>
+        <a className="lk hv-border" href={link('/my')} style={{ height: 42, padding: '0 14px 0 6px', borderRadius: 21, border: '1px solid #E2DCD3', background: nav === 'my' ? '#FCEEE3' : '#fff', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}><span style={{ width: 30, height: 30, borderRadius: 15, background: '#FCEEE3', color: '#A8481A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>{acct.name.slice(0, 1)}</span><span className="acct-kind" style={{ fontSize: 13, fontWeight: 600, color: '#7A808A', whiteSpace: 'nowrap' }}>기관</span><span className="acct-name" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>{acct.name}</span></a>
       </div>
     </header>
   )

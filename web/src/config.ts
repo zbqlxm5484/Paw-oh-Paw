@@ -8,6 +8,13 @@ export const herePath = (): string => {
   return (BASE && p.startsWith(BASE) ? p.slice(BASE.length) : p) || '/'
 }
 
+/** 화면 주소에 배포 접두어를 붙인다. <a href> 에 쓴다: 새 탭·링크 복사·휠 클릭도 /web 안에 머물게(클릭은 Base 가 가로채 navigate).
+ *  '/...' 가 아니거나(? # 바깥 주소 undefined) 이미 접두어가 있으면 그대로 */
+export const link = <T extends string | undefined>(p: T): T =>
+  (BASE && typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') && p !== BASE && !p.startsWith(BASE + '/') ? BASE + p : p) as T
+/** link() 를 거친 주소에서 접두어를 뗀다(navigate 는 basename 을 스스로 붙인다) */
+export const unlink = (p: string): string => (BASE && (p === BASE || p.startsWith(BASE + '/')) ? p.slice(BASE.length) || '/' : p)
+
 export const MAX_SHOTS = 16 // 한 회차 영상 수 (4초씩 16개)
 export const ANALYSIS_SEC = 7.0 // 분석 시뮬레이션 시간(가짜 서버 모드)
 export const MODEL = 'v1'

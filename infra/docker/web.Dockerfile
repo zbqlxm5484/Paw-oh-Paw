@@ -23,6 +23,7 @@ RUN npm run build
 FROM nginx:stable-alpine
 COPY --from=app /app/dist /usr/share/nginx/html
 COPY --from=web /web/dist /usr/share/nginx/html/web
-# React 라우터 경로를 새로고침해도 각자 index.html 로 떨어지게 한다
-RUN printf 'server {\n    listen 80;\n    root /usr/share/nginx/html;\n    location = /web { return 301 /web/; }\n    location /web/ {\n        try_files $uri /web/index.html;\n    }\n    location / {\n        try_files $uri /index.html;\n    }\n}\n' > /etc/nginx/conf.d/default.conf
+# React 라우터 경로를 새로고침해도 각자 index.html 로 떨어지게 한다.
+# absolute_redirect off: /web → /web/ 301 을 상대 주소로 보낸다(앞단 https·포트가 바뀌지 않게, MR !79 리뷰)
+RUN printf 'server {\n    listen 80;\n    root /usr/share/nginx/html;\n    absolute_redirect off;\n    location = /web { return 301 /web/; }\n    location /web/ {\n        try_files $uri /web/index.html;\n    }\n    location / {\n        try_files $uri /index.html;\n    }\n}\n' > /etc/nginx/conf.d/default.conf
 EXPOSE 80

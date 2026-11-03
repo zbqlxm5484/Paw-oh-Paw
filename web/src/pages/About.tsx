@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { staticUrl, usePage, useTitle } from '../app/page'
+import { link } from '../config'
 
 const STEPS: [string, string][] = [
   ['모든 견종', '대형견부터 소형견까지, 모든 반려견의 걸음을 분석합니다.'],
@@ -17,11 +18,11 @@ function GuestBar() {
   return (
     <header style={css('position:sticky;top:0;z-index:20;background:rgba(250,243,231,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid #ECE8E2')}>
       <div style={css('padding:0 25px;height:74px;display:flex;align-items:center;justify-content:space-between;gap:16px')}>
-        <a className="lk" href="/" style={css('display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
+        <a className="lk" href={link('/')} style={css('display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
         <nav style={css('display:flex;align-items:center;gap:8px')}>
           <span style={css('height:40px;padding:0 14px;border-radius:10px;background:#F1EAE0;color:#B4501A;display:flex;align-items:center;font-size:15px;font-weight:700')}>서비스 소개</span>
-          <a className="lk" href="/login" style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600')}>로그인</a>
-          <a className="lk" href="/signup" style={css('height:40px;padding:0 16px;border-radius:10px;background:#1B2433;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>회원가입</a>
+          <a className="lk" href={link('/login')} style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600')}>로그인</a>
+          <a className="lk" href={link('/signup')} style={css('height:40px;padding:0 16px;border-radius:10px;background:#1B2433;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>회원가입</a>
         </nav>
       </div>
     </header>
@@ -201,7 +202,7 @@ export default function About() {
             </div>
           </div>
         </div>
-        <div style={css('display:flex;justify-content:center;padding-top:8px')}><a className="lk hv-orange" href={acct ? '/upload' : '/signup'} style={css('height:56px;padding:0 28px;border-radius:14px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700')}>{acct ? '보행 분석 시작하기' : '지금 시작하기'}<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a></div>
+        <div style={css('display:flex;justify-content:center;padding-top:8px')}><a className="lk hv-orange" href={link(acct ? '/upload' : '/signup')} style={css('height:56px;padding:0 28px;border-radius:14px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700')}>{acct ? '보행 분석 시작하기' : '지금 시작하기'}<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a></div>
       </section>
     </Base>
   )
