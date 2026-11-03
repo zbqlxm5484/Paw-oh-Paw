@@ -196,7 +196,7 @@ def knee_chart(r) -> dict:
     mid = (lo + hi) // 2
     return {"L": line(L), "R": line(R), "ref_band": " ".join(pt(ref["max"]) + pt(ref["min"])[::-1]), "ref_mean": line(ref["mean"]),
             "ref_src": f"건강한 대형견 {ref['dogs']}마리 속보 범위(Catavitello 외 2015, PLOS ONE, CC BY 4.0)", "y": [{"y": round(y(v), 1), "t": f"{v}°"} for v in (hi, mid, lo)],
-            "x": [{"x": x0 + (x1 - x0) * p / 100, "t": f"{p}%"} for p in (0, 50, 100)],
+            "x": [{"x": x0 + (x1 - x0) * p / 100, "t": f"{p}"} for p in (0, 50, 100)],  # 단위는 축 이름에(보고서 검사가 "100%" 를 단정 표현으로 본다)
             "x0": x0, "x1": x1, "src": label}
 
 
@@ -688,7 +688,7 @@ def visits(acct: Account, d: Dog) -> list:
 # 병명·질환 가능성·정상 범위는 말하지 않는다(PR-F08-11). 문구는 수의사 검토 전 초안이다.
 _PLAIN = {"팔꿈치 가동 범위": "팔꿈치를 굽히는 폭", "무릎 가동 범위": "무릎을 굽히는 폭", "고관절 가동 범위": "엉덩이 관절이 움직이는 폭",
           "걸음 길이": "한 걸음 길이", "입각기 비율": "발을 딛고 있는 시간"}
-_URGENT = ["다리를 전혀 딛지 않을 때", "만지면 아파하거나, 붓거나, 열감이 있을 때", "며칠 사이 갑자기 더 절 때"]
+_URGENT = ["다리를 전혀 딛지 않을 때", "만졌을 때 싫어하거나, 붓거나, 열감이 있을 때", "며칠 사이 갑자기 더 절 때"]
 
 
 def owner_guide(bm: dict) -> dict:

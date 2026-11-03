@@ -205,7 +205,7 @@ export function knee_chart(r: Result) {
     L: line(L), R: line(R), ref_band: [...pt(ref.max), ...pt(ref.min).reverse()].join(' '), ref_mean: line(ref.mean),
     ref_src: `건강한 대형견 ${ref.dogs}마리 속보 범위(Catavitello 외 2015, PLOS ONE, CC BY 4.0)`,
     y: [hi, mid, lo].map((v) => ({ y: pyround(y(v), 1), t: `${v}°` })),
-    x: [0, 50, 100].map((p) => ({ x: x0 + ((x1 - x0) * p) / 100, t: `${p}%` })),
+    x: [0, 50, 100].map((p) => ({ x: x0 + ((x1 - x0) * p) / 100, t: `${p}` })), // 눈금 글자에 % 를 빼고 축 이름에 단위(보고서 검사가 "100%" 를 단정 표현으로 본다)
     x0, x1, src: label,
   }
 }
@@ -785,7 +785,7 @@ const _PLAIN: Record<string, string> = {
   '팔꿈치 가동 범위': '팔꿈치를 굽히는 폭', '무릎 가동 범위': '무릎을 굽히는 폭', '고관절 가동 범위': '엉덩이 관절이 움직이는 폭',
   '걸음 길이': '한 걸음 길이', '입각기 비율': '발을 딛고 있는 시간',
 }
-const _URGENT = ['다리를 전혀 딛지 않을 때', '만지면 아파하거나, 붓거나, 열감이 있을 때', '며칠 사이 갑자기 더 절 때']
+const _URGENT = ['다리를 전혀 딛지 않을 때', '만졌을 때 싫어하거나, 붓거나, 열감이 있을 때', '며칠 사이 갑자기 더 절 때']
 export interface OwnerGuide { weak: boolean; summary: string; what: string; look: string[]; help: string[]; urgent: string[] }
 
 export function owner_guide(bm: BodyMap): OwnerGuide {
