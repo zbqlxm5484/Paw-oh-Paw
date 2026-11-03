@@ -13,6 +13,7 @@ from app.report import pdf as pdf_module
 from app.report.checks import DISCLAIMER, check_texts, find_unexplained_jargon, load_rules
 from app.report.generate import generate_report, render
 from app.report.inputs import parse_input
+from app.report.judge import INCREASE, WITHIN_RANGE
 from app.report.numbers import UNMEASURABLE, build_tables, format_value
 from app.report.pdf import PdfUnavailableError, pdf_available
 from app.report.sentences import _glossary
@@ -278,3 +279,56 @@ def test_non_windows_never_touches_the_dll_env(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(pdf_module.sys, "platform", "linux")
     monkeypatch.delenv(pdf_module.DLL_DIRS_ENV, raising=False)
     assert pdf_module.prepare_windows_dlls() is None and pdf_module.DLL_DIRS_ENV not in pdf_module.os.environ
+
+
+# ---- 직전 회차 변화(5절 비교 규칙, S15P31A404-197) ----
+
+
+def _previous_for_change() -> dict:
+    previous = sample_result(measured_on="2026-10-20")
+    previous["gaits"][0]["metrics"] = [
+        metric("rom_stifle", "LH", 45.0),  # 47.3과 2.3 차이, 범위 4.2 안
+        metric("rom_stifle", "RH", 38.0),  # 43.1과 5.1 차이, 범위 밖
+        metric("stance_ratio", "LH", 50.0, unit="pct"),  # 견본 설정에는 오차 범위가 없다
+    ]
+    return previous
+
+
+def test_change_labels_follow_the_tolerance_and_are_absent_without_one() -> None:
+    tables, _ = build_tables(sample_result(), _previous_for_change(), tolerance={"rom_stifle": 4.2})
+    stifle = next(row for row in tables[0].rows if row.code == "rom_stifle")
+    assert (stifle.cells["LH"].change, stifle.cells["LH"].change_label) == (WITHIN_RANGE, "범위 안")
+    assert (stifle.cells["RH"].change, stifle.cells["RH"].change_label) == (INCREASE, "증가")
+    stance = next(row for row in tables[0].rows if row.code == "stance_ratio")
+    assert stance.cells["LH"].previous == "50.0%" and stance.cells["LH"].change is None
+    assert next(row for row in tables[0].rows if row.code == "rom_hip").cells["LH"].change is None
+
+
+def test_a_changed_model_keeps_previous_values_but_no_change_labels() -> None:
+    previous = _previous_for_change()
+    previous["model_version"] = "0.3.0/v1/deadbeef"
+    tables, _ = build_tables(sample_result(), previous, tolerance={"rom_stifle": 4.2}, model_changed=True)
+    stifle = next(row for row in tables[0].rows if row.code == "rom_stifle")
+    assert stifle.cells["RH"].previous == "38.0°" and stifle.cells["RH"].change is None
+
+
+def test_rendered_report_shows_changes_in_the_cells_and_explains_the_rule() -> None:
+    rendered = render(sample_input(previous=_previous_for_change()))
+    assert "(38.0°, 증가)" in rendered.html and "(45.0°, 범위 안)" in rendered.html and "(50.0%)" in rendered.html
+    assert "범위 밖 1개, 범위 안 1개" in rendered.texts["previous"]
+    assert "기준이 아직 없는 수치는 값만" in rendered.texts["previous"]
+
+
+def test_without_any_tolerance_the_note_says_the_rule_is_not_set() -> None:
+    data = sample_input(previous=_previous_for_change(), settings={"tolerance": {}})
+    rendered = render(data)
+    assert "오차 범위가 아직 정해지지 않아" in rendered.texts["previous"]
+    assert "증가" not in rendered.html and "범위 안" not in rendered.html
+
+
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_change_labels_and_the_note_pass_the_checks(edition: str) -> None:
+    rendered = render(sample_input(edition, previous=_previous_for_change()))
+    assert check_texts(rendered.texts, edition=edition) == []
+    if edition == "OWNER":
+        assert any(term == "오차 범위" for term, _ in rendered.sentences.glossary)

@@ -1,13 +1,14 @@
 """보고서 입력 만들기(12.4 "보고서 한 건", 8절 입력). 워커가 GENERATING으로 가져간 보고서 행 → 보고서 모듈 입력 dict.
 
 모양은 app/report/inputs.py 머리말과 같다. 회차 결과는 GET /sessions/{id}/result와 같은 값(session_result)이고, 직전
-회차는 같은 반려견의 바로 앞 DONE 회차(순서는 measured_on, created_at. 12.5)다. 오차 범위(settings.tolerance)는 197에서
-config/tolerance.yaml을 읽어 채운다. 지금은 비어 있다.
+회차는 같은 반려견의 바로 앞 DONE 회차(순서는 measured_on, created_at. 12.5)다. 오차 범위(settings.tolerance)는
+워커가 services/tolerance.py로 읽은 config/tolerance.yaml 값을 넘긴다(197).
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 from sqlalchemy import select, tuple_
@@ -50,7 +51,7 @@ def previous_session_id(db: Session, session: MeasureSession) -> uuid.UUID | Non
     ).first()
 
 
-def build_report_input(db: Session, report: Report) -> dict[str, Any]:
+def build_report_input(db: Session, report: Report, *, tolerance: Mapping[str, float] | None = None) -> dict[str, Any]:
     """보고서 행 → 입력 dict. 회차가 DONE이 아니거나 없으면 ReportInputError(워커는 REPORT_FAILED)."""
     session: MeasureSession = report.session
     dog: Dog = session.dog
@@ -85,5 +86,5 @@ def build_report_input(db: Session, report: Report) -> dict[str, Any]:
         },
         "result": result,
         "previous": previous,
-        "settings": {"tolerance": {}},  # 197: config/tolerance.yaml
+        "settings": {"tolerance": dict(tolerance or {})},  # config/tolerance.yaml(197)
     }

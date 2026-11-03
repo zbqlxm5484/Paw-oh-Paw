@@ -57,7 +57,7 @@
       <td>{{ row.label }}</td>
       {% for limb in table_limbs[table.gait_type] %}
         {% set cell = row.cells.get(limb) %}
-        <td>{% if cell %}{{ cell.text }}{% if cell.previous %} <span class="prev">({{ cell.previous }})</span>{% endif %}{% if cell.reason %}<br><span class="reason">{{ cell.reason }}</span>{% endif %}{% else %}-{% endif %}</td>
+        <td>{% if cell %}{{ cell.text }}{% if cell.previous %} <span class="prev">({{ cell.previous }}{% if cell.change_label %}, {{ cell.change_label }}{% endif %})</span>{% endif %}{% if cell.reason %}<br><span class="reason">{{ cell.reason }}</span>{% endif %}{% else %}-{% endif %}</td>
       {% endfor %}
     </tr>
   {% endfor %}

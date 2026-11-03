@@ -5,7 +5,7 @@ PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
 - 풀: ProcessPoolExecutor(mp_context=spawn) 1개(결과 영상 풀과 따로 두어 보고서가 결과 영상 뒤에서 기다리지 않는다).
 - 가져가기: UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING' → commit → 입력 dict(report_input)를
   UPLOAD_TMP_DIR/worker/report-{id}/input.json으로 쓰고 generate_report(입력, 출력)를 맡긴다.
-  자식은 DB·저장소를 모른다(11.3).
+  자식은 DB·저장소를 모른다(11.3). 입력의 settings.tolerance는 시작할 때 읽은 config/tolerance.yaml 값이다(197).
 - 거두기: 성공이면 PDF를 put_file로 넣고 status='DONE', file_key, generation_ms, model_version, template_version,
   fail_reason=NULL을 WHERE status='GENERATING'으로 쓴다. 바뀐 행이 0개면 방금 넣은 파일을 지운다. ReportCheckError면
   FAILED(REPORT_CHECK_FAILED), 그 밖의 예외는 FAILED(REPORT_FAILED). 키는 보고서 ID로 정해져 다시 만들면 덮어쓴다.
@@ -45,6 +45,7 @@ from app.report.generate import ReportResult, generate_report
 from app.report.verify import Verification, compare_numbers, summarize
 from app.services.report_input import build_report_input, load_report
 from app.services.report_numbers import reference_numbers
+from app.services.tolerance import get_tolerance
 from app.storage.base import StorageError, StorageService
 from app.storage.keys import report_key
 from app.worker.render import describe_error
@@ -93,6 +94,8 @@ class ReportGenerator:
         """executor_factory·generate는 테스트가 가짜 풀·가짜 생성 함수를 끼우는 자리다."""
         self.settings = settings
         self.storage = storage
+        # 오차 범위(5절·15.8)는 시작할 때 한 번 읽는다. 파일 모양이 틀리면 ToleranceFileError로 바로 멈춘다(197)
+        self.tolerance = get_tolerance(settings.TOLERANCE_FILE)
         self.concurrency = REPORT_CONCURRENCY
         self.tmp_root = Path(settings.UPLOAD_TMP_DIR) / "worker"
         self._executor_factory = executor_factory or self._spawn_pool
@@ -213,7 +216,7 @@ class ReportGenerator:
         if report is None:
             return
         try:
-            data = build_report_input(db, report)
+            data = build_report_input(db, report, tolerance=self.tolerance)
         except (ReportInputError, AppError) as error:
             logger.error("report input unavailable report=%s: %s", report_id, describe_error(error))
             self._fail(db, report_id, FailReason.REPORT_FAILED, stats)

@@ -16,6 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -26,6 +27,7 @@ from app.report.checks import Finding
 from app.report.generate import ReportResult
 from app.report.numbers import ListedNumber, build_tables
 from app.services import reports as report_service
+from app.services.tolerance import ToleranceFileError, get_tolerance
 from app.storage.base import get_storage
 from app.storage.keys import report_key
 from app.worker.main import WorkerStats, run_once
@@ -150,7 +152,9 @@ def test_input_written_for_the_child_has_the_report_shape(db: Session, dog, staf
     assert captured["edition"] == "OWNER" and captured["dog"]["name"] == dog.name
     assert captured["session"]["id"] == str(session.id) and captured["session"]["model_version"] == MODEL_VERSION
     assert captured["result"]["gaits"][0]["metrics"][0]["metric_code"] == "rom_stifle"
-    assert captured["previous"] is None and captured["settings"] == {"tolerance": {}}
+    assert captured["previous"] is None
+    assert captured["settings"] == {"tolerance": get_tolerance(settings.TOLERANCE_FILE)}
+    assert captured["settings"]["tolerance"]["rom_stifle"] == 4.2  # config/tolerance.yaml의 임시값(통합본 9-3)
 
 
 def test_previous_done_session_of_the_dog_is_included(db: Session, dog, staff, tmp_path: Path) -> None:
@@ -364,3 +368,28 @@ def test_a_report_that_lists_no_numbers_is_not_a_mismatch(db: Session, dog, staf
     _run(db, reporter, settings)
     _run(db, reporter, settings)
     assert _reports(db, session)["OWNER"].status == "DONE"
+
+
+# ---- 오차 범위 파일(S15P31A404-197) ----
+
+
+def test_malformed_tolerance_file_stops_the_worker_at_start(tmp_path: Path) -> None:
+    bad = tmp_path / "tolerance.yaml"
+    bad.write_text("rom_knee: 3.0\n", encoding="utf-8")
+    with pytest.raises(ToleranceFileError):
+        ReportGenerator(_settings(TOLERANCE_FILE=str(bad)), get_storage(), executor_factory=FakeExecutor)
+
+
+def test_missing_tolerance_file_means_no_tolerance_in_the_input(db: Session, dog, staff, tmp_path: Path) -> None:
+    _done_session(db, dog, staff)
+    settings = _settings(TOLERANCE_FILE=str(tmp_path / "none.yaml"), UPLOAD_TMP_DIR=str(tmp_path))
+    captured: dict[str, Any] = {}
+
+    def capture(input_path: Path, output: Path) -> ReportResult:
+        captured.update(json.loads(input_path.read_text(encoding="utf-8")))
+        return fake_generate(input_path, output)
+
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=FakeExecutor, generate=capture)
+    assert reporter.tolerance == {}
+    _run(db, reporter, settings)
+    assert captured["settings"] == {"tolerance": {}}

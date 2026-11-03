@@ -7,8 +7,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from app.report.judge import CHANGE_LABELS, judge
 
 UNMEASURABLE = "측정 불가"
 NO_VALUE = "-"
@@ -56,6 +59,11 @@ class Cell:
     text: str
     reason: str | None = None  # 측정 불가 사유 문장(14절 메시지)
     previous: str | None = None  # 직전 회차의 같은 값
+    change: str | None = None  # 직전 회차 대비 변화(judge의 CHANGE_LABELS 키). 기준이 없거나 비교 불가면 None
+
+    @property
+    def change_label(self) -> str | None:
+        return CHANGE_LABELS.get(self.change) if self.change else None
 
 
 @dataclass(frozen=True)
@@ -165,9 +173,16 @@ def _previous_values(previous: dict[str, Any] | None) -> dict[tuple[str, str, st
 
 
 def build_tables(
-    result: dict[str, Any], previous: dict[str, Any] | None = None
+    result: dict[str, Any],
+    previous: dict[str, Any] | None = None,
+    tolerance: Mapping[str, float] | None = None,
+    model_changed: bool = False,
 ) -> tuple[list[GaitTable], list[ListedNumber]]:
-    """gaits[] → 보행 유형별 표와 실린 숫자 목록. 수치 순서는 받은 순서(15.7이 12.3 표 순서로 준다)."""
+    """gaits[] → 보행 유형별 표와 실린 숫자 목록. 수치 순서는 받은 순서(15.7이 12.3 표 순서로 준다).
+
+    previous가 있으면 같은 (보행 유형, 수치, 다리)의 직전 값을 칸에 넣고, tolerance에 그 수치의 오차 범위가 있으면
+    5절 규칙의 변화(judge)를 함께 적는다. model_changed면 값만 적고 변화는 판단하지 않는다(197).
+    """
     tables: list[GaitTable] = []
     listed: list[ListedNumber] = []
     prior = _previous_values(previous)
@@ -180,12 +195,18 @@ def build_tables(
             unit = str(metric.get("unit", ""))
             value = _number(metric.get("value"))
             row = rows.setdefault(code, TableRow(code, metric_label(code, unit), unit))
-            prev = prior.get((gait_type, code, limb)) if prior else None
+            key = (gait_type, code, limb)
+            prev = prior.get(key)
+            change = None
+            if key in prior:
+                verdict = judge(prev, value, (tolerance or {}).get(code), model_changed=model_changed)
+                change = verdict.judgement if verdict.judgement in CHANGE_LABELS else None
             row.cells[limb] = Cell(
                 value=value,
                 text=format_value(value, unit),
                 reason=_reason_text(metric.get("unmeasurable_reason")) if value is None else None,
-                previous=format_value(prev, unit) if (gait_type, code, limb) in prior else None,
+                previous=format_value(prev, unit) if key in prior else None,
+                change=change,
             )
             if value is not None:
                 listed.append(ListedNumber(gait_type, code, limb, "metric", value))

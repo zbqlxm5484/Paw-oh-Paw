@@ -50,6 +50,7 @@ def _table_texts(tables: list[GaitTable]) -> dict[str, str]:
         for row in table.rows:
             parts.append(row.label)
             parts.extend(cell.reason for cell in row.cells.values() if cell.reason)
+            parts.extend(label for cell in row.cells.values() if (label := cell.change_label))
         for line in table.compare:
             parts.append(f"{line.pair_label} {line.label}")
             if line.reason:
@@ -60,7 +61,9 @@ def _table_texts(tables: list[GaitTable]) -> dict[str, str]:
 def render(data: Any) -> Rendered:
     """입력 dict → HTML과 검사용 문장. 검사는 하지 않는다(generate_report가 한다)."""
     inp: ReportInput = parse_input(data)
-    tables, numbers = build_tables(inp.result, inp.previous)
+    tables, numbers = build_tables(
+        inp.result, inp.previous, tolerance=inp.tolerance, model_changed=inp.previous_model_changed
+    )
     sentences = compose(inp, tables)
     charts = {table.gait_type: chart for table in tables if (chart := rom_chart(table))}
     html = render_html(

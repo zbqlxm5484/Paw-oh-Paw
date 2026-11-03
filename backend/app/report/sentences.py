@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from app.report.checks import DISCLAIMER, TermRules, contains_term, load_rules, normalize
 from app.report.inputs import ReportInput
+from app.report.judge import WITHIN_RANGE
 from app.report.numbers import NO_VALUE, GaitTable
 
 EDITION_LABELS = {"OWNER": "보호자용", "VET": "수의사용"}
@@ -107,13 +108,23 @@ def _gait_notes(tables: list[GaitTable]) -> dict[str, list[str]]:
     return notes
 
 
-def _previous_note(inp: ReportInput) -> str | None:
+def _previous_note(inp: ReportInput, tables: list[GaitTable]) -> str | None:
+    """직전 회차 비교 안내(5절 비교 규칙). 평가 단어 없이 방향만 말한다."""
     if not inp.previous:
         return None
     measured_on = inp.previous.get("measured_on")
-    if inp.previous.get("model_version") not in (None, inp.session.model_version):
+    if inp.previous_model_changed:
         return f"직전 회차({measured_on})는 분석 방식이 달라 변화를 판단하지 않았습니다. 값만 표에 함께 적었습니다."
-    return f"직전 회차({measured_on})의 값을 표의 괄호 안에 함께 적었습니다."
+    head = f"직전 회차({measured_on})의 값을 표의 괄호 안에 함께 적었습니다."
+    if not inp.tolerance:
+        return head + " 변화를 판단할 오차 범위가 아직 정해지지 않아 값만 적었습니다."
+    cells = [cell for table in tables for row in table.rows for cell in row.cells.values() if cell.change]
+    outside = sum(1 for cell in cells if cell.change != WITHIN_RANGE)
+    return (
+        head
+        + " 오차 범위가 정해진 수치는 범위 밖으로 달라진 것만 증가·감소로 표시했습니다"
+        + f"(범위 밖 {outside}개, 범위 안 {len(cells) - outside}개). 기준이 아직 없는 수치는 값만 적었습니다."
+    )
 
 
 def _caution(inp: ReportInput) -> list[str]:
@@ -146,7 +157,7 @@ def compose(inp: ReportInput, tables: list[GaitTable], rules: TermRules | None =
         intro=_intro(inp),
         summary=_summary(inp, tables),
         gait_notes=_gait_notes(tables),
-        previous_note=_previous_note(inp),
+        previous_note=_previous_note(inp, tables),
         caution=_caution(inp),
     )
     if inp.edition != "OWNER":
