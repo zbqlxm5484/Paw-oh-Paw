@@ -17,6 +17,8 @@ from app.report.numbers import NO_VALUE, CompareLine, GaitTable
 EDITION_LABELS = {"OWNER": "보호자용", "VET": "수의사용"}
 SIZE_LABELS = {"SMALL": "소형", "MEDIUM": "중형", "LARGE": "대형"}
 SEX_LABELS = {"M": "수컷", "F": "암컷", "MALE": "수컷", "FEMALE": "암컷"}
+# 오차 범위는 한쪽 8회 기준이다. 4회면 흔들림이 약 1.4배라 범위와 견주지 않는다(박규원 MR 80 답변)
+TOLERANCE_MIN_PASSES = 5
 
 
 @dataclass(frozen=True)
@@ -71,7 +73,8 @@ def _intro(inp: ReportInput) -> str:
 def _difference_note(top: CompareLine, tolerance: dict[str, float]) -> str:
     """보호자용 요약의 둘째 문장. 좌우 차이도 회차 비교의 오차 범위 표(15.8)와 견주고, 비교는 Decimal로 한다(15.1)."""
     allowed = tolerance.get(top.code)
-    if allowed is None or top.diff_value is None:
+    enough_passes = top.min_passes is not None and top.min_passes >= TOLERANCE_MIN_PASSES
+    if allowed is None or top.diff_value is None or not enough_passes:
         return (
             "좌우 차이는 촬영 조건에 따라서도 달라질 수 있어, 이 수치만으로 변화를 판단하지 않습니다. "
             "다음 측정과 같은 조건에서 비교해 보세요."

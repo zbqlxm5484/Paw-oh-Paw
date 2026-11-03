@@ -9,7 +9,7 @@ DOG_ID = "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e"
 MODEL_VERSION = "0.4.0/v1/a4261a10"
 
 
-def metric(code: str, limb: str, value: float | None, unit: str = "deg", reason: str | None = None, n: int = 2) -> dict:
+def metric(code: str, limb: str, value: float | None, unit: str = "deg", reason: str | None = None, n: int = 8) -> dict:
     return {
         "metric_code": code,
         "limb": limb,

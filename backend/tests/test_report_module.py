@@ -191,6 +191,35 @@ def test_tolerance_compares_the_size_of_the_difference_in_decimal() -> None:
     assert summary[1] == WITHIN_RANGE
 
 
+@pytest.mark.parametrize(
+    ("left_passes", "right_passes", "second"),
+    [
+        (5, 5, WITHIN_RANGE),  # 양쪽 5회부터는 범위와 견준다
+        (4, 8, NO_RANGE),  # 왼쪽이 4회 이하면 판단 보류
+        (8, 4, NO_RANGE),  # 오른쪽만 적어도 같다
+        (0, 0, NO_RANGE),
+    ],
+)
+def test_tolerance_is_not_used_when_one_side_has_too_few_passes(
+    left_passes: int, right_passes: int, second: str
+) -> None:
+    result = sample_result()
+    result["gaits"][0]["metrics"] = [
+        metric("rom_stifle", "LH", 47.3, n=left_passes),
+        metric("rom_stifle", "RH", 43.1, n=right_passes),
+    ]
+    summary = render(sample_input(result=result, settings={"tolerance": {"rom_stifle": 4.2}})).sentences.summary
+    assert summary == [TOP_LINE, second]
+
+
+def test_tolerance_is_not_used_when_the_pass_count_is_unknown() -> None:
+    # 기업 서버가 준 입력처럼 통과 수가 없으면 범위 안이라고 말하지 않는다
+    result = sample_result()
+    result["gaits"][0]["metrics"] = [metric("rom_hip", "LH", 41.9)]
+    summary = render(sample_input(result=result, settings={"tolerance": {"rom_stifle": 9.0}})).sentences.summary
+    assert summary == [TOP_LINE, NO_RANGE]
+
+
 def test_vet_summary_adds_the_symmetry_index_and_no_second_sentence() -> None:
     assert render(sample_input(edition="VET")).sentences.summary == [f"{TOP_LINE} 대칭 지수 9.3%."]
 
