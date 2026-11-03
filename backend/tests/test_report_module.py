@@ -108,7 +108,20 @@ def test_unit_basis_is_in_the_metric_name_not_in_every_cell() -> None:
     assert line.label == "걸음 길이(몸통 길이 기준)" and (line.left, line.diff) == ("122.70%", "2.00%")
 
 
-# ---- 문장·검사 ----
+# ---- 문장·검사(김지윤 문장 템플릿, MR 80 리뷰. 글자 그대로 나오는지 본다) ----
+
+TOP_LINE = (
+    "속보에서 왼쪽과 오른쪽의 차이를 비율로 볼 때 가장 큰 항목은 뒷다리 무릎 가동 범위입니다. "
+    "왼쪽 47.3°, 오른쪽 43.1°, 차이 4.2°입니다."
+)
+NO_RANGE = (
+    "좌우 차이는 촬영 조건에 따라서도 달라질 수 있어, 이 수치만으로 변화를 판단하지 않습니다. "
+    "다음 측정과 같은 조건에서 비교해 보세요."
+)
+WITHIN_RANGE = "이 차이는 측정 오차 범위 안에 있습니다."
+OVER_RANGE = (
+    "이 차이는 측정 오차 범위보다 큽니다. 다음 측정에서도 같은 다리에 차이가 이어지는지 담당 수의사와 함께 봐 주세요."
+)
 
 
 @pytest.mark.parametrize("edition", ["OWNER", "VET"])
@@ -116,7 +129,7 @@ def test_sentences_pass_the_checks_for_both_editions(edition: str) -> None:
     rendered = render(sample_input(edition=edition))
     assert check_texts(rendered.texts, edition=edition) == []
     assert DISCLAIMER in rendered.sentences.disclaimer
-    assert "속보 기준, 좌우 차이를 비율로 볼 때 가장 큰 항목은 뒷다리 무릎 가동 범위입니다" in rendered.texts["summary"]
+    assert TOP_LINE in rendered.texts["summary"]
 
 
 def test_summary_names_the_largest_ratio_not_the_largest_absolute_difference() -> None:
@@ -127,16 +140,125 @@ def test_summary_names_the_largest_ratio_not_the_largest_absolute_difference() -
         compare("FORE", "rom_carpus", 73.0, 71.0),
     ]
     summary = render(sample_input(result=result)).texts["summary"]
-    assert "좌우 차이를 비율로 볼 때 가장 큰 항목은 앞다리 어깨 가동 범위입니다" in summary
+    assert "왼쪽과 오른쪽의 차이를 비율로 볼 때 가장 큰 항목은 앞다리 어깨 가동 범위입니다" in summary
     assert "차이 1.9°" in summary and "차이가 가장" not in summary
 
 
-def test_summary_without_any_ratio_does_not_claim_a_largest_difference() -> None:
+def test_summary_exceptions_follow_the_template_without_a_second_sentence() -> None:
     result = sample_result()
     result["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 0.0, 0.0)]
-    summary = render(sample_input(result=result)).texts["summary"]
-    assert "비율로 낼 수 있는 항목이 없습니다" in summary and "뒷다리 무릎 가동 범위" in summary
-    assert "가장 큰 항목" not in summary and "덜 쓰고" not in summary
+    assert render(sample_input(result=result)).sentences.summary == [
+        "속보에서 좌우 차이를 비율로 낼 수 있는 항목은 없습니다. "
+        "뒷다리 무릎 가동 범위: 왼쪽 0.0°, 오른쪽 0.0°, 차이 0.0°입니다."
+    ]
+    result["gaits"][0]["limb_compare"] = []
+    assert render(sample_input(result=result)).sentences.summary == [
+        "왼쪽과 오른쪽을 비교할 수 있는 수치가 없어 차이를 적지 않았습니다."
+    ]
+
+
+def test_intro_follows_the_template_and_drops_only_the_missing_profile_items() -> None:
+    assert render(sample_input()).sentences.intro == (
+        "2026-11-02에 제니의 걷는 모습을 촬영해 수치를 냈습니다. 체중 12.5 kg, 중형견, 말티즈. "
+        "촬영 4건에서 걸음 6회를 보았고, 그중 5회로 수치를 냈습니다(제외 1회)."
+    )
+    bare = sample_input(dog={"name": "코코"}, session={"id": "x", "measured_on": "2026-11-02"})
+    assert render(bare).sentences.intro == (
+        "2026-11-02에 코코의 걷는 모습을 촬영해 수치를 냈습니다. "
+        "촬영 4건에서 걸음 6회를 보았고, 그중 5회로 수치를 냈습니다(제외 1회)."
+    )
+
+
+@pytest.mark.parametrize(
+    ("tolerance", "second"),
+    [
+        ({}, NO_RANGE),
+        ({"rom_hip": 1.0}, NO_RANGE),  # 표에 그 수치가 없으면 오차 범위가 없는 것과 같다
+        ({"rom_stifle": 4.2}, WITHIN_RANGE),  # 15.8: |diff| ≤ 오차 범위는 안이다
+        ({"rom_stifle": 4.1}, OVER_RANGE),
+    ],
+)
+def test_owner_summary_second_sentence_follows_the_tolerance(tolerance: dict[str, float], second: str) -> None:
+    summary = render(sample_input(settings={"tolerance": tolerance})).sentences.summary
+    assert summary == [TOP_LINE, second]
+
+
+def test_tolerance_compares_the_size_of_the_difference_in_decimal() -> None:
+    # 오른쪽이 더 커도(diff 음수) 크기로 견주고, 30.2와 33.2의 차이 3.0은 오차 범위 3.0 안이다(15.1, 15.8)
+    result = sample_result()
+    result["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 30.2, 33.2)]
+    summary = render(sample_input(result=result, settings={"tolerance": {"rom_stifle": 3.0}})).sentences.summary
+    assert summary[1] == WITHIN_RANGE
+
+
+def test_vet_summary_adds_the_symmetry_index_and_no_second_sentence() -> None:
+    assert render(sample_input(edition="VET")).sentences.summary == [f"{TOP_LINE} 대칭 지수 9.3%."]
+
+
+def test_gait_notes_and_no_pass_sentence_follow_the_template() -> None:
+    assert render(sample_input()).sentences.gait_notes["TROT"] == [
+        "속보: 수치 8개 중 7개를 측정했습니다.",
+        "측정하지 못한 1개는 표에 사유를 적었습니다.",
+        "좌우 비교를 하지 못한 항목 1개: NO_DATA 메시지",
+    ]
+    assert render(sample_input(result=sample_result(gaits=[]))).sentences.gait_notes["NONE"] == [
+        "수치를 낼 수 있는 걸음이 없었습니다. "
+        "매트를 옆으로 곧게 지나가도록, 반대 방향으로도 걷게 해 다시 촬영해 주세요."
+    ]
+
+
+def test_compare_skip_note_lists_each_reason_once() -> None:
+    result = sample_result()
+    result["gaits"][0]["limb_compare"] = [
+        compare("HIND", "rom_stifle", 47.3, None, reason="NO_DATA"),
+        compare("HIND", "rom_hip", None, 41.0, reason="NO_DATA"),
+        compare("FORE", "rom_elbow", None, None, reason="ONE_SIDE"),
+    ]
+    assert render(sample_input(result=result)).sentences.gait_notes["TROT"][-1] == (
+        "좌우 비교를 하지 못한 항목 3개: NO_DATA 메시지 ONE_SIDE 메시지"
+    )
+
+
+@pytest.mark.parametrize(
+    ("edition", "extra"),
+    [
+        ("OWNER", "걱정되는 변화가 있으면 담당 수의사와 상의해 주세요."),
+        ("VET", "이 수치는 영상에서 추정한 값이며, 임상 판단의 보조 자료입니다."),
+    ],
+)
+def test_caution_follows_the_template(edition: str, extra: str) -> None:
+    assert render(sample_input(edition=edition)).sentences.caution == [
+        "수치는 촬영 조건(바닥, 걷는 속도, 카메라 각도)에 따라 달라질 수 있습니다. "
+        "같은 조건에서 다시 잰 값과 비교해 주세요.",
+        extra,
+    ]
+
+
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_every_template_sentence_passes_the_checks(edition: str) -> None:
+    no_ratio = sample_result()
+    no_ratio["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 0.0, 0.0)]
+    no_lines = sample_result()
+    no_lines["gaits"][0]["limb_compare"] = []
+    earlier = sample_result(measured_on="2026-10-20")
+    other_model = sample_result(measured_on="2026-10-20", model_version="0.3.0/v1/deadbeef")
+    for data in (
+        sample_input(edition=edition, settings={"tolerance": {}}),
+        sample_input(edition=edition),
+        sample_input(edition=edition, settings={"tolerance": {"rom_stifle": 1.0}}),
+        sample_input(edition=edition, result=no_ratio),
+        sample_input(edition=edition, result=no_lines),
+        sample_input(edition=edition, result=sample_result(gaits=[])),
+        sample_input(edition=edition, previous=earlier),
+        sample_input(edition=edition, previous=other_model),
+    ):
+        rendered = render(data)
+        assert check_texts(rendered.texts, edition=edition) == []
+
+
+def test_owner_glossary_explains_the_tolerance_only_when_a_sentence_uses_it() -> None:
+    assert "오차 범위" in dict(render(sample_input()).sentences.glossary)
+    assert "오차 범위" not in dict(render(sample_input(settings=None)).sentences.glossary)
 
 
 def test_glossary_passes_the_check_for_every_listed_term() -> None:
@@ -166,13 +288,23 @@ def test_one_side_only_notice_and_no_numbers_are_sentences_not_failures() -> Non
     rendered = render(sample_input(result=result))
     assert "한쪽만 찍혀" in rendered.texts["summary"] and "가장 큰 항목" not in rendered.texts["summary"]
     empty = render(sample_input(result=sample_result(gaits=[])))
-    assert "유효한 걸음이 없어" in empty.texts["gaits"] and empty.tables == []
+    assert "수치를 낼 수 있는 걸음이 없었습니다" in empty.texts["gaits"] and empty.tables == []
 
 
 def test_previous_session_with_another_model_version_is_not_compared() -> None:
     previous = sample_result(measured_on="2026-10-20", model_version="0.3.0/v1/deadbeef")
     rendered = render(sample_input(previous=previous))
-    assert "분석 방식이 달라" in rendered.texts["previous"]
+    assert rendered.texts["previous"] == (
+        "직전 회차(2026-10-20)는 분석 방식이 달라 값만 표에 함께 적고, 변화는 판단하지 않았습니다."
+    )
+
+
+def test_previous_session_with_the_same_model_version_points_at_the_table() -> None:
+    rendered = render(sample_input(previous=sample_result(measured_on="2026-10-20")))
+    assert rendered.texts["previous"] == (
+        "직전 회차(2026-10-20)의 값을 표의 괄호 안에 함께 적었습니다. "
+        "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
+    )
 
 
 # ---- HTML ----
@@ -184,7 +316,8 @@ def test_html_has_title_tables_chart_glossary_and_footer() -> None:
     assert "<title>제니 보행 평가 보고서 (보호자용)</title>" in html
     assert "왼쪽 뒷다리" in html and "측정 불가" in html and "NOT_ENOUGH_CYCLES 메시지" in html
     assert 'src="data:image/png;base64,' in html
-    assert "용어 설명" in html and DISCLAIMER in html and f"템플릿 {TEMPLATE_VERSION}" in html
+    assert "용어 설명" in html and f"템플릿 {TEMPLATE_VERSION}" in html
+    assert "<footer>이 보고서는 보행 평가 보조 자료이며 진단을 대신하지 않습니다.</footer>" in html  # 고정 문구 그대로
     assert "tr { break-inside: avoid; }" in html  # 표 한 줄이 쪽 경계에서 갈라지지 않게
     assert "<script" not in html
 

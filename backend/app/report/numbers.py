@@ -79,6 +79,7 @@ class CompareLine:
     left: str
     right: str
     diff: str
+    diff_value: float | None  # 비교할 수 있을 때의 원래 값(오차 범위와 견준다)
     symmetry_index: str
     comparable: bool
     reason: str | None
@@ -206,6 +207,7 @@ def build_tables(
                     left=format_value(left, unit),
                     right=format_value(right, unit),
                     diff=format_value(diff, unit) if comparable else NO_VALUE,
+                    diff_value=diff if comparable else None,
                     symmetry_index=f"{symmetry:.1f}%" if comparable and symmetry is not None else NO_VALUE,
                     comparable=comparable,
                     reason=_reason_text(item.get("reason")),
