@@ -14,6 +14,7 @@ from app.report.checks import (
     KIND_JARGON,
     RULES_PATH,
     check_texts,
+    contains_term,
     ensure_checked,
     find_forbidden,
     find_unexplained_jargon,
@@ -24,7 +25,7 @@ from app.report.checks import (
 
 OK_OWNER = {
     "title": "제니 보행 평가",
-    "summary": "오른쪽 뒷다리의 가동 범위(관절이 움직인 각도의 폭)가 왼쪽보다 4.2° 작습니다.",
+    "summary": "오른쪽 뒷다리의 가동 범위(걸을 때 관절을 접었다 펴는 각도의 폭)가 왼쪽보다 4.2° 작습니다.",
     "footer": f"{DISCLAIMER}이며 진단을 대신하지 않습니다.",
 }
 
@@ -72,6 +73,42 @@ def test_missing_rule_file_is_a_value_error(tmp_path: Path) -> None:
 # ---- 금지 표현 ----
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "진단을 대신하지 않습니다.",
+        "지난 회차보다 4.2° 증가했습니다.",
+        "오차 범위 안입니다.",
+        "차이가 가장 큰 다리는 왼쪽 뒷다리입니다.",
+        "참고 범위와 비교한 값입니다.",
+        "측정 조건상 비교할 수 없습니다.",
+        "반드시 수의사와 상담하세요.",
+    ],
+)
+def test_shipped_rules_allow_the_wording_a_report_may_use(text: str) -> None:
+    assert find_forbidden({"body": text}, load_rules()) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "관절염이 의심됩니다.",
+        "슬개골 탈구 가능성이 있습니다.",
+        "이 차이가 원인입니다.",
+        "통증이 있어 보입니다.",
+        "불편한 다리는 오른쪽입니다.",
+        "지난번보다 좋아졌습니다.",
+        "악화됐습니다.",
+        "재활 효과가 있습니다.",
+        "건강합니다.",
+        "비정상 수치입니다.",
+        "반드시 걷게 하세요.",
+    ],
+)
+def test_shipped_rules_catch_diagnostic_and_judging_wording(text: str) -> None:
+    assert find_forbidden({"body": text}, load_rules()) != []
+
+
 def test_forbidden_term_is_found_with_inflection_and_case(tmp_path: Path) -> None:
     rules = _rules(
         tmp_path,
@@ -103,10 +140,23 @@ def test_owner_jargon_needs_its_explanation_somewhere_in_the_document() -> None:
     findings = find_unexplained_jargon(bare, rules)
     assert [(f.kind, f.term, f.where) for f in findings] == [(KIND_JARGON, "입각기", "summary")]
 
-    explained_elsewhere = {**bare, "glossary": "입각기: 발이 바닥에 닿아 있는 구간"}
+    explained_elsewhere = {**bare, "glossary": "입각기: 한 걸음 중 발이 바닥을 딛고 있는 구간"}
     assert find_unexplained_jargon(explained_elsewhere, rules) == []
-    inline = {"summary": "입각기(발이 바닥에 닿아 있는 구간) 비율이 왼쪽 58%입니다."}
+    inline = {"summary": "입각기(한 걸음 중 발이 바닥을 딛고 있는 구간) 비율이 왼쪽 58%입니다."}
     assert find_unexplained_jargon(inline, rules) == []
+
+
+@pytest.mark.parametrize("text", ["가동범위가 40°입니다.", "가동 범위가 40°입니다.", "가동\n범위가 40°입니다."])
+def test_jargon_is_found_however_it_is_spaced(text: str) -> None:
+    findings = find_unexplained_jargon({"summary": text}, load_rules())
+    assert [(f.term, f.where) for f in findings] == [("가동 범위", "summary")]
+    assert "범위가" in findings[0].excerpt
+
+
+def test_jargon_written_without_spaces_passes_when_explained() -> None:
+    texts = {"summary": "가동범위가 40°입니다.", "glossary": "가동 범위: 걸을 때 관절을 접었다 펴는 각도의 폭"}
+    assert find_unexplained_jargon(texts, load_rules()) == []
+    assert contains_term("보행주기 9회", "보행 주기") and not contains_term("보행 속도", "보행 주기")
 
 
 def test_vet_edition_skips_the_jargon_check() -> None:
