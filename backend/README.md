@@ -24,7 +24,7 @@
 | 실패한 요청이 만든 파일 정리 (12.4) | `app/api/deps.py`의 `delete_created_files` |
 | 워커: UPLOADED 촬영 제출 → SUBMITTED → ANALYZING → DONE(결과 저장), 제출 재시도·시간 초과, 전체·기관별 동시 처리 상한 (3절, 6절, 12.4, 14.2·14.3) | `app/worker/main.py`, `app/services/analysis_results.py` |
 | 결과 영상: 렌더 프로세스 풀(spawn, `WORKER_RENDER_CONCURRENCY`), 사람 얼굴 가리기(MediaPipe BlazeFace를 OpenCV DNN으로, 모델 동봉)·관절점으로 골격 그리기(OpenCV)·H.264 인코딩(ffmpeg), READY·FAILED 처리와 작업 폴더 정리 (7절, 12.4, 14.2) | `app/worker/render.py`, `app/video/render.py`, `app/video/models/` |
-| 보고서 검사: 금지 표현·보호자용 전문 용어·고정 문구 "보행 평가 보조 자료" (8절 7번, PR-F08-11·12). 목록은 패키지 안 YAML(김지윤 목록으로 교체) | `app/report/checks.py`, `app/report/terms.yaml` |
+| 보고서 검사: 금지 표현·보호자용 전문 용어·고정 문구 "보행 평가 보조 자료" (8절 7번, PR-F08-11·12). 목록은 패키지 안 YAML(김지윤 초안, 최종본으로 교체) | `app/report/checks.py`, `app/report/terms.yaml` |
 | 보고서 모듈(8절): 입력 dict 검사 → 보행 유형별 수치 표(측정 불가는 사유, 직전 회차 값) → 문장(김지윤 템플릿 전 자리 표시, 보호자용은 용어 설명 자동) → 차트(matplotlib Figure) → HTML(Jinja2) → 검사 → PDF(WeasyPrint). `generate_report(입력 JSON, 출력 PDF)` 하나를 자식 프로세스가 부른다. 미리보기 `python -m scripts.make_report` | `app/report/`(inputs·numbers·sentences·charts·html·pdf·generate, `templates/report.html.j2`) |
 | 보고서 워커(12.4): 회차 DONE 때 생긴 OWNER·VET 행을 PENDING → GENERATING → DONE(PDF 저장소)·FAILED(`REPORT_CHECK_FAILED`·`REPORT_FAILED`). 보고서 풀 1개(결과 영상 풀과 별도), 다시 켜면 GENERATING → PENDING | `app/worker/report.py`, `app/services/report_input.py`(입력 dict) |
 | 보고서 API: 판본별 상태, 다시 만들기(GENERATING이면 409), PDF 미리보기·내려받기(서명 URL, 한글 파일 이름) (15.7의 19~21) | `app/api/routes/reports.py`, `app/services/reports.py`, `app/schemas/reports.py` |

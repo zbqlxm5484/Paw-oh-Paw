@@ -5,7 +5,8 @@ REPORT_CHECK_FAILED로 남긴다(12.4). 수치 대조(같은 7번의 첫 항목)
 
 - 금지 표현: terms.yaml의 forbidden. 판본에 관계없이 0건이어야 한다.
 - 전문 용어: 보호자용(OWNER)에 jargon 용어가 나오면 같은 문서 안에 그 explanation 문구가 한 번은 있어야 한다.
-  용어 바로 뒤가 아니어도 되므로 맨 끝 용어 설명 칸으로도 된다. 수의사용(VET)은 검사하지 않는다.
+  용어 바로 뒤가 아니어도 되므로 맨 끝 용어 설명 칸으로도 된다. 용어는 공백을 빼고 찾는다("가동범위"도 "가동 범위"다).
+  수의사용(VET)은 검사하지 않는다.
 - 고정 문구: 모든 판본에 "보행 평가 보조 자료"(DISCLAIMER)가 있어야 한다(17.4 BE-15).
 
 목록 파일은 패키지 안에 둔다(11.3: report/는 app과 DB를 모르고 기업에 그대로 넘긴다). 김지윤의 목록을 받으면 그 파일만
@@ -122,6 +123,16 @@ def normalize(text: str) -> str:
     return " ".join(text.split())
 
 
+def _term_pattern(term: str) -> re.Pattern[str]:
+    """전문 용어를 찾는 정규식. 글자 사이의 공백은 있어도 없어도 된다."""
+    return re.compile(r"\s*".join(re.escape(letter) for letter in "".join(term.split())))
+
+
+def contains_term(text: str, term: str) -> bool:
+    """글에 전문 용어가 있는지. 공백을 빼고 비교한다."""
+    return _term_pattern(term).search(text) is not None
+
+
 def _excerpt(text: str, start: int, end: int) -> str:
     half = max((EXCERPT_CHARS - (end - start)) // 2, 0)
     return text[max(start - half, 0) : end + half]
@@ -145,11 +156,14 @@ def find_unexplained_jargon(texts: Mapping[str, str], rules: TermRules) -> list[
     whole = " ".join(normalized.values())
     findings: list[Finding] = []
     for rule in rules.jargon:
-        if rule.term not in whole or normalize(rule.explanation) in whole:
+        if normalize(rule.explanation) in whole:
             continue
-        where, text = next((w, t) for w, t in normalized.items() if rule.term in t)
-        start = text.index(rule.term)
-        findings.append(Finding(KIND_JARGON, rule.term, where, _excerpt(text, start, start + len(rule.term))))
+        pattern = _term_pattern(rule.term)
+        for where, text in normalized.items():
+            match = pattern.search(text)
+            if match:
+                findings.append(Finding(KIND_JARGON, rule.term, where, _excerpt(text, match.start(), match.end())))
+                break
     return findings
 
 
