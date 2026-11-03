@@ -52,12 +52,12 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
   )
 }
 
-/** 첫 쪽 요약(PR-F08-05): 주요 소견 · 측정 품질 · 이전 대비 변화 */
+/** 첫 쪽 요약(PR-F08-05): 주요 결과 · 측정 품질 · 이전 대비 변화 */
 function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; part?: unknown } }) {
   const prev = bm.trend.length > 1 ? bm.trend[bm.trend.length - 2] : null
   return (
     <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:14.5px;line-height:1.5')}>
-      <b style={css('color:#A8481A')}>주요 소견</b><span>{owner_guide(bm).summary}</span>
+      <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
       <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 지수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}%p · 측정 오차 범위가 아직 정해지지 않아, 작은 차이는 측정 흔들림일 수 있어요` : '첫 측정이라 비교할 회차가 없어요'}</span>
     </div>
@@ -169,8 +169,8 @@ export default function Report() {
                     <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
                       <span style={css(`position:absolute;top:-5px;left:calc(${bm.sym}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>
                     </div>
-                    <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100% (완전 대칭)</span></div>
-                    {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100%에 가까울수록 양쪽을 비슷하게 써요</span> : null}
+                    <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
+                    {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
                     <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}%p</b></> : '첫 측정이에요'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
                   </div>
                 </div>
@@ -244,6 +244,8 @@ export default function Report() {
                   </>
                 )}
                 <div style={css('flex:1')}></div>
+                {/* 보호자용 용어 설명(보고서 검사 terms.yaml 의 설명 문구 그대로, 토씨까지 같아야 검사를 통과한다) */}
+                {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
                 <span style={css('font-size:12px;color:#A0A7B2')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
               </div>
             </>
@@ -267,7 +269,7 @@ function KneeChart({ kc }: { kc: KC }) {
         <g stroke="#ECE8E2" strokeDasharray="3 4">{kc.y.map((t: Tick, i: number) => <line key={i} x1={kc.x0} y1={t.y} x2={kc.x1} y2={t.y}></line>)}</g>
         <g fontSize="9.5" fill="#8E949C">{kc.y.map((t: Tick, i: number) => <text key={i} x={kc.x0 - 5} y={t.y + 3} textAnchor="end">{t.t}</text>)}
           {kc.x.map((t: Tick, i: number) => <text key={'x' + i} x={t.x} y="133" textAnchor="middle">{t.t}</text>)}
-          <text x={(kc.x0 + kc.x1) / 2} y="146" textAnchor="middle">한 걸음 (뒷발 착지 → 다음 착지)</text>
+          <text x={(kc.x0 + kc.x1) / 2} y="146" textAnchor="middle">한 걸음 (뒷발 착지 → 다음 착지, %)</text>
           <text x="10" y="66" textAnchor="middle" transform="rotate(-90 10 66)">무릎 각도</text></g>
         <polygon points={kc.ref_band} fill="#E9E6E1" opacity=".75"></polygon>
         <polyline points={kc.ref_mean} fill="none" stroke="#A0A7B2" strokeWidth="1.3" strokeDasharray="2 3"></polyline>
