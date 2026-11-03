@@ -3,12 +3,13 @@ import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { PostForm, usePage, useTitle } from '../app/page'
 import { staffOf } from '../store/db'
+import { link } from '../config'
 
 const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none'
 
 export default function Account() {
   useTitle('기본 정보 · Paw oh Paw')
-  const { acct, me, toast } = usePage({ login: true })
+  const { acct, me, toast } = usePage({ login: true, creamoff: true }) // 관리자도 비밀번호·내 정보는 바꾼다
   if (!acct || !me) return null
   const ends = acct.contract_ends
   const rows: [string, string][] = [
@@ -22,7 +23,7 @@ export default function Account() {
   return (
     <Base acct={acct} me={me} nav="my" toast={toast}>
       <main style={css('max-width:860px;margin:0 auto;padding:40px 40px 96px;display:flex;flex-direction:column;gap:24px')}>
-        <a className="lk" href="/my" style={css('align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:16px;font-weight:600;color:#5B6472')}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-back"></use></svg>마이페이지</a>
+        <a className="lk" href={link('/my')} style={css('align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:16px;font-weight:600;color:#5B6472')}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-back"></use></svg>마이페이지</a>
         <div style={css('display:flex;align-items:center;justify-content:space-between')}><h1 style={css('margin:0;font-size:38px;font-weight:800;letter-spacing:-1px')}>기본 정보</h1></div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:22px;padding:8px 36px')}>
           {rows.map(([k, v], i) => (

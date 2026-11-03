@@ -8,6 +8,7 @@ import { dogOf, isoToday } from '../store/db'
 import { fmt_date, home_view } from '../views/views'
 import { PetModal } from './parts/Modals'
 import { VV } from './parts/Vital'
+import { link } from '../config'
 
 // EMR 첫 화면처럼 오늘 온 반려견부터(11-02)
 const HOME_VIEWS: [string, string][] = [['today', '오늘'], ['analyses', '분석'], ['dogs', '반려견'], ['staff', '촬영 담당자']]
@@ -79,7 +80,7 @@ export default function Home() {
             <span style={css('font-size:14.5px;font-weight:600;color:#3A4250;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')} title={r.dx}>{r.dx}</span>
             <span style={css('display:flex;gap:5px;flex-wrap:wrap')}>{r.steps.map((s: Chip, j: number) => <span key={j} style={css(`padding:3px 9px;border-radius:7px;background:${s.bg};color:${s.c};font-size:12.5px;font-weight:700`)}>{s.t}</span>)}</span>
             <span style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.who}</span>
-            <span>{r.todo ? <a className="lk" href={`/dogs/${r.id}?v=${today_iso}`} style={css('padding:4px 10px;border-radius:8px;border:1px solid #D2601A;color:#B4501A;font-size:12.5px;font-weight:700;white-space:nowrap')}>{r.todo} ›</a> : <span style={css('font-size:13px;color:#2E7A4F;font-weight:700')}>작성함</span>}</span>
+            <span>{r.todo ? <a className="lk" href={link(`/dogs/${r.id}?v=${today_iso}`)} style={css('padding:4px 10px;border-radius:8px;border:1px solid #D2601A;color:#B4501A;font-size:12.5px;font-weight:700;white-space:nowrap')}>{r.todo} ›</a> : <span style={css('font-size:13px;color:#2E7A4F;font-weight:700')}>작성함</span>}</span>
           </div>
         ))}
       </div>
@@ -96,13 +97,13 @@ export default function Home() {
             <span style={css('font-size:14px;color:#5B6472;font-variant-numeric:tabular-nums')}>{r.when}</span>
             <span style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}>
               <span style={css('font-size:12px;color:#8E949C;font-variant-numeric:tabular-nums')}>{r.no}</span>
-              <span style={css('white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}><a className="lk" href={`/dogs/${r.dog}`} style={css('font-size:15.5px;font-weight:700;border-bottom:1px dashed #C9C2B8')}>{r.name}</a>{' '}<span style={css('font-size:13.5px;color:#5B6472')}>({r.breed})</span></span>
+              <span style={css('white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}><a className="lk" href={link(`/dogs/${r.dog}`)} style={css('font-size:15.5px;font-weight:700;border-bottom:1px dashed #C9C2B8')}>{r.name}</a>{' '}<span style={css('font-size:13.5px;color:#5B6472')}>({r.breed})</span></span>
             </span>
             <span style={css('font-size:14.5px;font-weight:600;color:#3A4250;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')} title={r.dx}>{r.dx}</span>
             <span style={css('font-size:14px;color:#5B6472')}>{r.no_s}</span>
             <span style={css('display:flex;align-items:center;gap:6px')}><b style={css(`padding:4px 10px;border-radius:8px;background:${r.sym_bg};color:${r.sym_c};font-size:14px;font-variant-numeric:tabular-nums`)}>{r.sym}</b>{r.sym_d ? <span style={css(`font-size:12.5px;font-weight:700;color:${r.sym_dc}`)}>{r.sym_d}</span> : null}</span>
             <span><span style={css(`padding:4px 9px;border-radius:8px;background:${r.bg};color:${r.c};font-size:12.5px;font-weight:700;white-space:nowrap`)}>{r.st}</span></span>
-            <a className="lk" href={qs({ by: r.by, page: '' })} style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.by}</a>
+            <a className="lk" href={link(qs({ by: r.by, page: '' }))} style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.by}</a>
           </div>
         ))}
       </div>
@@ -166,7 +167,7 @@ export default function Home() {
 
         <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px')}>
           {cards.map(([label, n, href, on, warn]) => (
-            <a key={label} className="lk hv-border" href={href} style={css(`padding:16px 18px;border-radius:16px;background:#fff;border:1.5px solid ${on ? '#D2601A' : '#ECE8E2'};display:flex;flex-direction:column;gap:4px`)}>
+            <a key={label} className="lk hv-border" href={link(href)} style={css(`padding:16px 18px;border-radius:16px;background:#fff;border:1.5px solid ${on ? '#D2601A' : '#ECE8E2'};display:flex;flex-direction:column;gap:4px`)}>
               <span style={css('font-size:14px;font-weight:600;color:#5B6472')}>{label}</span>
               <b style={css(`font-size:28px;letter-spacing:-0.6px;color:${warn && n ? '#C2412D' : '#1B2433'}`)}>{n}<span style={css('font-size:15px;font-weight:600;color:#7A808A;margin-left:3px')}>마리</span></b>
             </a>
@@ -180,7 +181,7 @@ export default function Home() {
           <div style={css('display:flex;padding:4px;border-radius:12px;background:#F1ECE5;gap:2px')}>
             {HOME_VIEWS.map(([key, label]) => {
               const on = view === key && !by
-              return <a key={key} className="lk" href={qs({ view: key, by: '', page: '' })} style={css(`height:38px;padding:0 16px;border-radius:9px;display:flex;align-items:center;font-size:15px;font-weight:${on ? 700 : 500};background:${on ? '#fff' : 'transparent'};color:${on ? '#1B2433' : '#5B6472'};box-shadow:${on ? '0 1px 3px rgba(27,36,51,.12)' : 'none'}`)}>{label}</a>
+              return <a key={key} className="lk" href={link(qs({ view: key, by: '', page: '' }))} style={css(`height:38px;padding:0 16px;border-radius:9px;display:flex;align-items:center;font-size:15px;font-weight:${on ? 700 : 500};background:${on ? '#fff' : 'transparent'};color:${on ? '#1B2433' : '#5B6472'};box-shadow:${on ? '0 1px 3px rgba(27,36,51,.12)' : 'none'}`)}>{label}</a>
             })}
           </div>
           {q ? <><input type="hidden" name="q" value={q} /><span style={css('height:38px;padding:0 12px;border-radius:9px;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;font-size:14px;font-weight:700')}>‘{q}’ 검색 결과</span></> : null}
@@ -188,14 +189,14 @@ export default function Home() {
           <select name="stage" defaultValue={stage} onChange={(e) => e.currentTarget.form?.requestSubmit()} style={css(`height:44px;border-radius:12px;border:1px solid ${stage ? '#D2601A' : '#E2DCD3'};background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit`)}>
             {[['', '단계 전체'], ['pre', '수술 전'], ['rehab', '재활 중'], ['done', '종결']].map(([v, label]) => <option key={v} value={v}>{label}</option>)}
           </select>
-          {q || changed || stage ? <a className="lk" href={qs({ q: '', changed: '', stage: '', page: '' })} style={css('font-size:14px;font-weight:600;color:#7A808A')}>조건 지우기</a> : null}
+          {q || changed || stage ? <a className="lk" href={link(qs({ q: '', changed: '', stage: '', page: '' }))} style={css('font-size:14px;font-weight:600;color:#7A808A')}>조건 지우기</a> : null}
         </GetForm>
 
         {/* 고른 반려견 · 촬영 담당자 */}
         {by ? (
           <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
             <span style={css('font-size:15px;color:#5B6472')}><b style={css('color:#1B2433')}>{by}</b> 님이 촬영한 분석 · {hv.total}건</span>
-            <a className="lk" href={qs({ view: 'staff', by: '', page: '' })} style={css('height:32px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:13.5px;font-weight:600')}>✕ 담당자 목록으로</a>
+            <a className="lk" href={link(qs({ view: 'staff', by: '', page: '' }))} style={css('height:32px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:13.5px;font-weight:600')}>✕ 담당자 목록으로</a>
           </div>
         ) : null}
 
@@ -210,7 +211,7 @@ export default function Home() {
         {hv.pages > 1 ? (
           <div style={css('display:flex;justify-content:center;gap:6px;flex-wrap:wrap')}>
             {Array.from({ length: hv.pages }, (_, i) => i + 1).map((p) => (
-              <a key={p} className="lk" href={qs({ page: p })} style={css(`min-width:38px;height:38px;padding:0 10px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:${p === hv.page ? 700 : 500};background:${p === hv.page ? '#1B2433' : '#fff'};color:${p === hv.page ? '#fff' : '#3A4250'};border:1px solid ${p === hv.page ? '#1B2433' : '#E2DCD3'}`)}>{p}</a>
+              <a key={p} className="lk" href={link(qs({ page: p }))} style={css(`min-width:38px;height:38px;padding:0 10px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:${p === hv.page ? 700 : 500};background:${p === hv.page ? '#1B2433' : '#fff'};color:${p === hv.page ? '#fff' : '#3A4250'};border:1px solid ${p === hv.page ? '#1B2433' : '#E2DCD3'}`)}>{p}</a>
             ))}
           </div>
         ) : null}

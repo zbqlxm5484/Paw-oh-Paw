@@ -1,5 +1,20 @@
 // 설정값과 고정 목록. prototype/proto_app/config.py 를 그대로 옮겼다(값을 바꾸면 두 곳을 같이 바꾼다).
 
+// 배포 경로 접두어(/web). 개발 서버에서는 ''. 라우터 basename·정적 파일 주소·현재 주소 계산에 쓴다
+export const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+/** 접두어를 뺀 현재 화면 주소. window.location.pathname 을 navigate() 에 그대로 넘기면 접두어가 두 번 붙는다 */
+export const herePath = (): string => {
+  const p = window.location.pathname
+  return (BASE && p.startsWith(BASE) ? p.slice(BASE.length) : p) || '/'
+}
+
+/** 화면 주소에 배포 접두어를 붙인다. <a href> 에 쓴다: 새 탭·링크 복사·휠 클릭도 /web 안에 머물게(클릭은 Base 가 가로채 navigate).
+ *  '/...' 가 아니거나(? # 바깥 주소 undefined) 이미 접두어가 있으면 그대로 */
+export const link = <T extends string | undefined>(p: T): T =>
+  (BASE && typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') && p !== BASE && !p.startsWith(BASE + '/') ? BASE + p : p) as T
+/** link() 를 거친 주소에서 접두어를 뗀다(navigate 는 basename 을 스스로 붙인다) */
+export const unlink = (p: string): string => (BASE && (p === BASE || p.startsWith(BASE + '/')) ? p.slice(BASE.length) || '/' : p)
+
 export const MAX_SHOTS = 16 // 한 회차 영상 수 (4초씩 16개)
 export const ANALYSIS_SEC = 7.0 // 분석 시뮬레이션 시간(가짜 서버 모드)
 export const MODEL = 'v1'

@@ -7,6 +7,7 @@ import { usePage, useTitle } from '../app/page'
 import { redirect, setToast, type Go } from '../app/session'
 import { dogOf } from '../store/db'
 import { compare_view, seg, TREND_KEYS, valid } from '../views/views'
+import { link } from '../config'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -48,7 +49,7 @@ export default function Compare() {
   return (
     <Base acct={acct} me={me} nav="home" toast={toast}>
       <main style={css('max-width:none;margin:0;padding:24px 80px 96px;display:flex;flex-direction:column;gap:20px')}>
-        <a className="lk" href={`/dogs/${d.id}`} style={css('align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{d.name} 차트</a>
+        <a className="lk" href={link(`/dogs/${d.id}`)} style={css('align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{d.name} 차트</a>
         <div style={css('display:flex;flex-direction:column;gap:6px')}><h1 style={css('margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px')}>{cp.name} 경과 비교</h1></div>
         {!cp.has ? (
           <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:40px 32px;font-size:15px;color:#5B6472')}>비교하려면 유효한 회차가 2개 이상 필요해요.</div>
@@ -56,7 +57,7 @@ export default function Compare() {
           <>
             <div style={css('display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
               <div style={css('display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:380px;max-width:100%')}>
-                {segs.map((g) => <a key={g.key} className="lk" href={`?cmp=${g.key}&tk=${tk}`} onClick={rel(`?cmp=${g.key}&tk=${tk}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
+                {segs.map((g) => <a key={g.key} className="lk" href={link(`?cmp=${g.key}&tk=${tk}`)} onClick={rel(`?cmp=${g.key}&tk=${tk}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
               </div>
               <div style={css('flex:1 1 360px;min-width:0;background:#fff;border:1px solid #ECE8E2;border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
                 <div><span style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>{cp.baseLabel}</span><b style={css('display:block;font-size:16px;font-variant-numeric:tabular-nums')}>{cp.baseDate}</b></div>
@@ -79,7 +80,7 @@ export default function Compare() {
               <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px 18px;display:flex;flex-direction:column;gap:14px')}>
                 <div style={css('display:flex;justify-content:space-between;align-items:center')}><b style={css('font-size:16px')}>회차별 추이</b>{cp.two ? <div style={css('display:flex;gap:12px;font-size:13px;font-weight:600;color:#5B6472')}><span style={css('display:flex;align-items:center;gap:6px')}><span style={css('width:10px;height:10px;border-radius:3px;background:#3B6FE0')}></span>왼쪽</span><span style={css('display:flex;align-items:center;gap:6px')}><span style={css('width:10px;height:10px;border-radius:3px;background:#E5604D')}></span>오른쪽</span></div> : null}</div>
                 <div style={css('display:flex;gap:8px;flex-wrap:wrap')}>
-                  {trend.map((c) => <a key={c.key} className="lk" href={`?cmp=${cmp}&tk=${c.key}`} onClick={rel(`?cmp=${cmp}&tk=${c.key}`)} style={css(`height:36px;padding:0 14px;border-radius:18px;background:${c.on ? '#1B2433' : '#fff'};color:${c.on ? '#fff' : '#3A4250'};border:1px solid ${c.on ? '#1B2433' : '#ECE8E2'};display:flex;align-items:center;font-size:14px;font-weight:600`)}>{c.label}</a>)}
+                  {trend.map((c) => <a key={c.key} className="lk" href={link(`?cmp=${cmp}&tk=${c.key}`)} onClick={rel(`?cmp=${cmp}&tk=${c.key}`)} style={css(`height:36px;padding:0 14px;border-radius:18px;background:${c.on ? '#1B2433' : '#fff'};color:${c.on ? '#fff' : '#3A4250'};border:1px solid ${c.on ? '#1B2433' : '#ECE8E2'};display:flex;align-items:center;font-size:14px;font-weight:600`)}>{c.label}</a>)}
                 </div>
                 <svg viewBox="0 0 320 150" style={css('width:100%;display:block')}>
                   <g stroke="#ECE8E2" strokeDasharray="3 4"><line x1="20" y1="20" x2="300" y2="20"></line><line x1="20" y1="75" x2="300" y2="75"></line><line x1="20" y1="130" x2="300" y2="130"></line></g>

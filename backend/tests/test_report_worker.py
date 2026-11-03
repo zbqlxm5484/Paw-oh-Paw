@@ -150,6 +150,7 @@ def test_input_written_for_the_child_has_the_report_shape(db: Session, dog, staf
     assert captured["edition"] == "OWNER" and captured["dog"]["name"] == dog.name
     assert captured["session"]["id"] == str(session.id) and captured["session"]["model_version"] == MODEL_VERSION
     assert captured["result"]["gaits"][0]["metrics"][0]["metric_code"] == "rom_stifle"
+    assert captured["result"]["gaits"][0]["metrics"][0]["n_passes"] == 2  # 오차 범위를 쓸지 정하는 값(sentences)
     assert captured["previous"] is None and captured["settings"] == {"tolerance": {}}
 
 

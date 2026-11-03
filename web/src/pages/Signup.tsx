@@ -9,6 +9,7 @@ import { api_device_code_verify } from '../store/actions_impl'
 import { ApiError } from '../api/client'
 import { api, MOCK } from '../store/backend'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
+import { link } from '../config'
 
 const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none'
 const TERMS = ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 및 이용', '[필수] 측정 기기 연동 및 위치정보 이용', '[선택] 마케팅 정보 수신']
@@ -119,7 +120,7 @@ export default function Signup() {
             </div>
           </fieldset>
           <button className="bt" type="submit" id="soBtn" style={css(`height:56px;border-radius:14px;background:${ok() ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;margin-top:6px`)}>회원가입</button>
-          <a className="lk" href="/login" style={css('align-self:center;font-size:14px;color:#5B6472')}>이미 계정이 있어요 · <b style={css('color:#1B2433')}>로그인</b></a>
+          <a className="lk" href={link('/login')} style={css('align-self:center;font-size:14px;color:#5B6472')}>이미 계정이 있어요 · <b style={css('color:#1B2433')}>로그인</b></a>
         </PostForm>
       </main>
     </Base>

@@ -39,6 +39,7 @@ hadolint:
   script:
     - docker run --rm -i hadolint/hadolint:v2.12.0 hadolint --failure-threshold error - < backend/Dockerfile
     - docker run --rm -i hadolint/hadolint:v2.12.0 hadolint --failure-threshold error - < frontend/Dockerfile
+    - docker run --rm -i hadolint/hadolint:v2.12.0 hadolint --failure-threshold error - < infra/docker/web.Dockerfile
 
 gitleaks:
   stage: check

@@ -132,4 +132,7 @@ export function norm_code(raw: string): string {
   const c = [...(raw || '').toUpperCase()].filter((ch) => ch !== '-' && ch !== ' ').join('')
   return c.length === 20 && [...c].every((ch) => CODE_CHARS.includes(ch)) ? c : ''
 }
-export const show_code = (c: string): string => [0, 5, 10, 15].map((i) => c.slice(i, i + 5)).join('-')
+export const show_code = (c: string): string => {
+  const s = c.replace(/-/g, '') // 하이픈이 이미 들어 있어도 두 번 넣지 않는다
+  return [0, 5, 10, 15].map((i) => s.slice(i, i + 5)).join('-')
+}

@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiTarget = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8000'
   return {
+    // 배포에서는 /web/ 아래에 둔다(같은 도메인의 / 는 모바일 앱 화면). 빌드할 때 VITE_BASE=/web/ (infra/docker/web.Dockerfile)
+    base: env.VITE_BASE || '/',
     plugins: [react()],
     server: { port: 5174, proxy: { '/api': { target: apiTarget, changeOrigin: true } } },
     preview: { port: 5174 },

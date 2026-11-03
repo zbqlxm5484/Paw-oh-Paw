@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { PostForm, usePage, useTitle } from '../app/page'
-import { SEX } from '../config'
+import { SEX, link } from '../config'
 import { desc } from '../views/views'
 import { DeleteModal, LogoutModal, PetModal } from './parts/Modals'
 
@@ -26,7 +26,7 @@ export default function My() {
       modals={<><PetModal next_url="/my" /><LogoutModal /><DeleteModal name={del.name} action={del.action} /></>}>
       <main style={css('max-width:none;margin:0;padding:32px 80px 96px;display:flex;flex-direction:column;gap:20px')}>
         <div style={css('display:flex;flex-wrap:wrap;gap:16px;align-items:stretch')}>
-          <a className="lk" href="/account" style={css('flex:1 1 360px;min-width:0;background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px;display:flex;align-items:center;gap:16px')}>
+          <a className="lk" href={link('/account')} style={css('flex:1 1 360px;min-width:0;background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px;display:flex;align-items:center;gap:16px')}>
             <div style={css('width:64px;height:64px;border-radius:50%;background:#EEE8DF;color:#A69D90;display:flex;align-items:center;justify-content:center;flex:none')}><svg width="32" height="32" viewBox="0 0 24 24"><use href="#w-org"></use></svg></div>
             <div style={css('flex:1;min-width:0')}><div style={css('font-size:22px;font-weight:800;letter-spacing:-0.5px')}>{acct.name}</div><div style={css('font-size:14.5px;color:#5B6472;margin-top:2px')}>기본 정보 보기</div></div>
             <svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
@@ -61,7 +61,7 @@ export default function My() {
           <PostForm action="/my/notif" style={css('margin:0')}>
             <button className="bt" type="submit" style={css('width:100%;background:none;display:flex;align-items:center;gap:14px;min-height:56px;padding:0;color:inherit')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-bell"></use></svg><span style={css('flex:1;font-size:15.5px')}>분석 완료 알림</span><span style={css(`width:50px;height:30px;border-radius:15px;background:${acct.notif_on ? '#D2601A' : '#DDD7CE'};position:relative;transition:background .2s`)}><span style={css(`position:absolute;top:2px;left:${acct.notif_on ? 22 : 2}px;width:26px;height:26px;border-radius:13px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s`)}></span></span></button>
           </PostForm>
-          <a className="lk" href="/about" style={css('display:flex;align-items:center;gap:14px;min-height:56px')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-doc"></use></svg><span style={css('flex:1;font-size:16px')}>도움말 · 서비스 소개</span><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a>
+          <a className="lk" href={link('/about')} style={css('display:flex;align-items:center;gap:14px;min-height:56px')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-doc"></use></svg><span style={css('flex:1;font-size:16px')}>도움말 · 서비스 소개</span><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a>
           <div data-toast="고객센터로 연결할게요" style={css('display:flex;align-items:center;gap:14px;min-height:56px;cursor:pointer')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-headset"></use></svg><span style={css('flex:1;font-size:15.5px')}>고객센터</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg></div>
           <div data-open="logoutModal" style={css('display:flex;align-items:center;min-height:52px;font-size:15px;color:#5B6472;cursor:pointer')}>로그아웃</div>
         </div>

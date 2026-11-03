@@ -44,8 +44,10 @@ class StorageService(Protocol):
         """접두어 아래의 (파일 수, 바이트 수). 파기 dry_run에 쓴다."""
         ...
 
-    def file_url(self, key: str, api_path: str, download_name: str | None = None) -> tuple[str, datetime]:
-        """화면에 줄 주소와 만료 시각(FILE_URL_TTL_SEC 뒤)."""
+    def file_url(
+        self, key: str, api_path: str, download_name: str | None = None, *, now: datetime | None = None
+    ) -> tuple[str, datetime]:
+        """화면에 줄 주소와 만료 시각(FILE_URL_TTL_SEC 뒤). now를 주면 그 시각이 기준이다(두 주소의 만료를 맞출 때)."""
         ...
 
     def check_writable(self) -> None:

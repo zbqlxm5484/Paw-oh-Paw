@@ -205,7 +205,7 @@ export function knee_chart(r: Result) {
     L: line(L), R: line(R), ref_band: [...pt(ref.max), ...pt(ref.min).reverse()].join(' '), ref_mean: line(ref.mean),
     ref_src: `건강한 대형견 ${ref.dogs}마리 속보 범위(Catavitello 외 2015, PLOS ONE, CC BY 4.0)`,
     y: [hi, mid, lo].map((v) => ({ y: pyround(y(v), 1), t: `${v}°` })),
-    x: [0, 50, 100].map((p) => ({ x: x0 + ((x1 - x0) * p) / 100, t: `${p}%` })),
+    x: [0, 50, 100].map((p) => ({ x: x0 + ((x1 - x0) * p) / 100, t: `${p}` })), // 눈금 글자에 % 를 빼고 축 이름에 단위(보고서 검사가 "100%" 를 단정 표현으로 본다)
     x0, x1, src: label,
   }
 }
@@ -785,7 +785,7 @@ const _PLAIN: Record<string, string> = {
   '팔꿈치 가동 범위': '팔꿈치를 굽히는 폭', '무릎 가동 범위': '무릎을 굽히는 폭', '고관절 가동 범위': '엉덩이 관절이 움직이는 폭',
   '걸음 길이': '한 걸음 길이', '입각기 비율': '발을 딛고 있는 시간',
 }
-const _URGENT = ['다리를 전혀 딛지 않을 때', '만지면 아파하거나, 붓거나, 열감이 있을 때', '며칠 사이 갑자기 더 절 때']
+const _URGENT = ['다리를 전혀 딛지 않을 때', '만졌을 때 싫어하거나, 붓거나, 열감이 있을 때', '며칠 사이 갑자기 더 절 때']
 export interface OwnerGuide { weak: boolean; summary: string; what: string; look: string[]; help: string[]; urgent: string[] }
 
 export function owner_guide(bm: BodyMap): OwnerGuide {
@@ -811,7 +811,7 @@ export function owner_guide(bm: BodyMap): OwnerGuide {
       look: [`${side} 뒷다리를 디딜 때 엉덩이가 들썩이거나, 몸이 ${other}으로 기울어 보일 수 있어요`, `앉을 때 ${side} 뒷다리를 옆으로 빼고 앉을 수 있어요`,
         '계단을 오르거나 소파·차에 뛰어오를 때 머뭇거릴 수 있어요'],
       help: ['미끄러운 바닥에는 매트를 깔아 주세요', '계단·점프는 담당 수의사가 괜찮다고 할 때까지 줄여 주세요', '산책은 평지에서 짧게, 자주 하는 것이 좋아요',
-        `양쪽 허벅지 굵기를 가끔 손으로 견줘 보세요. ${side}이 가늘어지면 다음 진료 때 알려 주세요`] }
+        `양쪽 허벅지 굵기를 가끔 손으로 만져 비교해 보세요. ${side}이 가늘어지면 다음 진료 때 알려 주세요`] }
   return { weak: true, summary, what, urgent: _URGENT,
     look: [`${side} 앞다리를 디딜 때 고개가 위로 들리며 끄덕이듯 걸을 수 있어요`, `서 있을 때 ${side} 앞발을 살짝 들거나 짧게 디딜 수 있어요`,
       '계단을 내려가거나 높은 곳에서 뛰어내릴 때 머뭇거릴 수 있어요'],

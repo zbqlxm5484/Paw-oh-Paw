@@ -47,6 +47,7 @@ LIMB_LABELS: dict[str, str] = {
 }
 LIMB_ORDER = ("LF", "RF", "LH", "RH", "NONE")
 PAIR_LABELS: dict[str, str] = {"FORE": "앞다리", "HIND": "뒷다리"}
+PAIR_LIMBS: dict[str, tuple[str, str]] = {"FORE": ("LF", "RF"), "HIND": ("LH", "RH")}
 GAIT_LABELS: dict[str, str] = {"WALK": "평보", "TROT": "속보", "PACE": "측대보", "OTHER": "기타"}
 
 
@@ -79,6 +80,8 @@ class CompareLine:
     left: str
     right: str
     diff: str
+    diff_value: float | None  # 비교할 수 있을 때의 원래 값(오차 범위와 견준다)
+    min_passes: int | None  # 왼쪽·오른쪽 중 적은 쪽의 유효 통과 수. 한쪽이라도 모르면 None
     symmetry_index: str
     comparable: bool
     reason: str | None
@@ -164,6 +167,11 @@ def _previous_values(previous: dict[str, Any] | None) -> dict[tuple[str, str, st
     return values
 
 
+def _min_passes(passes: dict[tuple[str, str], int], code: str, pair: str) -> int | None:
+    counts = [passes[(code, limb)] for limb in PAIR_LIMBS.get(pair, ()) if (code, limb) in passes]
+    return min(counts) if len(counts) == 2 else None
+
+
 def build_tables(
     result: dict[str, Any], previous: dict[str, Any] | None = None
 ) -> tuple[list[GaitTable], list[ListedNumber]]:
@@ -174,11 +182,15 @@ def build_tables(
     for gait in result.get("gaits") or []:
         gait_type = str(gait.get("gait_type", "OTHER"))
         rows: dict[str, TableRow] = {}
+        passes: dict[tuple[str, str], int] = {}
         for metric in gait.get("metrics") or []:
             code = str(metric.get("metric_code", ""))
             limb = str(metric.get("limb", "NONE"))
             unit = str(metric.get("unit", ""))
             value = _number(metric.get("value"))
+            n_passes = _number(metric.get("n_passes"))
+            if n_passes is not None:
+                passes[(code, limb)] = int(n_passes)
             row = rows.setdefault(code, TableRow(code, metric_label(code, unit), unit))
             prev = prior.get((gait_type, code, limb)) if prior else None
             row.cells[limb] = Cell(
@@ -206,6 +218,8 @@ def build_tables(
                     left=format_value(left, unit),
                     right=format_value(right, unit),
                     diff=format_value(diff, unit) if comparable else NO_VALUE,
+                    diff_value=diff if comparable else None,
+                    min_passes=_min_passes(passes, code, pair),
                     symmetry_index=f"{symmetry:.1f}%" if comparable and symmetry is not None else NO_VALUE,
                     comparable=comparable,
                     reason=_reason_text(item.get("reason")),
