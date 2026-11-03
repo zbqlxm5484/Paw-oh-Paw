@@ -2,6 +2,7 @@
 import { css } from '../../app/css'
 import { PostForm } from '../../app/page'
 import { VV } from './Vital'
+import { link } from '../../config'
 
 /** views.memos 한 줄 */
 export interface MemoX {
@@ -21,7 +22,7 @@ const tone: Record<string, [string, string]> = { surg: ['#FCEEE3', '#A8481A'], d
 /** 메모 한 장: 분류 색 태그, 2줄까지, 아래에 날짜·작성자. edit_url 이 있으면 눌러서 고친다 */
 export function MemoCard({ x, edit_url = '' }: { x: MemoX; edit_url?: string }) {
   return (
-    <a className="lk memo-card" href={edit_url && x.id ? `${edit_url}${x.id}` : undefined} title={x.text}>
+    <a className="lk memo-card" href={link(edit_url && x.id ? `${edit_url}${x.id}` : undefined)} title={x.text}>
       <span className="memo-text">{x.imp ? <><b style={css('color:#C2412D')}>●</b>{' '}</> : null}{x.text}</span>
       <span className="memo-foot"><b style={css(`padding:1px 7px;border-radius:6px;background:${x.bg};color:${x.c}`)}>{x.cat}</b>{x.at ? <span>{x.at}{x.author ? ` · ${x.author.split(' ')[0]}` : ''}</span> : null}</span>
     </a>
@@ -50,7 +51,7 @@ export function MemoForm({ dog_id, next_url, memo_cat, edit = null, open = false
         ) : null}
         <textarea className="inp" name="text" rows={2} placeholder="예) 입질 있음, 입마개 착용 후 촬영" style={css('border-radius:10px;border:1px solid #E2DCD3;padding:9px 11px;font-size:14px;line-height:1.5;font-family:inherit;outline:none;resize:vertical;width:100%')} defaultValue={edit ? edit.text : ''}></textarea>
         <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px')}>
-          {!edit ? <label style={css('display:flex;align-items:center;gap:6px;font-size:13px;color:#3A4250;cursor:pointer')}><input type="checkbox" name="important" value="1" /> 중요 (홈 목록에 표시)</label> : <a className="lk" href={next_url} style={css('font-size:13px;color:#7A808A')}>취소</a>}
+          {!edit ? <label style={css('display:flex;align-items:center;gap:6px;font-size:13px;color:#3A4250;cursor:pointer')}><input type="checkbox" name="important" value="1" /> 중요 (홈 목록에 표시)</label> : <a className="lk" href={link(next_url)} style={css('font-size:13px;color:#7A808A')}>취소</a>}
           <button className="bt" type="submit" style={css('height:34px;padding:0 14px;border-radius:9px;background:#1B2433;color:#fff;font-size:13.5px;font-weight:700')}>{edit ? '저장' : '남기기'}</button>
         </div>
         {edit && edit.revs && edit.revs.length ? <details style={css('font-size:12.5px;color:#7A808A')}><summary style={css('cursor:pointer')}>고친 이력 {edit.revs.length}건</summary>{[...edit.revs].reverse().map((r, i) => <div key={i} style={css('padding:4px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:4px')}>{r.at} · {r.author}<div style={css('text-decoration:line-through')}>{r.text}</div></div>)}</details> : null}
@@ -96,7 +97,7 @@ export function DogPanel({ panel, next_url }: { panel: any; next_url: string }) 
           {!run_soap.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>이 회차에 남긴 진료 기록이 없어요.</span> : null}
         </div>
       ) : null}
-      <a className="lk" href={`/dogs/${panel.id}`} style={css('height:42px;border-radius:10px;border:1px solid #E2DCD3;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700')}>반려견 차트 (분석 {panel.n_res})</a>
+      <a className="lk" href={link(`/dogs/${panel.id}`)} style={css('height:42px;border-radius:10px;border:1px solid #E2DCD3;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700')}>반려견 차트 (분석 {panel.n_res})</a>
     </aside>
   )
 }

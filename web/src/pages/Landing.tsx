@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { staticUrl, usePage, useTitle } from '../app/page'
+import { link } from '../config'
 
 const RV = 'opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)'
 const RV2 = 'opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1) .15s,transform 1s cubic-bezier(.2,.7,.2,1) .15s'
@@ -63,15 +64,15 @@ export default function Landing() {
         <div style={css('position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,36,51,.35) 0%,rgba(27,36,51,0) 22%);pointer-events:none')}></div>
         <header style={css('position:absolute;top:0;left:0;right:0;z-index:2')}>
           <div style={css('padding:25px 25px 0;display:flex;align-items:center;justify-content:space-between;gap:16px')}>
-            <a className="lk" href={acct ? '/home' : '/'} style={css('display:flex;align-items:center;gap:8px;color:#fff;font-size:19px;font-weight:800;letter-spacing:-0.4px')}><img src={`${img}logo.png`} alt="" style={css('width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.25))')} />Paw oh Paw</a>
+            <a className="lk" href={link(acct ? '/home' : '/')} style={css('display:flex;align-items:center;gap:8px;color:#fff;font-size:19px;font-weight:800;letter-spacing:-0.4px')}><img src={`${img}logo.png`} alt="" style={css('width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.25))')} />Paw oh Paw</a>
             <nav style={css('display:flex;align-items:center;gap:8px')}>
-              <a className="lk" href="/about" style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>서비스 소개</a>
+              <a className="lk" href={link('/about')} style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>서비스 소개</a>
               {acct ? (
-                <a className="lk" href="/home" style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>홈</a>
+                <a className="lk" href={link('/home')} style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>홈</a>
               ) : (
                 <>
-                  <a className="lk" href="/login" style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>로그인</a>
-                  <a className="lk hv-orange" href="/signup" style={css('height:42px;padding:0 18px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>회원가입</a>
+                  <a className="lk" href={link('/login')} style={css('height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>로그인</a>
+                  <a className="lk hv-orange" href={link('/signup')} style={css('height:42px;padding:0 18px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>회원가입</a>
                 </>
               )}
             </nav>
@@ -81,7 +82,7 @@ export default function Landing() {
           <div style={css('width:100%;padding:0 80px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap')}>
             <span style={css('font-size:clamp(18px,1.8vw,26px);font-weight:700;letter-spacing:-0.6px;color:#1B2433')}>걷는 영상 하나로, 반려견 보행 분석</span>
             <div style={css('display:flex;align-items:center;gap:28px')}>
-              <a className="lk hv-orange" href={acct ? '/upload' : '/signup'} style={css('height:60px;padding:0 32px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:18px;font-weight:700;transition:background .2s')}>{acct ? '보행 분석 시작하기' : '기관으로 시작하기'}</a>
+              <a className="lk hv-orange" href={link(acct ? '/upload' : '/signup')} style={css('height:60px;padding:0 32px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:18px;font-weight:700;transition:background .2s')}>{acct ? '보행 분석 시작하기' : '기관으로 시작하기'}</a>
             </div>
           </div>
         </div>
@@ -119,7 +120,7 @@ export default function Landing() {
               <p style={css('margin:0;font-size:19px;line-height:1.75;color:#5B6472;text-wrap:pretty')}>측정한 수치와 그래프를<br />한눈에 볼 수 있는 리포트로 정리하고<br />PDF로 저장해 공유할 수 있습니다.</p>
             </div>
           </div>
-          <div className="rv" style={css(`display:flex;justify-content:center;${RV}`)}><a className="lk hv-orange" href="/about" style={css('height:56px;padding:0 28px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700')}>서비스 소개 자세히 보기<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a></div>
+          <div className="rv" style={css(`display:flex;justify-content:center;${RV}`)}><a className="lk hv-orange" href={link('/about')} style={css('height:56px;padding:0 28px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700')}>서비스 소개 자세히 보기<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a></div>
         </div>
       </section>
       <footer style={css('border-top:1px solid #E8E4DC;background:#F3F1EC;padding:72px 24px 88px;display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center')}>

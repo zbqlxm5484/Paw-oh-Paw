@@ -9,6 +9,7 @@ import { dogOf, resultOf } from '../store/db'
 import { body_map, memo_panel, owner_guide, result_view, seg } from '../views/views'
 import { pystr } from '../views/pyfmt'
 import { DogPanel } from './parts/DogPanel'
+import { link } from '../config'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -40,7 +41,7 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
         <>
           <span style={css('font-size:13px;color:#5B6472')}>{m0.n}</span>
           <b style={css(`font-size:24px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${g.weak ? g.c : '#1B2433'}`)}>{m0.v}</b>
-          {READ[m0.n] ? <span style={css('font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px')}>{READ[m0.n]}. 반대쪽과 견줘 보세요</span> : null}
+          {READ[m0.n] ? <span style={css('font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px')}>{READ[m0.n]}. 반대쪽 다리와 비교해 보세요</span> : null}
         </>
       ) : (
         g.mets.map((m, i) => (
@@ -127,9 +128,9 @@ export default function Report() {
       <main className="print-main" style={css('max-width:1320px;margin:0 auto;padding:24px 32px 96px;display:flex;gap:24px;align-items:flex-start')}>
         <div style={css('flex:1;min-width:0;max-width:920px;display:flex;flex-direction:column;gap:20px')}>
           <div className="no-print" style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
-            <a className="lk" href={`/dogs/${rd.dog}`} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{rd.name} 차트</a>
+            <a className="lk" href={link(`/dogs/${rd.dog}`)} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{rd.name} 차트</a>
             {!rd.fail ? (
-              <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={`/compare/${rd.dog}`} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={`/results/${rd.id}/3d`} style={css(BTN)}>3D로 보기</a><div className="hv-orange" onClick={() => window.print()} style={css('height:44px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700;cursor:pointer')}>PDF 내려받기</div></div>
+              <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={link(`/compare/${rd.dog}`)} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={link(`/results/${rd.id}/3d`)} style={css(BTN)}>3D로 보기</a><div className="hv-orange" onClick={() => window.print()} style={css('height:44px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700;cursor:pointer')}>PDF 내려받기</div></div>
             ) : null}
           </div>
           {rd.fail || !bm ? (
@@ -140,13 +141,13 @@ export default function Report() {
               {r.ex.length ? (
                 <div style={css('display:flex;flex-wrap:wrap;gap:6px')}>{r.ex.map(([n, c], i) => <span key={i} style={css('height:28px;padding:0 10px;border-radius:8px;background:#F2EEE8;color:#3A4250;font-size:13px;font-weight:600;display:flex;align-items:center;font-variant-numeric:tabular-nums')}>{n} {c}회</span>)}</div>
               ) : null}
-              <a className="lk hv-orange" href={`/upload?dog=${rd.dog}`} style={css('align-self:flex-start;height:46px;padding:0 20px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700')}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>다시 올리기</a>
+              <a className="lk hv-orange" href={link(`/upload?dog=${rd.dog}`)} style={css('align-self:flex-start;height:46px;padding:0 20px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700')}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>다시 올리기</a>
             </div>
           ) : (
             <>
               <div className="no-print" style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
                 <div style={css('display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:320px;max-width:100%')}>
-                  {segs.map((g) => <a key={g.key} className="lk" href={`?type=${g.key}`} onClick={rel(`?type=${g.key}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
+                  {segs.map((g) => <a key={g.key} className="lk" href={link(`?type=${g.key}`)} onClick={rel(`?type=${g.key}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
                 </div>
                 <span style={css('display:flex;align-items:center;gap:6px;font-size:13.5px;color:#5B6472;font-variant-numeric:tabular-nums')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>{status}</span>
               </div>

@@ -14,7 +14,7 @@
   {% set m0 = g.mets[0] %}
   <span style="font-size:13px;color:#5B6472">{{ m0.n }}</span>
   <b style="font-size:24px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:{{ g.c if g.weak else '#1B2433' }}">{{ m0.v }}</b>
-  {% if READ[m0.n] %}<span style="font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px">{{ READ[m0.n] }}. 반대쪽과 견줘 보세요</span>{% endif %}
+  {% if READ[m0.n] %}<span style="font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px">{{ READ[m0.n] }}. 반대쪽 다리와 비교해 보세요</span>{% endif %}
   {% else %}
   {% for m in g.mets %}
   <span style="font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums">{{ m.n }} <b style="font-size:15px;color:{{ g.c if m.lower and g.weak else '#1B2433' }}">{{ m.v }}</b> <span style="color:#A0A7B2">/ {{ m.other }}</span></span>
