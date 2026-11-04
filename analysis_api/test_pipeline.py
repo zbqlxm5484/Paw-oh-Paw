@@ -44,6 +44,7 @@ def track_mode(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "STORAGE_DIR", tmp_path / "storage")
     monkeypatch.setattr(main, "API_KEY", "")
     monkeypatch.setenv("ANALYSIS_POSE_SOURCE", "track")
+    monkeypatch.setenv("ANALYSIS_MODEL", "fs-test")      # 가상 관절점 파일 meta의 모델 이름과 같게
     monkeypatch.setenv("ANALYSIS_WEIGHTS_SHA256", "a4261a10" + "0" * 56)
     pipeline.load_tracks.cache_clear()
 

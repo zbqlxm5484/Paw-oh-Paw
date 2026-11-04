@@ -1,10 +1,12 @@
-"""분석 파이프라인: 영상 → (결과 JSON v1, 관절점 파일). S15P31A404-180, (3/4)
+"""분석 파이프라인: 영상 → (결과 JSON v1, 관절점 파일). S15P31A404-180 (3/4), S15P31A404-182 (4/4)
 
 관절점을 어디서 얻을지는 ANALYSIS_POSE_SOURCE로 고른다.
 - sample(기본): samples/의 견본 결과를 돌려준다. 모델·엔진 없이 팀 서비스 연동을 시험할 때
 - track: 미리 뽑아 둔 관절점 파일(기업 video_kpi.py track 형식, ANALYSIS_TRACK_FILE)에서 올린 영상과
   SHA-256이 같은 영상을 찾아 엔진을 돌린다. GPU·모델 없이 실제 엔진 결과를 낼 수 있다
-- 모델로 영상에서 바로 관절점을 뽑는 경로는 다음 단계(MMPose 실행 환경, 허정원)에서 이 자리에 더한다
+- 모델로 영상에서 바로 관절점을 뽑는 경로는 MMPose 실행 환경(허정원)이 정해지면 이 자리에 더한다
+
+모델은 models.yaml에서 고른다(ANALYSIS_MODEL, 없으면 default). 관절점 파일·가중치 해시도 모델마다 그 파일에 둔다.
 
 엔진(저장소 루트의 engine/)
 - engine.validity.judge_shot: 통과 자르기, 유효·무효 판별, 측정 구간
@@ -29,7 +31,9 @@ from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle  # noqa: E
 from engine.gait_events import EVENTS_VERSION  # noqa: E402
 from engine.validity import VALIDITY_VERSION, judge_shot, load_config  # noqa: E402
 
+# 결과가 바뀌는 변경(엔진·결과 형식)일 때만 올린다. model.version에 들어가서, 올리면 팀 서비스가 그 전 회차와 비교하지 않는다
 API_VERSION = "0.4.0"
+MODELS_FILE = HERE / "models.yaml"
 SAMPLES_DIR = HERE / "samples"
 KST = timezone(timedelta(hours=9))
 CONF = 0.3
@@ -52,12 +56,33 @@ def pose_source() -> str:
     return os.environ.get("ANALYSIS_POSE_SOURCE", "sample")
 
 
+def load_models(path: Optional[Path] = None) -> dict:
+    """models.yaml → {"default": 이름, "models": {이름: 항목}}"""
+    import yaml  # 설정을 읽을 때만 필요하다
+
+    data = yaml.safe_load(Path(path or MODELS_FILE).read_text(encoding="utf-8")) or {}
+    return {"default": data.get("default"), "models": data.get("models") or {}}
+
+
+def model_config() -> dict:
+    """지금 고른 모델. 환경변수 ANALYSIS_TRACK_FILE·ANALYSIS_WEIGHTS_SHA256이 있으면 models.yaml 값보다 먼저 쓴다.
+    models.yaml에 없는 이름이면 항목이 비어 track에서 POSE_UNAVAILABLE이 난다(조용히 다른 모델을 쓰지 않는다)"""
+    models = load_models()
+    name = os.environ.get("ANALYSIS_MODEL") or models["default"] or "unknown"
+    entry = models["models"].get(name) or {}
+    track = os.environ.get("ANALYSIS_TRACK_FILE") or entry.get("track_file") or ""
+    if track and not Path(track).is_absolute():
+        track = str(ROOT / track)
+    return {"name": name, "known": name in models["models"],
+            "weights_sha256": os.environ.get("ANALYSIS_WEIGHTS_SHA256") or entry.get("weights_sha256") or "",
+            "track_file": track}
+
+
 def current_model() -> dict:
-    """상태 조회·health에 내는 모델 정보"""
+    """상태 조회·health에 내는 모델 정보 {name, version}"""
     if pose_source() == "track":
-        weights = os.environ.get("ANALYSIS_WEIGHTS_SHA256", "")
-        name = os.environ.get("ANALYSIS_MODEL_NAME", "fs-v4")
-        return {"name": name, "version": f"{API_VERSION}/{ANGLE_DEF}/{weights[:8] or 'unknown'}"}
+        cfg = model_config()
+        return {"name": cfg["name"], "version": f"{API_VERSION}/{ANGLE_DEF}/{cfg['weights_sha256'][:8] or 'unknown'}"}
     return dict(SAMPLE_MODEL)
 
 
@@ -85,13 +110,12 @@ def load_tracks(path: str) -> dict:
     return index
 
 
-def find_track(video_path: Path, filename: Optional[str]) -> tuple:
+def find_track(video_path: Path, filename: Optional[str], track_file: str, sha256: Optional[str] = None) -> tuple:
     """(영상 하나의 관절점, 관절점 파일 meta). SHA-256으로 먼저 찾고, 없으면 파일 이름으로"""
-    track_file = os.environ.get("ANALYSIS_TRACK_FILE", "")
     if not track_file or not Path(track_file).is_file():
-        raise AnalysisFailed("POSE_UNAVAILABLE", "관절점 파일(ANALYSIS_TRACK_FILE)이 없습니다")
+        raise AnalysisFailed("POSE_UNAVAILABLE", "관절점 파일이 없습니다 (models.yaml의 track_file 또는 ANALYSIS_TRACK_FILE)")
     index = load_tracks(track_file)
-    video = index.get(sha256_of(video_path)) or (index.get(Path(filename).name) if filename else None)
+    video = index.get(sha256 or sha256_of(video_path)) or (index.get(Path(filename).name) if filename else None)
     if video is None:
         raise AnalysisFailed("POSE_UNAVAILABLE", "이 영상의 관절점을 찾지 못했습니다")
     return video, index["__meta__"]
@@ -173,13 +197,16 @@ def run_sample(job: dict) -> tuple:
 
 
 def run_track(video_path: Path, job: dict) -> tuple:
-    video, meta = find_track(video_path, job.get("filename"))
+    cfg = model_config()
+    video, meta = find_track(video_path, job.get("filename"), cfg["track_file"], job.get("video_sha256"))
+    made_by = (meta.get("model") or {}).get("name")
+    if made_by and made_by != cfg["name"]:   # 다른 모델로 뽑은 관절점에 이 모델 이름을 붙이지 않는다
+        raise AnalysisFailed("POSE_UNAVAILABLE", f"관절점 파일의 모델({made_by})이 고른 모델({cfg['name']})과 다릅니다")
     if not video.get("frames") or not video.get("fps"):
         raise AnalysisFailed("DECODE_FAILED", "영상의 프레임 정보를 읽을 수 없습니다")
     judged = judge_shot(video, load_config())
     model = current_model()
-    model["name"] = (meta.get("model") or {}).get("name") or model["name"]
-    model.update(angle_def=ANGLE_DEF, weights_sha256=os.environ.get("ANALYSIS_WEIGHTS_SHA256") or None)
+    model.update(angle_def=ANGLE_DEF, weights_sha256=cfg["weights_sha256"] or None)
     return build_result(job, video, judged, model), build_keypoints(video, judged["passes"])
 
 

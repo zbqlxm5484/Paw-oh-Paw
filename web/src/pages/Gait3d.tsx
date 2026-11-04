@@ -15,6 +15,7 @@ import { dogOf, resultOf } from '../store/db'
 import type { Account, Result } from '../store/types'
 import { session, source_name } from '../views/real'
 import { base_of, best_view, body_map, MEDIAN_SPEED, result_view, ROM_REF } from '../views/views'
+import { link } from '../config'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -128,7 +129,7 @@ export default function Gait3d() {
     <Base acct={acct} me={me} nav="results" toast={toast}>
       <main style={css('max-width:1280px;margin:0 auto;padding:20px 32px 64px;display:flex;flex-direction:column;gap:16px')}>
         <div style={css('display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap')}>
-          <a className="lk" href={`/results/${rd.id}`} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>분석 결과</a>
+          <a className="lk" href={link(`/results/${rd.id}`)} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>분석 결과</a>
           <span style={css('font-size:14px;color:#5B6472')}>{rd.when}</span>
         </div>
         <div style={css('display:flex;gap:18px;align-items:stretch;flex-wrap:wrap')}>

@@ -4,6 +4,7 @@ import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { PostForm, useTitle } from '../app/page'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
+import { link } from '../config'
 
 export default function Login() {
   useTitle('로그인 · Paw oh Paw')
@@ -26,7 +27,7 @@ export default function Login() {
           <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:16px;font-weight:600')}>아이디</span><input className="inp" name="login_id" id="liId" autoComplete="username" placeholder="가입할 때 만든 아이디 (기관 코드는 넣지 않아요)" onInput={(e) => setId(e.currentTarget.value)} style={css('height:60px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:17px;color:#1B2433;outline:none')} /></label>
           <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:16px;font-weight:600')}>비밀번호</span><input className="inp" type="password" name="password" id="liPw" autoComplete="current-password" placeholder="비밀번호" onInput={(e) => setPw(e.currentTarget.value)} style={css('height:60px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:17px;color:#1B2433;outline:none')} /></label>
           <button className="bt" type="submit" id="liBtn" style={css(`height:62px;border-radius:14px;background:${ok() ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700`)}>로그인</button>
-          <div style={css('display:flex;justify-content:space-between;align-items:center')}><a className="lk" href="/forgot" style={css('font-size:15px;color:#5B6472')}>비밀번호를 잊으셨나요?</a><a className="lk" href="/signup" style={css('font-size:15px;font-weight:600;color:#D2601A')}>디바이스 코드로 회원가입</a></div>
+          <div style={css('display:flex;justify-content:space-between;align-items:center')}><a className="lk" href={link('/forgot')} style={css('font-size:15px;color:#5B6472')}>비밀번호를 잊으셨나요?</a><a className="lk" href={link('/signup')} style={css('font-size:15px;font-weight:600;color:#D2601A')}>디바이스 코드로 회원가입</a></div>
         </PostForm>
         <PostForm action="/login/demo" style={css('margin-top:16px;text-align:center')}><button type="submit" style={css('border:0;background:none;font-size:15px;color:#5B6472;text-decoration:underline;cursor:pointer')}>시연용 예시 기관으로 둘러보기</button></PostForm>
       </main>

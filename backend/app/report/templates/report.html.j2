@@ -32,9 +32,9 @@
 </head>
 <body>
 {# running 요소는 자기보다 앞 쪽에는 나오지 않으므로 본문 맨 앞에 둔다(매 쪽 아래 여백) #}
-<footer>{{ s.disclaimer }} · 템플릿 {{ template_version }}</footer>
+<footer>{{ s.disclaimer }}</footer>
 <h1>{{ s.title }}</h1>
-<div class="edition">{{ s.edition_label }} · 측정일 {{ session.measured_on }}{% if session.model_name %} · 분석 모델 {{ session.model_name }}{% if session.model_version %} {{ session.model_version }}{% endif %}{% endif %}</div>
+<div class="edition">{{ s.edition_label }} · 측정일 {{ session.measured_on }}{% if session.model_name %} · 분석 모델 {{ session.model_name }}{% if session.model_version %} {{ session.model_version }}{% endif %}{% endif %} · 템플릿 {{ template_version }}</div>
 <p class="meta">{{ s.intro }}</p>
 
 <h2>요약</h2>

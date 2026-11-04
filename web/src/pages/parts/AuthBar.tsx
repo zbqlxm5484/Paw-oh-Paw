@@ -5,11 +5,12 @@ import { css } from '../../app/css'
 import { staticUrl } from '../../app/page'
 import { currentStaff, setToast, takeToast, type Go } from '../../app/session'
 import { useDb } from '../../store/db'
+import { link } from '../../config'
 
 export default function AuthBar() {
   return (
     <header style={css('padding:25px 25px 0;display:flex;align-items:center;justify-content:space-between')}>
-      <a className="lk" href="/" style={css('display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
+      <a className="lk" href={link('/')} style={css('display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
     </header>
   )
 }
