@@ -17,7 +17,8 @@ def test_clean_walk_matches_truth():
         for paw in ("front", "hind"):
             assert abs(m[f"stride_length_{paw}"]["value"] - TRUE_STRIDE) <= 2.0
             assert m[f"stride_length_{paw}"]["unit"] == "pct_body"
-            # 착지 검출이 1프레임 늦게 잡혀(KPI-05 허용 안) 디딤이 1프레임 짧게 나온다. 1프레임 차이까지 허용
+            # 이 가상 보행에서는 착지가 1프레임 늦게 잡혀 디딤이 1프레임 짧다. 1프레임 차이까지 허용
+            # (실제 영상은 착지는 맞고 이지를 약 2프레임 일찍 잡는다: docs/engine/gaitMetrics.md 4절)
             assert abs(m[f"stance_ratio_{paw}"]["value"] - TRUE_STANCE) <= 100 / (CYCLE_S * FPS) + 0.1
             assert m[f"stance_ratio_{paw}"]["unit"] == "pct"
         assert abs(m["walk_speed"]["value"] - 2.4) <= 0.05 and m["walk_speed"]["unit"] == "body_per_sec"
@@ -62,3 +63,22 @@ def test_no_body_is_low_confidence():
     m = pass_metrics([None] * 60, FPS, "right")
     assert m["walk_speed"] == {"value": None, "reason": "LOW_CONFIDENCE"}
     assert m["stride_length_front"]["reason"] == "LOW_CONFIDENCE"
+
+
+
+def test_summarize_track_uses_only_valid_passes(tmp_path):
+    """관절점 파일 요약(문서 4절 재현 명령): 유효 통과만 세고, 보행 속도는 늘 나온다"""
+    import json
+
+    import pytest
+    pytest.importorskip("yaml")
+    from test_validity import walk
+
+    from engine.gait_metrics import summarize_track
+    valid, short = walk(), walk(seconds=1.4)          # 두 번째는 화면 가운데서 끝나 무효(PARTIAL_PASS)
+    path = tmp_path / "t.track.json"
+    path.write_text(json.dumps({"meta": {}, "videos": [dict(valid, video="a.mp4"), dict(short, video="b.mp4")]}),
+                    encoding="utf-8")
+    s = summarize_track(str(path))
+    assert s["videos"] == 2 and s["valid_passes"] == 1
+    assert len(s["values"]["walk_speed"]) == 1
