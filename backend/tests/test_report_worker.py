@@ -16,6 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -26,6 +27,7 @@ from app.report.checks import Finding
 from app.report.generate import ReportResult
 from app.report.numbers import ListedNumber, build_tables
 from app.services import reports as report_service
+from app.services.report_numbers import reference_numbers
 from app.storage.base import get_storage
 from app.storage.keys import report_key
 from app.worker.main import WorkerStats, run_once
@@ -365,3 +367,92 @@ def test_a_report_that_lists_no_numbers_is_not_a_mismatch(db: Session, dog, staf
     _run(db, reporter, settings)
     _run(db, reporter, settings)
     assert _reports(db, session)["OWNER"].status == "DONE"
+
+
+# ---- 거두는 중 DB 오류(12.4, MR !85 리뷰) ----
+
+DB_DOWN = OperationalError("SELECT 1", {}, Exception("connection lost"))
+
+
+def _fails_once(real: Callable[..., Any], error: Exception) -> Callable[..., Any]:
+    """처음 한 번만 error를 내고 그다음부터 real을 부르는 함수."""
+    errors = [error]
+
+    def call(*args: Any, **kwargs: Any) -> Any:
+        if errors:
+            raise errors.pop()
+        return real(*args, **kwargs)
+
+    return call
+
+
+def test_db_error_reading_the_reference_keeps_the_job_and_its_pdf_for_the_next_loop(
+    db: Session, dog, staff, monkeypatch, tmp_path: Path
+) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings(UPLOAD_TMP_DIR=str(tmp_path))
+    executor = FakeExecutor()
+    reporter = _reporter(settings, executor)
+    _run(db, reporter, settings)
+    report_id, job = next(iter(reporter.jobs.items()))
+    monkeypatch.setattr("app.worker.report.reference_numbers", _fails_once(reference_numbers, DB_DOWN))
+
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, stats.report_failed) == ("GENERATING", None, 0)
+    assert list(reporter.jobs) == [report_id] and job.output.exists()
+
+    stats = _run(db, reporter, settings)  # 다시 만들지 않고 같은 PDF를 거둔다. 둘째 호출은 VET다
+    assert stats.reported == 1 and _reports(db, session)["OWNER"].status == "DONE"
+    assert len(executor.calls) == 2 and not job.job_dir.exists()
+
+
+def test_db_error_while_recording_a_failure_is_recorded_on_the_next_loop(db: Session, dog, staff, monkeypatch) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    extra = ListedNumber("TROT", "rom_hip", "LH", "metric", 41.9)
+    reporter = ReportGenerator(
+        settings,
+        get_storage(),
+        executor_factory=FakeExecutor,
+        generate=_with_numbers(lambda numbers: (*numbers, extra)),
+    )
+    _run(db, reporter, settings)
+    monkeypatch.setattr(reporter, "_fail", _fails_once(reporter._fail, DB_DOWN))
+
+    _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "GENERATING" and len(reporter.jobs) == 1
+
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, stats.report_failed) == ("FAILED", "REPORT_CHECK_FAILED", 1)
+
+
+def test_other_errors_reading_the_reference_fail_the_report_without_a_file(
+    db: Session, dog, staff, monkeypatch
+) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    reporter = _reporter(settings, FakeExecutor())
+    _run(db, reporter, settings)
+    monkeypatch.setattr("app.worker.report.reference_numbers", _fails_once(reference_numbers, ValueError("bad row")))
+
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, row.file_key, stats.report_failed) == ("FAILED", "REPORT_FAILED", None, 1)
+
+
+def test_generating_report_without_a_job_goes_back_and_a_job_in_flight_is_left_alone(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    _reports(db, session)["OWNER"].status = "GENERATING"  # 가져간 뒤 맡기지 못한 경우
+    db.flush()
+    db.commit()
+    settings = _settings()
+    executor = FakeExecutor("hang")
+    reporter = _reporter(settings, executor)
+    for _ in range(2):
+        _run(db, reporter, settings)
+        rows = {row.id: row.status for row in _reports(db, session).values()}
+        assert sorted(rows.values()) == ["GENERATING", "PENDING"]
+        assert [report_id for report_id, status in rows.items() if status == "GENERATING"] == list(reporter.jobs)
+    assert len(executor.calls) == 1
