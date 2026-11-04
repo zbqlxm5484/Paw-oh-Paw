@@ -189,9 +189,10 @@ export interface DAcct {
   loc: string
   dev: string
   staffName: string
+  email: string
 }
 export function toAcct(s: StaffOut | null): DAcct {
-  return { type: 'org', name: s?.institution.name ?? '', id: s?.login_id ?? '', loc: '-', dev: '-', staffName: s?.name ?? '' }
+  return { type: 'org', name: s?.institution.name ?? '', id: s?.login_id ?? '', loc: '-', dev: '-', staffName: s?.name ?? '', email: s?.email ?? '' }
 }
 
 /* ---------- 경과 비교 (api-spec 8절 → 디자인 cp 모양) ---------- */

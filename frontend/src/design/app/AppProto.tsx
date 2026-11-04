@@ -23,6 +23,7 @@ export class AppProto extends DCLogic<Props, any> {
   state: any = {
     splash: false, joint: false, line: 0, sheet: null, toast: '', viaTab: true,
     li: { id: '', pw: '' }, so: { org: '', loc: '', dev: '', id: '', pw: '', pw2: '' }, to: [false, false, false, false],
+    af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
     capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0,
   }
@@ -207,6 +208,7 @@ export class AppProto extends DCLogic<Props, any> {
     const orgOk = reqOrg && s.so.org && s.so.dev && s.so.id.length >= 4 && s.so.pw.length >= 4 && s.so.pw === s.so.pw2
     const setSo = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ so: { ...st.so, [k]: v } })) }
     const setPet = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ pet: { ...st.pet, [k]: v } })) }
+    const setF = (g: string, k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ [g]: { ...st[g], [k]: v } })) }
     const setLi = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ li: { ...st.li, [k]: v } })) }
     const termRows = (key: string, labels: [string, boolean][]) => labels.map(([label, view], i) => ({ label, view, c: chk(s[key][i]), toggle: () => this.setState((st: any) => { const a = [...st[key]]; a[i] = !a[i]; return { [key]: a } }) }))
 
@@ -376,11 +378,42 @@ export class AppProto extends DCLogic<Props, any> {
       myDogCount: dogs.length + '마리',
       tgBg: s.notifOn ? '#D2601A' : '#DDD7CE', tgX: s.notifOn ? 22 : 2, toggleNotif: () => this.setState((st: any) => ({ notifOn: !st.notifOn })),
       askLogout: () => this.setState({ sheet: 'logout' }),
-      acctRows: [['계정 유형', '기관 회원'], ['기관명', acct.name], ['담당자', acct.staffName || '-'], ['아이디', acct.id || '-'], ['기관 주소', acct.loc || '-'], ['디바이스 번호', acct.dev || '-']].map(([k, v], i) => ({ k, v, bt: i ? '1px solid #F2EFEA' : 'none' })),
-      editAcct: () => this.toast(PREP),
+      acctRows: [['계정 유형', '기관 회원'], ['기관명', acct.name], ['담당자', acct.staffName || '-'], ['이메일', acct.email || '-'], ['아이디', acct.id || '-'], ['기관 주소', acct.loc || '-'], ['디바이스 번호', acct.dev || '-']].map(([k, v], i) => ({ k, v, bt: i ? '1px solid #F2EFEA' : 'none' })),
+      // 기본 정보 수정(이름·이메일)과 비밀번호 변경은 아래 시트에서. 서버 오류 문구는 그대로 보여 준다
+      editAcct: () => this.setState({ sheet: 'acct', af: { name: acct.staffName, email: acct.email } }),
+      openPw: () => this.setState({ sheet: 'pw', pf: { cur: '', nw: '', nw2: '' } }),
+      fAcctName: s.af.name, fAcctEmail: s.af.email, onAcctName: setF('af', 'name'), onAcctEmail: setF('af', 'email'),
+      fPwCur: s.pf.cur, fPwNew: s.pf.nw, fPwNew2: s.pf.nw2, onPwCur: setF('pf', 'cur'), onPwNew: setF('pf', 'nw'), onPwNew2: setF('pf', 'nw2'),
+      pwHint: s.pf.nw && s.pf.nw.length < 8 ? '8자 이상으로 입력해 주세요' : s.pf.nw2 && s.pf.nw !== s.pf.nw2 ? '새 비밀번호가 서로 달라요' : '',
+      saveOp: s.saving ? 0.55 : 1,
+      saveAcct: async () => {
+        const name = s.af.name.trim(), email = s.af.email.trim()
+        if (!name) return this.toast('담당자 이름을 입력해 주세요')
+        if (s.saving) return
+        const body: { name?: string; email?: string } = {}
+        if (name !== acct.staffName) body.name = name
+        if (email && email !== acct.email) body.email = email
+        if (!body.name && !body.email) return this.setState({ sheet: null })
+        this.setState({ saving: true })
+        try { await this.props.auth.updateMe(body); this.setState({ sheet: null }); this.toast('기본 정보를 저장했어요') }
+        catch (e) { this.toast(e instanceof ApiError && e.code === 'CONTRACT_EXPIRED' ? '계약이 끝나 정보를 바꿀 수 없어요' : errMsg(e, '저장하지 못했어요')) }
+        finally { this.setState({ saving: false }) }
+      },
+      savePw: async () => {
+        const { cur, nw, nw2 } = s.pf
+        if (!cur || !nw || !nw2) return this.toast('비밀번호를 모두 입력해 주세요')
+        if (nw.length < 8) return this.toast('새 비밀번호는 8자 이상이어야 해요')
+        if (nw !== nw2) return this.toast('새 비밀번호가 서로 달라요')
+        if (nw === cur) return this.toast('지금 비밀번호와 다른 비밀번호를 입력해 주세요')
+        if (s.saving) return
+        this.setState({ saving: true })
+        try { await this.props.auth.changePassword(cur, nw); this.setState({ sheet: null, pf: { cur: '', nw: '', nw2: '' } }); this.toast('비밀번호를 바꿨어요') }
+        catch (e) { this.toast(e instanceof ApiError && e.code === 'PASSWORD_MISMATCH' ? '지금 비밀번호가 맞지 않아요' : errMsg(e, '비밀번호를 바꾸지 못했어요')) }
+        finally { this.setState({ saving: false }) }
+      },
 
       showTabs, tb: { home: tbOn('home'), story: tbOn('story'), results: tbOn('results'), my: tbOn('my') },
-      sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', anySheet: !!s.sheet,
+      sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', sheetAcct: s.sheet === 'acct', sheetPw: s.sheet === 'pw', anySheet: !!s.sheet,
       closeSheet: () => this.setState({ sheet: null }),
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',
