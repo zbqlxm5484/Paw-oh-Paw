@@ -9,13 +9,18 @@
 - 무릎 주기별 가동 범위(stifle_cycle_rom): 뒷발 주기마다 무릎 가동 범위. 팀 서비스가 회차의 주기들을 모아
   무릎 움직임 일관성(stifle_cv = 표본 표준편차 ÷ 평균 × 100)을 낸다
 
-어느 프레임에서 재나: 그 다리 발의 **완전한 보행 주기**(착지에서 다음 착지까지, engine/gait_events.py) 안의 프레임만 쓴다.
-앞다리 관절은 앞발 주기, 뒷다리 관절은 뒷발 주기다. 주기의 일부만 보면 관절이 덜 움직인 구간만 잡혀 가동 범위가 작게
-나오기 때문이다. 그래서 주기를 못 잡은 통과는 NOT_ENOUGH_CYCLES다(docs/engine/gaitMetrics.md 4절: 통과당 주기는 많아야 1개).
+어느 프레임에서 재나
+- 가동 범위·각도 중앙값: 통과에서 몸 전체가 화면 안에 보인 프레임 전부(engine/validity.py inside_frames).
+  처음 초안(v1 초안, MR !90)은 완전한 보행 주기 안 프레임만 썼다. 박규원이 유효 통과 642개로 비교해 보니 주기만 쓰면
+  값이 나오는 통과가 71에서 78%로 줄고, 같은 날 재측정 차는 줄지 않았다(통과 전체: 100%, 재측정 차 같거나 작음).
+  그래서 통과 전체를 쓴다(docs/engine/jointRom.md 4절)
+- 무릎 주기별 가동 범위: 뒷발 주기(착지에서 다음 착지까지, engine/gait_events.py) 안 프레임
+- 화면 끝에 걸린 프레임은 쓰지 않는다. 상자가 잘리면 각도가 크게 흔들린다(박규원 비교: 고관절 4.5 → 6.6°)
 
 측정 불가는 0이 아니라 {"value": null, "reason"}로 낸다(PR-F02-05).
-- NOT_ENOUGH_CYCLES: 그 발의 주기가 없음
-- LOW_CONFIDENCE: 주기 안 프레임 중 세 점(꼭짓점·근위·원위)을 모두 믿을 만한 프레임이 절반이 안 됨
+- LOW_CONFIDENCE: 몸이 보인 프레임 중 세 점(꼭짓점·근위·원위)을 모두 믿을 만한 프레임이 절반이 안 됨.
+  몸통 길이를 못 재 착지를 검출하지 못한 통과의 stifle_cycle_rom도 이 사유다(보행 수치와 같게)
+- NOT_ENOUGH_CYCLES: stifle_cycle_rom에서 뒷발 주기가 없음
 """
 import statistics
 from typing import Optional, Sequence
@@ -69,11 +74,6 @@ def _missing(reason: str) -> dict:
     return {"value": None, "reason": reason}
 
 
-def _cycle_frames(strides) -> list:
-    """주기들에 든 프레임 번호 (착지부터 다음 착지 바로 전까지)"""
-    return [i for s in strides for i in range(s.start, s.end)]
-
-
 def joint_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
                   events: Optional[dict] = None) -> dict:
     """통과 하나의 가동 범위·각도 중앙값·무릎 주기별 가동 범위. 결과 JSON v1 passes[].metrics에 그대로 넣는 모양
@@ -83,22 +83,16 @@ def joint_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
     """
     events = events if events is not None else detect_pass(frames, fps, camera_side)
     angles = [frame_angles(f, camera_side) for f in frames]
+    body = [i for i, f in enumerate(frames) if f is not None]
     out = {}
-    for paw, joints in (("front", FORE), ("hind", HIND)):
-        paw_events = events.get(paw)
-        strides = paw_events.strides if paw_events else []
-        idx = _cycle_frames(strides)
-        for joint in joints:
-            if not idx:
-                out[f"rom_{joint}"] = out[f"angle_median_{joint}"] = _missing("NOT_ENOUGH_CYCLES")
-                continue
-            series = [angles[i][joint] for i in idx if joint in angles[i]]
-            width = percentile_width(series)
-            if len(series) < MIN_ANGLE_SEEN * len(idx) or width is None:
-                out[f"rom_{joint}"] = out[f"angle_median_{joint}"] = _missing("LOW_CONFIDENCE")
-                continue
-            out[f"rom_{joint}"] = {"value": round(width, 1), "unit": "deg"}
-            out[f"angle_median_{joint}"] = {"value": round(statistics.median(series), 1), "unit": "deg"}
+    for joint in FORE + HIND:
+        series = [angles[i][joint] for i in body if joint in angles[i]]
+        width = percentile_width(series)
+        if width is None or len(series) < MIN_ANGLE_SEEN * len(body):
+            out[f"rom_{joint}"] = out[f"angle_median_{joint}"] = _missing("LOW_CONFIDENCE")
+            continue
+        out[f"rom_{joint}"] = {"value": round(width, 1), "unit": "deg"}
+        out[f"angle_median_{joint}"] = {"value": round(statistics.median(series), 1), "unit": "deg"}
 
     hind = events.get("hind")
     cycles = []
@@ -110,6 +104,13 @@ def joint_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
     if cycles:
         out["stifle_cycle_rom"] = {"values": cycles, "unit": "deg"}
     else:
-        out["stifle_cycle_rom"] = _missing("NOT_ENOUGH_CYCLES" if not (hind and hind.strides) else "LOW_CONFIDENCE")
+        # 착지 검출이 비었으면(몸통 길이를 못 잼) 관절점 문제라 LOW_CONFIDENCE, 검출은 됐는데 주기가 없으면 NOT_ENOUGH_CYCLES
+        enough = hind is not None and bool(hind.strides)
+        out["stifle_cycle_rom"] = _missing("LOW_CONFIDENCE" if not events or enough else "NOT_ENOUGH_CYCLES")
     return out
 
+
+if __name__ == "__main__":   # python -m engine.joint_rom data/tracks/fs-v4.track.json (docs/engine/jointRom.md 4절)
+    from engine.gait_metrics import main
+
+    main(metrics_fn=joint_metrics, doc="docs/engine/jointRom.md 4절")
