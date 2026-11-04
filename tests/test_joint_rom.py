@@ -55,7 +55,18 @@ def test_unseen_joint_is_low_confidence_not_zero():
     assert m["angle_median_elbow"]["reason"] == "LOW_CONFIDENCE"
 
 
-def test_no_cycle_is_not_enough_cycles():
+def test_short_pass_has_rom_but_no_cycle_rom():
+    """가동 범위는 몸이 보인 프레임 전부로 재므로 주기가 없어도 나온다. 주기별 가동 범위만 NOT_ENOUGH_CYCLES"""
     m = joint_metrics(with_stifle(make_frames(n=20)), FPS, "right")     # 0.33초: 주기 없음
-    assert m["rom_stifle"] == {"value": None, "reason": "NOT_ENOUGH_CYCLES"}
+    assert m["rom_stifle"]["value"] is not None
     assert m["stifle_cycle_rom"] == {"value": None, "reason": "NOT_ENOUGH_CYCLES"}
+
+
+def test_no_body_length_is_low_confidence_everywhere():
+    """몸통 점이 없어 착지를 못 찾으면 보행 수치(gait_metrics)와 같게 LOW_CONFIDENCE"""
+    frames = with_stifle(make_frames())
+    for kp in frames:
+        kp[2][2] = kp[13][2] = 0.1                    # T13·장골능 확신도가 바닥 아래
+    m = joint_metrics(frames, FPS, "right")
+    assert m["stifle_cycle_rom"] == {"value": None, "reason": "LOW_CONFIDENCE"}
+    assert m["rom_stifle"]["value"] is not None       # 무릎 세 점은 보여서 가동 범위는 잰다
