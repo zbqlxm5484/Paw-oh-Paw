@@ -11,8 +11,10 @@ PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
   FAILED(REPORT_CHECK_FAILED), 그 밖의 예외는 FAILED(REPORT_FAILED). 키는 보고서 ID로 정해져 다시 만들면 덮어쓴다.
 - 대조(8절 7번 첫 항목, 196): 붙이기 전에 자식이 돌려준 실린 숫자 목록(ReportResult.numbers)을 DB의 session_metric 값과
   15.7 다리 비교 계산값에 맞춘다(report/verify.compare_numbers, 기준은 services/report_numbers.reference_numbers).
-  값이 다르거나 기준에 없는 숫자가 있으면 PDF를 저장하지 않고 FAILED(REPORT_CHECK_FAILED), 기준을 읽지 못하면
-  FAILED(REPORT_FAILED). 기준에는 있는데 싣지 않은 수치는 불일치가 아니다(로그에 개수만).
+  값이 다르거나 기준에 없는 숫자가 있으면 PDF를 저장하지 않고 FAILED(REPORT_CHECK_FAILED), DB 오류가 아닌 이유로
+  기준을 읽지 못하면 FAILED(REPORT_FAILED). 기준에는 있는데 싣지 않은 수치는 불일치가 아니다(로그에 개수만).
+- DB 오류: 거두는 중에 나면 작업과 PDF를 그대로 두고 다음 바퀴에 다시 거둔다. GENERATING인데 맡은 작업이 없는
+  보고서(가져간 뒤 DB가 끊겨 맡기지 못한 것)는 매 바퀴 PENDING으로 돌린다.
 - 자식이 죽으면(BrokenProcessPool) 풀을 새로 만들고 실행 중이던 보고서는 FAILED(REPORT_FAILED).
 - 다시 켤 때: reset_generating이 GENERATING을 PENDING으로 돌린다(만들던 중에 꺼진 것).
 VideoRenderer와 같은 모양이다. Spring에 빗대면 @Async 큐 소비자 하나가 트랜잭션 밖에서 PDF를 만들고 결과만 적는 것이다.
@@ -34,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -142,6 +145,7 @@ class ReportGenerator:
     # ---- 한 바퀴 ----
 
     def run(self, db: Session, stats: Any) -> None:
+        self._release_orphans(db)
         self.reap(db, stats)
         self.dispatch(db, stats)
 
@@ -153,7 +157,7 @@ class ReportGenerator:
             if isinstance(error, BrokenProcessPool):
                 self._fail_all(db, stats, error)
                 return
-            self.jobs.pop(report_id)
+            keep = False
             try:
                 if error is None:
                     self._verify_and_attach(db, job, job.future.result(), stats)
@@ -163,8 +167,14 @@ class ReportGenerator:
                 else:
                     logger.error("report generation failed report=%s: %s", report_id, describe_error(error))
                     self._fail(db, report_id, FailReason.REPORT_FAILED, stats)
+            except SQLAlchemyError as cause:  # 보고서 탓이 아니다. 작업과 PDF를 두고 다음 바퀴에 다시 거둔다
+                db.rollback()
+                logger.error("report reap failed report=%s; retrying next loop: %s", report_id, describe_error(cause))
+                keep = True
             finally:
-                self._cleanup(job)
+                if not keep:
+                    self.jobs.pop(report_id)
+                    self._cleanup(job)
 
     def dispatch(self, db: Session, stats: Any) -> None:
         room = self.concurrency - len(self.jobs)
@@ -174,6 +184,19 @@ class ReportGenerator:
             if len(self.jobs) >= self.concurrency:
                 break
             self._start(db, candidate, stats)
+
+    def _release_orphans(self, db: Session) -> None:
+        """GENERATING인데 맡은 작업이 없는 보고서를 PENDING으로. 워커가 한 대일 때만 맞다(12.4).
+
+        그대로 두면 워커를 다시 켤 때까지 다시 만들기도 409로 막힌다.
+        """
+        query = update(Report).where(Report.status == GENERATING)
+        if self.jobs:
+            query = query.where(Report.id.not_in(list(self.jobs)))
+        count = db.execute(query.values(status=PENDING)).rowcount
+        db.commit()
+        if count:
+            logger.warning("reports without a job reset to PENDING: %d", count)
 
     # ---- 맡기기 ----
 
@@ -259,6 +282,8 @@ class ReportGenerator:
         report_id = job.report_id
         try:
             reference = reference_numbers(db, job.session_id)
+        except SQLAlchemyError:  # reap이 다음 바퀴에 다시 거둔다
+            raise
         except Exception as error:  # 기준을 읽지 못하면 대조할 수 없으므로 DONE으로 두지 않는다
             db.rollback()
             logger.error("report numbers reference unavailable report=%s: %s", report_id, describe_error(error))
@@ -296,7 +321,7 @@ class ReportGenerator:
                 )
             ).rowcount
             db.commit()
-        except Exception as error:  # DB 오류. 다음 바퀴에 reset_generating이 아니라 GENERATING 그대로라 사람이 본다
+        except Exception as error:  # DB 오류. 넣은 파일을 지우고 PENDING으로 돌려 다음 바퀴에 다시 만든다
             db.rollback()
             self._discard(job.file_key, report_id)
             logger.error("report attach failed report=%s: %s", report_id, describe_error(error))
