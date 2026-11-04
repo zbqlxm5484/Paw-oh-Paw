@@ -126,7 +126,7 @@ def find_track(video_path: Path, filename: Optional[str], track_file: str, sha25
 # ---- 결과 만들기 ----
 
 
-def frame_angles(kp, side: str, head: int = 0) -> Optional[dict]:
+def frame_angles(kp, side: str) -> Optional[dict]:
     """카메라 쪽 다리 6관절의 굽힘 각도. 키는 {관절}_l·{관절}_r (결과 형식 5절). 계산은 engine.joint_rom과 같다"""
     if kp is None:
         return None
@@ -138,18 +138,17 @@ def build_keypoints(video: dict, passes: list) -> dict:
     """관절점 파일. 통과 안의 프레임만 camera_side와 각도를 낸다 (통과 밖은 방향을 정하지 않음)"""
     side_of = {}
     for p in passes:
-        head = 1 if p["heading"] == "right" else -1
         for i in range(p["start_frame"], p["end_frame"] + 1):
-            side_of[i] = (p["camera_side"], head)
+            side_of[i] = p["camera_side"]
     frames = []
     for i, f in enumerate(video["frames"]):
         kp = f["kp"] if f else None
-        side, head = side_of.get(i, (None, 0))
+        side = side_of.get(i)
         frames.append({
             "frame": i,
             "camera_side": side if kp else None,
             "points": [[round(p[0], 1), round(p[1], 1), round(p[2], 3)] for p in kp] if kp else None,
-            "angles": frame_angles(kp, side, head) if kp and side else None,
+            "angles": frame_angles(kp, side) if kp and side else None,
         })
     return {"angle_def": ANGLE_DEF, "fps": video["fps"], "width": video["width"], "height": video["height"],
             "keypoint_order": "PRD 6.5.3 (0-21)", "frames": frames}
