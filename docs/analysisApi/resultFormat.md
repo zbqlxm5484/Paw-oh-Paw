@@ -77,7 +77,7 @@
 | `gait` | `walk`·`trot`·`pace`·`other`·null | 보행 유형. null은 아직 판별 못 함(이 경우 제외하지 않는다) |
 | `valid` | 참·거짓 | 이 통과를 수치에 쓰나 |
 | `reason_code`·`reason` | 사유 코드와 문장·null | 뺀 이유. 화면은 코드로, 보고서·로그는 문장으로 (PR-F03-04) |
-| `measure_start`·`measure_end` | 프레임·null | 측정 구간(첫 착지부터 마지막 이지). 착지를 못 찾으면 null. 수치는 이 구간에서 낸다: 걸음 길이·입각기 비율은 착지 사이 주기라 구간 안이고, 보행 속도도 이 구간의 몸통 속도다. 관절점은 몸 전체가 화면 안에 보인 프레임만 쓴다(`docs/engine/gaitMetrics.md` 1절) |
+| `measure_start`·`measure_end` | 프레임·null | 측정 구간(첫 착지부터 마지막 이지). 착지를 못 찾으면 null. 수치는 이 구간에서 낸다: 걸음 길이·입각기 비율은 착지 사이 주기라 구간 안이고, 보행 속도도 이 구간의 몸통 속도다. 가동 범위·각도 중앙값은 이 구간이 아니라 통과에서 몸 전체가 보인 프레임 전부로 잰다(재측정 차가 같거나 작고 모든 통과에서 값이 나옴, `docs/engine/jointRom.md` 4절). 관절점은 몸 전체가 화면 안에 보인 프레임만 쓴다 |
 | `metrics` | 객체 | 3절. 제외된 통과와 수치 계산 전에는 `{}` |
 | `checks` | 객체 | 판단 근거(속도, 같은 쪽 앞·뒷발 위상, 옆모습 비율, 몸 전체가 보인 시간, 걸린 사유 목록). **진단용이라 키가 바뀔 수 있다.** 화면·저장에 쓰지 않는다 |
 
@@ -87,7 +87,7 @@
 
 | 키 | 단위 | 뜻 |
 | --- | --- | --- |
-| `rom_shoulder`·`rom_elbow`·`rom_carpus`·`rom_hip`·`rom_stifle`·`rom_tarsus` | `deg` | 관절 가동 범위 (5에서 95 백분위 폭, 그 다리 발의 완전한 주기 안 프레임. `docs/engine/jointRom.md`) |
+| `rom_shoulder`·`rom_elbow`·`rom_carpus`·`rom_hip`·`rom_stifle`·`rom_tarsus` | `deg` | 관절 가동 범위 (5에서 95 백분위 폭, 몸 전체가 보인 프레임 전부. `docs/engine/jointRom.md`) |
 | `angle_median_<관절>` | `deg` | 위 6개 관절 각도의 중앙값 |
 | `paw_slope_median_front`·`_hind` | `deg` | 발 경사 중앙값. **JSON 원본에만 남고 팀 서비스는 저장하지 않는다** (기업 세부명세서 6.2.1 회차 수치에 없음, MR !65 리뷰 11-02) |
 | `paw_lift_front`·`_hind` | `pct_body` | 발 높이(최대 들림) |
