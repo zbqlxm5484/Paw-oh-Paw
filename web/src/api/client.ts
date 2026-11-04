@@ -113,6 +113,16 @@ export interface SessionResultOut extends SessionOut {
   notices: ReasonOut[]
   gaits: GaitResultOut[]
 }
+/** 보고서 판본 1개. file_url·download_url 은 status 가 DONE 일 때만 있다(서명 붙은 주소, 로그인 토큰 없이 열린다) */
+export interface ReportOut {
+  id: string; session_id: string; edition: 'OWNER' | 'VET' | string; status: 'PENDING' | 'GENERATING' | 'DONE' | 'FAILED' | string
+  fail_reason: ReasonOut | null; generation_ms: number | null; template_version: string; model_version: string | null; updated_at: string
+  file_url: string | null; download_url: string | null; url_expires_at: string | null
+}
+/** GET /sessions/{id}/reports. reports 는 OWNER, VET 순서이고 회차가 DONE 이 되기 전에는 비어 있다 */
+export interface SessionReportsOut { session_id: string; session_status: string; reports: ReportOut[] }
+/** 서버가 준 파일 주소(/api/v1/...)를 이 웹에서 열 주소로. S3 처럼 이미 절대 주소면 그대로 */
+export const fileHref = (u: string): string => (/^https?:\/\//.test(u) ? u : `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ''}${u}`)
 export interface DeviceCodeVerifyOut { institution: { id: string; name: string }; remaining_accounts: number }
 export interface InstitutionAdminOut extends InstitutionOut { staff_count: number; device_code_count: number; created_at: string }
 export interface DeviceCodeOut { id: string; code: string; institution_id: string; max_accounts: number; active_accounts: number; revoked_at: string | null; note: string | null; created_at: string }
@@ -146,6 +156,8 @@ export const api = {
     fd.append('file', file, file.name)
     return request<ShotOut>(`/sessions/${sessionId}/shots`, { method: 'POST', body: fd })
   },
+  sessionReports: (sessionId: string) => request<SessionReportsOut>(`/sessions/${sessionId}/reports`),
+  regenerateReport: (reportId: string) => request<ReportOut>(`/reports/${reportId}/regenerate`, { method: 'POST' }),
   institutions: () => request<{ items: InstitutionAdminOut[] }>('/admin/institutions'),
   createInstitution: (body: { name: string; code?: string; contract_ends_at?: string | null }) =>
     request<InstitutionAdminOut>('/admin/institutions', { method: 'POST', body }),
