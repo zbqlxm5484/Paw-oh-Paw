@@ -121,14 +121,16 @@ def pass_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
     return out
 
 
-def summarize_track(path: str) -> dict:
-    """관절점 파일(기업 video_kpi.py track 형식)의 유효 통과마다 수치를 내고, 키마다 값 목록과 측정 불가 사유 수를 모은다"""
+def summarize_track(path: str, metrics_fn=None) -> dict:
+    """관절점 파일(기업 video_kpi.py track 형식)의 유효 통과마다 수치를 내고, 키마다 값 목록과 측정 불가 사유 수를 모은다.
+    metrics_fn(frames, fps, camera_side)를 주면 그 함수로 잰다(가동 범위: engine.joint_rom.joint_metrics)"""
     import json
     from collections import Counter, defaultdict
     from pathlib import Path
 
     from engine.validity import inside_frames, judge_shot, load_config
 
+    metrics_fn = metrics_fn or pass_metrics
     cfg = load_config()
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     values, missing, passes = defaultdict(list), Counter(), 0
@@ -138,21 +140,23 @@ def summarize_track(path: str) -> dict:
                 continue
             passes += 1
             _, kps = inside_frames(video, p["start_frame"], p["end_frame"], cfg)
-            for key, item in pass_metrics(kps, video["fps"], p["camera_side"]).items():
-                if item.get("value") is None:
+            for key, item in metrics_fn(kps, video["fps"], p["camera_side"]).items():
+                if item.get("values"):          # 주기별 값 목록 (stifle_cycle_rom)
+                    values[key].extend(item["values"])
+                elif item.get("value") is None:
                     missing[(key, item["reason"])] += 1
                 else:
                     values[key].append(item["value"])
     return {"videos": len(data["videos"]), "valid_passes": passes, "values": dict(values), "missing": dict(missing)}
 
 
-def main(argv=None) -> None:
+def main(argv=None, metrics_fn=None, doc="docs/engine/gaitMetrics.md 4절") -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="관절점 파일의 유효 통과 보행 수치 요약 (docs/engine/gaitMetrics.md 4절)")
+    parser = argparse.ArgumentParser(description=f"관절점 파일의 유효 통과 수치 요약 ({doc})")
     parser.add_argument("track", help="관절점 파일 (*.track.json)")
     args = parser.parse_args(argv)
-    s = summarize_track(args.track)
+    s = summarize_track(args.track, metrics_fn)
     print(f"영상 {s['videos']}개, 유효 통과 {s['valid_passes']}개")
     for key, xs in sorted(s["values"].items()):
         print(f"  {key:22s} n={len(xs):3d} 중앙값 {statistics.median(xs):7.2f}  최소 {min(xs):7.2f}  최대 {max(xs):7.2f}")
