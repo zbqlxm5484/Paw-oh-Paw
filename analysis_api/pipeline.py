@@ -11,6 +11,7 @@
 엔진(저장소 루트의 engine/)
 - engine.validity.judge_shot: 통과 자르기, 유효·무효 판별, 측정 구간
 - engine.angles.flexion_angle: 프레임별 카메라 쪽 다리 굽힘 각도(관절점 파일의 angles)
+- engine.gait_metrics.pass_metrics: 유효 통과의 걸음 길이·입각기 비율·보행 속도·주기 수(passes[].metrics)
 형식: docs/analysisApi/resultFormat.md
 """
 import hashlib
@@ -29,10 +30,11 @@ if str(ROOT) not in sys.path:   # analysis_api 폴더에서 실행해도 저장�
 
 from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle  # noqa: E402
 from engine.gait_events import EVENTS_VERSION  # noqa: E402
-from engine.validity import VALIDITY_VERSION, judge_shot, load_config  # noqa: E402
+from engine.gait_metrics import METRICS_VERSION, pass_metrics  # noqa: E402
+from engine.validity import VALIDITY_VERSION, inside_frames, judge_shot, load_config  # noqa: E402
 
 # 결과가 바뀌는 변경(엔진·결과 형식)일 때만 올린다. model.version에 들어가서, 올리면 팀 서비스가 그 전 회차와 비교하지 않는다
-API_VERSION = "0.4.0"
+API_VERSION = "0.5.0"   # 0.5.0: 보행 수치(metrics)를 채움 (S15P31A404-183)
 MODELS_FILE = HERE / "models.yaml"
 SAMPLES_DIR = HERE / "samples"
 KST = timezone(timedelta(hours=9))
@@ -40,7 +42,8 @@ CONF = 0.3
 JOINT_NAMES = {"어깨": "shoulder", "팔꿈치": "elbow", "앞발목": "carpus",
                "고관절": "hip", "무릎": "stifle", "뒷발목": "tarsus"}
 RIGHT_SLOTS = {1, 8, 9, 10, 11, 12, 18, 19, 20, 21}
-VERSIONS = {"angle_def": ANGLE_DEF, "gait_events": EVENTS_VERSION, "validity": VALIDITY_VERSION}
+VERSIONS = {"angle_def": ANGLE_DEF, "gait_events": EVENTS_VERSION, "validity": VALIDITY_VERSION,
+            "gait_metrics": METRICS_VERSION}
 SAMPLE_MODEL = {"name": "sample-pipeline", "version": f"{API_VERSION}/{ANGLE_DEF}/sample"}
 
 
@@ -164,7 +167,7 @@ def build_keypoints(video: dict, passes: list) -> dict:
 
 
 def build_result(job: dict, video: dict, judged: dict, model: dict) -> dict:
-    """결과 JSON v1. 수치(metrics)는 계산 함수(S15P31A404-183·184)가 붙기 전이라 {}"""
+    """결과 JSON v1. 수치(metrics)는 유효 통과만 채운다. 가동 범위·각도 중앙값(S15P31A404-184)은 아직 없다"""
     passes = []
     for p in judged["passes"]:
         passes.append({
@@ -172,7 +175,7 @@ def build_result(job: dict, video: dict, judged: dict, model: dict) -> dict:
             "heading": p["heading"], "camera_side": p["camera_side"], "gait": p["gait"],
             "valid": p["valid"], "reason_code": p["reason_code"], "reason": p["reason"],
             "measure_start": p["measure_start"], "measure_end": p["measure_end"],
-            "metrics": {}, "checks": p["checks"],
+            "metrics": p.get("metrics") or {}, "checks": p["checks"],
         })
     return {
         "id": job["id"], "shot_id": job["shot_id"], "status": "done",
@@ -204,7 +207,12 @@ def run_track(video_path: Path, job: dict) -> tuple:
         raise AnalysisFailed("POSE_UNAVAILABLE", f"관절점 파일의 모델({made_by})이 고른 모델({cfg['name']})과 다릅니다")
     if not video.get("frames") or not video.get("fps"):
         raise AnalysisFailed("DECODE_FAILED", "영상의 프레임 정보를 읽을 수 없습니다")
-    judged = judge_shot(video, load_config())
+    cfg_validity = load_config()
+    judged = judge_shot(video, cfg_validity)
+    for p in judged["passes"]:
+        if p["valid"]:   # 제외된 통과는 수치를 내지 않는다 (결과 형식 3절)
+            _, kps = inside_frames(video, p["start_frame"], p["end_frame"], cfg_validity)
+            p["metrics"] = pass_metrics(kps, video["fps"], p["camera_side"])
     model = current_model()
     model.update(angle_def=ANGLE_DEF, weights_sha256=cfg["weights_sha256"] or None)
     return build_result(job, video, judged, model), build_keypoints(video, judged["passes"])
