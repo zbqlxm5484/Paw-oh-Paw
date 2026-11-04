@@ -7,6 +7,10 @@
   있으면 예외를 내 DB 행을 지우기 전에 멈춘다(11.11).
 - dry_run이면 세기만 한다(stat_prefix, count). 어느 쪽이든 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409
   SHOT_IN_PROGRESS.
+- 실제로 지울 때는 그 검사 전에 대상 회차 행을 모두 FOR UPDATE로 잠근다(12.4 잠금). 워커가 UPLOADED 촬영을 가져갈 때
+  같은 행을 잠그므로, 확인과 삭제 사이에 촬영이 분석 API로 나가는 틈이 없다(199 리뷰, 조유진). 워커가 먼저 잠갔으면
+  파기는 기다렸다가 SUBMITTED를 보고 409, 파기가 먼저면 워커는 commit 뒤 지워진 행을 보고 건너뛴다. 잠금은 파일을
+  지우는 동안도 쥐고 있다(파일 → 행 순서가 한 트랜잭션 안이어야 하므로). dry_run은 지우지 않으니 잠그지 않는다.
 - INSTITUTION·ALL은 반려견과 그 아래 자료만 지우고 기관·담당자 계정·디바이스 코드는 남긴다(15.9). ALL은 API로 열지 않고
   scripts/purge.py만 부른다.
 - 로그에는 개수만 남긴다(11.8: 반려견 이름·파일 경로 금지).
@@ -61,6 +65,14 @@ def _resolve(db: Session, scope: str, *, institution_id: uuid.UUID | None, targe
 
 def _sessions_of(dog_ids: list[uuid.UUID]):
     return select(MeasureSession.id).where(MeasureSession.dog_id.in_(dog_ids))
+
+
+def _lock_sessions(db: Session, dog_ids: list[uuid.UUID]) -> int:
+    """대상 회차 행을 모두 FOR UPDATE로 잠근다(12.4 잠금. 워커 claim_uploaded와 같은 행). 잠근 행 수를 돌려준다."""
+    if not dog_ids:
+        return 0
+    rows = db.execute(select(MeasureSession.id).where(MeasureSession.dog_id.in_(dog_ids)).with_for_update()).all()
+    return len(rows)
 
 
 def _has_shot_in_progress(db: Session, dog_ids: list[uuid.UUID]) -> bool:
@@ -124,6 +136,8 @@ def purge(
 ) -> PurgeOut:
     """파기 또는 dry_run 집계(15.9). institution_id는 부른 담당자의 기관(ALL이면 없음), executed_by는 담당자 ID."""
     target = _resolve(db, scope, institution_id=institution_id, target_id=target_id)
+    if not dry_run:
+        _lock_sessions(db, target.dog_ids)  # 잠근 뒤 확인한다(12.4). 세기만 하는 dry_run은 잠그지 않는다
     if _has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
 

@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, Staff, WalkPass
@@ -199,6 +199,63 @@ def test_a_shot_in_progress_blocks_purge_even_as_dry_run(
 
 
 # ---- 권한·입력 ----
+
+
+class _MarkingStorage:
+    """delete_prefix가 불린 순간을 SQL 기록 사이에 표시한다. 나머지는 실제 저장소에 맡긴다."""
+
+    MARK = "storage.delete_prefix"
+
+    def __init__(self, inner, events: list[str]) -> None:
+        self.inner, self.events = inner, events
+
+    def __getattr__(self, name: str):
+        return getattr(self.inner, name)
+
+    def delete_prefix(self, prefix: str) -> tuple[int, int]:
+        self.events.append(self.MARK)
+        return self.inner.delete_prefix(prefix)
+
+
+@contextmanager
+def _recorded_sql(db: Session):
+    """이 세션의 연결이 보내는 SQL을 순서대로 모은다."""
+    events: list[str] = []
+    connection = db.connection()
+
+    def record(_conn, _cursor, statement: str, _params, _context, _many) -> None:
+        events.append(statement)
+
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        yield events
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+
+
+def _is_session_lock(statement: str) -> bool:
+    return "FOR UPDATE" in statement and "measure_session" in statement
+
+
+def test_purge_locks_the_target_sessions_before_files_and_rows(db: Session, dog, staff) -> None:
+    """12.4 잠금(199 리뷰): 실제 파기는 대상 회차 행을 FOR UPDATE로 잠근 뒤 진행 중 촬영을 보고 파일·행을 지운다.
+
+    워커 claim_uploaded가 같은 행을 잠그므로 확인과 삭제 사이에 UPLOADED 촬영이 분석 API로 나가지 못한다. dry_run은
+    세기만 하므로 잠그지 않는다.
+    """
+    _fill(db, dog, staff, sessions=1)
+    with _recorded_sql(db) as events:
+        purge(db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=True)
+    assert not any(_is_session_lock(statement) for statement in events)
+
+    with _recorded_sql(db) as events:
+        storage = _MarkingStorage(get_storage(), events)
+        purge(db, storage, "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False)
+    lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
+    files = events.index(_MarkingStorage.MARK)
+    first_delete = next(i for i, statement in enumerate(events) if statement.lstrip().upper().startswith("DELETE"))
+    assert lock < files < first_delete
+    assert _rows_of_dog(db, dog.id) == 0
 
 
 def test_only_an_admin_can_purge(client: TestClient, db: Session, dog, staff, auth_headers, other_staff) -> None:

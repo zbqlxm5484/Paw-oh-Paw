@@ -955,7 +955,7 @@ CREATE TABLE purge_log (
 - 상태·결과 조회에서 분석 API가 작업이 없다고 답하면(404·410. 재시작으로 작업을 잃었거나 보관 기간이 지남) 기다려도 오지 않으므로 바로 FAILED(`ANALYSIS_FAILED`)다. 409(아직 결과 없음)·5xx·연결 실패는 다음 바퀴에 다시 묻고 시간 초과가 끝을 낸다. 결과를 DB에 넣다가 오류가 나면 방금 쓴 파일을 지우고 그 촬영만 건너뛴다(다음 바퀴에 다시). 한 촬영의 오류가 같은 바퀴의 다른 촬영·가져오기·제출을 막지 않는다. 결과 JSON의 값은 DB 범위(`pass_no` SMALLINT, 프레임 INTEGER)까지 미리 검사해 저장 중 형식 오류가 나지 않게 한다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
-* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
+* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석, 자료 파기)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다(파기는 대상 회차 행 전부. 15.9). 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
 * **API가 만든 파일**: 업로드처럼 요청 안에서 파일을 만들면 그 키를 `db.info["created_files"]`에 넣는다. commit이 실패하면 `get_db`가 그 파일을 지운다(11.7). 지울 때는 12.5 순서대로 파일을 먼저 지운다. 행 삭제가 실패해 파일 없는 행이 남는 것은 괜찮다(파기 때 함께 지워진다). 반대로 DB에 키가 없는 파일이 남으면 파기에서 빠진다.
 * **보고서 행 값**: `template_version`에는 보고서 모듈의 `report.TEMPLATE_VERSION` 상수를 넣는다.
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
@@ -1913,7 +1913,7 @@ stance_ratio: 5.0 # pct
 - `dry_run`의 기본값은 true다. 지울 행·파일·용량만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 분명히 보낸다.
 - 실제로 지우면 `purge_log`에 1행을 남기고 그 ID를 `purge_log_id`로 돌려준다. 파기 확인서(D-13)의 근거다.
 - `INSTITUTION`은 반려견과 그 아래 자료를 모두 지우고, 기관과 담당자 계정은 남긴다.
-- 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다.
+- 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다. 실제로 지울 때는 대상 회차 행을 모두 `SELECT … FOR UPDATE`로 잠근 뒤 이 검사를 하고 파일·행을 지운다(12.4 잠금. 워커가 그사이 UPLOADED 촬영을 가져가 분석 API로 보내는 틈을 막는다). 워커가 먼저 잠갔으면 파기는 기다렸다가 SUBMITTED를 보고 409를 내고, 파기가 먼저면 워커는 지워진 행을 보고 건너뛴다. `dry_run`은 세기만 하므로 잠그지 않는다.
 - `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 자기 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
 - `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
 - `python -m scripts.purge --all`은 지울 양만 세고, `--execute`를 붙여야 지운다(확인 문구를 묻고 `--yes`면 묻지 않는다). 기관·담당자 계정·디바이스 코드는 `INSTITUTION`과 같이 남긴다(계정 정리는 10절 Q27과 함께 정한다).
