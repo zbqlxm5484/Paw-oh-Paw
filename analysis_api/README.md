@@ -42,11 +42,11 @@
 
 - 모델을 바꾸면 결과의 `model.name`·`model.version`이 바뀐다. 팀 서비스는 모델이 다른 회차끼리 변화를 판단하지 않는다(`MODEL_CHANGED`)
 - `models.yaml`에 없는 이름을 고르면 다른 모델로 바꿔 돌리지 않고 `POSE_UNAVAILABLE`로 실패한다. `/health`의 `model_known`이 false로 보인다
-- `pipeline.py`의 `API_VERSION`은 결과가 바뀌는 변경(엔진·결과 형식)일 때만 올린다. `model.version`에 들어가서, 올리면 그 전 회차와 비교하지 않게 되기 때문이다. 4/4는 결과를 바꾸지 않아 0.4.0 그대로다
+- `pipeline.py`의 `API_VERSION`은 결과가 바뀌는 변경(엔진·결과 형식)일 때만 올린다. `model.version`에 들어가서, 올리면 그 전 회차와 비교하지 않게 되기 때문이다. 4/4는 결과를 바꾸지 않아 0.4.0 그대로였고, 보행 수치를 채운 #183에서 0.5.0으로 올렸다
 
 영상에서 바로 관절점을 뽑는 경로(MMPose)는 실행 환경이 정해지면 `pipeline.py`에 더한다.
 
-지금 결과에서 비어 있는 것: `metrics`는 `{}`(걸음 길이·입각기 비율, 가동 범위 계산 뒤), `gait`는 null(보행 유형 판별 뒤), `input.codec`는 null.
+지금 결과에서 비어 있는 것: `metrics`의 가동 범위·각도 중앙값(#184 뒤. 걸음 길이·입각기 비율·보행 속도·주기 수는 채움), `gait`는 null(보행 유형 판별 뒤), `input.codec`는 null.
 
 ## 실행
 
@@ -86,7 +86,7 @@ ANALYSIS_API_KEY=
 | `ANALYSIS_POSE_SOURCE` | `sample` | 위 표 |
 | `ANALYSIS_MODEL` | `models.yaml`의 `default` | 쓸 모델 이름. 결과 `model.name`이 된다 |
 | `ANALYSIS_TRACK_FILE` | 고른 모델의 `track_file` | `track`일 때 읽을 관절점 파일. 주면 `models.yaml` 값보다 먼저 쓴다 |
-| `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256` | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.4.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
+| `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256` | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.5.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
 
 `/health`는 Docker 상태 확인용이라 인증 없이 열려 있다. 지금 모델(`model`), 관절점 출처(`pose_source`), 모델이 `models.yaml`에 있는지(`model_known`)를 함께 준다.
 

@@ -62,11 +62,13 @@ def test_track_result_is_v1(tmp_path, monkeypatch):
     assert status["model"] == {"name": "fs-test", "version": f"{pipeline.API_VERSION}/v1/a4261a10"}
     r = client.get(f"/analyses/{job_id}/result").json()
     assert r["shot_id"] == "s-1" and r["validity"] == "valid" and r["validity_reason"] is None
-    assert r["versions"] == {"angle_def": "v1", "gait_events": "v1", "validity": "v1"}
+    assert r["versions"] == {"angle_def": "v1", "gait_events": "v1", "validity": "v1", "gait_metrics": "v1"}
     assert r["input"] == {"filename": "shot.mp4", "codec": None, "fps": FPS, "width": W, "height": H,
                           "frames": 3 * FPS}
     p = r["passes"][0]
-    assert p["index"] == 1 and p["camera_side"] == "right" and p["valid"] and p["metrics"] == {}
+    assert p["index"] == 1 and p["camera_side"] == "right" and p["valid"]
+    assert {"stride_length_front", "stance_ratio_hind", "walk_speed", "gait_cycles"} <= set(p["metrics"])
+    assert abs(p["metrics"]["walk_speed"]["value"] - 1000 / 150) < 0.1      # 가상 개: 1000px/초, 몸통 150px
     for key in ("measure_start", "measure_end", "checks", "reason_code", "reason", "gait"):
         assert key in p
 

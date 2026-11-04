@@ -105,6 +105,15 @@ def find_passes(video: dict, cfg: dict) -> list:
 # ---- 통과 하나 검사 ----
 
 
+def inside_frames(video: dict, start: int, end: int, cfg: dict) -> tuple:
+    """통과 구간의 (몸 전체가 화면 안에 보였는지, 그 프레임의 관절점). 화면에 들어오고 나가는 동안은 몸이 잘려
+    관절점이 틀리므로, 상자가 화면 끝에 닿지 않은 프레임만 쓴다. 보행 수치(gait_metrics)도 같은 프레임을 쓴다"""
+    edge, width = cfg["pass_rules"]["edge_px"], video["width"]
+    frames = video["frames"][start:end + 1]
+    inside = [f is not None and f["box"][0] > edge and f["box"][2] < width - edge for f in frames]
+    return inside, [f["kp"] if ok else None for f, ok in zip(frames, inside)]
+
+
 def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
     """통과 하나 → {"reason_code", "camera_side", "measure_start", "measure_end", "checks"}"""
     conf = cfg["common"]["conf_min"]
@@ -114,10 +123,7 @@ def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
     side = "right" if head > 0 else "left"
     found = {}
 
-    # 화면에 들어오고 나가는 동안은 몸이 잘려 관절점이 틀리므로, 상자가 화면 끝에 닿지 않은 프레임만 본다
-    edge = rules["edge_px"]
-    inside = [f is not None and f["box"][0] > edge and f["box"][2] < width - edge for f in frames]
-    kps = [f["kp"] if ok else None for f, ok in zip(frames, inside)]
+    inside, kps = inside_frames(video, start, end, cfg)
     n = max(1, sum(f is not None for f in frames))
     present = [k is not None for k in kps]
     n_in = max(1, sum(present))
