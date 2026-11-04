@@ -11,6 +11,7 @@ import { dogKeys } from '../api/dogs'
 import { fileUrl } from '../api/labels'
 import { useSession } from '../api/sessions'
 import type { LoginIn, ReportOut, ReportsOut, SessionDetailOut } from '../api/types'
+import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
 import { AppProto } from './app/AppProto'
 import { reportStatusLine, toAna, type DAna } from './adapter'
@@ -32,7 +33,12 @@ export interface ProtoProps {
   query: URLSearchParams
   data: DesignData
   actions: ReturnType<typeof useDesignActions>
-  auth: { login: (b: LoginIn) => Promise<unknown>; logout: () => void }
+  auth: {
+    login: (b: LoginIn) => Promise<unknown>
+    logout: () => void
+    updateMe: (b: { name?: string; email?: string }) => Promise<unknown>
+    changePassword: (current: string, next: string) => Promise<unknown>
+  }
   nav: (path: string, opts?: { replace?: boolean }) => void
   back: () => void
   ui: UiSel
@@ -84,7 +90,7 @@ const PUBLIC = new Set(['landing', 'story', 'login', 'signupOrg', 'splash'])
 export function DesignRoot() {
   const loc = useLocation()
   const navigate = useNavigate()
-  const { loggedIn, checking, login, logout } = useAuth()
+  const { loggedIn, checking, login, logout, setStaff } = useAuth()
   const route = useMemo(() => parseRoute(loc.pathname), [loc.pathname])
   const query = useMemo(() => new URLSearchParams(loc.search), [loc.search])
 
@@ -161,7 +167,11 @@ export function DesignRoot() {
   }, [])
 
   const props: ProtoProps = {
-    screen: route.screen, params: route.params, query, data, actions, auth: { login, logout }, nav, back, ui, setUi,
+    screen: route.screen, params: route.params, query, data, actions, auth: {
+      login, logout,
+      updateMe: async (b: { name?: string; email?: string }) => setStaff(await authApi.updateMe(b)),
+      changePassword: async (current: string, next: string) => setStaff(await authApi.changePassword(current, next)),
+    }, nav, back, ui, setUi,
     compare: route.screen === 'compare' ? compare : null, reports: reportsQ.data, reportStatus: reportStatusLine,
     session: sessQ.data, sessionAna, pickFile, openFile,
   }

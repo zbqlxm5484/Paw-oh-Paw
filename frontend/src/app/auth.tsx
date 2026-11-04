@@ -13,6 +13,8 @@ interface AuthState {
   staff: StaffOut | null
   login: (body: LoginIn) => Promise<StaffOut>
   logout: () => void
+  /** 내 정보 수정·비밀번호 변경 응답으로 화면의 담당자 정보를 바꾼다 */
+  setStaff: (s: StaffOut) => void
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -64,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return out.staff
   }, [])
 
-  const value = useMemo<AuthState>(() => ({ loggedIn, checking, staff, login, logout }), [loggedIn, checking, staff, login, logout])
+  const value = useMemo<AuthState>(() => ({ loggedIn, checking, staff, login, logout, setStaff }), [loggedIn, checking, staff, login, logout])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

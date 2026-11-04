@@ -88,6 +88,24 @@ export const handlers = [
     return HttpResponse.json(MOCK_STAFF)
   }),
 
+  http.patch(`${BASE}/auth/me`, async ({ request }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(250)
+    const body = (await request.json()) as { name?: string; email?: string }
+    Object.assign(MOCK_STAFF, body)
+    return HttpResponse.json(MOCK_STAFF)
+  }),
+
+  // 가짜 규칙: 지금 비밀번호가 "wrong" 이면 틀린 것으로 본다(로그인과 같은 규칙)
+  http.patch(`${BASE}/auth/password`, async ({ request }) => {
+    if (!authed(request)) return unauthorized()
+    await delay(250)
+    const body = (await request.json()) as { current_password: string; new_password: string }
+    if (body.current_password === 'wrong') return err(400, 'PASSWORD_MISMATCH', '현재 비밀번호가 맞지 않습니다.')
+    if ((body.new_password ?? '').length < 8) return err(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', { fields: [{ field: 'new_password', type: 'too_short' }] })
+    return HttpResponse.json(MOCK_STAFF)
+  }),
+
   // ---------- 반려견 ----------
   http.get(`${BASE}/dogs`, async ({ request }) => {
     if (!authed(request)) return unauthorized()
