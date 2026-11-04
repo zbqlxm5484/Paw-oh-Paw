@@ -10,6 +10,8 @@ import { body_map, memo_panel, owner_guide, result_view, seg } from '../views/vi
 import { pystr } from '../views/pyfmt'
 import { DogPanel } from './parts/DogPanel'
 import { link } from '../config'
+import { MOCK } from '../store/backend'
+import { PrintPdf, ServerPdf } from './parts/ServerPdf'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -111,6 +113,7 @@ export default function Report() {
   const rd = v.rd
   const panel = d ? memo_panel(acct, d, r.id) : null
   const fail = r.st === 'fail'
+  const fromServer = !MOCK && (r.src ?? '').startsWith('backend:') // 백엔드 회차면 서버가 만든 PDF, 시연 데이터면 브라우저 인쇄
   const kind = fail ? 'v' : type === 'g' || type === 'v' ? type : 'g'
   const rp = v.rp
   const bm = fail ? null : body_map(acct, r)
@@ -130,7 +133,7 @@ export default function Report() {
           <div className="no-print" style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
             <a className="lk" href={link(`/dogs/${rd.dog}`)} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{rd.name} 차트</a>
             {!rd.fail ? (
-              <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={link(`/compare/${rd.dog}`)} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={link(`/results/${rd.id}/3d`)} style={css(BTN)}>3D로 보기</a><div className="hv-orange" onClick={() => window.print()} style={css('height:44px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700;cursor:pointer')}>PDF 내려받기</div></div>
+              <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={link(`/compare/${rd.dog}`)} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={link(`/results/${rd.id}/3d`)} style={css(BTN)}>3D로 보기</a>{fromServer ? <ServerPdf sessionId={r.id} edition={kind === 'v' ? 'VET' : 'OWNER'} /> : <PrintPdf />}</div>
             ) : null}
           </div>
           {rd.fail || !bm ? (
