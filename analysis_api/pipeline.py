@@ -10,8 +10,9 @@
 
 엔진(저장소 루트의 engine/)
 - engine.validity.judge_shot: 통과 자르기, 유효·무효 판별, 측정 구간
-- engine.angles.flexion_angle: 프레임별 카메라 쪽 다리 굽힘 각도(관절점 파일의 angles)
+- engine.joint_rom.frame_angles: 프레임별 카메라 쪽 다리 굽힘 각도(관절점 파일의 angles)
 - engine.gait_metrics.pass_metrics: 유효 통과의 걸음 길이·입각기 비율·보행 속도·주기 수(passes[].metrics)
+- engine.joint_rom.joint_metrics: 유효 통과의 관절 가동 범위·각도 중앙값·무릎 주기별 가동 범위(passes[].metrics)
 형식: docs/analysisApi/resultFormat.md
 """
 import hashlib
@@ -28,22 +29,20 @@ ROOT = HERE.parent
 if str(ROOT) not in sys.path:   # analysis_api 폴더에서 실행해도 저장소 루트의 engine 패키지를 쓰게 한다
     sys.path.insert(0, str(ROOT))
 
-from engine.angles import ANGLE_DEF, FLEX_SIDE, JOINTS, flexion_angle  # noqa: E402
-from engine.gait_events import EVENTS_VERSION  # noqa: E402
+from engine.angles import ANGLE_DEF  # noqa: E402
+from engine.gait_events import EVENTS_VERSION, detect_pass  # noqa: E402
 from engine.gait_metrics import METRICS_VERSION, pass_metrics  # noqa: E402
+from engine.joint_rom import ROM_VERSION, joint_metrics  # noqa: E402
+from engine.joint_rom import frame_angles as joint_rom_angles  # noqa: E402
 from engine.validity import VALIDITY_VERSION, inside_frames, judge_shot, load_config  # noqa: E402
 
 # 결과가 바뀌는 변경(엔진·결과 형식)일 때만 올린다. model.version에 들어가서, 올리면 팀 서비스가 그 전 회차와 비교하지 않는다
-API_VERSION = "0.5.0"   # 0.5.0: 보행 수치(metrics)를 채움 (S15P31A404-183)
+API_VERSION = "0.6.0"   # 0.5.0: 보행 수치(S15P31A404-183), 0.6.0: 가동 범위·각도 중앙값(S15P31A404-184)
 MODELS_FILE = HERE / "models.yaml"
 SAMPLES_DIR = HERE / "samples"
 KST = timezone(timedelta(hours=9))
-CONF = 0.3
-JOINT_NAMES = {"어깨": "shoulder", "팔꿈치": "elbow", "앞발목": "carpus",
-               "고관절": "hip", "무릎": "stifle", "뒷발목": "tarsus"}
-RIGHT_SLOTS = {1, 8, 9, 10, 11, 12, 18, 19, 20, 21}
 VERSIONS = {"angle_def": ANGLE_DEF, "gait_events": EVENTS_VERSION, "validity": VALIDITY_VERSION,
-            "gait_metrics": METRICS_VERSION}
+            "gait_metrics": METRICS_VERSION, "joint_rom": ROM_VERSION}
 SAMPLE_MODEL = {"name": "sample-pipeline", "version": f"{API_VERSION}/{ANGLE_DEF}/sample"}
 
 
@@ -127,22 +126,12 @@ def find_track(video_path: Path, filename: Optional[str], track_file: str, sha25
 # ---- 결과 만들기 ----
 
 
-def frame_angles(kp, side: str, head: int) -> Optional[dict]:
-    """카메라 쪽 다리 6관절의 굽힘 각도. 세 점 중 하나라도 확신도가 낮으면 그 관절은 뺀다"""
+def frame_angles(kp, side: str, head: int = 0) -> Optional[dict]:
+    """카메라 쪽 다리 6관절의 굽힘 각도. 키는 {관절}_l·{관절}_r (결과 형식 5절). 계산은 engine.joint_rom과 같다"""
     if kp is None:
         return None
     suffix = "r" if side == "right" else "l"
-    out = {}
-    for vertex, proximal, distal, name in JOINTS:
-        if (vertex in RIGHT_SLOTS) != (side == "right"):
-            continue
-        pts = [kp[vertex], kp[proximal], kp[distal]]
-        if any(p is None or len(p) < 3 or p[2] < CONF for p in pts):
-            continue
-        angle = flexion_angle(pts[0][:2], pts[1][:2], pts[2][:2], (float(head), 0.0), FLEX_SIDE[name])
-        if angle is not None:
-            out[f"{JOINT_NAMES[name]}_{suffix}"] = round(angle, 1)
-    return out
+    return {f"{joint}_{suffix}": round(angle, 1) for joint, angle in joint_rom_angles(kp, side).items()}
 
 
 def build_keypoints(video: dict, passes: list) -> dict:
@@ -167,7 +156,7 @@ def build_keypoints(video: dict, passes: list) -> dict:
 
 
 def build_result(job: dict, video: dict, judged: dict, model: dict) -> dict:
-    """결과 JSON v1. 수치(metrics)는 유효 통과만 채운다. 가동 범위·각도 중앙값(S15P31A404-184)은 아직 없다"""
+    """결과 JSON v1. 수치(metrics)는 유효 통과만 채운다"""
     passes = []
     for p in judged["passes"]:
         passes.append({
@@ -212,7 +201,9 @@ def run_track(video_path: Path, job: dict) -> tuple:
     for p in judged["passes"]:
         if p["valid"]:   # 제외된 통과는 수치를 내지 않는다 (결과 형식 3절)
             _, kps = inside_frames(video, p["start_frame"], p["end_frame"], cfg_validity)
-            p["metrics"] = pass_metrics(kps, video["fps"], p["camera_side"])
+            events = detect_pass(kps, video["fps"], p["camera_side"])   # 두 계산이 같은 착지·이지를 쓴다
+            p["metrics"] = {**pass_metrics(kps, video["fps"], p["camera_side"], events),
+                            **joint_metrics(kps, video["fps"], p["camera_side"], events)}
     model = current_model()
     model.update(angle_def=ANGLE_DEF, weights_sha256=cfg["weights_sha256"] or None)
     return build_result(job, video, judged, model), build_keypoints(video, judged["passes"])
