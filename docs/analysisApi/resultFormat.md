@@ -46,7 +46,7 @@
 | `shot_id` | 문자열·null | 등록할 때 `meta`로 받은 값을 그대로 | |
 | `model.name`·`model.version` | 문자열 | 팀 서비스가 `shot.model_name`·`model_version`(각 50자)에 저장. 다르면 회차 비교에서 MODEL_CHANGED | PR-F07-05, REQ-OP-006 |
 | `model.weights_sha256` | 문자열·null | 가중치 전체 해시. JSON 원본에만 남긴다. 분석 API에 가중치 해시(`ANALYSIS_WEIGHTS_SHA256`)를 넣지 않았으면 null이고, `model.version` 끝은 `unknown`이다 | |
-| `versions` | 객체 | 엔진 부분별 정의 버전. 정의가 다른 결과끼리 비교하지 않기 위해 | |
+| `versions` | 객체 | 엔진 부분별 정의 버전(`angle_def`, `gait_events`, `validity`, `gait_metrics`). 정의가 다른 결과끼리 비교하지 않기 위해. `gait_metrics`는 11-04(#183)에 더함 | |
 | `input` | 객체 | 입력 영상 사양 | PR-F07-05 |
 | `validity` | `valid`·`partial`·`invalid` | 촬영 판정 | F-03 |
 | `validity_reason` | 사유 코드·null | 4절 | PR-F03-05 |
@@ -141,7 +141,7 @@
 
 | 항목 | 언제 |
 | --- | --- |
-| `metrics` 실제 값 (지금 엔진 연결 단계는 `{}`) | 걸음 길이·입각기 비율(#183), 가동 범위(#184) 다음 |
+| `metrics`의 가동 범위·각도 중앙값·`stifle_cycle_rom` (걸음 길이·입각기 비율·보행 속도·주기 수는 #183에서 채움, `docs/engine/gaitMetrics.md`) | 가동 범위(#184) |
 | `gait` 실제 값 | 보행 유형 판별(박규원 #106 다음 단계) |
 | `MAT_NOT_FOUND`, `OVERLAP` | 매트·사람 겹침 검출 방법 정해진 뒤 |
 | `paw_slope_*`, `paw_lift_*`, `paw_excursion_*`, `stifle_cycle_rom` | 스프린트 4 |
