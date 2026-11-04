@@ -16,8 +16,9 @@ Oct 19, 2026 · @조영운
 | v1.15 | 2026-11-02 | 작업 단위 9 구현(S15P31A404-195): 보고서 모듈 `report/`(8절 입력 dict 모양은 `report/inputs.py` 머리말, 문장은 김지윤 템플릿 전 자리 표시), 보고서 풀·`services/report_input.py`(12.4), 보고서 API 19~21(15.7). 오차 범위(`settings.tolerance`)는 197에서 채운다 |
 | v1.16 | 2026-11-03 | 195 리뷰 반영(김지윤, MR !80): 8절 3번에 문장 템플릿 확정과 보호자용 요약 둘째 문장 규칙(좌우 차이도 15.8 오차 범위 표와 견줌), 8절 7번 목록은 김지윤 초안이 현재본이고 용어 설명은 명사형, 15.8에 보고서도 같은 표를 쓴다고 적음. 표 쓰임은 조영운 확정(11-03). 박규원 리뷰 반영: 11.11 `file_url`의 `now`(두 주소의 만료를 맞춤), 15.7 주소 재사용과 ASCII 대체 파일 이름, 8절 3번 한쪽 유효 통과 4회 이하는 범위와 견주지 않음 |
 | v1.17 | 2026-11-04 | 보고서 수치 자동 대조(작업 단위 9의 7번 첫 항목, S15P31A404-196): 8절 7번에 대조 방식(실린 숫자 목록 ↔ DB `session_metric` 값·15.7 다리 비교 계산값, `report/verify.py`·`services/report_numbers.py`, 값이 다르거나 기준에 없으면 `REPORT_CHECK_FAILED`, 싣지 않은 수치는 불일치 아님), 12.4 보고서 한 건에 붙이기 전 대조 줄. 리뷰 반영(MR !85): 12.4에 거두는 중 DB 오류와 맡은 작업 없는 GENERATING 처리. |
-| v1.19 | 2026-11-04 | 198 이력·비교·추이 구현에 맞춰 15.8 보충: `base`가 BASELINE·PREVIOUS·UUID 형식이 아니거나 추이의 `metric_code`가 12.3 표에 없으면 422, 추이 `series`는 그 수치의 다리 전부(점 없는 다리는 빈 배열)이고 `lr_diff` 쌍은 관심 다리 쌍 먼저, 비교 API도 오차 범위 파일을 워커와 같은 함수로 읽는다 |
 | v1.18 | 2026-11-04 | 보고서 판정 기준 설정 파일 반영(작업 단위 9, S15P31A404-197): `config/tolerance.yaml`에 통합본 9-3 임시값(15.8의 예시를 실제 값으로), `services/tolerance.py`가 읽어 보고서 입력 `settings.tolerance`에 넣음(워커 시작 때, 없으면 빈 것·모양이 틀리면 시작 실패, 16절), 판정 함수 `report/judge.py`(15.8 판정 표, Decimal, 비교 API와 공용), 8절 2번에 직전 회차 값 옆 변화 표시(증가·감소·범위 안), 17.4 BE-15 한 줄. 고관절·무릎은 박규원 MR 80 답변의 5°·8°로 올리고 팔꿈치는 뺌. 10절 Q6·12.3의 최소 주기 수는 2개로 둔다(조유진, S15P31A404-183 실측, 11-04). 리뷰 반영(MR !86): 오차 범위와 견주는 곳을 `n_passes` 8 이상으로 통일(5절, 8절 2·3번, 15.8 판정 3, 좌우 차이는 5회에서 8회로). |
+| v1.19 | 2026-11-04 | 198 이력·비교·추이 구현에 맞춰 15.8 보충: `base`가 BASELINE·PREVIOUS·UUID 형식이 아니거나 추이의 `metric_code`가 12.3 표에 없으면 422, 추이 `series`는 그 수치의 다리 전부(점 없는 다리는 빈 배열)이고 `lr_diff` 쌍은 관심 다리 쌍 먼저, 비교 API도 오차 범위 파일을 워커와 같은 함수로 읽는다 |
+| v1.20 | 2026-11-04 | 199 자료 파기 구현에 맞춰 15.9 보충: `INSTITUTION`에 `target_id`를 보내면 422, 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 적용, `rows`는 반려견·회차·촬영·통과·수치·보고서 행 수의 합, `purge_log.target_id`·`executed_by` 값, 전체 파기 스크립트는 `--execute` 없이는 세기만 하고 기관·계정·코드는 남긴다 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -1913,6 +1914,9 @@ stance_ratio: 5.0 # pct
 - 실제로 지우면 `purge_log`에 1행을 남기고 그 ID를 `purge_log_id`로 돌려준다. 파기 확인서(D-13)의 근거다.
 - `INSTITUTION`은 반려견과 그 아래 자료를 모두 지우고, 기관과 담당자 계정은 남긴다.
 - 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다.
+- `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 자기 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
+- `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
+- `python -m scripts.purge --all`은 지울 양만 세고, `--execute`를 붙여야 지운다(확인 문구를 묻고 `--yes`면 묻지 않는다). 기관·담당자 계정·디바이스 코드는 `INSTITUTION`과 같이 남긴다(계정 정리는 10절 Q27과 함께 정한다).
 
 **크림오프 관리자 API** (BE-24, 11.6 역할 검사: 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`. 기관·코드·계정 메타데이터까지만 다루고 고객 자료는 열지 않는다. 10절 Q31)
 
