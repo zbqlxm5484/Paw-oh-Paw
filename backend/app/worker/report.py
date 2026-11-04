@@ -5,10 +5,16 @@ PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
 - 풀: ProcessPoolExecutor(mp_context=spawn) 1개(결과 영상 풀과 따로 두어 보고서가 결과 영상 뒤에서 기다리지 않는다).
 - 가져가기: UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING' → commit → 입력 dict(report_input)를
   UPLOAD_TMP_DIR/worker/report-{id}/input.json으로 쓰고 generate_report(입력, 출력)를 맡긴다.
-  자식은 DB·저장소를 모른다(11.3).
+  자식은 DB·저장소를 모른다(11.3). 입력의 settings.tolerance는 시작할 때 읽은 config/tolerance.yaml 값이다(197).
 - 거두기: 성공이면 PDF를 put_file로 넣고 status='DONE', file_key, generation_ms, model_version, template_version,
   fail_reason=NULL을 WHERE status='GENERATING'으로 쓴다. 바뀐 행이 0개면 방금 넣은 파일을 지운다. ReportCheckError면
   FAILED(REPORT_CHECK_FAILED), 그 밖의 예외는 FAILED(REPORT_FAILED). 키는 보고서 ID로 정해져 다시 만들면 덮어쓴다.
+- 대조(8절 7번 첫 항목, 196): 붙이기 전에 자식이 돌려준 실린 숫자 목록(ReportResult.numbers)을 DB의 session_metric 값과
+  15.7 다리 비교 계산값에 맞춘다(report/verify.compare_numbers, 기준은 services/report_numbers.reference_numbers).
+  값이 다르거나 기준에 없는 숫자가 있으면 PDF를 저장하지 않고 FAILED(REPORT_CHECK_FAILED), DB 오류가 아닌 이유로
+  기준을 읽지 못하면 FAILED(REPORT_FAILED). 기준에는 있는데 싣지 않은 수치는 불일치가 아니다(로그에 개수만).
+- DB 오류: 거두는 중에 나면 작업과 PDF를 그대로 두고 다음 바퀴에 다시 거둔다. GENERATING인데 맡은 작업이 없는
+  보고서(가져간 뒤 DB가 끊겨 맡기지 못한 것)는 매 바퀴 PENDING으로 돌린다.
 - 자식이 죽으면(BrokenProcessPool) 풀을 새로 만들고 실행 중이던 보고서는 FAILED(REPORT_FAILED).
 - 다시 켤 때: reset_generating이 GENERATING을 PENDING으로 돌린다(만들던 중에 꺼진 것).
 VideoRenderer와 같은 모양이다. Spring에 빗대면 @Async 큐 소비자 하나가 트랜잭션 밖에서 PDF를 만들고 결과만 적는 것이다.
@@ -30,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -38,7 +45,10 @@ from app.models import Dog, MeasureSession, Report
 from app.models.enums import ReportStatus
 from app.report import ReportCheckError, ReportInputError
 from app.report.generate import ReportResult, generate_report
+from app.report.verify import Verification, compare_numbers, summarize
 from app.services.report_input import build_report_input, load_report
+from app.services.report_numbers import reference_numbers
+from app.services.tolerance import get_tolerance
 from app.storage.base import StorageError, StorageService
 from app.storage.keys import report_key
 from app.worker.render import describe_error
@@ -58,6 +68,7 @@ GenerateFn = Callable[..., ReportResult]
 @dataclass
 class ReportJob:
     report_id: uuid.UUID
+    session_id: uuid.UUID
     file_key: str
     model_version: str | None
     future: Future
@@ -69,6 +80,7 @@ class ReportJob:
 @dataclass(frozen=True)
 class _Candidate:
     report_id: uuid.UUID
+    session_id: uuid.UUID
     file_key: str
     model_version: str | None
 
@@ -85,6 +97,8 @@ class ReportGenerator:
         """executor_factory·generate는 테스트가 가짜 풀·가짜 생성 함수를 끼우는 자리다."""
         self.settings = settings
         self.storage = storage
+        # 오차 범위(5절·15.8)는 시작할 때 한 번 읽는다. 파일 모양이 틀리면 ToleranceFileError로 바로 멈춘다(197)
+        self.tolerance = get_tolerance(settings.TOLERANCE_FILE)
         self.concurrency = REPORT_CONCURRENCY
         self.tmp_root = Path(settings.UPLOAD_TMP_DIR) / "worker"
         self._executor_factory = executor_factory or self._spawn_pool
@@ -131,6 +145,7 @@ class ReportGenerator:
     # ---- 한 바퀴 ----
 
     def run(self, db: Session, stats: Any) -> None:
+        self._release_orphans(db)
         self.reap(db, stats)
         self.dispatch(db, stats)
 
@@ -142,18 +157,24 @@ class ReportGenerator:
             if isinstance(error, BrokenProcessPool):
                 self._fail_all(db, stats, error)
                 return
-            self.jobs.pop(report_id)
+            keep = False
             try:
                 if error is None:
-                    self._attach(db, job, job.future.result(), stats)
+                    self._verify_and_attach(db, job, job.future.result(), stats)
                 elif isinstance(error, ReportCheckError):
                     logger.error("report check failed report=%s: %s", report_id, error)
                     self._fail(db, report_id, FailReason.REPORT_CHECK_FAILED, stats)
                 else:
                     logger.error("report generation failed report=%s: %s", report_id, describe_error(error))
                     self._fail(db, report_id, FailReason.REPORT_FAILED, stats)
+            except SQLAlchemyError as cause:  # 보고서 탓이 아니다. 작업과 PDF를 두고 다음 바퀴에 다시 거둔다
+                db.rollback()
+                logger.error("report reap failed report=%s; retrying next loop: %s", report_id, describe_error(cause))
+                keep = True
             finally:
-                self._cleanup(job)
+                if not keep:
+                    self.jobs.pop(report_id)
+                    self._cleanup(job)
 
     def dispatch(self, db: Session, stats: Any) -> None:
         room = self.concurrency - len(self.jobs)
@@ -163,6 +184,19 @@ class ReportGenerator:
             if len(self.jobs) >= self.concurrency:
                 break
             self._start(db, candidate, stats)
+
+    def _release_orphans(self, db: Session) -> None:
+        """GENERATING인데 맡은 작업이 없는 보고서를 PENDING으로. 워커가 한 대일 때만 맞다(12.4).
+
+        그대로 두면 워커를 다시 켤 때까지 다시 만들기도 409로 막힌다.
+        """
+        query = update(Report).where(Report.status == GENERATING)
+        if self.jobs:
+            query = query.where(Report.id.not_in(list(self.jobs)))
+        count = db.execute(query.values(status=PENDING)).rowcount
+        db.commit()
+        if count:
+            logger.warning("reports without a job reset to PENDING: %d", count)
 
     # ---- 맡기기 ----
 
@@ -181,7 +215,7 @@ class ReportGenerator:
         if self.jobs:
             query = query.where(Report.id.not_in(list(self.jobs)))
         return [
-            _Candidate(report_id, report_key(institution_id, dog_id, session_id, report_id), model_version)
+            _Candidate(report_id, session_id, report_key(institution_id, dog_id, session_id, report_id), model_version)
             for report_id, session_id, dog_id, institution_id, model_version in db.execute(query).all()
         ]
 
@@ -205,7 +239,7 @@ class ReportGenerator:
         if report is None:
             return
         try:
-            data = build_report_input(db, report)
+            data = build_report_input(db, report, tolerance=self.tolerance)
         except (ReportInputError, AppError) as error:
             logger.error("report input unavailable report=%s: %s", report_id, describe_error(error))
             self._fail(db, report_id, FailReason.REPORT_FAILED, stats)
@@ -230,6 +264,7 @@ class ReportGenerator:
             return
         self.jobs[report_id] = ReportJob(
             report_id=report_id,
+            session_id=candidate.session_id,
             file_key=candidate.file_key,
             model_version=candidate.model_version,
             future=future,
@@ -242,7 +277,28 @@ class ReportGenerator:
 
     # ---- 거두기 ----
 
-    def _attach(self, db: Session, job: ReportJob, result: ReportResult, stats: Any) -> None:
+    def _verify_and_attach(self, db: Session, job: ReportJob, result: ReportResult, stats: Any) -> None:
+        """실린 숫자 목록을 DB와 대조하고(8절 7번 첫 항목) 맞을 때만 PDF를 붙인다."""
+        report_id = job.report_id
+        try:
+            reference = reference_numbers(db, job.session_id)
+        except SQLAlchemyError:  # reap이 다음 바퀴에 다시 거둔다
+            raise
+        except Exception as error:  # 기준을 읽지 못하면 대조할 수 없으므로 DONE으로 두지 않는다
+            db.rollback()
+            logger.error("report numbers reference unavailable report=%s: %s", report_id, describe_error(error))
+            self._fail(db, report_id, FailReason.REPORT_FAILED, stats)
+            return
+        verification = compare_numbers(result.numbers, reference)
+        if not verification.ok:
+            logger.error("report numbers mismatch report=%s: %s", report_id, summarize(verification))
+            self._fail(db, report_id, FailReason.REPORT_CHECK_FAILED, stats)
+            return
+        self._attach(db, job, result, stats, verification)
+
+    def _attach(
+        self, db: Session, job: ReportJob, result: ReportResult, stats: Any, verification: Verification
+    ) -> None:
         """PDF를 먼저 넣고 조건을 건 UPDATE로 키를 붙인다. 바뀐 행이 0개면 방금 넣은 파일을 지운다(12.4)."""
         report_id = job.report_id
         try:
@@ -265,7 +321,7 @@ class ReportGenerator:
                 )
             ).rowcount
             db.commit()
-        except Exception as error:  # DB 오류. 다음 바퀴에 reset_generating이 아니라 GENERATING 그대로라 사람이 본다
+        except Exception as error:  # DB 오류. 넣은 파일을 지우고 PENDING으로 돌려 다음 바퀴에 다시 만든다
             db.rollback()
             self._discard(job.file_key, report_id)
             logger.error("report attach failed report=%s: %s", report_id, describe_error(error))
@@ -274,10 +330,12 @@ class ReportGenerator:
         if changed:
             stats.reported += 1
             logger.info(
-                "report ready report=%s bytes=%d generation_ms=%d in %.1fs",
+                "report ready report=%s bytes=%d generation_ms=%d numbers=%d omitted=%d in %.1fs",
                 report_id,
                 result.pdf_bytes,
                 result.generation_ms,
+                verification.checked,
+                len(verification.omitted),
                 time.monotonic() - job.started_at,
             )
         else:

@@ -732,7 +732,7 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 | --- | --- | --- |
 | `INCREASE` / `DECREASE` | 오차 범위를 넘게 늘었다 / 줄었다 | `null` |
 | `WITHIN_RANGE` | 오차 범위 안이다 | `null` |
-| `UNKNOWN` | 판단하지 않았다. 값과 `diff`는 있다 | `MODEL_CHANGED`(분석 방식이 바뀜) 또는 `RANGE_NOT_SET`(기준 미정) |
+| `UNKNOWN` | 판단하지 않았다. 값과 `diff`는 있다 | `MODEL_CHANGED`(분석 방식이 바뀜) 또는 `RANGE_NOT_SET`(기준 미정, 또는 두 회차 중 한쪽이라도 그 수치·그 다리의 `n_passes`가 8 미만) |
 | `NOT_COMPARABLE` | 한쪽에 값이 없거나 측정 불가. `diff`는 `null` | `NO_DATA` 또는 측정 불가 사유 |
 
 - 지금은 기업의 오차 범위 값을 받기 전이라, 비교할 수 있는 항목은 `UNKNOWN` + `RANGE_NOT_SET`으로 온다. 값이 없거나 측정 불가인 항목은 `NOT_COMPARABLE`, 두 회차의 분석 방식이 다르면 `UNKNOWN` + `MODEL_CHANGED`다.

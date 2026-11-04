@@ -4,6 +4,8 @@
 - ReportError: 보고서를 만들지 못함(REPORT_FAILED). ReportInputError는 입력으로는 만들 수 없는 경우(8절 1번)
 - ReportCheckError: 8절 7번 검사(수치 대조·금지 표현·전문 용어·고정 문구)에 걸렸을 때(REPORT_CHECK_FAILED)
 만드는 흐름은 generate.py(입력 → 수치 정리 → 문장 → 차트 → HTML → 검사 → PDF). 자식 프로세스는 그것만 부른다.
+수치 대조는 verify.py(compare_numbers)가 하고, 기준값은 부르는 쪽(팀 서비스 워커)이 준다(196).
+변화 판정(5절·15.8 판정 표)은 judge.py가 하고, 보고서의 직전 회차 비교와 비교 API가 같이 쓴다(197).
 """
 
 from __future__ import annotations

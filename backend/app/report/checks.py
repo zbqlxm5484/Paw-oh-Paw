@@ -1,7 +1,8 @@
 """보고서 검사(명세 8절 만드는 순서 7, PR-F08-11·12, KPI-30·31): 금지 표현, 보호자용 전문 용어, 고정 문구.
 
 PDF로 바꾸기 전에 보고서에 실릴 문장을 모두 모아 검사한다. 하나라도 걸리면 ReportCheckError이고 워커는
-REPORT_CHECK_FAILED로 남긴다(12.4). 수치 대조(같은 7번의 첫 항목)는 numbers.py가 따로 한다.
+REPORT_CHECK_FAILED로 남긴다(12.4). 수치 대조(같은 7번의 첫 항목)는 numbers.py가 실린 숫자 목록을 만들고 verify.py가
+기준값과 맞춘다(기준값은 부르는 쪽이 준다, 196).
 
 - 금지 표현: terms.yaml의 forbidden. 판본에 관계없이 0건이어야 한다.
 - 전문 용어: 보호자용(OWNER)에 jargon 용어가 나오면 같은 문서 안에 그 explanation 문구가 한 번은 있어야 한다.

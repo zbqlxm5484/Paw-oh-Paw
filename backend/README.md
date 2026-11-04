@@ -15,6 +15,7 @@
 | 크림오프 관리자 API `/admin/*` 9개: 기관·디바이스 코드·계정 중지(조회는 ADMIN·STAFF, 쓰기는 ADMIN, 기관 필터 없음) (13.6, 15.9) | `app/api/routes/admin.py`, `app/services/admin.py`, `app/schemas/admin.py` |
 | 반려견 목록·등록·상세·수정, 수정은 `version` 낙관적 잠금 (12.5, 13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
 | 체급 분류 `classify_size`(체중 기준)와 견종 이름 목록 (12.5) | `app/services/size_class.py`, `config/breeds.yaml` |
+| 회차 비교 오차 범위 `config/tolerance.yaml`(통합본 9-3 임시값, 11-05 재측정 값으로 교체)과 읽기(없으면 빈 것, 모양이 틀리면 워커 시작 실패), 변화 판정(5절 비교 규칙·15.8 판정 표, Decimal 계산, 보고서·비교 API 공용) | `app/services/tolerance.py`, `app/report/judge.py` |
 | "오늘"의 시간대 (16절 APP_TIMEZONE) | `app/core/dates.py` |
 | 회차 시작·상태·진행·촬영 목록·측정 취소, 회차 시점 체급 (12.5, 13.3, 15.6) | `app/api/routes/sessions.py`, `app/services/sessions.py`, `app/schemas/sessions.py` |
 | 영상 업로드 검사 9가지·저장 (13.1, 15.6) | `app/services/uploads.py`, `app/video/probe.py`(ffprobe) |
@@ -25,8 +26,9 @@
 | 워커: UPLOADED 촬영 제출 → SUBMITTED → ANALYZING → DONE(결과 저장), 제출 재시도·시간 초과, 전체·기관별 동시 처리 상한 (3절, 6절, 12.4, 14.2·14.3) | `app/worker/main.py`, `app/services/analysis_results.py` |
 | 결과 영상: 렌더 프로세스 풀(spawn, `WORKER_RENDER_CONCURRENCY`), 사람 얼굴 가리기(MediaPipe BlazeFace를 OpenCV DNN으로, 모델 동봉)·관절점으로 골격 그리기(OpenCV)·H.264 인코딩(ffmpeg), READY·FAILED 처리와 작업 폴더 정리 (7절, 12.4, 14.2) | `app/worker/render.py`, `app/video/render.py`, `app/video/models/` |
 | 보고서 검사: 금지 표현·보호자용 전문 용어·고정 문구 "보행 평가 보조 자료" (8절 7번, PR-F08-11·12). 목록은 패키지 안 YAML(김지윤 초안, 최종본으로 교체) | `app/report/checks.py`, `app/report/terms.yaml` |
-| 보고서 모듈(8절): 입력 dict 검사 → 보행 유형별 수치 표(측정 불가는 사유, 직전 회차 값) → 문장(김지윤 템플릿, 보호자용은 용어 설명 자동) → 차트(matplotlib Figure) → HTML(Jinja2) → 검사 → PDF(WeasyPrint). `generate_report(입력 JSON, 출력 PDF)` 하나를 자식 프로세스가 부른다. 미리보기 `python -m scripts.make_report` | `app/report/`(inputs·numbers·sentences·charts·html·pdf·generate, `templates/report.html.j2`) |
-| 보고서 워커(12.4): 회차 DONE 때 생긴 OWNER·VET 행을 PENDING → GENERATING → DONE(PDF 저장소)·FAILED(`REPORT_CHECK_FAILED`·`REPORT_FAILED`). 보고서 풀 1개(결과 영상 풀과 별도), 다시 켜면 GENERATING → PENDING | `app/worker/report.py`, `app/services/report_input.py`(입력 dict) |
+| 보고서 수치 대조(8절 7번 첫 항목, PR-F08-12): 워커가 PDF를 붙이기 전에 자식이 돌려준 실린 숫자 목록을 DB `session_metric` 값·15.7 다리 비교 계산값과 맞춘다. 값이 다르거나 기준에 없으면 PDF 없이 `REPORT_CHECK_FAILED`, 싣지 않은 수치는 불일치 아님 | `app/report/verify.py`(비교), `app/services/report_numbers.py`(기준값), `app/worker/report.py` |
+| 보고서 모듈(8절): 입력 dict 검사 → 보행 유형별 수치 표(측정 불가는 사유, 직전 회차 값과 오차 범위 기준 변화 증가·감소·범위 안) → 문장(김지윤 템플릿, 보호자용은 용어 설명 자동) → 차트(matplotlib Figure) → HTML(Jinja2) → 검사 → PDF(WeasyPrint). `generate_report(입력 JSON, 출력 PDF)` 하나를 자식 프로세스가 부른다. 미리보기 `python -m scripts.make_report` | `app/report/`(inputs·numbers·sentences·charts·html·pdf·generate, `templates/report.html.j2`) |
+| 보고서 워커(12.4): 회차 DONE 때 생긴 OWNER·VET 행을 PENDING → GENERATING → DONE(PDF 저장소)·FAILED(`REPORT_CHECK_FAILED`·`REPORT_FAILED`). 보고서 풀 1개(결과 영상 풀과 별도), 다시 켜면 GENERATING → PENDING, 거두는 중 DB 오류는 다음 바퀴에 다시 거둠 | `app/worker/report.py`, `app/services/report_input.py`(입력 dict) |
 | 보고서 API: 판본별 상태, 다시 만들기(GENERATING이면 409), PDF 미리보기·내려받기(서명 URL, 한글 파일 이름) (15.7의 19~21) | `app/api/routes/reports.py`, `app/services/reports.py`, `app/schemas/reports.py` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
 | 화면 문구 (14.5) | `messages/ko.yaml` |

@@ -1,18 +1,23 @@
 """보고서 워커(12.4 "보고서 한 건", 17.4 BE-15, 17.6, S15P31A404-195).
 
-PENDING → GENERATING → DONE·FAILED, 다시 켜기, 다시 만들기.
+PENDING → GENERATING → DONE·FAILED, 다시 켜기, 다시 만들기, 실린 숫자 대조(196).
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import uuid
+from collections.abc import Callable
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import pytest
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -21,7 +26,10 @@ from app.models import MeasureSession, Report, SessionMetric
 from app.report import ReportCheckError
 from app.report.checks import Finding
 from app.report.generate import ReportResult
+from app.report.numbers import ListedNumber, build_tables
 from app.services import reports as report_service
+from app.services.report_numbers import reference_numbers
+from app.services.tolerance import ToleranceFileError, get_tolerance
 from app.storage.base import get_storage
 from app.storage.keys import report_key
 from app.worker.main import WorkerStats, run_once
@@ -90,8 +98,9 @@ def fake_generate(input_path: Path, output: Path) -> ReportResult:
     data = json.loads(input_path.read_text(encoding="utf-8"))
     body = MARK + data["edition"].encode("utf-8") + b" " + data["dog"]["name"].encode("utf-8")
     output.write_bytes(body)
+    numbers = tuple(build_tables(data["result"])[1])  # 실제 모듈처럼 입력의 수치를 그대로 싣는다(대조 통과)
     return ReportResult(
-        pdf_bytes=len(body), generation_ms=12, template_version="0.2", numbers=(), edition=data["edition"]
+        pdf_bytes=len(body), generation_ms=12, template_version="0.2", numbers=numbers, edition=data["edition"]
     )
 
 
@@ -146,7 +155,9 @@ def test_input_written_for_the_child_has_the_report_shape(db: Session, dog, staf
     assert captured["session"]["id"] == str(session.id) and captured["session"]["model_version"] == MODEL_VERSION
     assert captured["result"]["gaits"][0]["metrics"][0]["metric_code"] == "rom_stifle"
     assert captured["result"]["gaits"][0]["metrics"][0]["n_passes"] == 2  # 오차 범위를 쓸지 정하는 값(sentences)
-    assert captured["previous"] is None and captured["settings"] == {"tolerance": {}}
+    assert captured["previous"] is None
+    assert captured["settings"] == {"tolerance": get_tolerance(settings.TOLERANCE_FILE)}
+    assert captured["settings"]["tolerance"]["rom_stifle"] == 8.0  # config/tolerance.yaml의 임시값(박규원 MR 80 답변)
 
 
 def test_previous_done_session_of_the_dog_is_included(db: Session, dog, staff, tmp_path: Path) -> None:
@@ -273,3 +284,204 @@ def test_unknown_report_id_in_candidates_is_skipped_quietly(db: Session, dog, st
     settings = _settings()
     reporter = _reporter(settings, FakeExecutor())
     assert reporter._claim(db, uuid.uuid4()) is False
+
+
+# ---- 수치 대조(8절 7번 첫 항목, S15P31A404-196) ----
+
+
+def _with_numbers(
+    numbers_of: Callable[[tuple[ListedNumber, ...]], tuple[ListedNumber, ...]],
+) -> Callable[[Path, Path], ReportResult]:
+    """fake_generate가 돌려주는 실린 숫자 목록을 바꿔 끼운 생성 함수."""
+
+    def generate(input_path: Path, output: Path) -> ReportResult:
+        result = fake_generate(input_path, output)
+        return replace(result, numbers=numbers_of(result.numbers))
+
+    return generate
+
+
+def test_matching_numbers_are_verified_and_counted_in_the_log(db: Session, dog, staff, caplog) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    reporter = _reporter(settings, FakeExecutor())
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        _run(db, reporter, settings)
+        _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "DONE"
+    # 수치 2개(LH·RH) + 뒷다리 쌍 4개(왼쪽·오른쪽·차이·대칭 지수) = 6, 싣지 않은 기준값 없음
+    assert any("numbers=6 omitted=0" in message for message in caplog.messages)
+
+
+def test_a_number_that_differs_from_the_session_metric_fails_the_check_without_a_file(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+
+    def wrong(numbers: tuple[ListedNumber, ...]) -> tuple[ListedNumber, ...]:
+        return tuple(replace(n, value=n.value + 0.5) if (n.limb, n.kind) == ("LH", "metric") else n for n in numbers)
+
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=FakeExecutor, generate=_with_numbers(wrong))
+    _run(db, reporter, settings)
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, row.file_key) == ("FAILED", "REPORT_CHECK_FAILED", None)
+    assert stats.report_failed == 1 and stats.reported == 0
+    assert not get_storage().path(report_key(dog.institution_id, dog.id, session.id, row.id)).exists()
+
+
+def test_a_number_the_session_does_not_have_fails_the_check(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    extra = ListedNumber("TROT", "rom_hip", "LH", "metric", 41.9)
+    reporter = ReportGenerator(
+        settings,
+        get_storage(),
+        executor_factory=FakeExecutor,
+        generate=_with_numbers(lambda numbers: (*numbers, extra)),
+    )
+    _run(db, reporter, settings)
+    _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].fail_reason == "REPORT_CHECK_FAILED"
+
+
+def test_metrics_changed_while_the_report_was_being_made_fail_the_check(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    executor = FakeExecutor("hang")
+    reporter = _reporter(settings, executor)
+    _run(db, reporter, settings)  # 맡겼지만 아직 끝나지 않았다
+    fn, args, kwargs = executor.calls[0]
+    made = fn(*args, **kwargs)  # 자식은 맡길 때의 입력으로 만든다
+    row = db.query(SessionMetric).filter(SessionMetric.session_id == session.id, SessionMetric.limb == "LH").one()
+    row.value = Decimal("40.0")  # 그사이 회차 수치가 바뀌었다
+    db.flush()
+    db.commit()
+    executor.futures[0].set_result(made)
+    stats = _run(db, reporter, settings)
+    report = _reports(db, session)["OWNER"]
+    assert (report.status, report.fail_reason) == ("FAILED", "REPORT_CHECK_FAILED") and stats.report_failed == 1
+
+
+def test_a_report_that_lists_no_numbers_is_not_a_mismatch(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    reporter = ReportGenerator(
+        settings, get_storage(), executor_factory=FakeExecutor, generate=_with_numbers(lambda numbers: ())
+    )
+    _run(db, reporter, settings)
+    _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "DONE"
+
+
+# ---- 오차 범위 파일(S15P31A404-197) ----
+
+
+def test_malformed_tolerance_file_stops_the_worker_at_start(tmp_path: Path) -> None:
+    bad = tmp_path / "tolerance.yaml"
+    bad.write_text("rom_knee: 3.0\n", encoding="utf-8")
+    with pytest.raises(ToleranceFileError):
+        ReportGenerator(_settings(TOLERANCE_FILE=str(bad)), get_storage(), executor_factory=FakeExecutor)
+
+
+def test_missing_tolerance_file_means_no_tolerance_in_the_input(db: Session, dog, staff, tmp_path: Path) -> None:
+    _done_session(db, dog, staff)
+    settings = _settings(TOLERANCE_FILE=str(tmp_path / "none.yaml"), UPLOAD_TMP_DIR=str(tmp_path))
+    captured: dict[str, Any] = {}
+
+    def capture(input_path: Path, output: Path) -> ReportResult:
+        captured.update(json.loads(input_path.read_text(encoding="utf-8")))
+        return fake_generate(input_path, output)
+
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=FakeExecutor, generate=capture)
+    assert reporter.tolerance == {}
+    _run(db, reporter, settings)
+    assert captured["settings"] == {"tolerance": {}}
+
+
+# ---- 거두는 중 DB 오류(12.4, MR !85 리뷰) ----
+
+DB_DOWN = OperationalError("SELECT 1", {}, Exception("connection lost"))
+
+
+def _fails_once(real: Callable[..., Any], error: Exception) -> Callable[..., Any]:
+    """처음 한 번만 error를 내고 그다음부터 real을 부르는 함수."""
+    errors = [error]
+
+    def call(*args: Any, **kwargs: Any) -> Any:
+        if errors:
+            raise errors.pop()
+        return real(*args, **kwargs)
+
+    return call
+
+
+def test_db_error_reading_the_reference_keeps_the_job_and_its_pdf_for_the_next_loop(
+    db: Session, dog, staff, monkeypatch, tmp_path: Path
+) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings(UPLOAD_TMP_DIR=str(tmp_path))
+    executor = FakeExecutor()
+    reporter = _reporter(settings, executor)
+    _run(db, reporter, settings)
+    report_id, job = next(iter(reporter.jobs.items()))
+    monkeypatch.setattr("app.worker.report.reference_numbers", _fails_once(reference_numbers, DB_DOWN))
+
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, stats.report_failed) == ("GENERATING", None, 0)
+    assert list(reporter.jobs) == [report_id] and job.output.exists()
+
+    stats = _run(db, reporter, settings)  # 다시 만들지 않고 같은 PDF를 거둔다. 둘째 호출은 VET다
+    assert stats.reported == 1 and _reports(db, session)["OWNER"].status == "DONE"
+    assert len(executor.calls) == 2 and not job.job_dir.exists()
+
+
+def test_db_error_while_recording_a_failure_is_recorded_on_the_next_loop(db: Session, dog, staff, monkeypatch) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    extra = ListedNumber("TROT", "rom_hip", "LH", "metric", 41.9)
+    reporter = ReportGenerator(
+        settings,
+        get_storage(),
+        executor_factory=FakeExecutor,
+        generate=_with_numbers(lambda numbers: (*numbers, extra)),
+    )
+    _run(db, reporter, settings)
+    monkeypatch.setattr(reporter, "_fail", _fails_once(reporter._fail, DB_DOWN))
+
+    _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "GENERATING" and len(reporter.jobs) == 1
+
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, stats.report_failed) == ("FAILED", "REPORT_CHECK_FAILED", 1)
+
+
+def test_other_errors_reading_the_reference_fail_the_report_without_a_file(
+    db: Session, dog, staff, monkeypatch
+) -> None:
+    session = _done_session(db, dog, staff)
+    settings = _settings()
+    reporter = _reporter(settings, FakeExecutor())
+    _run(db, reporter, settings)
+    monkeypatch.setattr("app.worker.report.reference_numbers", _fails_once(reference_numbers, ValueError("bad row")))
+
+    stats = _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, row.file_key, stats.report_failed) == ("FAILED", "REPORT_FAILED", None, 1)
+
+
+def test_generating_report_without_a_job_goes_back_and_a_job_in_flight_is_left_alone(db: Session, dog, staff) -> None:
+    session = _done_session(db, dog, staff)
+    _reports(db, session)["OWNER"].status = "GENERATING"  # 가져간 뒤 맡기지 못한 경우
+    db.flush()
+    db.commit()
+    settings = _settings()
+    executor = FakeExecutor("hang")
+    reporter = _reporter(settings, executor)
+    for _ in range(2):
+        _run(db, reporter, settings)
+        rows = {row.id: row.status for row in _reports(db, session).values()}
+        assert sorted(rows.values()) == ["GENERATING", "PENDING"]
+        assert [report_id for report_id, status in rows.items() if status == "GENERATING"] == list(reporter.jobs)
+    assert len(executor.calls) == 1

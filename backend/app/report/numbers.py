@@ -1,14 +1,17 @@
 """수치 정리(8절 만드는 순서 2, PR-F08-06·07·14): 회차 결과의 수치를 보행 유형별 표로, 측정 불가는 사유와 함께.
 
 입력은 15.7 SessionResultOut dict의 gaits(수치·다리 비교)다. 값을 다시 계산하지 않고 받은 값을 그대로 싣는다.
-실은 수치는 ListedNumber 목록으로 함께 돌려주어 8절 7번 수치 대조(numbers 대조, 196)가 원본과 맞춘다.
+실은 수치는 ListedNumber 목록으로도 돌려준다. 8절 7번 수치 대조(verify.py, 워커가 DB 값과 맞춘다. 196)의 재료다.
 0은 측정값이 아니므로 value가 None이면 "측정 불가"와 사유를 쓴다(12.5).
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from app.report.judge import CHANGE_LABELS, judge, usable_tolerance
 
 UNMEASURABLE = "측정 불가"
 NO_VALUE = "-"
@@ -57,6 +60,11 @@ class Cell:
     text: str
     reason: str | None = None  # 측정 불가 사유 문장(14절 메시지)
     previous: str | None = None  # 직전 회차의 같은 값
+    change: str | None = None  # 직전 회차 대비 변화(judge의 CHANGE_LABELS 키). 기준이 없거나 비교 불가면 None
+
+    @property
+    def change_label(self) -> str | None:
+        return CHANGE_LABELS.get(self.change) if self.change else None
 
 
 @dataclass(frozen=True)
@@ -157,12 +165,16 @@ def _number(raw: Any) -> float | None:
         return None
 
 
-def _previous_values(previous: dict[str, Any] | None) -> dict[tuple[str, str, str], float | None]:
-    values: dict[tuple[str, str, str], float | None] = {}
+def _previous_values(
+    previous: dict[str, Any] | None,
+) -> dict[tuple[str, str, str], tuple[float | None, float | None]]:
+    """(보행 유형, 수치, 다리) → (값, n_passes)."""
+    values: dict[tuple[str, str, str], tuple[float | None, float | None]] = {}
     for gait in (previous or {}).get("gaits") or []:
         for metric in gait.get("metrics") or []:
-            values[(str(gait.get("gait_type")), str(metric.get("metric_code")), str(metric.get("limb")))] = _number(
-                metric.get("value")
+            values[(str(gait.get("gait_type")), str(metric.get("metric_code")), str(metric.get("limb")))] = (
+                _number(metric.get("value")),
+                _number(metric.get("n_passes")),
             )
     return values
 
@@ -173,9 +185,17 @@ def _min_passes(passes: dict[tuple[str, str], int], code: str, pair: str) -> int
 
 
 def build_tables(
-    result: dict[str, Any], previous: dict[str, Any] | None = None
+    result: dict[str, Any],
+    previous: dict[str, Any] | None = None,
+    tolerance: Mapping[str, float] | None = None,
+    model_changed: bool = False,
 ) -> tuple[list[GaitTable], list[ListedNumber]]:
-    """gaits[] → 보행 유형별 표와 실린 숫자 목록. 수치 순서는 받은 순서(15.7이 12.3 표 순서로 준다)."""
+    """gaits[] → 보행 유형별 표와 실린 숫자 목록. 수치 순서는 받은 순서(15.7이 12.3 표 순서로 준다).
+
+    previous가 있으면 같은 (보행 유형, 수치, 다리)의 직전 값을 칸에 넣고, tolerance에 그 수치의 오차 범위가 있고
+    두 회차의 n_passes가 모두 모자라지 않으면 5절 규칙의 변화(judge)를 함께 적는다. model_changed면 값만 적고
+    변화는 판단하지 않는다(197).
+    """
     tables: list[GaitTable] = []
     listed: list[ListedNumber] = []
     prior = _previous_values(previous)
@@ -192,12 +212,19 @@ def build_tables(
             if n_passes is not None:
                 passes[(code, limb)] = int(n_passes)
             row = rows.setdefault(code, TableRow(code, metric_label(code, unit), unit))
-            prev = prior.get((gait_type, code, limb)) if prior else None
+            key = (gait_type, code, limb)
+            prev, prev_passes = prior.get(key, (None, None))
+            change = None
+            if key in prior:
+                allowed = usable_tolerance((tolerance or {}).get(code), prev_passes, n_passes)
+                verdict = judge(prev, value, allowed, model_changed=model_changed)
+                change = verdict.judgement if verdict.judgement in CHANGE_LABELS else None
             row.cells[limb] = Cell(
                 value=value,
                 text=format_value(value, unit),
                 reason=_reason_text(metric.get("unmeasurable_reason")) if value is None else None,
-                previous=format_value(prev, unit) if (gait_type, code, limb) in prior else None,
+                previous=format_value(prev, unit) if key in prior else None,
+                change=change,
             )
             if value is not None:
                 listed.append(ListedNumber(gait_type, code, limb, "metric", value))

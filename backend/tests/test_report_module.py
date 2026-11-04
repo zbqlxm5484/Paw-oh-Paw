@@ -13,6 +13,7 @@ from app.report import pdf as pdf_module
 from app.report.checks import DISCLAIMER, check_texts, find_unexplained_jargon, load_rules
 from app.report.generate import generate_report, render
 from app.report.inputs import parse_input
+from app.report.judge import INCREASE, WITHIN_RANGE
 from app.report.numbers import UNMEASURABLE, build_tables, format_value
 from app.report.pdf import PdfUnavailableError, pdf_available
 from app.report.sentences import _glossary
@@ -118,7 +119,7 @@ NO_RANGE = (
     "좌우 차이는 촬영 조건에 따라서도 달라질 수 있어, 이 수치만으로 변화를 판단하지 않습니다. "
     "다음 측정과 같은 조건에서 비교해 보세요."
 )
-WITHIN_RANGE = "이 차이는 측정 오차 범위 안에 있습니다."
+IN_RANGE = "이 차이는 측정 오차 범위 안에 있습니다."
 OVER_RANGE = (
     "이 차이는 측정 오차 범위보다 큽니다. 다음 측정에서도 같은 다리에 차이가 이어지는지 담당 수의사와 함께 봐 주세요."
 )
@@ -174,7 +175,7 @@ def test_intro_follows_the_template_and_drops_only_the_missing_profile_items() -
     [
         ({}, NO_RANGE),
         ({"rom_hip": 1.0}, NO_RANGE),  # 표에 그 수치가 없으면 오차 범위가 없는 것과 같다
-        ({"rom_stifle": 4.2}, WITHIN_RANGE),  # 15.8: |diff| ≤ 오차 범위는 안이다
+        ({"rom_stifle": 4.2}, IN_RANGE),  # 15.8: |diff| ≤ 오차 범위는 안이다
         ({"rom_stifle": 4.1}, OVER_RANGE),
     ],
 )
@@ -188,15 +189,15 @@ def test_tolerance_compares_the_size_of_the_difference_in_decimal() -> None:
     result = sample_result()
     result["gaits"][0]["limb_compare"] = [compare("HIND", "rom_stifle", 30.2, 33.2)]
     summary = render(sample_input(result=result, settings={"tolerance": {"rom_stifle": 3.0}})).sentences.summary
-    assert summary[1] == WITHIN_RANGE
+    assert summary[1] == IN_RANGE
 
 
 @pytest.mark.parametrize(
     ("left_passes", "right_passes", "second"),
     [
-        (5, 5, WITHIN_RANGE),  # 양쪽 5회부터는 범위와 견준다
-        (4, 8, NO_RANGE),  # 왼쪽이 4회 이하면 판단 보류
-        (8, 4, NO_RANGE),  # 오른쪽만 적어도 같다
+        (8, 8, IN_RANGE),  # 양쪽 8회부터 범위와 견준다
+        (7, 8, NO_RANGE),  # 왼쪽이 8회 미만이면 판단 보류
+        (8, 7, NO_RANGE),  # 오른쪽만 적어도 같다
         (0, 0, NO_RANGE),
     ],
 )
@@ -340,7 +341,7 @@ def test_previous_session_with_another_model_version_is_not_compared() -> None:
 
 
 def test_previous_session_with_the_same_model_version_points_at_the_table() -> None:
-    rendered = render(sample_input(previous=sample_result(measured_on="2026-10-20")))
+    rendered = render(sample_input(previous=sample_result(measured_on="2026-10-20"), settings={"tolerance": {}}))
     assert rendered.texts["previous"] == (
         "직전 회차(2026-10-20)의 값을 표의 괄호 안에 함께 적었습니다. "
         "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
@@ -451,3 +452,82 @@ def test_non_windows_never_touches_the_dll_env(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(pdf_module.sys, "platform", "linux")
     monkeypatch.delenv(pdf_module.DLL_DIRS_ENV, raising=False)
     assert pdf_module.prepare_windows_dlls() is None and pdf_module.DLL_DIRS_ENV not in pdf_module.os.environ
+
+
+# ---- 직전 회차 변화(5절 비교 규칙, S15P31A404-197) ----
+
+
+def _previous_for_change() -> dict:
+    previous = sample_result(measured_on="2026-10-20")
+    previous["gaits"][0]["metrics"] = [
+        metric("rom_stifle", "LH", 45.0),  # 47.3과 2.3 차이, 범위 4.2 안
+        metric("rom_stifle", "RH", 38.0),  # 43.1과 5.1 차이, 범위 밖
+        metric("stance_ratio", "LH", 50.0, unit="pct"),  # 견본 설정에는 오차 범위가 없다
+    ]
+    return previous
+
+
+def test_change_labels_follow_the_tolerance_and_are_absent_without_one() -> None:
+    tables, _ = build_tables(sample_result(), _previous_for_change(), tolerance={"rom_stifle": 4.2})
+    stifle = next(row for row in tables[0].rows if row.code == "rom_stifle")
+    assert (stifle.cells["LH"].change, stifle.cells["LH"].change_label) == (WITHIN_RANGE, "범위 안")
+    assert (stifle.cells["RH"].change, stifle.cells["RH"].change_label) == (INCREASE, "증가")
+    stance = next(row for row in tables[0].rows if row.code == "stance_ratio")
+    assert stance.cells["LH"].previous == "50.0%" and stance.cells["LH"].change is None
+    assert next(row for row in tables[0].rows if row.code == "rom_hip").cells["LH"].change is None
+
+
+def test_a_changed_model_keeps_previous_values_but_no_change_labels() -> None:
+    previous = _previous_for_change()
+    previous["model_version"] = "0.3.0/v1/deadbeef"
+    tables, _ = build_tables(sample_result(), previous, tolerance={"rom_stifle": 4.2}, model_changed=True)
+    stifle = next(row for row in tables[0].rows if row.code == "rom_stifle")
+    assert stifle.cells["RH"].previous == "38.0°" and stifle.cells["RH"].change is None
+
+
+def test_rendered_report_shows_changes_in_the_cells_and_explains_the_rule() -> None:
+    rendered = render(sample_input(previous=_previous_for_change()))
+    assert "(38.0°, 증가)" in rendered.html and "(45.0°, 범위 안)" in rendered.html and "(50.0%)" in rendered.html
+    assert rendered.texts["previous"] == (
+        "직전 회차(2026-10-20)의 값을 표의 괄호 안에 함께 적었습니다. "
+        "오차 범위보다 크게 달라진 값은 증가·감소로 적었습니다. "
+        '"범위 안"은 달라진 크기가 오차 범위 안이라는 뜻이고, 정상 범위라는 뜻은 아닙니다. '
+        "판단할 기준이 없거나 걸음 수가 적으면 값만 적었습니다. "
+        "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
+    )
+
+
+def test_only_the_vet_note_counts_the_changes() -> None:
+    rendered = render(sample_input("VET", previous=_previous_for_change()))
+    assert "증가·감소로 적었습니다(범위 밖 1개, 범위 안 1개)." in rendered.texts["previous"]
+
+
+@pytest.mark.parametrize(
+    ("previous_passes", "passes", "change"),
+    [(8, 8, WITHIN_RANGE), (7, 8, None), (8, 7, None), (None, 8, None), (8, None, None)],
+)
+def test_a_change_needs_eight_passes_in_both_sessions(
+    previous_passes: int | None, passes: int | None, change: str | None
+) -> None:
+    previous = sample_result(measured_on="2026-10-20")
+    previous["gaits"][0]["metrics"] = [metric("rom_stifle", "LH", 45.0, n=previous_passes)]
+    result = sample_result()
+    result["gaits"][0]["metrics"] = [metric("rom_stifle", "LH", 47.3, n=passes)]
+    tables, _ = build_tables(result, previous, tolerance={"rom_stifle": 4.2})
+    cell = tables[0].rows[0].cells["LH"]
+    assert cell.previous == "45.0°" and cell.change == change
+
+
+def test_without_any_tolerance_only_the_template_note_and_values_remain() -> None:
+    data = sample_input(previous=_previous_for_change(), settings={"tolerance": {}})
+    rendered = render(data)
+    assert "증가·감소로 적었습니다" not in rendered.texts["previous"]
+    assert "증가" not in rendered.html and "범위 안" not in rendered.html
+
+
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_change_labels_and_the_note_pass_the_checks(edition: str) -> None:
+    rendered = render(sample_input(edition, previous=_previous_for_change()))
+    assert check_texts(rendered.texts, edition=edition) == []
+    if edition == "OWNER":
+        assert any(term == "오차 범위" for term, _ in rendered.sentences.glossary)

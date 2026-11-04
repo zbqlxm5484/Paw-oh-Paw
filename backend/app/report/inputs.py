@@ -52,6 +52,13 @@ class ReportInput:
     previous: dict[str, Any] | None
     tolerance: dict[str, float]
 
+    @property
+    def previous_model_changed(self) -> bool:
+        """직전 회차의 분석 모델이 다르면 변화를 판단하지 않는다(5절 비교 규칙)."""
+        if not self.previous:
+            return False
+        return self.previous.get("model_version") not in (None, self.session.model_version)
+
 
 def _optional_text(value: Any) -> str | None:
     return str(value).strip() if isinstance(value, str) and value.strip() else None
