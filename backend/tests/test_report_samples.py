@@ -7,15 +7,18 @@ WeasyPrint가 있을 때만 한 경우로 확인한다(test_report_module의 실
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
+from app.models import SessionMetric
 from app.report.checks import ensure_checked
 from app.report.generate import render
 from app.report.pdf import pdf_available
-from app.report.samples import CASES, EDITIONS, MESSAGES, case_names, sample_input
+from app.report.samples import CASES, EDITIONS, MESSAGES, case_names, compare_rank, sample_input
 from app.report.verify import compare_numbers, reference_from_result
+from app.services.session_results import limb_compare
 from scripts import report_samples
 
 PAIRS = [(case.name, edition) for case in CASES for edition in EDITIONS]
@@ -94,6 +97,44 @@ def test_reference_from_result_follows_the_worker_rules() -> None:
     # 무릎 쌍은 양쪽이 있어 네 값이 다 있고 12.3 식과 맞는다(47.3·43.1 → 4.2, 9.29)
     assert reference[("TROT", "rom_stifle", "HIND", "diff")] == pytest.approx(4.2)
     assert reference[("TROT", "rom_stifle", "HIND", "symmetry_index")] == pytest.approx(9.29)
+
+
+def _as_rows(gait: dict) -> list[SessionMetric]:
+    """견본의 수치 행을 결과 조회가 받는 session_metric 행 모양으로(DB 없이 객체만)."""
+    return [
+        SessionMetric(
+            gait_type=gait["gait_type"],
+            limb=row["limb"],
+            metric_code=row["metric_code"],
+            value=None if row["value"] is None else Decimal(str(row["value"])),
+            unit=row["unit"],
+            measurable=row["measurable"],
+            unmeasurable_reason=(row["unmeasurable_reason"] or {}).get("code"),
+            n_passes=row["n_passes"],
+        )
+        for row in gait["metrics"]
+    ]
+
+
+@pytest.mark.parametrize("case", case_names())
+def test_limb_compare_lines_follow_the_result_api_order(case: str) -> None:
+    """견본의 다리 비교 줄은 결과 조회(services/session_results.limb_compare)와 같은 순서·값이다(15.7)."""
+    for gait in sample_input(case, "VET")["result"]["gaits"]:
+        keys = ("pair", "metric_code", "left", "right", "diff", "symmetry_index", "comparable")
+        expected = [tuple(getattr(entry, key) for key in keys) for entry in limb_compare(_as_rows(gait))]
+        actual = [tuple(line[key] for key in keys) for line in gait["limb_compare"]]
+        assert actual == expected, gait["gait_type"]
+        assert gait["limb_compare"] == sorted(gait["limb_compare"], key=compare_rank)
+
+
+def test_follow_up_summary_names_the_largest_ratio_item() -> None:
+    """평보는 무릎 4.50% > 고관절 1.81% > 입각기 1.08%라 요약의 "가장 큰 항목"은 무릎이다(정렬 전엔 첫 행 고관절)."""
+    (walk, _trot) = sample_input("follow_up", "OWNER")["result"]["gaits"]
+    assert [line["metric_code"] for line in walk["limb_compare"]] == ["rom_stifle", "rom_hip", "stance_ratio"]
+    assert [line["symmetry_index"] for line in walk["limb_compare"]] == [4.5, 1.81, 1.08]
+    html = _html("follow_up", "OWNER")
+    assert "평보에서 왼쪽과 오른쪽의 차이를 비율로 볼 때 가장 큰 항목은 뒷다리 무릎 가동 범위입니다." in html
+    assert "가장 큰 항목은 뒷다리 고관절" not in html
 
 
 def test_script_html_mode_writes_every_case_and_edition(tmp_path: Path) -> None:

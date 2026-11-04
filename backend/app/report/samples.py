@@ -2,7 +2,8 @@
 
 경우 목록은 조영운 제안이고 기업 승인 전이다(계획 문서 "경우 목록은 기업 승인"). scripts/report_samples.py가 이 목록으로
 판본별 PDF를 만들고 생성 시간(KPI-29, 20초)을 잰다. 수치는 지어낸 값이되 15.7 다리 비교 값(diff·symmetry_index)은
-12.3 식(Decimal, 넷째·둘째 자리)으로 맞춰 두어, 실린 숫자 대조(report/verify.py)를 그대로 통과한다.
+12.3 식(Decimal, 넷째·둘째 자리)으로 맞춰 두어, 실린 숫자 대조(report/verify.py)를 그대로 통과한다. 다리 비교 줄의
+순서도 결과 조회와 같다(compare_rank. 요약 문장이 "비율로 가장 큰 항목"을 첫 줄에서 고르므로 순서가 내용이다).
 
 경우(이름 → 뜻):
 - first: 첫 회차. 양방향 통과가 충분하고(8회 이상) 평보·속보 둘 다 있다. 직전 회차 없음
@@ -112,8 +113,20 @@ def compare(pair: str, code: str, left: float | None, right: float | None, *, re
     }
 
 
+def compare_rank(line: Mapping[str, Any]) -> tuple[int, float]:
+    """15.7 다리 비교 줄 순서: 대칭 지수가 있는 줄을 큰 순서로 → 지수만 없는 비교 가능 줄 → 비교할 수 없는 줄.
+
+    결과 조회(services/session_results.py의 _compare_rank)와 같은 규칙이다. 이 패키지는 app.services를 모르므로(11.3)
+    규칙을 여기 둔다. 같은 값끼리는 만든 순서(12.3 표, 앞다리 쌍 → 뒷다리 쌍)를 지킨다(sorted는 안정 정렬).
+    """
+    symmetry = line.get("symmetry_index")
+    if symmetry is not None:
+        return (0, -float(symmetry))
+    return (1, 0.0) if line.get("comparable") else (2, 0.0)
+
+
 def _pairs(rows: list[dict]) -> list[dict]:
-    """수치 행에서 15.7 다리 비교 줄을 만든다(앞다리 쌍 → 뒷다리 쌍, 12.3 표 순서는 rows 순서를 따른다)."""
+    """수치 행에서 15.7 다리 비교 줄을 만들고 compare_rank 순서로 정렬한다(같은 값은 12.3 표, 앞다리 쌍 → 뒷다리 쌍)."""
     by_key = {(row["metric_code"], row["limb"]): row for row in rows}
     lines: list[dict] = []
     for code in dict.fromkeys(row["metric_code"] for row in rows if row["limb"] != "NONE"):
@@ -131,7 +144,7 @@ def _pairs(rows: list[dict]) -> list[dict]:
                     reason_code=(missing["unmeasurable_reason"] or {}).get("code") if missing else None,
                 )
             )
-    return lines
+    return sorted(lines, key=compare_rank)
 
 
 def gait(gait_type: str, rows: list[dict]) -> dict:
