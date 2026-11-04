@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from app.report.numbers import ListedNumber
 
@@ -89,3 +90,29 @@ def summarize(verification: Verification) -> str:
     parts = [f"{kind} {len(keys)}: {', '.join(dict.fromkeys(keys))}" for kind, keys in kinds.items()]
     parts.append(f"checked {verification.checked}, omitted {len(verification.omitted)}")
     return "; ".join(parts)
+
+
+# 15.7 다리 비교 줄의 종류(services/report_numbers.py의 PAIR_KINDS와 같다)
+PAIR_KINDS = ("left", "right", "diff", "symmetry_index")
+
+
+def reference_from_result(result: Mapping[str, Any]) -> dict[NumberKey, float]:
+    """회차 결과 dict(15.7 SessionResultOut 모양, 보고서 입력의 result) → 대조 기준값.
+
+    팀 서비스 워커는 DB에서 기준값을 만들지만(services/report_numbers.py), 기업 서버와 견본 스크립트
+    (scripts/report_samples.py)는 분석 결과에서 같은 모양으로 만든다(8절 7번). 규칙은 같다: 측정된 수치 값, 쌍의
+    왼쪽·오른쪽 값은 비교할 수 없어도, 차이·대칭 지수는 비교할 수 있을 때만.
+    """
+    reference: dict[NumberKey, float] = {}
+    for gait in result.get("gaits") or []:
+        gait_type = str(gait.get("gait_type"))
+        for row in gait.get("metrics") or []:
+            if row.get("value") is not None:
+                reference[(gait_type, str(row["metric_code"]), str(row["limb"]), "metric")] = float(row["value"])
+        for entry in gait.get("limb_compare") or []:
+            comparable = bool(entry.get("comparable"))
+            for kind in PAIR_KINDS:
+                value = entry.get(kind)
+                if value is not None and (comparable or kind in ("left", "right")):
+                    reference[(gait_type, str(entry["metric_code"]), str(entry["pair"]), kind)] = float(value)
+    return reference
