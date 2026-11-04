@@ -15,6 +15,7 @@ from app.report.judge import (
     UNKNOWN,
     WITHIN_RANGE,
     judge,
+    usable_tolerance,
 )
 
 
@@ -69,3 +70,24 @@ def test_labels_exist_only_for_decided_judgements() -> None:
     assert set(CHANGE_LABELS) == {INCREASE, DECREASE, WITHIN_RANGE}
     assert UNKNOWN not in CHANGE_LABELS and NOT_COMPARABLE not in CHANGE_LABELS
     assert not any(word in label for label in CHANGE_LABELS.values() for word in ("좋아", "나빠"))
+
+
+@pytest.mark.parametrize(
+    ("tolerance", "passes", "expected"),
+    [
+        (3.0, (8, 8), 3.0),
+        (3.0, (8,), 3.0),
+        (3.0, (7, 8), None),
+        (3.0, (8, 7), None),
+        (3.0, (8, None), None),
+        (None, (8, 8), None),
+    ],
+)
+def test_tolerance_is_usable_only_with_eight_passes_on_every_value(
+    tolerance: float | None, passes: tuple[int | None, ...], expected: float | None
+) -> None:
+    assert usable_tolerance(tolerance, *passes) == expected
+
+
+def test_too_few_passes_are_judged_like_a_range_that_is_not_set() -> None:
+    assert judge(38.2, 42.0, usable_tolerance(3.0, 7, 8)) == (UNKNOWN, NOTE_RANGE_NOT_SET, 3.8)

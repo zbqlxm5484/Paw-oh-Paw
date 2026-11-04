@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.report.judge import CHANGE_LABELS, judge
+from app.report.judge import CHANGE_LABELS, judge, usable_tolerance
 
 UNMEASURABLE = "측정 불가"
 NO_VALUE = "-"
@@ -165,12 +165,16 @@ def _number(raw: Any) -> float | None:
         return None
 
 
-def _previous_values(previous: dict[str, Any] | None) -> dict[tuple[str, str, str], float | None]:
-    values: dict[tuple[str, str, str], float | None] = {}
+def _previous_values(
+    previous: dict[str, Any] | None,
+) -> dict[tuple[str, str, str], tuple[float | None, float | None]]:
+    """(보행 유형, 수치, 다리) → (값, n_passes)."""
+    values: dict[tuple[str, str, str], tuple[float | None, float | None]] = {}
     for gait in (previous or {}).get("gaits") or []:
         for metric in gait.get("metrics") or []:
-            values[(str(gait.get("gait_type")), str(metric.get("metric_code")), str(metric.get("limb")))] = _number(
-                metric.get("value")
+            values[(str(gait.get("gait_type")), str(metric.get("metric_code")), str(metric.get("limb")))] = (
+                _number(metric.get("value")),
+                _number(metric.get("n_passes")),
             )
     return values
 
@@ -188,8 +192,9 @@ def build_tables(
 ) -> tuple[list[GaitTable], list[ListedNumber]]:
     """gaits[] → 보행 유형별 표와 실린 숫자 목록. 수치 순서는 받은 순서(15.7이 12.3 표 순서로 준다).
 
-    previous가 있으면 같은 (보행 유형, 수치, 다리)의 직전 값을 칸에 넣고, tolerance에 그 수치의 오차 범위가 있으면
-    5절 규칙의 변화(judge)를 함께 적는다. model_changed면 값만 적고 변화는 판단하지 않는다(197).
+    previous가 있으면 같은 (보행 유형, 수치, 다리)의 직전 값을 칸에 넣고, tolerance에 그 수치의 오차 범위가 있고
+    두 회차의 n_passes가 모두 모자라지 않으면 5절 규칙의 변화(judge)를 함께 적는다. model_changed면 값만 적고
+    변화는 판단하지 않는다(197).
     """
     tables: list[GaitTable] = []
     listed: list[ListedNumber] = []
@@ -208,10 +213,11 @@ def build_tables(
                 passes[(code, limb)] = int(n_passes)
             row = rows.setdefault(code, TableRow(code, metric_label(code, unit), unit))
             key = (gait_type, code, limb)
-            prev = prior.get(key)
+            prev, prev_passes = prior.get(key, (None, None))
             change = None
             if key in prior:
-                verdict = judge(prev, value, (tolerance or {}).get(code), model_changed=model_changed)
+                allowed = usable_tolerance((tolerance or {}).get(code), prev_passes, n_passes)
+                verdict = judge(prev, value, allowed, model_changed=model_changed)
                 change = verdict.judgement if verdict.judgement in CHANGE_LABELS else None
             row.cells[limb] = Cell(
                 value=value,

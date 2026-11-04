@@ -12,14 +12,12 @@ from decimal import Decimal
 
 from app.report.checks import DISCLAIMER, TermRules, contains_term, load_rules, normalize
 from app.report.inputs import ReportInput
-from app.report.judge import WITHIN_RANGE
+from app.report.judge import WITHIN_RANGE, usable_tolerance
 from app.report.numbers import NO_VALUE, CompareLine, GaitTable
 
 EDITION_LABELS = {"OWNER": "보호자용", "VET": "수의사용"}
 SIZE_LABELS = {"SMALL": "소형", "MEDIUM": "중형", "LARGE": "대형"}
 SEX_LABELS = {"M": "수컷", "F": "암컷", "MALE": "수컷", "FEMALE": "암컷"}
-# 오차 범위는 한쪽 8회 기준이다. 4회면 흔들림이 약 1.4배라 범위와 견주지 않는다(박규원 MR 80 답변)
-TOLERANCE_MIN_PASSES = 5
 
 
 @dataclass(frozen=True)
@@ -73,9 +71,8 @@ def _intro(inp: ReportInput) -> str:
 
 def _difference_note(top: CompareLine, tolerance: dict[str, float]) -> str:
     """보호자용 요약의 둘째 문장. 좌우 차이도 회차 비교의 오차 범위 표(15.8)와 견주고, 비교는 Decimal로 한다(15.1)."""
-    allowed = tolerance.get(top.code)
-    enough_passes = top.min_passes is not None and top.min_passes >= TOLERANCE_MIN_PASSES
-    if allowed is None or top.diff_value is None or not enough_passes:
+    allowed = usable_tolerance(tolerance.get(top.code), top.min_passes)
+    if allowed is None or top.diff_value is None:
         return (
             "좌우 차이는 촬영 조건에 따라서도 달라질 수 있어, 이 수치만으로 변화를 판단하지 않습니다. "
             "다음 측정과 같은 조건에서 비교해 보세요."
@@ -145,12 +142,15 @@ def _previous_note(inp: ReportInput, tables: list[GaitTable]) -> str | None:
     caution = "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
     if not inp.tolerance:
         return f"{head} {caution}"
-    cells = [cell for table in tables for row in table.rows for cell in row.cells.values() if cell.change]
-    outside = sum(1 for cell in cells if cell.change != WITHIN_RANGE)
+    counts = ""
+    if inp.edition == "VET":  # 보호자용에는 개수를 적지 않는다(박규원 MR 86 리뷰)
+        cells = [cell for table in tables for row in table.rows for cell in row.cells.values() if cell.change]
+        outside = sum(1 for cell in cells if cell.change != WITHIN_RANGE)
+        counts = f"(범위 밖 {outside}개, 범위 안 {len(cells) - outside}개)"
     return (
-        f"{head} 오차 범위가 정해진 수치는 범위 밖으로 달라진 것만 증가·감소로 표시했습니다"
-        f"(범위 밖 {outside}개, 범위 안 {len(cells) - outside}개). "
-        f"기준이 아직 없는 수치는 값만 적었습니다. {caution}"
+        f"{head} 오차 범위보다 크게 달라진 값은 증가·감소로 적었습니다{counts}. "
+        '"범위 안"은 달라진 크기가 오차 범위 안이라는 뜻이고, 정상 범위라는 뜻은 아닙니다. '
+        f"판단할 기준이 없거나 걸음 수가 적으면 값만 적었습니다. {caution}"
     )
 
 

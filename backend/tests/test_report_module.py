@@ -195,9 +195,9 @@ def test_tolerance_compares_the_size_of_the_difference_in_decimal() -> None:
 @pytest.mark.parametrize(
     ("left_passes", "right_passes", "second"),
     [
-        (5, 5, IN_RANGE),  # 양쪽 5회부터는 범위와 견준다
-        (4, 8, NO_RANGE),  # 왼쪽이 4회 이하면 판단 보류
-        (8, 4, NO_RANGE),  # 오른쪽만 적어도 같다
+        (8, 8, IN_RANGE),  # 양쪽 8회부터 범위와 견준다
+        (7, 8, NO_RANGE),  # 왼쪽이 8회 미만이면 판단 보류
+        (8, 7, NO_RANGE),  # 오른쪽만 적어도 같다
         (0, 0, NO_RANGE),
     ],
 )
@@ -488,15 +488,40 @@ def test_a_changed_model_keeps_previous_values_but_no_change_labels() -> None:
 def test_rendered_report_shows_changes_in_the_cells_and_explains_the_rule() -> None:
     rendered = render(sample_input(previous=_previous_for_change()))
     assert "(38.0°, 증가)" in rendered.html and "(45.0°, 범위 안)" in rendered.html and "(50.0%)" in rendered.html
-    assert "범위 밖 1개, 범위 안 1개" in rendered.texts["previous"]
-    assert "기준이 아직 없는 수치는 값만" in rendered.texts["previous"]
-    assert rendered.texts["previous"].endswith("값의 차이는 측정 조건에 따라서도 생길 수 있습니다.")
+    assert rendered.texts["previous"] == (
+        "직전 회차(2026-10-20)의 값을 표의 괄호 안에 함께 적었습니다. "
+        "오차 범위보다 크게 달라진 값은 증가·감소로 적었습니다. "
+        '"범위 안"은 달라진 크기가 오차 범위 안이라는 뜻이고, 정상 범위라는 뜻은 아닙니다. '
+        "판단할 기준이 없거나 걸음 수가 적으면 값만 적었습니다. "
+        "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
+    )
+
+
+def test_only_the_vet_note_counts_the_changes() -> None:
+    rendered = render(sample_input("VET", previous=_previous_for_change()))
+    assert "증가·감소로 적었습니다(범위 밖 1개, 범위 안 1개)." in rendered.texts["previous"]
+
+
+@pytest.mark.parametrize(
+    ("previous_passes", "passes", "change"),
+    [(8, 8, WITHIN_RANGE), (7, 8, None), (8, 7, None), (None, 8, None), (8, None, None)],
+)
+def test_a_change_needs_eight_passes_in_both_sessions(
+    previous_passes: int | None, passes: int | None, change: str | None
+) -> None:
+    previous = sample_result(measured_on="2026-10-20")
+    previous["gaits"][0]["metrics"] = [metric("rom_stifle", "LH", 45.0, n=previous_passes)]
+    result = sample_result()
+    result["gaits"][0]["metrics"] = [metric("rom_stifle", "LH", 47.3, n=passes)]
+    tables, _ = build_tables(result, previous, tolerance={"rom_stifle": 4.2})
+    cell = tables[0].rows[0].cells["LH"]
+    assert cell.previous == "45.0°" and cell.change == change
 
 
 def test_without_any_tolerance_only_the_template_note_and_values_remain() -> None:
     data = sample_input(previous=_previous_for_change(), settings={"tolerance": {}})
     rendered = render(data)
-    assert "증가·감소로 표시" not in rendered.texts["previous"]
+    assert "증가·감소로 적었습니다" not in rendered.texts["previous"]
     assert "증가" not in rendered.html and "범위 안" not in rendered.html
 
 

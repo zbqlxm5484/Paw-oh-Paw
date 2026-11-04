@@ -6,7 +6,7 @@
 1. 한쪽 값이 없거나 측정 불가 → NOT_COMPARABLE. note는 행이 없는 쪽이 있으면 NO_DATA, 아니면 base 쪽, 그다음 target 쪽의
    측정 불가 사유. diff는 None
 2. 두 회차의 분석 모델이 다름 → UNKNOWN·MODEL_CHANGED
-3. 그 수치의 오차 범위가 없음 → UNKNOWN·RANGE_NOT_SET
+3. 그 수치의 오차 범위가 없음 → UNKNOWN·RANGE_NOT_SET. 통과 수가 모자라면 부르는 쪽이 usable_tolerance로 None을 넘긴다
 4. |diff| ≤ 오차 범위 → WITHIN_RANGE
 5. 그 밖 → INCREASE(diff > 범위)·DECREASE(diff < −범위)
 
@@ -36,10 +36,22 @@ CHANGE_LABELS: dict[str, str] = {INCREASE: "증가", DECREASE: "감소", WITHIN_
 DIFF_PLACES = Decimal("0.0001")
 
 
+# 오차 범위 값은 통과 8개를 평균한 줄에서 나왔다. 5회면 고관절 약 6°·무릎 약 11°·입각기 약 6%p가 흔들려
+# 범위보다 크므로, 회차 비교와 좌우 차이 모두 8회 미만이면 견주지 않는다(박규원 MR 86 답변)
+TOLERANCE_MIN_PASSES = 8
+
+
 class Judgement(NamedTuple):
     judgement: str
     note: str | None  # 14절 사유 코드. 판정이 났으면 None
     diff: float | None  # target − base. 비교할 수 없으면 None
+
+
+def usable_tolerance(tolerance: float | None, *passes: float | None) -> float | None:
+    """견줄 수 있는 오차 범위. 견주는 값들의 n_passes가 하나라도 모자라거나 모르면 None이다."""
+    if any(count is None or count < TOLERANCE_MIN_PASSES for count in passes):
+        return None
+    return tolerance
 
 
 def judge(
