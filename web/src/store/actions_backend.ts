@@ -6,7 +6,7 @@ import { redirect, need_login, setLogin, current, currentStaff, type Go } from '
 import * as config from '../config'
 import { on, f, BACKEND, type Handler } from './actions'
 import { api, MOCK, SEX_OUT, SIZE_OUT, syncFromBackend, tokenStore, isRemote, syncAdmin } from './backend'
-import { db, dogOf } from './db'
+import { db, dogOf, resultOf } from './db'
 import { remember } from './sessions_backend'
 
 /** 백엔드 처리 함수 등록: 로컬(시제품) 처리 함수보다 언제나 먼저 불린다 */
@@ -124,6 +124,27 @@ if (!MOCK) {
     } catch (e) {
       if (e instanceof ApiError && e.code === 'DOG_MODIFIED') return redirect(next_url, '다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.')
       return redirect(next_url, msg(e))
+    }
+  })
+
+  // 기준 회차 지정: 서버 반려견의 baseline_session_id 로 저장한다(version 낙관적 잠금). 다른 담당자가 먼저 고쳤으면 다시 불러온다
+  onB('/dogs/:dog_id/base', async (p, fd) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const back = `/dogs/${p.dog_id}`
+    const d = dogOf(acct, p.dog_id), r = resultOf(acct, f(fd, 'rid'))
+    if (!d || !r || r.st === 'fail') return redirect(back)
+    try {
+      await api.updateDog(d.id, { baseline_session_id: r.id, version: d.version })
+      await syncFromBackend()
+      return redirect(back, `${r.date} 회차를 기준으로 정했어요`)
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'DOG_MODIFIED') {
+        await syncFromBackend().catch(() => undefined)
+        return redirect(back, '다른 담당자가 먼저 수정해서 새로 불러왔어요. 다시 눌러 주세요')
+      }
+      return redirect(back, msg(e))
     }
   })
 
