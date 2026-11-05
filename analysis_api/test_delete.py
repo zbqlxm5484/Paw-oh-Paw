@@ -5,9 +5,7 @@ import main
 import purge
 import pytest
 import store
-from fastapi.testclient import TestClient
-
-client = TestClient(main.app)
+from conftest import client  # 세션 동안 열어 둔 클라이언트 (conftest.py)
 
 
 @pytest.fixture(autouse=True)
@@ -73,7 +71,7 @@ def test_purge_refuses_while_analysis_running(storage, monkeypatch):
 
 def test_purge_counts_and_removes_folders_without_job_json(storage):
     upload()
-    half = storage / "half-upload"                 # 업로드 도중 끊겨 영상만 남은 폴더
+    half = storage / "3f2b8c1e-5d4a-4b6f-9a7e-1c2d3e4f5a6b"   # 업로드 도중 끊겨 영상만 남은 폴더 (이름은 작업 ID)
     half.mkdir()
     (half / "video.mp4").write_bytes(b"12345")
     stats = store.purge_stats(storage)
@@ -106,3 +104,20 @@ def test_interrupted_upload_leaves_no_folder(storage, monkeypatch):
     with pytest.raises(ConnectionResetError):
         client.post("/analyses", files={"video": ("a.mp4", b"x", "video/mp4")})
     assert not storage.exists() or list(storage.iterdir()) == []
+
+
+
+def test_purge_keeps_folders_that_are_not_jobs(tmp_path, monkeypatch):
+    """ANALYSIS_STORAGE_DIR를 data/처럼 넓게 잘못 줘도 작업 폴더가 아닌 data/tracks/ 등은 남는다"""
+    data = tmp_path / "data"
+    monkeypatch.setattr(main, "STORAGE_DIR", data)
+    upload()
+    tracks = data / "tracks"
+    tracks.mkdir()
+    (tracks / "fs-v4.track.json").write_text("{}", encoding="utf-8")
+    (data / "notes.txt").write_text("x", encoding="utf-8")
+    stats = store.purge_stats(data)
+    assert stats["jobs"] == 1 and stats["others"] == 2
+    assert purge.run(["--all", "--execute", "--yes"], root=data) == 0
+    assert (tracks / "fs-v4.track.json").exists() and (data / "notes.txt").exists()
+    assert not any(store.is_job_dir_name(p.name) for p in data.iterdir())
