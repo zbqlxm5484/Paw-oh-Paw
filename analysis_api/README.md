@@ -114,8 +114,8 @@ data/analysis_api/
 
 | 무엇을 | 방법 |
 | --- | --- |
-| 작업 하나 | `DELETE /analyses/{id}`: 올린 영상·작업 상태·결과·관절점 파일(폴더째)과 `analyses.jsonl`의 그 줄. 성공 204. 분석 중(queued·running)이면 409 `JOB_IN_PROGRESS`, 없으면 404(부르는 쪽은 "이미 없음"으로 본다) |
-| 전체 | `python purge.py --all`은 지울 양만 센다. `python purge.py --all --execute`는 확인 문구 `PURGE`를 받고 모든 작업과 `analyses.jsonl`을 지운다(`--yes`면 묻지 않음). 분석 중인 작업이 있으면 지우지 않는다. 분석 API를 끈 뒤 돌린다 |
+| 작업 하나 | `DELETE /analyses/{id}`: 올린 영상·작업 상태·결과·관절점 파일(폴더째)과 `analyses.jsonl`의 그 줄. 성공 204. 분석 중(queued·running)이면 409 `JOB_IN_PROGRESS`, 없으면 404(부르는 쪽은 "이미 없음"으로 본다), 폴더를 다 지우지 못하면 500 `DELETE_FAILED`(기록 줄은 남기고 다시 시도) |
+| 전체 | `python purge.py --all`은 지울 양만 센다. `python purge.py --all --execute`는 확인 문구 `PURGE`를 받고 저장소 아래 모든 작업 폴더(`job.json`이 없는, 업로드 도중 끊긴 폴더도)와 `analyses.jsonl`을 지운다(`--yes`면 묻지 않음). 분석 중인 작업이 있으면 지우지 않는다. 분석 API를 끈 뒤 돌린다 |
 
 관절점 파일(`data/tracks/`)과 `models.yaml`은 지우지 않는다. 관절점 파일도 기업 데이터에서 나온 것이라 과제 종료 때는 따로 지운다.
 
@@ -135,7 +135,9 @@ data/analysis_api/
 | `POSE_UNAVAILABLE` | 이 영상의 관절점을 얻지 못함 (`track`에서 관절점 파일이 없거나, 영상을 못 찾거나, 관절점 파일의 모델이 다름) |
 | `INTERRUPTED` | 분석 중에 분석 API가 다시 시작됨 |
 
-등록·조회 말고 지우기에서 나는 오류: 409 `JOB_IN_PROGRESS`(분석 중인 작업은 지울 수 없음).
+등록·조회 말고 지우기에서 나는 오류: 409 `JOB_IN_PROGRESS`(분석 중인 작업은 지울 수 없음), 500 `DELETE_FAILED`(폴더를 다 지우지 못함).
+
+업로드가 도중에 끊기면 그때까지 쓴 영상을 지운다(크기 초과 413과 같다). `analyses.jsonl`에 깨진 줄(쓰는 도중 꺼진 것)이 있으면 읽을 때 건너뛰고, 작업을 지울 때 함께 버린다.
 | `INTERNAL` | 분석 중 알 수 없는 오류 |
 
 ## 테스트
