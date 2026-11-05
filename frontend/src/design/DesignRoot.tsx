@@ -207,6 +207,8 @@ function AppShell(props: ProtoProps) {
   // --safe-area-inset-* 는 Capacitor(SystemBars)가 넣고, 브라우저는 env() 를 쓴다
   return (
     <div style={{ height: '100dvh', paddingBottom: SAFE_BOTTOM, background: '#FAF9F6' }}>
+      {/* 디자인의 가짜 상태 표시줄(9:41)은 데스크톱 시안 틀에서만. 폰에서는 진짜 상태 표시줄과 겹친다 */}
+      <style>{'.pp-fakebar{display:none !important}'}</style>
       <AppProto {...props} rootStyle={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }} />
       <DemoPill />
     </div>

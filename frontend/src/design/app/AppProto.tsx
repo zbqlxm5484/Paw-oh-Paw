@@ -213,6 +213,8 @@ export class AppProto extends DCLogic<Props, any> {
     const termRows = (key: string, labels: [string, boolean][]) => labels.map(([label, view], i) => ({ label, view, c: chk(s[key][i]), toggle: () => this.setState((st: any) => { const a = [...st[key]]; a[i] = !a[i]; return { [key]: a } }) }))
 
     const showTabs = li && ['home', 'results', 'my', 'story'].includes(sc)
+    // 소개 장의 그림 높이: 4번째 장(보고서 견본) 높이에 맞추되, 짧은 폰에서는 아래 글이 잘리지 않게 화면의 절반 남짓으로 줄인다
+    const storyH = Math.min(s.repH || 480, Math.max(380, Math.round(window.innerHeight * 0.5)))
     const tbOn = (k: string) => { const on = (k === 'home' && sc === 'home') || (k === 'story' && sc === 'story') || (k === 'results' && sc === 'results') || (k === 'my' && sc === 'my'); return { bg: on ? '#F1EEE9' : 'transparent', c: on ? '#B4501A' : '#8E949C', w: on ? 700 : 500 } }
     const dark = ['landing', 'capGuide'].includes(sc)
     const landscape = sc === 'capGuide' && s.rotDone
@@ -316,15 +318,17 @@ export class AppProto extends DCLogic<Props, any> {
 
       storyBack: !li || !s.viaTab, storyTitlePad: !li || !s.viaTab ? 0 : 12, storyBottom: showTabs ? 96 : 0,
       onStory: (e: any) => { const p = Math.round(e.target.scrollLeft / e.target.clientWidth); if (p !== this.state.page) { if (p === 2) this.moStart = Date.now(); this.setState({ page: p }) } },
-      pages: pagesCopy.map((c, i) => ({ num: String(i + 1).padStart(2, '0'), tag: c[0], title: c[1], body: c[2], vbg: c[3], vh: c[4] === 3 ? 'auto' : (s.repH || 480) + 'px', v0: c[4] === 0, v1: c[4] === 1, v2: c[4] === 2, v3: c[4] === 3 })),
+      pages: pagesCopy.map((c, i) => ({ num: String(i + 1).padStart(2, '0'), tag: c[0], title: c[1], body: c[2], vbg: c[3], vh: c[4] === 3 ? 'auto' : storyH + 'px', v0: c[4] === 0, v1: c[4] === 1, v2: c[4] === 2, v3: c[4] === 3 })),
       pageDots: pagesCopy.map((_, i) => ({ w: i === page ? 18 : 6, c: i === page ? '#1B2433' : 'rgba(27,36,51,.2)' })),
       storyBtn: page < 3 ? '다음' : li ? '촬영하기' : '시작하기', storyBtnBg: page < 3 ? '#1B2433' : '#D2601A',
+      // 보고서 견본 카드(4번째 장) 확대 비율: 디자인은 1.38. 짧은 폰에서는 그림 높이(storyH)에 들어가게 줄인다(카드 원래 높이 약 380px)
+      repZoom: String(Math.max(0.9, Math.min(1.38, Math.round(window.innerHeight * 0.5) / 380))),
       storyKneeL: knee(53), storyKneeR: knee(46),
       mo: (() => {
         const T = 6.4, t = ((Date.now() - (this.moStart || 0)) / 1000) % T
         const cl = (v: number) => Math.max(0, Math.min(1, v)), ez = (v: number) => v * v * (3 - 2 * v)
         const z = ez(cl((t - 0.4) / 1.4)), sk = ez(cl((t - 2.0) / 1.2)), m = ez(cl((t - 3.6) / 1.0)), out = ez(cl((t - 5.7) / 0.5))
-        const k = 372 / 1254, SX = 2.069, SY = 2.036, TX = k * -701, OFF = ((s.repH || 480) - 372) / 2, TY = (OFF - 23) + k * -520 - OFF * SY
+        const k = 372 / 1254, SX = 2.069, SY = 2.036, TX = k * -701, OFF = (storyH - 372) / 2, TY = (OFF - 23) + k * -520 - OFF * SY
         return { t1: `translate(${(z * TX).toFixed(2)}px,${(z * TY).toFixed(2)}px) scale(${(1 + z * (SX - 1)).toFixed(4)},${(1 + z * (SY - 1)).toFixed(4)})`, o1: ((1 - m) * (1 - out)).toFixed(3), o3: (sk * (1 - m)).toFixed(3), o2: (m * (1 - out)).toFixed(3) }
       })(),
       prevOp: page > 0 ? 1 : 0.35, prevPe: page > 0 ? 'auto' : 'none',
