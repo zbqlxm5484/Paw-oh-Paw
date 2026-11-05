@@ -128,7 +128,8 @@ export function DesignRoot() {
   const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null)
   const reportsQ = useReportData(route.screen === 'report' ? route.params.sessionId : undefined)
   // 보고서 수의사용 탭: 이 회차를 직전 회차와 비교(서버 판정)하고 무릎 가동 범위 추이를 읽는다(웹 수의사용 보고서와 같은 구성)
-  const repR = route.screen === 'report' ? data.results.find((r) => r.id === route.params.sessionId) : undefined
+  // 회차 결과 화면도 보고서와 같은 본문을 쓴다
+  const repR = route.screen === 'report' || route.screen === 'detail' ? data.results.find((r) => r.id === route.params.sessionId) : undefined
   const repGait = mainGaitOf(repR?.result)
   const repCmpQ = useCompare(repR?.dog, { target: repR?.id, base: 'PREVIOUS', gait_type: repGait })
   const repTrQ = useTrends(repR?.dog, { metric_code: 'rom_stifle', gait_type: repGait })
