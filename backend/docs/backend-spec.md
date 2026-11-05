@@ -19,6 +19,7 @@ Oct 19, 2026 · @조영운
 | v1.18 | 2026-11-04 | 보고서 판정 기준 설정 파일 반영(작업 단위 9, S15P31A404-197): `config/tolerance.yaml`에 통합본 9-3 임시값(15.8의 예시를 실제 값으로), `services/tolerance.py`가 읽어 보고서 입력 `settings.tolerance`에 넣음(워커 시작 때, 없으면 빈 것·모양이 틀리면 시작 실패, 16절), 판정 함수 `report/judge.py`(15.8 판정 표, Decimal, 비교 API와 공용), 8절 2번에 직전 회차 값 옆 변화 표시(증가·감소·범위 안), 17.4 BE-15 한 줄. 고관절·무릎은 박규원 MR 80 답변의 5°·8°로 올리고 팔꿈치는 뺌. 10절 Q6·12.3의 최소 주기 수는 2개로 둔다(조유진, S15P31A404-183 실측, 11-04). 리뷰 반영(MR !86): 오차 범위와 견주는 곳을 `n_passes` 8 이상으로 통일(5절, 8절 2·3번, 15.8 판정 3, 좌우 차이는 5회에서 8회로). |
 | v1.19 | 2026-11-04 | 198 이력·비교·추이 구현에 맞춰 15.8 보충: `base`가 BASELINE·PREVIOUS·UUID 형식이 아니거나 추이의 `metric_code`가 12.3 표에 없으면 422, 추이 `series`는 그 수치의 다리 전부(점 없는 다리는 빈 배열)이고 `lr_diff` 쌍은 관심 다리 쌍 먼저, 비교 API도 오차 범위 파일을 워커와 같은 함수로 읽는다 |
 | v1.20 | 2026-11-04 | 199 자료 파기 구현에 맞춰 15.9 보충: `INSTITUTION`에 `target_id`를 보내면 422, 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 적용, `rows`는 반려견·회차·촬영·통과·수치·보고서 행 수의 합, `purge_log.target_id`·`executed_by` 값, 전체 파기 스크립트는 `--execute` 없이는 세기만 하고 기관·계정·코드는 남긴다 |
+| v1.21 | 2026-11-04 | 200 견본 PDF·20초 측정(S15P31A404-200): 8절에 견본 보고서(D-08) 경우 목록·스크립트·기업 서버용 대조 기준값(`reference_from_result`, `metrics`에서 다시 계산) 문단, 17.4 BE-15의 20초 확인 방법을 회차 DONE 기준으로 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -361,6 +362,8 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 8. 저장: 팀 서비스는 파일 저장소에 넣고 report 행을 갱신한다
 
 모든 판본에 "보행 평가 보조 자료" 문구를 고정으로 넣는다. WeasyPrint는 시스템 라이브러리가 필요해 requirements.txt만으로는 설치되지 않으므로, 그 전제를 실행 가이드(D-09)에 적는다(PR-C-07).
+
+**견본 보고서(D-08)**: 경우 목록은 `app/report/samples.py`(첫 회차, 재측정, 분석 모델 바뀜, 측정 불가 수치 포함, 한쪽 방향만 촬영, 유효 통과 0건. 기업 승인 전 제안)이고, `python -m scripts.report_samples <폴더>`가 경우 × 판본의 입력 JSON과 PDF를 만들며 생성 시간을 잰다(KPI-29, 결과는 `docs/report/reportTiming.md`). 기업 서버는 `report/verify.py`의 `reference_from_result`로 분석 결과(15.7 모양)에서 대조 기준값을 만들어 같은 `compare_numbers`를 부른다. `reference_from_result`는 `metrics`만 읽고 다리 비교 값을 12.3 식으로 다시 계산한다(`report/pairs.py`). 그래서 입력의 `limb_compare`는 같은 `metrics`로 계산한 값이어야 대조를 통과한다. 보고서 입력과 같은 dict를 넘기면 수치 값 자체는 증명하지 못하므로, 기업 서버는 따로 가진 분석 결과를 넘긴다.
 
 ## 9. 일정
 
@@ -2102,7 +2105,7 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-14: 측정 불가 수치는 `value`가 `null`이고 사유가 있으며, 0이 나오지 않는다.
 - [ ] BE-14: 화면에 내려가는 수치가 `session_metric`과 분석 결과 JSON의 값과 같다(PR-F09-05).
 - [ ] BE-21: `limb_compare`가 15.7의 정렬을 따르고, 왼쪽 31.0·오른쪽 38.2이면 `diff`는 −7.2, `symmetry_index`는 20.81이다.
-- [ ] BE-15: 회차가 DONE이 된 뒤 두 판본이 20초 안에 DONE이 된다(KPI-29, `generation_ms`로 확인).
+- [ ] BE-15: 회차가 DONE이 된 뒤 두 판본이 20초 안에 DONE이 된다(KPI-29, `measure_session.aggregated_at`과 두 보고서 행의 `updated_at`으로 확인. `generation_ms`는 한 판본 생성 시간이라 주 반복 대기가 빠진다).
 - [ ] BE-15: 수치 대조나 금지 표현 검사에 걸리면 PDF를 내보내지 않고 FAILED·`REPORT_CHECK_FAILED`가 된다.
 - [ ] BE-15: 모든 판본에 "보행 평가 보조 자료" 문구가 있다.
 - [ ] BE-15: 직전 회차가 있으면 표의 괄호 안 값 옆에 5절 규칙의 변화(증가·감소·범위 안)가 오차 범위가 있고 두 회차 모두 `n_passes`가 8 이상인 값에만 붙고, 분석 모델이 다르면 붙지 않는다.
