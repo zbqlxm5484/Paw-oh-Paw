@@ -14,15 +14,20 @@ export function appRecordUrl(sid: string): string {
   return `${base.replace(/\/$/, '')}/sessions/${sid}/record`
 }
 
-/** 이 반려견의 회차를 연다. 이미 측정 중인 회차가 있으면 그 회차를 쓴다 */
-export async function openSession(dog: string, weight: string): Promise<string> {
+/** 이 반려견의 회차를 연다. 이미 측정 중인 회차가 있으면 그 회차를 쓴다(created=false) */
+export async function openSession(dog: string, weight: string): Promise<{ id: string; created: boolean }> {
   try {
-    return (await api.startSession(dog, weight.trim() ? { weight_kg: Number(weight) } : {})).id
+    return { id: (await api.startSession(dog, weight.trim() ? { weight_kg: Number(weight) } : {})).id, created: true }
   } catch (e) {
     const open = e instanceof ApiError && e.code === 'SESSION_ALREADY_OPEN' ? (await api.dog(dog).catch(() => null))?.open_session_id : null
-    if (open) return open
+    if (open) return { id: open, created: false }
     throw e
   }
+}
+
+/** QR 로 새로 연 회차에 영상이 하나도 없으면 지운다(측정 중 회차가 남아 그 반려견이 막히지 않게) */
+export function dropEmptySession(sid: string): void {
+  void api.cancelSession(sid).catch(() => undefined)
 }
 
 /** 회차에 올라온 촬영(올린 순서)을 몇 초마다 읽는다. reload 는 지우기·다시 분석 뒤 바로 다시 읽을 때 */
