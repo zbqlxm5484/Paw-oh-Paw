@@ -26,7 +26,7 @@ export class AppProto extends DCLogic<Props, any> {
     li: { id: '', pw: '' }, so: { org: '', loc: '', dev: '', id: '', pw: '', pw2: '' }, to: [false, false, false, false],
     af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
-    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0,
+    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
   }
   vids = new Set<HTMLVideoElement>()
   recTick: any; raf: any; t1: any; t2: any; tt: any; r1: any; r2: any; storyEl?: HTMLElement; lastMo = 0; moStart = 0
@@ -301,11 +301,12 @@ export class AppProto extends DCLogic<Props, any> {
       loginBg: s.li.id.length >= 1 && s.li.pw.length >= 1 ? '#D2601A' : '#C3C8CF',
       doLogin: async () => {
         if (!(s.li.id.length >= 1 && s.li.pw.length >= 1)) return this.toast('아이디·비밀번호를 입력해 주세요')
-        if (s.busy) return
-        this.setState({ busy: true })
+        // 로그인은 촬영·업로드의 busy 와 따로 막는다(업로드가 걸려 있으면 로그인 버튼이 말없이 무시되던 문제)
+        if (s.loginBusy) return
+        this.setState({ loginBusy: true })
         try { await this.props.auth.login({ login_id: s.li.id.trim(), password: s.li.pw }); this.setState({ li: { id: '', pw: '' }, q: '', viaTab: true }); this.props.nav(this.props.query.get('from') || '/', { replace: true }) }
         catch (e) { this.toast(errMsg(e, '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')) }
-        finally { this.setState({ busy: false }) }
+        finally { this.setState({ loginBusy: false }) }
       },
       loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '가입할 때 만든 아이디',
       orgFields: [
