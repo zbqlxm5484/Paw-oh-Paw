@@ -5,6 +5,8 @@
  * 촬영: 디자인의 촬영 화면에서 촬영 버튼을 누르면 기기 카메라(파일 입력 capture)가 열린다.
  */
 import * as camera from '../../app/camera'
+import { AppReport } from './AppReport'
+import { SessionThumb } from './SessionThumb'
 import { ApiError } from '../../api/client'
 import { BREEDS } from '../../api/labels'
 import { DCLogic } from '../DCLogic'
@@ -322,12 +324,12 @@ export class AppProto extends DCLogic<Props, any> {
       signOrgBg: orgOk ? '#D2601A' : '#C3C8CF',
       doSignupOrg: () => { if (!orgOk) return this.toast(!reqOrg ? '필수 약관에 동의해 주세요' : (s.so.pw2 && s.so.pw !== s.so.pw2) ? '비밀번호가 서로 달라요' : '입력하지 않은 항목이 있어요'); this.toast('회원가입은 준비 중이에요. 기관 관리자에게 계정을 요청해 주세요') },
 
-      acctKind: '기관', acctName: acct.name,
+      acctKind: '기관', acctName: acct.name, acctInit: (acct.name || '?').slice(0, 1),
       goNotif: () => this.nav('notif'), tabMy: () => this.tab('my'), tabHome: () => this.tab('home'), tabResults: () => this.tab('results'), tabStory: () => this.tab('story'), tabCapture: () => this.tab('capSelect'),
       hasDogs: dogs.length > 0, noDogs: !dogs.length, dogCount: dogs.length + '마리',
       q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) }, homeDogs, noMatch: !!qq && !shown.length,
       goPetNew: this.goPetNew, goCapture: () => this.goCapture(), dd,
-      anaOn: !!ana && li && sc !== 'analyzing', goAnalyzing: () => ana && this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`), anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
+      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`), anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
       prints: (() => { const ph = Math.floor(Date.now() / 420) % 11; return Array.from({ length: 8 }, (_, i) => { const on = ph <= 8 ? i < ph : ph === 9; const jx = [0, 6, -8, 4, -4, 10, -2, 5][i], jr = -23 + [7, -4, 10, -8, 4, -10, 8, -5][i]; return { x: (i % 2 ? 236 : 118) + jx * 2 + Math.round(Math.sin(i * 0.9) * 22), y: 656 - i * 68 + (i % 2 ? 10 : 0), r: jr, op: on ? 1 : 0, s: on ? 1 : 0.7 } }) })(),
 
       petTitle: s.petMode === 'edit' ? '반려견 정보 수정' : '반려견 등록', petCta: s.petMode === 'edit' ? '저장하기' : '등록하기',
@@ -419,18 +421,28 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       filters: [{ id: 'all', label: '전체' }, ...dogs.map((d) => ({ id: d.id, label: d.name }))].map((f) => { const on = s.filt === f.id; return { label: f.label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.setState({ filt: f.id }) } }),
-      resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date} · ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? '다시 촬영 필요' : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) })),
+      resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date} · ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? '다시 촬영 필요' : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, open: () => this.openRes(r.id) })),
       hasRes: filtDogs.length > 0, noRes: !filtDogs.length,
       rd, retake: () => { if (R) this.goCapture(R.dog) },
       gaitSegs: seg([['walk', '평보'], ['trot', '속보']], G, (k) => this.setState({ gait: k })), gaitName: rd.gaitName,
       openRep: () => { if (!R) return; this.setState({ repType: 'g' }); this.nav('report', `/sessions/${R.id}/report`) },
       openCompare: () => { if (!R) return; if (valid(R.dog).length < 2) return this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있어요'); this.props.setUi({ cmp: 'base' }); this.nav('compare', `/dogs/${R.dog}/compare`) },
       partMsg: R?.result?.notices?.[0]?.message || '일부 통과에서 다리가 가려지거나 뛰어서 해당 통과를 제외하고 계산했습니다.',
-      rp, isRepG: s.repType === 'g', isRepV: s.repType === 'v', repKind: s.repType === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용',
+      rp, isRepG: s.repType === 'g',
+      // 보고서 본문: 웹 보고서와 같은 구성(보호자용·수의사용)
+      repBody: R ? (() => {
+        const RD = dogById(R.dog)
+        const vs = valid(R.dog).slice().reverse(), at = vs.findIndex((x) => x.id === R.id)
+        const symHist = vs.slice(0, at >= 0 ? at + 1 : vs.length).filter((x) => x.sym != null).map((x) => [x.measured_on.slice(5), x.sym as number] as [string, number])
+        const bId = RD ? baseOf(RD) : null, bR = results.find((x) => x.id === bId)
+        const vsBase = bR && bR.id !== R.id && bR.sym != null && R.sym != null ? { d: R.sym - bR.sym, date: bR.measured_on.slice(5) } : null
+        return <AppReport kind={s.repType === 'v' ? 'v' : 'g'} result={R.result} dogName={RD?.name ?? ''} dogSize={RD?.size ?? 'M'} focus={RD?.focus ?? null}
+          sym={R.sym} symHist={symHist} vsBase={vsBase} passes={R.ps} excluded={R.ex} vet={this.props.vetReport} />
+      })() : null, isRepV: s.repType === 'v', repKind: s.repType === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용',
       repStatus: R ? this.props.reportStatus(rep, R.model) : '',
       repSegs: seg([['g', '보호자용'], ['v', '수의사용']], s.repType, (k) => this.setState({ repType: k })),
       regenRep: async () => { if (!R || !rep) return this.toast('아직 보고서가 없어요'); try { await this.props.actions.regenerateReport(R.id, rep.id); this.toast('보고서를 다시 만들고 있어요') } catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없어요')) } },
-      saveRep: () => { if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했어요. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중이에요. 잠시 뒤 다시 눌러 주세요'); this.props.openFile(rep.download_url); this.toast('PDF를 내려받았어요') },
+      saveRep: () => { if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했어요. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중이에요. 잠시 뒤 다시 눌러 주세요'); this.toast(this.props.openFile(rep.download_url) ? 'PDF를 내려받는 중이에요' : '체험 모드에서는 PDF를 받을 수 없어요. 로그인하면 받을 수 있어요') },
 
       cp, cmpSegs: seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], this.props.ui.cmp, (k) => this.props.setUi({ cmp: k as 'base' | 'prev' })),
       trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 지수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),

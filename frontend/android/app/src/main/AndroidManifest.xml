@@ -23,6 +23,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- 웹의 '폰으로 촬영' QR(https://k15a404.p.ssafy.io/sessions/{회차}/record)을 이 앱이 연다(App Links).
+                 서버의 /.well-known/assetlinks.json 에 이 앱 서명 키 지문이 있어야 확인된다 -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="k15a404.p.ssafy.io" android:pathPattern="/sessions/.*/record" />
+            </intent-filter>
+
         </activity>
 
         <provider

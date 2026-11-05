@@ -33,8 +33,8 @@ function reportOut(s: MockSession, edition: Edition, origin: string): ReportOut 
     template_version: '1.0',
     model_version: s.model_version,
     updated_at: s.aggregated_at ?? s.created_at,
-    file_url: status === 'DONE' ? `${origin}${BASE}/reports/${id}/file?${sig}` : null,
-    download_url: status === 'DONE' ? `${origin}${BASE}/reports/${id}/file?${sig}&download=true` : null,
+    file_url: status === 'DONE' ? new URL(`${BASE}/reports/${id}/file?${sig}`, origin).href : null,
+    download_url: status === 'DONE' ? new URL(`${BASE}/reports/${id}/file?${sig}&download=true`, origin).href : null,
     url_expires_at: status === 'DONE' ? exp : null,
   }
 }
