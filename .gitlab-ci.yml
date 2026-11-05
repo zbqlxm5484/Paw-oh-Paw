@@ -8,6 +8,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_OPEN_MERGE_REQUESTS
       when: never
+    - if: $CI_COMMIT_TAG =~ /^v/      # 배포 태그(v*) 파이프라인. GPU 서버 배포용(deploy_gpu)
     - if: $CI_COMMIT_BRANCH
 
 default:
@@ -102,3 +103,16 @@ deploy:
   script:
     - cp "$ENV_FILE" .env
     - bash infra/ci/deploy.sh
+
+# GPU 서버 분석 API 배포 (Jira 239). 보호된 태그 v* 에서만 실행된다.
+# 러너: GPU 서버(jupyter12) shell executor, 태그 gpu-deploy, Protected. 위의 check·build·smoke 가 통과해야 도달한다.
+# 동작은 infra/ci/deploy_gpu.sh 참고. 수동 배포 절차는 manual/GPU서버_분석API_배포_가이드.md
+deploy_gpu:
+  stage: deploy
+  tags: [gpu-deploy]
+  resource_group: gpu-analysis-api    # GPU 서버 배포 동시 실행 방지
+  timeout: 20m
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v/
+  script:
+    - bash infra/ci/deploy_gpu.sh "$CI_COMMIT_TAG"
