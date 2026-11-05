@@ -37,6 +37,11 @@ class Staff(Base):
     # 비밀번호 재설정 토큰의 SHA-256과 만료 시각(15.4). 쓰거나 만료되면 NULL
     password_reset_hash: Mapped[str | None] = mapped_column(CHAR(64))
     password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 가입 때 동의한 약관 버전과 시각(13.5). 동의 기록 없이 만든 계정(seed.py, 예전 가입)은 NULL
+    terms_version: Mapped[str | None] = mapped_column(String(20))
+    terms_agreed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 선택 항목(마케팅 정보 수신) 동의
+    marketing_agreed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

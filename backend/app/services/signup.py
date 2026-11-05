@@ -5,7 +5,7 @@ Spring에 빗대면 가입 서비스다. 첫 인자는 DB 세션이고 flush()�
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -45,6 +45,7 @@ def signup(db: Session, data: SignupIn) -> AuthStaff:
     if db.scalar(select(Staff.id).where(Staff.login_id == data.login_id)) is not None:
         raise AppError(ErrorCode.LOGIN_ID_TAKEN)
 
+    terms = data.terms
     staff = Staff(
         institution_id=code.institution_id,
         login_id=data.login_id,
@@ -53,6 +54,10 @@ def signup(db: Session, data: SignupIn) -> AuthStaff:
         role=StaffRole.CLIENT.value,
         device_code_id=code.id,
         email=data.email,
+        # 약관 동의 기록(13.5). 시각은 DB 시각이다. 화면이 terms를 보내지 않으면 남기지 않는다
+        terms_version=terms.version if terms else None,
+        terms_agreed_at=func.now() if terms else None,
+        marketing_agreed=bool(terms and terms.marketing),
     )
     db.add(staff)
     try:

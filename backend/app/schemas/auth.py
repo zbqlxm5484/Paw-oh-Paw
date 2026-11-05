@@ -68,14 +68,39 @@ class DeviceCodeVerifyOut(BaseModel):
     remaining_accounts: int
 
 
+# 13.5 약관 버전: 1~20자, 앞뒤 공백은 지운다
+TermsVersion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+
+
+class TermsIn(BaseModel):
+    """가입 때의 약관 동의(13.5, 15.4). 필수 셋은 true여야 하고(아니면 422) marketing만 선택이다."""
+
+    version: TermsVersion
+    service: bool
+    privacy: bool
+    device_location: bool
+    marketing: bool = False
+
+    @field_validator("service", "privacy", "device_location")
+    @classmethod
+    def required_terms_are_agreed(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("필수 약관에 동의해야 합니다")
+        return value
+
+
 class SignupIn(BaseModel):
-    """POST /auth/signup 요청(13.5, 15.4). 가입 계정은 모두 CLIENT이고 이메일은 필수다(인증 메일은 없다)."""
+    """POST /auth/signup 요청(13.5, 15.4). 가입 계정은 모두 CLIENT이고 이메일은 필수다(인증 메일은 없다).
+
+    terms는 약관 동의다. 화면이 아직 보내지 않아 없어도 가입되고 그때는 기록을 남기지 않는다(15.4).
+    """
 
     code: str = Field(min_length=1, max_length=40)
     login_id: LoginId
     password: NewPassword
     name: PersonName
     email: Email
+    terms: TermsIn | None = None
 
 
 class PasswordChangeIn(BaseModel):

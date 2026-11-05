@@ -401,10 +401,14 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 ```json
 // 요청
-{"code": "7F3K2-QW9PA-X2M8N-H4CDE", "login_id": "kim01", "password": "…", "name": "김담당", "email": "kim01@example.com"}
+{"code": "7F3K2-QW9PA-X2M8N-H4CDE", "login_id": "kim01", "password": "…", "name": "김담당", "email": "kim01@example.com",
+ "terms": {"version": "2026-11-01", "service": true, "privacy": true, "device_location": true, "marketing": false}}
 
 // 응답 201: POST /auth/login의 응답과 같다
 ```
+
+- `terms`는 약관 동의다. `service`·`privacy`·`device_location`(필수 3개)은 `true`여야 하고 아니면 422다. `marketing`(선택)은 기본 `false`다. `version`은 화면이 보여 준 약관의 버전(1~20자)이다.
+- `terms`를 보내지 않아도 지금은 가입된다. 다만 서버에 동의 기록이 남지 않는다. 웹과 앱이 보내기 시작하면 필수로 바꾼다.
 
 - 가입 계정은 모두 `CLIENT`이고 코드의 기관에 속한다. 가입 즉시 로그인된 상태다. 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다.
 - 코드 오류는 확인 API와 같고, 아이디가 겹치면(다른 기관이어도) 409 `LOGIN_ID_TAKEN`이다. 입력 규칙은 12.5.

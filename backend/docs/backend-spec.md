@@ -23,6 +23,7 @@ Oct 19, 2026 · @조영운
 | v1.22 | 2026-11-05 | 분석 API 사본 파기(199 후속, 조유진 185 계약): 6절 `AnalysisClient`에 `delete`와 API 프로세스 설정, 7절 보관과 파기, 12.2 `purge_log.analysis_jobs_deleted`(마이그레이션 0004), 12.5, 14.1 `ANALYSIS_UNAVAILABLE`, 15.2·15.9 `analysis_jobs`와 503, 17.6 |
 | v1.23 | 2026-11-05 | 디바이스 코드 계정 상한의 최댓값 10을 없앰(조영운 결정, 11-05): 설정값 `DEVICE_CODE_MAX_ACCOUNTS`를 지우고 `max_accounts`는 관리자가 코드마다 1 \~ 32767(SMALLINT가 담는 값) 안에서 정한다. 기관에 코드를 더 발급하면 넘길 수 있어 제한 역할을 못 했고, 올리려면 서버 설정을 바꿔야 했다. 기본값 3은 그대로다. 12.2 DDL 주석, 13.6, 16절 |
 | v1.30 | 2026-11-05 | 병원 자료 파기(199 후속): 15.9 `POST /admin/purge`에 대상 기관 `institution_id`(생략하면 부른 관리자의 기관, 없는 기관은 404), 10절 Q31과의 관계. 15.2(42번)·15.5 `DELETE /dogs/{dog_id}`(병원 담당자의 반려견 삭제) |
+| v1.31 | 2026-11-06 | 가입 약관 동의 기록(192 후속, 통합본 결정 1번): 12.2 `staff.terms_version`·`terms_agreed_at`·`marketing_agreed`(마이그레이션 0010), 13.5 `terms`, 15.4 `POST /auth/signup` 요청에 `terms`(선택. 화면이 보내기 전까지는 없어도 가입된다) |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -744,6 +745,9 @@ CREATE TABLE staff (
   email                      VARCHAR(254)  NULL,  -- 가입 계정은 필수(13.5). seed 계정은 비울 수 있다. 소문자로 저장
   password_reset_hash        CHAR(64)      NULL,  -- 재설정 토큰의 SHA-256. 쓰거나 만료되면 NULL(15.4)
   password_reset_expires_at  TIMESTAMPTZ   NULL,
+  terms_version              VARCHAR(20)   NULL,  -- 가입 때 동의한 약관 버전(13.5). 기록 없이 만든 계정은 NULL
+  terms_agreed_at            TIMESTAMPTZ   NULL,  -- 동의한 시각(가입 시각)
+  marketing_agreed           BOOLEAN       NOT NULL DEFAULT FALSE,  -- 선택 항목(마케팅 정보 수신) 동의
   created_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
@@ -1090,6 +1094,7 @@ CREATE TABLE purge_log (
 | `login_id` | 4\~50자, 영문 소문자·숫자·`.`·`_`·`-`만. 대문자를 넣으면 422(가입에서 소문자만 받아 로그인의 "입력 그대로 비교"와 부딪히지 않게 한다) |
 | `password` | 13.4 규칙(8자 이상, 72바이트 이하). 비밀번호 확인은 화면만 한다 |
 | `name` | 1\~50자, 앞뒤 공백은 지운다 |
+| `terms` | 선택(15.4). 보내면 `version`은 1\~20자(앞뒤 공백은 지운다)이고 `service`·`privacy`·`device_location`은 모두 `true`여야 한다. 하나라도 `false`이거나 빠지면 422(`field`는 `terms.service`처럼 점으로 잇는다). `marketing`은 선택이고 기본 `false` |
 | `email` | 필수. 앞뒤 공백을 지우고 소문자로 바꿔 저장. 5\~254자, `@`가 하나이고 그 뒤에 `.`이 있어야 한다(정규식, 라이브러리 없음). 인증 메일은 보내지 않는다 |
 
 ### 13.6 관리자
@@ -1516,10 +1521,15 @@ STOPPED: "중간에 멈췄습니다."
 
 ```json
 // 요청
-{"code": "7F3K2-QW9PA-X2M8N-H4CDE", "login_id": "kim01", "password": "…", "name": "김담당", "email": "kim01@example.com"}
+{"code": "7F3K2-QW9PA-X2M8N-H4CDE", "login_id": "kim01", "password": "…", "name": "김담당", "email": "kim01@example.com",
+ "terms": {"version": "2026-11-01", "service": true, "privacy": true, "device_location": true, "marketing": false}}
 
 // 응답 201: POST /auth/login의 응답과 같다
 ```
+
+- `terms`는 가입 화면의 약관 동의다. `service`(서비스 이용약관)·`privacy`(개인정보 수집 및 이용)·`device_location`(측정 기기 연동 및 위치정보 이용)은 필수라 `true`가 아니면 422이고, `marketing`(마케팅 정보 수신)은 선택이다. 받으면 `staff.terms_version`에 `version`, `terms_agreed_at`에 DB 시각, `marketing_agreed`에 `marketing`을 남긴다. 필수 셋은 따로 저장하지 않는다(`terms_agreed_at`이 있으면 셋 다 동의한 것이다). 응답에는 넣지 않는다.
+- `terms`가 없어도 가입된다. 웹과 앱이 아직 보내지 않기 때문이다. 그때는 `terms_version`·`terms_agreed_at`이 NULL이라 동의 기록이 없는 계정이 된다. 웹과 앱이 보내기 시작하면 필수로 바꾼다.
+- `version`은 화면이 보여 준 약관의 버전을 그대로 받는다. 약관 문서와 버전 번호가 아직 없어 서버는 값을 대조하지 않는다.
 
 - 순서: 입력 규칙(422) → 코드 검사(verify와 같은 404·409) → `device_code` 행 잠금 → 활성 계정 수 재확인(409 `DEVICE_CODE_FULL`) → 아이디 중복(409 `LOGIN_ID_TAKEN`) → `staff` 생성(`role` = `CLIENT`, `institution_id` = 코드의 기관, `device_code_id` = 코드, `email`) → 토큰 발급. 가입 즉시 로그인된 상태다(화면이 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다).
 - `uq_staff_login` 위반이 동시에 나면(같은 아이디로 동시에 가입) IntegrityError를 409 `LOGIN_ID_TAKEN`으로 바꾼다.

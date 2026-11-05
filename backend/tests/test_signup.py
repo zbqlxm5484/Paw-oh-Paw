@@ -222,3 +222,56 @@ def test_logs_do_not_contain_code_or_email(client: TestClient, device_code: Devi
     assert "secret@example.com" not in caplog.text
     assert "kim01@example.com" not in caplog.text
     assert CODE not in caplog.text
+
+
+# ---- 약관 동의 기록 (13.5, 15.4) ----
+
+TERMS = {"version": "2026-11-01", "service": True, "privacy": True, "device_location": True}
+
+
+def test_signup_records_the_agreed_terms(client: TestClient, db: Session, device_code: DeviceCode) -> None:
+    before = datetime.now(UTC) - timedelta(minutes=1)
+    response = _signup(client, terms={**TERMS, "version": " 2026-11-01 ", "marketing": True})
+    assert response.status_code == 201, response.text
+    assert "terms" not in response.json()["staff"]  # 응답 모양은 그대로다
+    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
+    assert (row.terms_version, row.marketing_agreed) == ("2026-11-01", True)
+    assert before <= row.terms_agreed_at <= datetime.now(UTC) + timedelta(minutes=1)
+
+
+def test_marketing_is_optional_and_defaults_to_false(client: TestClient, db: Session, device_code: DeviceCode) -> None:
+    assert _signup(client, terms=TERMS).status_code == 201
+    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
+    assert (row.terms_version, row.marketing_agreed) == ("2026-11-01", False)
+    assert row.terms_agreed_at is not None
+
+
+def test_signup_without_terms_still_works_and_leaves_no_record(
+    client: TestClient, db: Session, device_code: DeviceCode
+) -> None:
+    """웹·앱이 아직 terms를 보내지 않는다. 그 가입이 깨지면 안 되고, 동의한 것처럼 기록해도 안 된다."""
+    assert _signup(client).status_code == 201
+    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
+    assert (row.terms_version, row.terms_agreed_at, row.marketing_agreed) == (None, None, False)
+
+
+@pytest.mark.parametrize(
+    ("terms", "field"),
+    [
+        ({**TERMS, "service": False}, "terms.service"),
+        ({**TERMS, "privacy": False}, "terms.privacy"),
+        ({**TERMS, "device_location": False}, "terms.device_location"),
+        ({"version": "2026-11-01", "service": True, "privacy": True}, "terms.device_location"),  # 빠짐
+        ({**TERMS, "version": "  "}, "terms.version"),
+        ({**TERMS, "version": "v" * 21}, "terms.version"),
+        ({"service": True, "privacy": True, "device_location": True}, "terms.version"),
+        ({**TERMS, "marketing": "아마도"}, "terms.marketing"),
+    ],
+)
+def test_terms_rules_are_422_and_nothing_is_created(
+    client: TestClient, db: Session, device_code: DeviceCode, terms: dict, field: str
+) -> None:
+    response = _signup(client, terms=terms)
+    assert response.status_code == 422, response.text
+    assert [item["field"] for item in response.json()["error"]["detail"]["fields"]] == [field]
+    assert _count(db, "kim01") == 0
