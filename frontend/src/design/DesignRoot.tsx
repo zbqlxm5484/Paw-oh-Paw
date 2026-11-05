@@ -202,10 +202,11 @@ function AppShell(props: ProtoProps) {
       </div>
     )
   }
-  // 안드로이드 15 이상은 화면이 상태 표시줄·내비게이션 바 밑까지 그려진다. 화면 안의 요소가 모두 absolute 라
-  // 바깥 틀에 그만큼 여백을 둔다. --safe-area-inset-* 는 Capacitor(SystemBars)가 넣고, 브라우저는 env() 를 쓴다
+  // 안드로이드 15 이상은 화면이 내비게이션 바 밑까지 그려져 하단 버튼이 걸린다. 화면 안의 요소가 모두 absolute 라
+  // 바깥 틀 아래에 그만큼 여백을 둔다(위는 첫 화면 영상이 상태 표시줄 밑까지 보이는 디자인이라 그대로).
+  // --safe-area-inset-* 는 Capacitor(SystemBars)가 넣고, 브라우저는 env() 를 쓴다
   return (
-    <div style={{ height: '100dvh', paddingTop: SAFE_TOP, paddingBottom: SAFE_BOTTOM, background: '#FAF9F6' }}>
+    <div style={{ height: '100dvh', paddingBottom: SAFE_BOTTOM, background: '#FAF9F6' }}>
       <AppProto {...props} rootStyle={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }} />
       <DemoPill />
     </div>
