@@ -8,9 +8,13 @@
 을 두고, 저장소 맨 위 analyses.jsonl에 끝난 작업을 한 줄씩 쌓는다 (모델·버전·판정·걸린 시간).
 
 파일은 임시 이름으로 다 쓴 뒤 이름을 바꿔 넣는다. 쓰는 도중에 꺼져도 반쯤 쓴 파일이 남지 않는다.
+
+파기(팀 서비스 자료 파기와 짝, 백엔드 명세 7절·15.9): delete_job은 작업 하나(폴더째, analyses.jsonl의 그 줄까지),
+purge_all은 저장소 전체를 지운다. analyses.jsonl에는 파일 이름을 남기지 않는다(기업 영상 이름에 반려견 이름이 있다).
 """
 import json
 import os
+import shutil
 import threading
 from pathlib import Path
 from typing import Optional
@@ -73,6 +77,66 @@ def append_log(root: Path, entry: dict) -> None:
     line = json.dumps(entry, ensure_ascii=False)
     with _LOG_LOCK, (Path(root) / LOG_FILE).open("a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+
+def _valid_id(job_id: str) -> bool:
+    return bool(job_id) and Path(job_id).name == job_id and not job_id.startswith(".")
+
+
+def _job_dirs(root: Path) -> list:
+    return [p.parent for p in sorted(Path(root).glob(f"*/{JOB_FILE}"))]
+
+
+def _dir_size(folder: Path) -> tuple:
+    files = [p for p in folder.rglob("*") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def scrub_log(root: Path, job_ids: set) -> int:
+    """analyses.jsonl에서 그 작업들의 줄을 지운다. 지운 줄 수"""
+    path = Path(root) / LOG_FILE
+    if not path.exists() or not job_ids:
+        return 0
+    with _LOG_LOCK:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        keep = [line for line in lines if line.strip() and json.loads(line).get("id") not in job_ids]
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+        os.replace(tmp, path)
+    return len(lines) - len(keep)
+
+
+def delete_job(root: Path, job_id: str) -> tuple:
+    """작업 하나를 지운다(영상·상태·결과·관절점 파일, 기록 줄). (지운 파일 수, 바이트). 없으면 (0, 0)"""
+    if not _valid_id(job_id):
+        return 0, 0
+    folder = Path(root) / job_id
+    files, size = _dir_size(folder) if folder.is_dir() else (0, 0)
+    shutil.rmtree(folder, ignore_errors=True)
+    scrub_log(root, {job_id})
+    return files, size
+
+
+def purge_stats(root: Path) -> dict:
+    """전체 파기 대상: 작업 수, 파일 수(기록 파일 포함), 바이트, 분석 중인 작업 수"""
+    jobs = _job_dirs(root)
+    files = size = 0
+    for folder in jobs:
+        f, b = _dir_size(folder)
+        files, size = files + f, size + b
+    log = Path(root) / LOG_FILE
+    if log.exists():
+        files, size = files + 1, size + log.stat().st_size
+    return {"jobs": len(jobs), "files": files, "bytes": size, "unfinished": len(unfinished_jobs(root))}
+
+
+def purge_all(root: Path) -> dict:
+    """저장소의 모든 작업과 analyses.jsonl을 지운다. 지우기 전에 센 값을 돌려준다"""
+    stats = purge_stats(root)
+    for folder in _job_dirs(root):
+        shutil.rmtree(folder, ignore_errors=True)
+    (Path(root) / LOG_FILE).unlink(missing_ok=True)
+    return stats
 
 
 def read_log(root: Path) -> list:
