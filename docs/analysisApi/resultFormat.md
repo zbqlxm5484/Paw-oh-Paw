@@ -33,6 +33,7 @@
   "input": {"filename": "shot.mp4", "codec": "h264", "fps": 59.94, "width": 1920, "height": 1080, "frames": 642},
   "validity": "partial",
   "validity_reason": null,
+  "validity_reason_text": null,
   "summary": {"passes": 3, "used": 2, "excluded": 1},
   "passes": [ ... 2절 ... ],
   "files": {"keypoints": "/analyses/7c1f3a52-.../files/keypoints"},
@@ -50,6 +51,7 @@
 | `input` | 객체 | 입력 영상 사양 | PR-F07-05 |
 | `validity` | `valid`·`partial`·`invalid` | 촬영 판정 | F-03 |
 | `validity_reason` | 사유 코드·null | 4절 | PR-F03-05 |
+| `validity_reason_text` | 문장·null | 촬영 판정 사유를 잰 값과 기준값으로 쓴 문장. 기업 무효 사유면 어느 통과 때문인지 적는다(예: "1번 통과: 몸통이 1초에 몸통 길이의 12.2배를 움직여 뛰기 기준(11배)보다 빨랐습니다. ..."). 보고서·로그용, 11-05(#185)에 더함 | PR-F03-04 |
 | `summary` | `{passes, used, excluded}` | 몇 번 측정, 몇 번 사용, 몇 번 제외 | REQ-VT-002 |
 | `created_at` | ISO 8601 (+09:00) | | |
 
@@ -76,7 +78,8 @@
 | `camera_side` | `right`·`left` | 카메라 쪽 다리. 수치는 이쪽 다리만 (PR-F02-04) |
 | `gait` | `walk`·`trot`·`pace`·`other`·null | 보행 유형. null은 아직 판별 못 함(이 경우 제외하지 않는다) |
 | `valid` | 참·거짓 | 이 통과를 수치에 쓰나 |
-| `reason_code`·`reason` | 사유 코드와 문장·null | 뺀 이유. 화면은 코드로, 보고서·로그는 문장으로 (PR-F03-04) |
+| `reason_code`·`reason` | 사유 코드와 문장·null | 뺀 이유. 화면은 코드로, 보고서·로그는 문장으로 (PR-F03-04). `reason`은 백엔드 명세 14.3의 기본 문장과 같다 |
+| `reason_detail` | 문장·null | 그 통과에서 잰 값과 기준값을 넣은 문장. 다시 찍을 때 무엇을 고칠지 알려 준다(`engine/reasons.py`). 11-05(#185)에 더함 |
 | `measure_start`·`measure_end` | 프레임·null | 측정 구간(첫 착지부터 마지막 이지). 착지를 못 찾으면 null. 수치는 이 구간에서 낸다: 걸음 길이·입각기 비율은 착지 사이 주기라 구간 안이고, 보행 속도도 이 구간의 몸통 속도다. 가동 범위·각도 중앙값은 이 구간이 아니라 통과에서 몸 전체가 보인 프레임 전부로 잰다(재측정 차가 같거나 작고 모든 통과에서 값이 나옴, `docs/engine/jointRom.md` 4절). 관절점은 몸 전체가 화면 안에 보인 프레임만 쓴다 |
 | `metrics` | 객체 | 3절. 제외된 통과와 수치 계산 전에는 `{}` |
 | `checks` | 객체 | 판단 근거(속도, 같은 쪽 앞·뒷발 위상, 옆모습 비율, 몸 전체가 보인 시간, 걸린 사유 목록). **진단용이라 키가 바뀔 수 있다.** 화면·저장에 쓰지 않는다 |
@@ -114,7 +117,7 @@
 
 기업 무효 사유(이 중 하나가 붙은 통과가 있으면 촬영 전체 `invalid`): `GAIT_PACE`, `RUNNING`, `TURNED`, `STOPPED`, `SITTING`, `PARTIAL_PASS`, `OVERLAP`.
 
-분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERRUPTED`(분석 중에 분석 API가 다시 시작됨), `INTERNAL`. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
+분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERRUPTED`(분석 중에 분석 API가 다시 시작됨), `INTERNAL`. 사유 코드마다의 기본 문장은 `engine/reasons.py`의 `REASON_TEXT`(백엔드 명세 14.3과 같음)다. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
 
 ## 5. 관절점 파일 (`GET /analyses/{id}/files/keypoints`)
 

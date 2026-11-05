@@ -1,9 +1,7 @@
 import main
 import pytest
-from fastapi.testclient import TestClient
-from main import JOBS, app
-
-client = TestClient(app)
+from conftest import client  # 세션 동안 열어 둔 클라이언트 (conftest.py)
+from main import JOBS
 
 
 @pytest.fixture(autouse=True)

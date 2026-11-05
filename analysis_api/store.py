@@ -8,10 +8,15 @@
 을 두고, 저장소 맨 위 analyses.jsonl에 끝난 작업을 한 줄씩 쌓는다 (모델·버전·판정·걸린 시간).
 
 파일은 임시 이름으로 다 쓴 뒤 이름을 바꿔 넣는다. 쓰는 도중에 꺼져도 반쯤 쓴 파일이 남지 않는다.
+
+파기(팀 서비스 자료 파기와 짝, 백엔드 명세 7절·15.9): delete_job은 작업 하나(폴더째, analyses.jsonl의 그 줄까지),
+purge_all은 저장소 전체를 지운다. analyses.jsonl에는 파일 이름을 남기지 않는다(기업 영상 이름에 반려견 이름이 있다).
 """
 import json
 import os
+import shutil
 import threading
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -75,8 +80,108 @@ def append_log(root: Path, entry: dict) -> None:
         f.write(line + "\n")
 
 
+def _valid_id(job_id: str) -> bool:
+    return bool(job_id) and Path(job_id).name == job_id and not job_id.startswith(".")
+
+
+def is_job_dir_name(name: str) -> bool:
+    """작업 폴더 이름인가. 작업 ID는 uuid4 문자열(main.create_analysis)이라 그 모양인 이름만 작업 폴더로 본다"""
+    try:
+        return str(uuid.UUID(name)) == name
+    except ValueError:
+        return False
+
+
+def _job_dirs(root: Path) -> list:
+    """저장소 아래 작업 폴더(이름이 UUID인 폴더). job.json이 없는 폴더(업로드 도중 끊겨 영상만 남은 것)도 포함한다.
+    이름이 UUID가 아닌 폴더는 건드리지 않는다: ANALYSIS_STORAGE_DIR를 data/처럼 넓게 잘못 줘도 data/tracks/ 등이 남는다"""
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.iterdir() if p.is_dir() and is_job_dir_name(p.name))
+
+
+def _other_entries(root: Path) -> list:
+    """작업 폴더도 기록 파일도 아닌 것. 파기 명령이 지우지 않고 개수만 알린다"""
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    ours = {LOG_FILE, LOG_FILE + ".tmp"}
+    return [p for p in root.iterdir() if not (p.is_dir() and is_job_dir_name(p.name)) and p.name not in ours]
+
+
+def _parse(line: str):
+    """기록 한 줄. 깨진 줄(쓰는 도중 꺼진 것 등)은 None"""
+    try:
+        row = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return row if isinstance(row, dict) else None
+
+
+def _dir_size(folder: Path) -> tuple:
+    files = [p for p in folder.rglob("*") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def scrub_log(root: Path, job_ids: set) -> int:
+    """analyses.jsonl에서 그 작업들의 줄을 지운다. 지운 줄 수"""
+    path = Path(root) / LOG_FILE
+    if not path.exists() or not job_ids:
+        return 0
+    with _LOG_LOCK:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        # 깨진 줄은 어느 작업 것인지 알 수 없고 읽을 수도 없으므로 버린다(지운 작업의 조각일 수 있다)
+        keep = [line for line in lines if (row := _parse(line)) is not None and row.get("id") not in job_ids]
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+        os.replace(tmp, path)
+    return len(lines) - len(keep)
+
+
+def delete_job(root: Path, job_id: str) -> tuple:
+    """작업 하나를 지운다(영상·상태·결과·관절점 파일, 기록 줄). (지운 파일 수, 바이트). 없으면 (0, 0).
+    폴더를 다 지우지 못하면 OSError(기록 줄은 그대로 둔다)"""
+    if not (_valid_id(job_id) and is_job_dir_name(job_id)):
+        return 0, 0
+    folder = Path(root) / job_id
+    files, size = _dir_size(folder) if folder.is_dir() else (0, 0)
+    shutil.rmtree(folder, ignore_errors=True)
+    if folder.exists():
+        raise OSError(f"작업 폴더를 다 지우지 못했습니다: {job_id}")
+    scrub_log(root, {job_id})
+    return files, size
+
+
+def purge_stats(root: Path) -> dict:
+    """전체 파기 대상: 작업 수, 파일 수(기록 파일 포함), 바이트, 분석 중인 작업 수"""
+    jobs = _job_dirs(root)
+    files = size = 0
+    for folder in jobs:
+        f, b = _dir_size(folder)
+        files, size = files + f, size + b
+    log = Path(root) / LOG_FILE
+    if log.exists():
+        files, size = files + 1, size + log.stat().st_size
+    return {"jobs": len(jobs), "files": files, "bytes": size, "unfinished": len(unfinished_jobs(root)),
+            "others": len(_other_entries(root))}
+
+
+def purge_all(root: Path) -> dict:
+    """저장소의 모든 작업과 analyses.jsonl을 지운다. 지우기 전에 센 값을 돌려준다"""
+    stats = purge_stats(root)
+    for folder in _job_dirs(root):
+        shutil.rmtree(folder, ignore_errors=True)
+    for name in (LOG_FILE, LOG_FILE + ".tmp"):
+        (Path(root) / name).unlink(missing_ok=True)
+    left = _job_dirs(root)
+    if left:
+        raise OSError(f"작업 폴더 {len(left)}개를 다 지우지 못했습니다")
+    return stats
+
+
 def read_log(root: Path) -> list:
     path = Path(root) / LOG_FILE
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [row for line in path.read_text(encoding="utf-8").splitlines() if (row := _parse(line)) is not None]

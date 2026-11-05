@@ -5,11 +5,10 @@ import json
 import main
 import pipeline
 import pytest
-from fastapi.testclient import TestClient
+from conftest import client  # 세션 동안 열어 둔 클라이언트 (conftest.py)
 
 pytest.importorskip("yaml")   # 유효 판별 기준값(engine/validity.yaml)을 읽는 데 필요
 
-client = TestClient(main.app)
 FPS, W, H, L = 30, 1920, 1080, 150.0
 VIDEO = b"fake video bytes"
 
@@ -71,7 +70,8 @@ def test_track_result_is_v1(tmp_path, monkeypatch):
     assert {"stride_length_front", "stance_ratio_hind", "walk_speed", "gait_cycles",
             "rom_stifle", "angle_median_shoulder", "stifle_cycle_rom"} <= set(p["metrics"])
     assert abs(p["metrics"]["walk_speed"]["value"] - 1000 / 150) < 0.1      # 가상 개: 1000px/초, 몸통 150px
-    for key in ("measure_start", "measure_end", "checks", "reason_code", "reason", "gait"):
+    assert "validity_reason_text" in r and r["validity_reason_text"] is None
+    for key in ("measure_start", "measure_end", "checks", "reason_code", "reason", "reason_detail", "gait"):
         assert key in p
 
 
