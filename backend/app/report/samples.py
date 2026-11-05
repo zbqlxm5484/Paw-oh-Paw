@@ -6,20 +6,27 @@
 순서도 결과 조회와 같다(compare_rank. 요약 문장이 "비율로 가장 큰 항목"을 첫 줄에서 고르므로 순서가 내용이다).
 
 경우(이름 → 뜻):
-- first: 첫 회차. 양방향 통과가 충분하고(8회 이상) 평보·속보 둘 다 있다. 직전 회차 없음
+- first: 첫 회차. 평보·속보 모두 왼쪽·오른쪽 통과가 8회씩이다. 직전 회차 없음
 - follow_up: 직전 회차가 있고 오차 범위가 있다. 증가·감소·범위 안·기준 없는 수치(값만)·통과 부족(값만)이 섞인다
 - model_changed: 직전 회차의 분석 모델이 다르다. 값만 적고 변화를 판단하지 않는다
-- unmeasurable: 측정 불가 수치(NOT_ENOUGH_CYCLES·LOW_CONFIDENCE)와 좌우 비교 불가 줄이 있다
+- unmeasurable: 측정 불가 수치(NOT_ENOUGH_CYCLES·LOW_CONFIDENCE)와 좌우 비교 불가 줄이 있다. 통과가 좌우 5회씩이라
+  좌우 차이를 오차 범위와 견주지 않는다
 - one_side: 한쪽 방향만 찍혔다(ONE_SIDE_ONLY). 오른쪽 다리는 전부 NO_PASS_FOR_LIMB, 좌우 비교 불가
 - no_passes: 유효 통과가 0건인 DONE 회차. 수치 표 없이 다시 촬영 안내만 있다
+
+통과 수도 집계 규칙(services/aggregation.py)에 맞춘다. 왼쪽 통과는 LF·LH, 오른쪽 통과는 RF·RH의 값만 내므로 다리의
+n_passes는 그 쪽 통과 수를 넘지 못하고, 몸 전체 수치(NONE)는 양쪽의 합까지다. 증가·감소·범위 안은 두 회차 모두 8회
+이상이어야 붙으므로(judge.usable_tolerance), 판정을 보여 주는 경우는 좌우 8회씩 둔다.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
+
+from app.report.pairs import pair_numbers
 
 SESSION_ID = "a4e9b3c2-1d2e-4f5a-8b6c-7d8e9f0a1b2c"
 PREVIOUS_SESSION_ID = "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
@@ -67,15 +74,13 @@ UNITS = {
 }
 FORE = ("LF", "RF")
 HIND = ("LH", "RH")
-DIFF_PLACES = Decimal("0.0001")
-SYMMETRY_PLACES = Decimal("0.01")
 
 
 def reason(code: str | None) -> dict | None:
     return None if code is None else {"code": code, "message": MESSAGES.get(code, code)}
 
 
-def metric(code: str, limb: str, value: float | None, *, reason_code: str | None = None, n: int = 8) -> dict:
+def metric(code: str, limb: str, value: float | None, *, n: int, reason_code: str | None = None) -> dict:
     return {
         "metric_code": code,
         "limb": limb,
@@ -92,14 +97,9 @@ def compare(pair: str, code: str, left: float | None, right: float | None, *, re
     comparable = left is not None and right is not None
     diff = symmetry = None
     if comparable:
-        left_d, right_d = Decimal(str(left)), Decimal(str(right))
-        diff_d = (left_d - right_d).quantize(DIFF_PLACES, rounding=ROUND_HALF_UP)
+        diff_d, symmetry_d = pair_numbers(Decimal(str(left)), Decimal(str(right)))
         diff = float(diff_d)
-        total = left_d + right_d
-        if total != 0:
-            symmetry = float(
-                (abs(left_d - right_d) / (total / 2) * 100).quantize(SYMMETRY_PLACES, rounding=ROUND_HALF_UP)
-            )
+        symmetry = None if symmetry_d is None else float(symmetry_d)
     return {
         "pair": pair,
         "metric_code": code,
@@ -154,11 +154,11 @@ def gait(gait_type: str, rows: list[dict]) -> dict:
 def result(
     gaits: list[dict],
     *,
+    passes: tuple[int, int, int],
+    shots: tuple[int, int, int],
     session_id: str = SESSION_ID,
     measured_on: str = MEASURED_ON,
     model_version: str | None = MODEL_VERSION,
-    passes: tuple[int, int, int] = (12, 11, 1),
-    shots: tuple[int, int, int] = (8, 0, 1),
     exclude_summary: list[dict] | None = None,
     notices: list[dict] | None = None,
 ) -> dict:
@@ -192,8 +192,8 @@ def result(
     }
 
 
-def _trot_rows(**overrides: tuple[float | None, float | None]) -> list[dict]:
-    """속보 수치 전부. overrides는 수치 코드 → (왼쪽, 오른쪽) 값으로 바꿔 끼운다."""
+def _trot_rows(left: int, right: int, **overrides: tuple[float | None, float | None]) -> list[dict]:
+    """속보 수치 전부. left·right는 왼쪽·오른쪽 유효 통과 수, overrides는 수치 코드 → (왼쪽, 오른쪽) 값."""
     values: dict[str, tuple[float | None, float | None]] = {
         "rom_shoulder": (28.5, 27.9),
         "rom_elbow": (55.1, 52.0),
@@ -205,45 +205,47 @@ def _trot_rows(**overrides: tuple[float | None, float | None]) -> list[dict]:
     }
     values.update(overrides)
     rows: list[dict] = []
-    for code, (left, right) in values.items():
+    for code, (left_value, right_value) in values.items():
         left_limb, right_limb = FORE if code in ("rom_shoulder", "rom_elbow", "rom_carpus") else HIND
-        rows.append(metric(code, left_limb, left))
-        rows.append(metric(code, right_limb, right))
+        rows.append(metric(code, left_limb, left_value, n=left))
+        rows.append(metric(code, right_limb, right_value, n=right))
     rows += [
-        metric("paw_lift", "LF", 12.4),
-        metric("paw_lift", "RF", 12.1),
-        metric("paw_lift", "LH", 10.8),
-        metric("paw_lift", "RH", 10.2),
-        metric("stride_length", "LF", 142.0),
-        metric("stride_length", "RF", 140.5),
-        metric("stride_length", "LH", 138.2),
-        metric("stride_length", "RH", 133.4),
-        metric("stance_ratio", "LF", 58.2),
-        metric("stance_ratio", "RF", 59.1),
-        metric("stance_ratio", "LH", 61.0),
-        metric("stance_ratio", "RH", 62.3),
-        metric("walk_speed", "NONE", 2.41),
-        metric("gait_cycles", "NONE", 9),
+        metric("paw_lift", "LF", 12.4, n=left),
+        metric("paw_lift", "RF", 12.1, n=right),
+        metric("paw_lift", "LH", 10.8, n=left),
+        metric("paw_lift", "RH", 10.2, n=right),
+        metric("stride_length", "LF", 142.0, n=left),
+        metric("stride_length", "RF", 140.5, n=right),
+        metric("stride_length", "LH", 138.2, n=left),
+        metric("stride_length", "RH", 133.4, n=right),
+        metric("stance_ratio", "LF", 58.2, n=left),
+        metric("stance_ratio", "RF", 59.1, n=right),
+        metric("stance_ratio", "LH", 61.0, n=left),
+        metric("stance_ratio", "RH", 62.3, n=right),
+        metric("walk_speed", "NONE", 2.41, n=left + right),
+        metric("gait_cycles", "NONE", left + right, n=left + right),
     ]
     return rows
 
 
-def _walk_rows() -> list[dict]:
+def _walk_rows(left: int, right: int) -> list[dict]:
     return [
-        metric("rom_hip", "LH", 33.4),
-        metric("rom_hip", "RH", 32.8),
-        metric("rom_stifle", "LH", 38.6),
-        metric("rom_stifle", "RH", 36.9),
-        metric("stance_ratio", "LH", 64.5),
-        metric("stance_ratio", "RH", 65.2),
-        metric("walk_speed", "NONE", 1.62),
-        metric("gait_cycles", "NONE", 6),
+        metric("rom_hip", "LH", 33.4, n=left),
+        metric("rom_hip", "RH", 32.8, n=right),
+        metric("rom_stifle", "LH", 38.6, n=left),
+        metric("rom_stifle", "RH", 36.9, n=right),
+        metric("stance_ratio", "LH", 64.5, n=left),
+        metric("stance_ratio", "RH", 65.2, n=right),
+        metric("walk_speed", "NONE", 1.62, n=left + right),
+        metric("gait_cycles", "NONE", left + right, n=left + right),
     ]
 
 
 def _previous_result(model_version: str = MODEL_VERSION) -> dict:
     """직전 회차(2026-10-14). 속보만. follow_up 경우에 증가·감소·범위 안·값만이 섞이도록 값을 둔다."""
     rows = _trot_rows(
+        8,
+        8,
         rom_stifle=(38.0, 44.0),  # LH +9.3 > 8.0 증가, RH −0.9 범위 안
         rom_hip=(48.5, 40.6),  # LH −6.6 < −5.0 감소, RH는 통과 부족(아래)으로 값만
         rom_tarsus=(30.5, 36.0),  # LH +4.5 > 4.0 증가, RH +0.4 범위 안
@@ -262,7 +264,6 @@ def _previous_result(model_version: str = MODEL_VERSION) -> dict:
         ("stride_length", "LH"): 134.0,
         ("stride_length", "RH"): 131.2,
         ("walk_speed", "NONE"): 2.25,
-        ("gait_cycles", "NONE"): 8,
     }
     for row in rows:
         if row["metric_code"] == "rom_hip" and row["limb"] == "RH":
@@ -275,37 +276,38 @@ def _previous_result(model_version: str = MODEL_VERSION) -> dict:
         session_id=PREVIOUS_SESSION_ID,
         measured_on=PREVIOUS_MEASURED_ON,
         model_version=model_version,
-        passes=(10, 9, 1),
-        shots=(6, 0, 1),
+        passes=(18, 16, 2),
+        shots=(16, 0, 1),
     )
 
 
 def _first() -> tuple[dict, dict | None]:
-    return result([gait("WALK", _walk_rows()), gait("TROT", _trot_rows())]), None
+    gaits = [gait("WALK", _walk_rows(8, 8)), gait("TROT", _trot_rows(8, 8))]
+    return result(gaits, passes=(34, 32, 2), shots=(16, 0, 1)), None
 
 
 def _follow_up() -> tuple[dict, dict | None]:
-    return result([gait("WALK", _walk_rows()), gait("TROT", _trot_rows())]), _previous_result()
+    gaits = [gait("WALK", _walk_rows(3, 3)), gait("TROT", _trot_rows(8, 8))]
+    return result(gaits, passes=(24, 22, 2), shots=(16, 0, 1)), _previous_result()
 
 
 def _model_changed() -> tuple[dict, dict | None]:
-    return result([gait("TROT", _trot_rows())]), _previous_result(model_version=OLD_MODEL_VERSION)
+    current = result([gait("TROT", _trot_rows(8, 8))], passes=(18, 16, 2), shots=(16, 0, 1))
+    return current, _previous_result(model_version=OLD_MODEL_VERSION)
 
 
 def _unmeasurable() -> tuple[dict, dict | None]:
-    rows = _trot_rows(rom_hip=(41.9, None), rom_carpus=(None, 58.8), stifle_cv=(None, 7.5))
+    rows = _trot_rows(5, 5, rom_hip=(41.9, None), rom_carpus=(None, 58.8), stifle_cv=(None, 7.5))
     for row in rows:
         if row["value"] is None:
             row["unmeasurable_reason"] = reason(
                 "LOW_CONFIDENCE" if row["metric_code"] == "rom_carpus" else "NOT_ENOUGH_CYCLES"
             )
-        if row["metric_code"] == "stance_ratio":
-            row["n_passes"] = 5  # 통과 부족: 좌우 차이를 오차 범위와 견주지 않는다
-    return result([gait("TROT", rows)], passes=(9, 7, 2), shots=(6, 0, 2)), None
+    return result([gait("TROT", rows)], passes=(12, 10, 2), shots=(8, 0, 2)), None
 
 
 def _one_side() -> tuple[dict, dict | None]:
-    rows = _trot_rows()
+    rows = _trot_rows(6, 0)
     for row in rows:
         if row["limb"] in ("RF", "RH"):
             row.update(value=None, measurable=False, unmeasurable_reason=reason("NO_PASS_FOR_LIMB"), n_passes=0)

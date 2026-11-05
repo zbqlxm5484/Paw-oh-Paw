@@ -4,11 +4,13 @@
     python -m scripts.report_samples <출력 폴더> --html           # WeasyPrint 없이 HTML만(검사는 한다)
     python -m scripts.report_samples <출력 폴더> --repeat 3       # 같은 PDF를 3번 만들어 중앙값·최대를 적는다
     python -m scripts.report_samples <출력 폴더> --pool           # 워커처럼 풀(1개)에서 두 판본을 잇따라 만들어
-                                                                  # 두 판본이 끝나기까지의 벽시계 시간을 잰다
+                                                                  # 벽시계 시간을 잰다(주 반복 대기는 빠진다)
     python -m scripts.report_samples <출력 폴더> --case first --case no_passes
 
 경우 목록은 app/report/samples.py(기업 승인 전 제안). 오차 범위는 --tolerance 파일(기본 config/tolerance.yaml) 값이다.
-만든 PDF마다 실린 숫자를 입력의 결과 값과 대조한다(8절 7번, report/verify.py). 어긋나거나 검사에 걸리면 종료 코드 2다.
+만든 PDF마다 실린 숫자를 입력의 수치 행에서 다시 계산한 값과 대조한다(8절 7번, report/verify.py). 어긋나거나, 기준에
+있는 숫자가 실리지 않았거나, 검사에 걸리면 종료 코드 2다. 시간 표는 측정값일 뿐이고 KPI-29 판정은 실제 흐름으로 한다
+(docs/report/reportTiming.md).
 PDF는 저장소에 넣지 않는다(backend/docs/*.pdf 금지). 결과 표는 docs/report/reportTiming.md에 옮겨 적는다.
 """
 
@@ -32,7 +34,6 @@ from app.report.verify import summarize as summarize_numbers
 from app.services.tolerance import load_tolerance
 
 ROOT = Path(__file__).resolve().parents[1]
-KPI_LIMIT_MS = 20_000  # 17.4 BE-15: 회차가 DONE이 된 뒤 두 판본이 20초 안에
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ def _verify(input_path: Path, numbers) -> None:
     """실린 숫자를 입력의 회차 결과로 만든 기준값과 대조한다(기업 서버가 하는 것과 같은 방식)."""
     data = json.loads(input_path.read_text(encoding="utf-8"))
     verification = compare_numbers(numbers, reference_from_result(data["result"]))
-    if not verification.ok:
+    if not verification.ok or verification.omitted:
         raise ReportError(f"실린 숫자 대조 실패: {summarize_numbers(verification)}")
 
 
@@ -118,8 +119,7 @@ def _print_table(timings: list[Timing], repeat: int) -> None:
         cell = f"{timing.median_ms} / {timing.max_ms}" if repeat > 1 else str(timing.runs_ms[0])
         print(f"| {timing.case} | {timing.edition} | {timing.pdf_bytes} | {timing.numbers} | {cell} |")
     worst = max(timings, key=lambda timing: timing.max_ms)
-    verdict = "통과" if worst.max_ms <= KPI_LIMIT_MS else "초과"
-    print(f"\n가장 긴 생성 시간 {worst.max_ms} ms ({worst.case}/{worst.edition}) → KPI-29 20초 {verdict}")
+    print(f"\n가장 긴 생성 시간 {worst.max_ms} ms ({worst.case}/{worst.edition}). KPI-29 20초 판정이 아니다")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -163,8 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             for case, wall_ms, (owner_ms, vet_ms) in rows:
                 print(f"| {case} | {wall_ms} | {owner_ms} | {vet_ms} |")
             worst = max(wall_ms for _, wall_ms, _ in rows)
-            verdict = "통과" if worst <= KPI_LIMIT_MS else "초과"
-            print(f"\n두 판본이 끝나기까지 가장 긴 벽시계 시간 {worst} ms → KPI-29 20초 {verdict}")
+            print(f"\n풀 벽시계 최대 {worst} ms. 주 반복 대기가 빠진 값이라 KPI-29 20초는 실제 흐름으로 판정한다")
     except ReportCheckError as error:
         print(f"검사 실패: {summarize(error.findings)}", file=sys.stderr)
         return 2

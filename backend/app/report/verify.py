@@ -17,9 +17,11 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.report.numbers import ListedNumber
+from app.report.numbers import PAIR_LIMBS, ListedNumber, _number
+from app.report.pairs import pair_numbers
 
 # (보행 유형, 수치 코드, 다리 또는 쌍, 종류). 종류는 metric·left·right·diff·symmetry_index(numbers.ListedNumber.kind)
 NumberKey = tuple[str, str, str, str]
@@ -92,27 +94,47 @@ def summarize(verification: Verification) -> str:
     return "; ".join(parts)
 
 
-# 15.7 다리 비교 줄의 종류(services/report_numbers.py의 PAIR_KINDS와 같다)
-PAIR_KINDS = ("left", "right", "diff", "symmetry_index")
+def _finite(raw: Any) -> float | None:
+    """numbers._number와 같게 읽되 NaN·무한대는 수로 치지 않는다(Decimal 계산이 깨진다)."""
+    number = _number(raw)
+    return number if number is not None and math.isfinite(number) else None
 
 
 def reference_from_result(result: Mapping[str, Any]) -> dict[NumberKey, float]:
     """회차 결과 dict(15.7 SessionResultOut 모양, 보고서 입력의 result) → 대조 기준값.
 
     팀 서비스 워커는 DB에서 기준값을 만들지만(services/report_numbers.py), 기업 서버와 견본 스크립트
-    (scripts/report_samples.py)는 분석 결과에서 같은 모양으로 만든다(8절 7번). 규칙은 같다: 측정된 수치 값, 쌍의
-    왼쪽·오른쪽 값은 비교할 수 없어도, 차이·대칭 지수는 비교할 수 있을 때만.
+    (scripts/report_samples.py)는 분석 결과에서 같은 모양으로 만든다(8절 7번). 워커처럼 수치 행(metrics)만 읽고
+    다리 비교 값은 12.3 식으로 다시 계산한다. 입력의 limb_compare는 읽지 않으므로, 그 값이 틀리면 VALUE_DIFFERS,
+    metrics로 만들 수 없는 줄이면 NOT_IN_SOURCE가 된다. 왼쪽·오른쪽 값은 있는 쪽만, 차이는 양쪽이 있을 때만,
+    대칭 지수는 합이 0이 아닐 때만 넣는다.
+
+    한계: 보고서를 만든 입력과 같은 dict를 넘기면 수치 값 자체는 같은 곳에서 나오므로 틀려도 잡지 못한다(몸 전체 수치와
+    측정된 수치 값). 그 값까지 대조하려면 보고서 입력과 따로 가진 분석 결과를 넘겨야 한다.
     """
     reference: dict[NumberKey, float] = {}
     for gait in result.get("gaits") or []:
         gait_type = str(gait.get("gait_type"))
+        values: dict[tuple[str, str], float | None] = {}
         for row in gait.get("metrics") or []:
-            if row.get("value") is not None:
-                reference[(gait_type, str(row["metric_code"]), str(row["limb"]), "metric")] = float(row["value"])
-        for entry in gait.get("limb_compare") or []:
-            comparable = bool(entry.get("comparable"))
-            for kind in PAIR_KINDS:
-                value = entry.get(kind)
-                if value is not None and (comparable or kind in ("left", "right")):
-                    reference[(gait_type, str(entry["metric_code"]), str(entry["pair"]), kind)] = float(value)
+            code, limb = str(row.get("metric_code")), str(row.get("limb"))
+            value = values[(code, limb)] = _finite(row.get("value"))
+            if value is not None:
+                reference[(gait_type, code, limb, "metric")] = value
+        for code in dict.fromkeys(code for code, limb in values if limb != "NONE"):
+            for pair, (left_limb, right_limb) in PAIR_LIMBS.items():
+                left, right = values.get((code, left_limb)), values.get((code, right_limb))
+                if left is not None:
+                    reference[(gait_type, code, pair, "left")] = left
+                if right is not None:
+                    reference[(gait_type, code, pair, "right")] = right
+                if left is None or right is None:
+                    continue
+                try:
+                    diff, symmetry = pair_numbers(Decimal(str(left)), Decimal(str(right)))
+                except InvalidOperation:  # 반올림할 수 없을 만큼 큰 값. 기준에 넣지 않아 NOT_IN_SOURCE가 된다
+                    continue
+                reference[(gait_type, code, pair, "diff")] = float(diff)
+                if symmetry is not None:
+                    reference[(gait_type, code, pair, "symmetry_index")] = float(symmetry)
     return reference
