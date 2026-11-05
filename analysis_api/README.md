@@ -94,7 +94,7 @@ ANALYSIS_API_KEY=
 
 ```
 data/analysis_api/
-  analyses.jsonl          끝난 작업 한 줄씩 (모델, 엔진 버전, 판정, 실패 사유, 걸린 시간)
+  analyses.jsonl          끝난 작업 한 줄씩 (모델, 엔진 버전, 판정, 실패 사유, 영상 SHA-256, 걸린 시간. 파일 이름은 남기지 않음)
   {작업 ID}/
     video.mp4             올린 영상
     job.json              작업 상태
@@ -106,7 +106,18 @@ data/analysis_api/
 - 분석 중(queued·running)에 꺼진 작업은 다시 켤 때 `failed` + `INTERRUPTED`로 바꾼다. 팀 서비스는 다시 분석으로 안내한다
 - `analyses.jsonl`은 모델을 바꿔 가며 돌린 결과를 나중에 비교하는 기록이다. 영상의 SHA-256이 들어 있어 같은 영상끼리 맞춰 볼 수 있다
 - 파일은 임시 이름으로 다 쓴 뒤 이름을 바꿔 넣어, 쓰는 도중에 꺼져도 반쯤 쓴 파일이 남지 않는다
-- 오래된 작업을 지우는 일은 아직 없다. 영상까지 남으므로 시연 뒤에 폴더를 정리한다
+- 기업 영상 이름에는 반려견 이름이 들어 있어 `analyses.jsonl`에 파일 이름을 남기지 않는다. 같은 영상끼리는 SHA-256으로 맞춘다
+
+## 지우기 (자료 파기)
+
+팀 서비스 자료 파기(`backend/scripts/purge.py`, `POST /admin/purge`)는 팀 서비스 쪽 파일과 DB만 지운다. 같은 영상과 결과가 분석 API 저장소에도 남으므로 여기서도 지운다(백엔드 명세 7절·15.9).
+
+| 무엇을 | 방법 |
+| --- | --- |
+| 작업 하나 | `DELETE /analyses/{id}`: 올린 영상·작업 상태·결과·관절점 파일(폴더째)과 `analyses.jsonl`의 그 줄. 성공 204. 분석 중(queued·running)이면 409 `JOB_IN_PROGRESS`, 없으면 404(부르는 쪽은 "이미 없음"으로 본다) |
+| 전체 | `python purge.py --all`은 지울 양만 센다. `python purge.py --all --execute`는 확인 문구 `PURGE`를 받고 모든 작업과 `analyses.jsonl`을 지운다(`--yes`면 묻지 않음). 분석 중인 작업이 있으면 지우지 않는다. 분석 API를 끈 뒤 돌린다 |
+
+관절점 파일(`data/tracks/`)과 `models.yaml`은 지우지 않는다. 관절점 파일도 기업 데이터에서 나온 것이라 과제 종료 때는 따로 지운다.
 
 ## 처리 흐름
 
@@ -123,6 +134,8 @@ data/analysis_api/
 | `DECODE_FAILED` | 영상을 읽을 수 없음 |
 | `POSE_UNAVAILABLE` | 이 영상의 관절점을 얻지 못함 (`track`에서 관절점 파일이 없거나, 영상을 못 찾거나, 관절점 파일의 모델이 다름) |
 | `INTERRUPTED` | 분석 중에 분석 API가 다시 시작됨 |
+
+등록·조회 말고 지우기에서 나는 오류: 409 `JOB_IN_PROGRESS`(분석 중인 작업은 지울 수 없음).
 | `INTERNAL` | 분석 중 알 수 없는 오류 |
 
 ## 테스트
@@ -139,5 +152,6 @@ python -m pytest -q
 
 - 영상에서 바로 관절점을 뽑는 경로(MMPose). 실행 환경이 정해지면 `pipeline.py`에 더하고, `models.yaml`의 `config`를 쓴다
 - 지금은 응답 뒤 같은 프로세스 안에서 분석한다(FastAPI `BackgroundTasks`). 모델 추론이 붙어 무거워지면 작업 큐로 옮긴다
-- 오래된 작업·영상 정리
+- 오래된 작업·영상을 기간이 지나면 저절로 지우기(지금은 지우기 API·전체 파기 명령으로만)
+- 팀 서비스 파기가 지우는 촬영의 작업 ID로 `DELETE /analyses/{id}`를 부르는 자리(조영운과 정함)
 - Dockerfile과 compose 서비스, CI에서 이 폴더 테스트 돌리기는 허정원과 정한다. 이미지에는 `engine/`도 함께 넣고, `data/`는 볼륨으로 둔다
