@@ -12,6 +12,7 @@ from app.core.auth_cache import auth_cache
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.models import Institution, Staff
+from app.schemas.admin import MAX_ACCOUNTS_LIMIT
 from app.services.device_codes import CODE_ALPHABET
 from tests.conftest import GOOD_PASSWORD, bearer, password_hash_for
 
@@ -260,7 +261,7 @@ def test_update_institution(client: TestClient, admin_headers: dict, staff) -> N
 
 def test_device_code_rules(client: TestClient, admin_headers: dict, staff) -> None:
     base = f"{INSTITUTIONS}/{staff.institution_id}/device-codes"
-    limit = get_settings().DEVICE_CODE_MAX_ACCOUNTS
+    limit = MAX_ACCOUNTS_LIMIT
     for body in ({"max_accounts": 0}, {"max_accounts": limit + 1}, {"note": "메" * 101}):
         response = client.post(base, json=body, headers=admin_headers)
         assert response.status_code == 422, body
@@ -274,6 +275,12 @@ def test_device_code_rules(client: TestClient, admin_headers: dict, staff) -> No
     cleared = client.patch(code_url, json={"note": None, "max_accounts": 2}, headers=admin_headers)
     assert cleared.status_code == 200
     assert (cleared.json()["max_accounts"], cleared.json()["note"]) == (2, None)
+
+    # 최댓값 10을 없앴다(v1.23): 관리자가 적은 수가 그대로 들어가고, SMALLINT가 못 담는 값만 422다
+    raised = client.patch(code_url, json={"max_accounts": 11}, headers=admin_headers)
+    assert (raised.status_code, raised.json()["max_accounts"]) == (200, 11)
+    too_big = client.patch(code_url, json={"max_accounts": limit + 1}, headers=admin_headers)
+    assert too_big.status_code == 422
 
     null_max = client.patch(code_url, json={"max_accounts": None}, headers=admin_headers)
     assert null_max.status_code == 422

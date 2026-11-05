@@ -1076,7 +1076,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | 기관 `code` | 1~20자, 유일. 비우면 서버가 `INST-` + 6자로 만든다 |
 | 기관 `name` | 1~100자 |
 | `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
-| `max_accounts` | 1 ~ 서버 설정값(기본 10) |
+| `max_accounts` | 1 ~ 32767 |
 | `note` | 최대 100자 |
 | `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
 

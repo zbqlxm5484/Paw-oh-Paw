@@ -21,6 +21,7 @@ Oct 19, 2026 · @조영운
 | v1.20 | 2026-11-04 | 199 자료 파기 구현에 맞춰 15.9 보충: `INSTITUTION`에 `target_id`를 보내면 422, 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 적용, `rows`는 반려견·회차·촬영·통과·수치·보고서 행 수의 합, `purge_log.target_id`·`executed_by` 값, 전체 파기 스크립트는 `--execute` 없이는 세기만 하고 기관·계정·코드는 남긴다 |
 | v1.21 | 2026-11-04 | 200 견본 PDF·20초 측정(S15P31A404-200): 8절에 견본 보고서(D-08) 경우 목록·스크립트·기업 서버용 대조 기준값(`reference_from_result`, `metrics`에서 다시 계산) 문단, 17.4 BE-15의 20초 확인 방법을 회차 DONE 기준으로 |
 | v1.22 | 2026-11-05 | 분석 API 사본 파기(199 후속, 조유진 185 계약): 6절 `AnalysisClient`에 `delete`와 API 프로세스 설정, 7절 보관과 파기, 12.2 `purge_log.analysis_jobs_deleted`(마이그레이션 0004), 12.5, 14.1 `ANALYSIS_UNAVAILABLE`, 15.2·15.9 `analysis_jobs`와 503, 17.6 |
+| v1.23 | 2026-11-05 | 디바이스 코드 계정 상한의 최댓값 10을 없앰(조영운 결정, 11-05): 설정값 `DEVICE_CODE_MAX_ACCOUNTS`를 지우고 `max_accounts`는 관리자가 코드마다 1 \~ 32767(SMALLINT가 담는 값) 안에서 정한다. 기관에 코드를 더 발급하면 넘길 수 있어 제한 역할을 못 했고, 올리려면 서버 설정을 바꿔야 했다. 기본값 3은 그대로다. 12.2 DDL 주석, 13.6, 16절 |
 | v1.30 | 2026-11-05 | 병원 자료 파기(199 후속): 15.9 `POST /admin/purge`에 대상 기관 `institution_id`(생략하면 부른 관리자의 기관, 없는 기관은 404), 10절 Q31과의 관계. 15.2(42번)·15.5 `DELETE /dogs/{dog_id}`(병원 담당자의 반려견 삭제) |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
@@ -719,7 +720,7 @@ CREATE TABLE device_code (
   id              UUID          NOT NULL,
   institution_id  UUID          NOT NULL,
   code            VARCHAR(32)   NOT NULL,  -- 20자, 하이픈 없이 저장
-  max_accounts    SMALLINT      NOT NULL DEFAULT 3,  -- 상한은 설정값 DEVICE_CODE_MAX_ACCOUNTS로 API가 막는다
+  max_accounts    SMALLINT      NOT NULL DEFAULT 3,  -- 관리자가 코드마다 정한다. 입력 범위는 13.6
   revoked_at      TIMESTAMPTZ   NULL,      -- 회수 시각. NULL이면 쓸 수 있다
   note            VARCHAR(100)  NULL,      -- 운영 메모(예: "2호기")
   created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -1098,7 +1099,7 @@ CREATE TABLE purge_log (
 | 기관 `code` | 1\~20자, 유일. 비우면 서버가 `INST-` + 6자(코드 글자)로 만든다 |
 | 기관 `name` | 1\~100자 |
 | `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
-| `max_accounts` | 1 \~ `DEVICE_CODE_MAX_ACCOUNTS` |
+| `max_accounts` | 1 \~ 32767. 관리자가 코드마다 정한다. 위쪽 한계는 SMALLINT가 담을 수 있는 값뿐이다 |
 | `note` | 최대 100자 |
 | `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
 
@@ -2015,7 +2016,6 @@ stance_ratio: 5.0 # pct
 | `METRICS_ENABLED` | `false` | `/api/v1/metrics`를 켜는지(선택) | 15.9 |
 | `API_DOCS_ENABLED` | `false` | `/docs`·`/redoc`·`/openapi.json`을 여는지. 개발 환경에서만 `true`. 공식 명세는 `docs/openapi.yaml` | 15절 |
 | `AUTH_CACHE_TTL_SEC` | `60` | 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다. 테스트는 0 | 11.6 인증 캐시 |
-| `DEVICE_CODE_MAX_ACCOUNTS` | `10` | 코드 하나의 계정 상한으로 관리자가 줄 수 있는 최댓값 | 13.6 |
 | `SMTP_HOST` | (빈 값) | 메일 서버. 비어 있으면 메일을 보내지 않는다(재설정 요청은 503) | 11.6 메일 |
 | `SMTP_PORT` | `587` | STARTTLS 포트 | 11.6 메일 |
 | `SMTP_USER` | (빈 값) | 발신 계정. 비어 있으면 인증 없이 보낸다 | 11.6 메일 |

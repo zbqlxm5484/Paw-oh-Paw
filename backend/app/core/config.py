@@ -97,8 +97,6 @@ class Settings(DbSettings):
     API_DOCS_ENABLED: bool = False
     # 11.6 인증 캐시: 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다(테스트)
     AUTH_CACHE_TTL_SEC: int = Field(60, ge=0)
-    # 13.6: 디바이스 코드 하나의 계정 상한으로 관리자가 줄 수 있는 최댓값
-    DEVICE_CODE_MAX_ACCOUNTS: int = Field(10, ge=1)
     # 11.6 메일(비밀번호 재설정): SMTP_HOST가 비어 있으면 보내지 않는다(요청은 503 MAIL_UNAVAILABLE). STARTTLS
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

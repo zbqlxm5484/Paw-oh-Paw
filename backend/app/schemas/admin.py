@@ -10,9 +10,8 @@ import uuid
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, StringConstraints, ValidationInfo, field_validator
 
-from app.core.config import get_settings
 from app.schemas.common import OutModel, UtcDateTime
 
 # 13.6 기관 코드 1~20자(비우면 서버가 만든다), 기관 이름 1~100자, 코드 메모 최대 100자
@@ -21,15 +20,9 @@ InstitutionName = Annotated[str, StringConstraints(strip_whitespace=True, min_le
 Note = Annotated[str, StringConstraints(max_length=100)]
 
 
-def _max_accounts_rule(value: int) -> int:
-    """13.6: 1 ~ DEVICE_CODE_MAX_ACCOUNTS(16절, 기본 10)."""
-    limit = get_settings().DEVICE_CODE_MAX_ACCOUNTS
-    if value > limit:
-        raise ValueError(f"{limit} 이하여야 합니다")
-    return value
-
-
-MaxAccounts = Annotated[int, Field(ge=1), AfterValidator(_max_accounts_rule)]
+# 13.6 코드 하나의 계정 상한은 관리자가 정한다. 위쪽 한계는 SMALLINT 칸이 담을 수 있는 값뿐이다
+MAX_ACCOUNTS_LIMIT = 32767
+MaxAccounts = Annotated[int, Field(ge=1, le=MAX_ACCOUNTS_LIMIT)]
 
 
 def _not_null(value: object) -> object:

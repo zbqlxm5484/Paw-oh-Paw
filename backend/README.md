@@ -97,7 +97,7 @@ uvicorn app.main:app --no-access-log
 ```
 
 - `.env`의 `JWT_SECRET`·`FILE_URL_SECRET`(32자 이상, 서로 다른 값)이 비어 있으면 켜지지 않고 어느 값이 문제인지 출력한다(16절). 값 만들기: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
-- 비밀번호 재설정 메일을 보내려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USER`·`SMTP_PASSWORD`·`SMTP_FROM`(STARTTLS)과 링크 앞부분 `FRONTEND_BASE_URL`을 적는다. `SMTP_HOST`가 비어 있으면 메일 없이 돌고 재설정 요청만 503이다. 디바이스 코드 하나의 계정 상한 최댓값은 `DEVICE_CODE_MAX_ACCOUNTS`(기본 10)다.
+- 비밀번호 재설정 메일을 보내려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USER`·`SMTP_PASSWORD`·`SMTP_FROM`(STARTTLS)과 링크 앞부분 `FRONTEND_BASE_URL`을 적는다. `SMTP_HOST`가 비어 있으면 메일 없이 돌고 재설정 요청만 503이다.
 - 접근 로그는 끈다(11.8). 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID를 한 줄로 남기고, 응답 헤더 `X-Request-ID`로도 돌려준다.
 - `http://localhost:8000/api/v1/health`가 `{"status": "ok", "db": "ok", "version": "1.0.0"}`이면 정상이다. DB에 못 붙으면 503이고 `status`·`db`가 `"error"`다. `storage`는 `STORAGE_ROOT`에 쓸 수 있는지 검사한 결과다.
 - 모든 오류 응답은 `{"error": {"code", "message", "detail"}}` 한 모양이다(11.5). `message`는 `messages/ko.yaml`에서 `code`로 찾는다.

@@ -1494,13 +1494,13 @@ components:
     DeviceCodeCreate:
       type: object
       properties:
-        max_accounts: {type: integer, minimum: 1, default: 3, description: '1 ~ 서버 설정값(DEVICE_CODE_MAX_ACCOUNTS, 기본 10)', example: 3}
+        max_accounts: {type: integer, minimum: 1, maximum: 32767, default: 3, description: '관리자가 코드마다 정한다', example: 3}
         note: {type: [string, 'null'], maxLength: 100, example: 2호기}
     DeviceCodeUpdate:
       type: object
       description: 보낸 필드만 바꾼다. note의 null은 메모 지우기이고 max_accounts는 비울 수 없다.
       properties:
-        max_accounts: {type: integer, minimum: 1, description: '1 ~ 서버 설정값(DEVICE_CODE_MAX_ACCOUNTS, 기본 10)', example: 5}
+        max_accounts: {type: integer, minimum: 1, maximum: 32767, description: '관리자가 코드마다 정한다', example: 5}
         note: {type: [string, 'null'], maxLength: 100, example: null}
     StaffAdminOut:
       type: object

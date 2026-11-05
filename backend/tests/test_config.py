@@ -24,7 +24,6 @@ def test_defaults_follow_section_16(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.ANALYSIS_API_MODE == "mock"
     assert settings.CORS_ORIGINS == ["http://localhost:5173"]
     assert settings.AUTH_CACHE_TTL_SEC == 60
-    assert settings.DEVICE_CODE_MAX_ACCOUNTS == 10
     assert (settings.SMTP_HOST, settings.SMTP_PORT, settings.SMTP_USER, settings.SMTP_FROM) == ("", 587, "", "")
     assert settings.SMTP_PASSWORD.get_secret_value() == ""
     assert settings.FRONTEND_BASE_URL == "http://localhost:5173"
@@ -37,11 +36,6 @@ def test_worker_caps_must_be_at_least_one(name: str) -> None:
     # 16절: 0이면 워커가 오류 없이 아무것도 가져가지 않으므로(결과 영상은 영영 PENDING) 시작 때 막는다
     with pytest.raises(ValidationError, match=name):
         _settings(**{name: 0})
-
-
-def test_device_code_max_accounts_is_at_least_one() -> None:
-    with pytest.raises(ValidationError, match="DEVICE_CODE_MAX_ACCOUNTS"):
-        _settings(DEVICE_CODE_MAX_ACCOUNTS=0)
 
 
 def test_smtp_host_requires_from_address() -> None:
