@@ -7,6 +7,7 @@ import { ApiError } from './api/client'
 import { AuthProvider } from './app/auth'
 import { isDemo } from './app/demoMode'
 import { router } from './app/router'
+import { listenDeepLinks } from './app/deepLinks'
 import './styles/global.css'
 
 const queryClient = new QueryClient({
@@ -46,6 +47,8 @@ async function nativeBackButton() {
 void nativeBackButton()
 
 enableMocking().then(() => {
+  // 링크(웹 QR)로 열리면 그 화면으로
+  void listenDeepLinks((path) => void router.navigate(path))
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
