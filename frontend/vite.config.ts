@@ -34,7 +34,8 @@ export default defineConfig(({ mode }) => {
         workbox: {
           // 화면 파일만 미리 캐시. /api 는 네트워크만 쓴다(폴링·서명 주소가 캐시되면 안 된다)
           globPatterns: ['**/*.{js,css,html,svg,woff2}'],
-          navigateFallbackDenylist: [/^\/api\//],
+          // /web 은 같은 도메인의 수의사용 웹(별도 앱)이라 앱 index.html 로 대신 응답하면 안 된다
+          navigateFallbackDenylist: [/^\/api\//, /^\/web(\/|$)/],
           runtimeCaching: [],
         },
         devOptions: { enabled: false },
