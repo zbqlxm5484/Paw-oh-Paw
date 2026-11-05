@@ -92,7 +92,9 @@ export interface DogOut {
 }
 export interface Paged<T> { items: T[]; total: number; page: number; size: number }
 export interface ReasonOut { code: string; message: string }
-export interface ShotOut { id: string; seq_no: number; status: string; fail_reason: ReasonOut | null; validity: string | null; uploaded_at: string; analyzed_at: string | null }
+export interface ShotOut { id: string; seq_no: number; status: string; fail_reason: ReasonOut | null; validity: string | null; uploaded_at: string; analyzed_at: string | null; video_status?: string }
+/** GET /shots/{id}. video_url 은 결과 영상이 준비됐을 때만(서명 주소) */
+export interface ShotDetailOut extends ShotOut { video_url: string | null }
 export interface SessionOut {
   id: string; dog_id: string; staff: { id: string; name: string }; measured_on: string; weight_kg: number | null
   size_class: string; status: string; fail_reason: ReasonOut | null; model_name: string | null; model_version: string | null; created_at: string
@@ -165,6 +167,7 @@ export const api = {
   startSession: (dogId: string, body: { measured_on?: string; weight_kg?: number }) =>
     request<SessionOut>(`/dogs/${dogId}/sessions`, { method: 'POST', body }),
   session: (id: string) => request<SessionDetailOut>(`/sessions/${id}`),
+  shot: (id: string) => request<ShotDetailOut>(`/shots/${id}`),
   cancelSession: (id: string) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
   completeSession: (id: string) => request<SessionOut>(`/sessions/${id}/complete`, { method: 'POST' }),
   deleteShot: (id: string) => request<void>(`/shots/${id}`, { method: 'DELETE' }),

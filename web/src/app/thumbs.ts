@@ -1,5 +1,6 @@
 // 첨부한 영상의 첫 프레임 미리보기(앱 촬영 화면과 같은 방식). 업로드 칸에 디자인 그림 대신 쓴다
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { api, type ShotOut } from '../api/client'
 
 /** 영상 파일의 첫 프레임을 작은 jpeg data URL 로. 못 뽑으면 '' */
 export async function firstFrame(file: File, width = 320): Promise<string> {
@@ -34,22 +35,39 @@ export async function firstFrame(file: File, width = 320): Promise<string> {
   }
 }
 
-/** files 각각의 첫 프레임. 새 파일이 들어오면 그 파일만 뽑는다 */
+/** files 각각의 첫 프레임. 새 파일이 들어오면 그 파일만 뽑는다.
+ * (전에는 썸네일 하나가 끝나 map 이 바뀔 때마다 효과를 정리하면서 아직 뽑던 다른 파일 결과를 버려, 여러 개 올리면 하나만 떴다) */
 export function useFirstFrames(files: File[]): Map<File, string> {
   const [map, setMap] = useState(() => new Map<File, string>())
+  const started = useRef(new WeakSet<File>())
   useEffect(() => {
-    let alive = true
     for (const f of files) {
-      if (map.has(f)) continue
-      map.set(f, '')
+      if (started.current.has(f)) continue
+      started.current.add(f)
       void firstFrame(f).then((u) => {
-        if (!alive || !u) return
-        setMap((m) => new Map(m).set(f, u))
+        if (u) setMap((m) => new Map(m).set(f, u))
       })
     }
-    return () => {
-      alive = false
-    }
-  }, [files, map])
+  }, [files])
   return map
+}
+
+/** 폰에서 올린 촬영의 서버 영상 주소(서명). 결과 영상이 준비된 촬영만 있다. <video> 의 첫 프레임을 썸네일로 쓴다 */
+export function useShotVideos(shots: ShotOut[]): Record<string, string> {
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  const busy = useRef(new Set<string>())
+  useEffect(() => {
+    for (const s of shots) {
+      if (urls[s.id] || busy.current.has(s.id)) continue
+      busy.current.add(s.id)
+      void api
+        .shot(s.id)
+        .then((d) => {
+          if (d.video_url) setUrls((u) => ({ ...u, [s.id]: d.video_url! }))
+        })
+        .catch(() => undefined)
+        .finally(() => busy.current.delete(s.id)) // 아직 준비 전이면 다음 조회(3초) 때 다시
+    }
+  }, [shots, urls])
+  return urls
 }
