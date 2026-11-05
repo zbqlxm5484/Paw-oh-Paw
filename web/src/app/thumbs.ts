@@ -1,6 +1,6 @@
 // 첨부한 영상의 첫 프레임 미리보기(앱 촬영 화면과 같은 방식). 업로드 칸에 디자인 그림 대신 쓴다
 import { useEffect, useRef, useState } from 'react'
-import { api, type ShotOut } from '../api/client'
+import { api, fileHref, type ShotOut } from '../api/client'
 
 /** 영상 파일의 첫 프레임을 작은 jpeg data URL 로. 못 뽑으면 '' */
 export async function firstFrame(file: File, width = 320): Promise<string> {
@@ -58,12 +58,13 @@ export function useShotVideos(shots: ShotOut[]): Record<string, string> {
   const busy = useRef(new Set<string>())
   useEffect(() => {
     for (const s of shots) {
-      if (urls[s.id] || busy.current.has(s.id)) continue
+      // 분석에 실패한 촬영은 결과 영상이 만들어지지 않으니 다시 묻지 않는다
+      if (urls[s.id] || busy.current.has(s.id) || s.status === 'FAILED' || s.video_status === 'FAILED') continue
       busy.current.add(s.id)
       void api
         .shot(s.id)
         .then((d) => {
-          if (d.video_url) setUrls((u) => ({ ...u, [s.id]: d.video_url! }))
+          if (d.video_url) setUrls((u) => ({ ...u, [s.id]: fileHref(d.video_url!) })) // VITE_API_BASE 를 따로 줄 때도 맞게
         })
         .catch(() => undefined)
         .finally(() => busy.current.delete(s.id)) // 아직 준비 전이면 다음 조회(3초) 때 다시
