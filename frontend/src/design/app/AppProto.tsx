@@ -4,6 +4,7 @@
  * 화면 이동은 주소(props.screen·nav·back)로 한다. 문구·색·배치 값은 원본 그대로.
  * 촬영: 디자인의 촬영 화면에서 촬영 버튼을 누르면 기기 카메라(파일 입력 capture)가 열린다.
  */
+import * as camera from '../../app/camera'
 import { ApiError } from '../../api/client'
 import { BREEDS } from '../../api/labels'
 import { DCLogic } from '../DCLogic'
@@ -25,10 +26,10 @@ export class AppProto extends DCLogic<Props, any> {
     li: { id: '', pw: '' }, so: { org: '', loc: '', dev: '', id: '', pw: '', pw2: '' }, to: [false, false, false, false],
     af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
-    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0,
+    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0,
   }
   vids = new Set<HTMLVideoElement>()
-  raf: any; t1: any; t2: any; tt: any; r1: any; r2: any; storyEl?: HTMLElement; lastMo = 0; moStart = 0
+  recTick: any; raf: any; t1: any; t2: any; tt: any; r1: any; r2: any; storyEl?: HTMLElement; lastMo = 0; moStart = 0
   componentDidMount() {
     // 로그인 전 첫 진입이면 스플래시(2.2초) 뒤 랜딩
     if (!this.props.data.loggedIn && (this.props.screen === 'landing' || this.props.screen === 'home')) this.startSplash()
@@ -39,14 +40,15 @@ export class AppProto extends DCLogic<Props, any> {
   componentDidUpdate(prev: Props) {
     if (prev.screen !== this.props.screen || prev.params !== this.props.params) {
       this.syncRoute()
-      if (this.props.screen === 'capGuide') this.startRot()
+      if (this.props.screen === 'capGuide') { this.startRot(); void camera.setNavBarHidden(true); if (camera.canRecordInApp()) { this.setState({ camLoading: !camera.isLive() }); void camera.warm() } }
+      if (prev.screen === 'capGuide' && this.props.screen !== 'capGuide') { if (camera.isRecording()) void camera.stopRecording(); camera.stopLater(); void camera.setNavBarHidden(false); clearInterval(this.recTick); this.setState({ camLive: false, recSec: -1, camLoading: false }) }
       if (this.props.screen === 'story') this.setState({ page: 0 })
     }
     if (prev.data.dogs !== this.props.data.dogs) this.syncRoute()
     const s = this.props.session
     if (this.props.screen === 'analyzing' && s && (s.status === 'DONE' || s.status === 'FAILED') && s.id === this.props.params.sessionId) this.props.nav(`/sessions/${s.id}/result`, { replace: true })
   }
-  componentWillUnmount() { cancelAnimationFrame(this.raf); clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.tt); clearTimeout(this.r1); clearTimeout(this.r2) }
+  componentWillUnmount() { camera.stopPreview(); void camera.setNavBarHidden(false); clearInterval(this.recTick); cancelAnimationFrame(this.raf); clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.tt); clearTimeout(this.r1); clearTimeout(this.r2) }
   syncRoute() {
     const { screen, params, data } = this.props
     if (screen === 'petNew') {
@@ -70,6 +72,22 @@ export class AppProto extends DCLogic<Props, any> {
     this.vids.add(el)
     // 영상 첨부 화면: 디자인의 견본 영상 대신 방금 올린 영상을 보여 준다
     if (this.props.screen === 'capReview' && this.lastFileUrl) el.src = this.lastFileUrl
+    // 촬영 화면: 견본 영상 대신 앱 안 카메라 미리보기(처음이면 권한 창). 못 쓰면 견본 영상 그대로 두고 촬영 버튼은 기기 카메라
+    if (this.props.screen === 'capGuide' && camera.canRecordInApp()) {
+      // 카메라가 실제로 그림을 내기 전까지는 영상 칸을 숨기고 '카메라를 켜는 중' 을 보인다(회색 빈 화면 대신)
+      void camera.startPreview(el).then((ok) => {
+        if (ok) camera.uprightInRotatedBox(el)
+        this.setState({ camLive: ok })
+        if (!ok) return this.setState({ camLoading: false })
+        // 첫 프레임이 그려지면 로딩 표시를 걷는다(이벤트를 놓쳐도 1.5초 뒤에는 걷는다)
+        const done = () => { if (this.state.camLoading) this.setState({ camLoading: false }) }
+        const wait = () => (el.readyState >= 2 && el.videoWidth > 0 ? done() : requestAnimationFrame(wait))
+        wait(); setTimeout(done, 1500)
+      })
+      return
+    }
+    // 첨부 화면: 아직 올린 영상이 없으면 견본 영상을 보이지 않는다
+    if (this.props.screen === 'capReview' && !this.lastFileUrl) { el.removeAttribute('src'); el.removeAttribute('poster'); el.load(); return }
     el.muted = true; el.volume = 0; el.loop = true; el.playsInline = true
     const go = () => { el.muted = true; el.play().catch(() => {}) }
     go()
@@ -111,7 +129,9 @@ export class AppProto extends DCLogic<Props, any> {
     this.setState({ capDog: cur.id, sessW: '' })
     this.nav('capSelect')
   }
-  startRot = () => { clearTimeout(this.r1); clearTimeout(this.r2); this.setState({ rotDone: false, rotAnim: false }); this.r1 = setTimeout(() => this.setState({ rotAnim: true }), 350); this.r2 = setTimeout(() => this.setState({ rotDone: true }), 1500) }
+  /** 가로로 돌리라는 안내는 앱을 켠 뒤 처음 한 번만(16번 찍을 때마다 1.5초씩 기다리지 않게) */
+  rotSeen = false
+  startRot = () => { if (this.rotSeen) { this.setState({ rotDone: true, rotAnim: true }); return } this.rotSeen = true; clearTimeout(this.r1); clearTimeout(this.r2); this.setState({ rotDone: false, rotAnim: false }); this.r1 = setTimeout(() => this.setState({ rotAnim: true }), 350); this.r2 = setTimeout(() => this.setState({ rotDone: true }), 1500) }
   sessionId(): string | null { return ['capReview', 'capGuide', 'analyzing'].includes(this.props.screen) ? this.props.params.sessionId ?? null : null }
   /** 회차가 없으면 만든다(반려견·오늘 체중) */
   ensureSession = async (): Promise<string> => {
@@ -124,12 +144,33 @@ export class AppProto extends DCLogic<Props, any> {
     return s.id
   }
   shots(): number { const s = this.props.session; return s && this.sessionId() ? s.shots.length : 0 }
+  /** 앱 안에서 찍은 영상은 촬영 화면에 머문 채 뒤에서 차례로 올린다(다음 영상을 바로 찍을 수 있게) */
+  upQ: Promise<void> = Promise.resolve()
+  queueUpload = (file: File | null) => {
+    if (!file) return
+    this.setState((st: any) => ({ pend: (st.pend || 0) + 1 }))
+    this.upQ = this.upQ.then(async () => {
+      try {
+        const sid = await this.ensureSession()
+        const out = await this.props.actions.uploadShot(sid, file)
+        void camera.rememberFirstFrame(out.id, file).then(() => this.forceUpdate())
+        if (this.lastFileUrl) URL.revokeObjectURL(this.lastFileUrl)
+        this.lastFileUrl = URL.createObjectURL(file)
+        this.toast(out.warnings?.length ? out.warnings[0].message : `${out.seq_no}번째 영상을 첨부했어요`)
+      } catch (e) {
+        this.toast(errMsg(e, '영상을 올리지 못했어요. 잠시 후 다시 시도해 주세요'))
+      } finally {
+        this.setState((st: any) => ({ pend: Math.max(0, (st.pend || 0) - 1) }))
+      }
+    })
+  }
   addFile = async (file: File | null) => {
     if (!file || this.state.busy) return
     this.setState({ busy: true })
     try {
       const sid = await this.ensureSession()
       const out = await this.props.actions.uploadShot(sid, file)
+      void camera.rememberFirstFrame(out.id, file).then(() => this.forceUpdate())
       if (this.lastFileUrl) URL.revokeObjectURL(this.lastFileUrl)
       this.lastFileUrl = URL.createObjectURL(file)
       for (const v of this.vids) if (v.isConnected && this.props.screen === 'capReview') v.src = this.lastFileUrl
@@ -340,14 +381,32 @@ export class AppProto extends DCLogic<Props, any> {
       fromGallery: async () => { if (shots >= 16) return this.toast('영상 16개를 모두 첨부했어요'); const f = await this.props.pickFile(false); await this.addFile(f) },
       goCapGuide: this.goCapGuide,
       capDogName: capD.name || '',
-      slots: Array.from({ length: 16 }, (_, i) => { const done = i < shots, next = i === shots; return { n: i + 1, done, next, bg: done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC', bs: next ? 'dashed' : 'solid', bd: done ? '#141B22' : next ? '#D2601A' : '#ECE8E2', nc: done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2', cur: next ? 'pointer' : 'default', tap: next ? this.goCapGuide : () => {} } }),
+      slots: Array.from({ length: 16 }, (_, i) => { const done = i < shots, next = i === shots; const sh = [...(this.props.session?.shots ?? [])].sort((a: any, b: any) => a.seq_no - b.seq_no)[i]; return { n: i + 1, done, next, thumb: done && sh ? camera.shotThumbs[sh.id] ?? '' : '', bg: done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC', bs: next ? 'dashed' : 'solid', bd: done ? '#141B22' : next ? '#D2601A' : '#ECE8E2', nc: done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2', cur: next ? 'pointer' : 'default', tap: next ? this.goCapGuide : () => {} } }),
       shotN: shots, shotPct: Math.round(shots / 16 * 100), moreOp: shots >= 16 ? 0.4 : 1,
       shotHint: s.busy ? '영상을 올리는 중이에요…' : shots >= 16 ? '16개를 모두 첨부했어요. 분석을 시작해 주세요.' : `${shots + 1}번째 영상을 이어서 찍어 주세요. 16개를 모두 채우면 결과가 더 정확해요.`,
       rotHint: !s.rotDone, rotDone: !!s.rotDone, rotDeg: s.rotAnim ? 90 : 0,
-      recTime: `영상 ${Math.min(16, shots + 1)}/16 · 00:00 / 00:04`, recPillBg: s.busy ? '#C2412D' : 'rgba(14,18,23,.55)', recDot: s.busy ? '#fff' : '#E5604D',
-      recBtnS: s.busy ? 30 : 62, recBtnR: s.busy ? 8 : 31, capHint: s.busy ? '영상을 올리는 중이에요' : '촬영 버튼을 누르면 카메라가 열려요. 점선 안에 반려견 옆모습이 들어오게 맞춰 주세요',
+      // 촬영 화면 영상 칸: 앱 안 카메라를 쓰면 견본 영상 없이 카메라만
+      capVidSrc: camera.canRecordInApp() ? undefined : '/assets/landing.mp4', capVidPoster: camera.canRecordInApp() ? undefined : '/assets/landing-poster.webp',
+      camLoading: !!s.camLoading, camOp: s.camLoading ? 0 : 1,
+      recTime: `영상 ${Math.min(16, shots + (s.pend || 0) + 1)}/16 · ${s.recSec >= 0 ? `00:${String(Math.min(99, s.recSec)).padStart(2, '0')} 녹화 중` : '00:00 / 00:04'}`, recPillBg: s.busy || s.recSec >= 0 ? '#C2412D' : 'rgba(14,18,23,.55)', recDot: s.busy || s.recSec >= 0 ? '#fff' : '#E5604D',
+      recBtnS: s.busy || s.recSec >= 0 ? 30 : 62, recBtnR: s.busy || s.recSec >= 0 ? 8 : 31,
+      capHint: s.busy ? '영상을 올리는 중이에요' : s.recSec < 0 && s.pend > 0 ? `앞 영상 ${s.pend}개를 올리는 중이에요. 바로 다음 영상을 찍어도 돼요` : s.recSec >= 0 ? '반려견이 화면을 다 지나가면 버튼을 다시 눌러 멈춰 주세요' : s.camLive ? '점선 안에 반려견 옆모습이 들어오게 맞추고 촬영 버튼을 눌러 주세요' : '촬영 버튼을 누르면 카메라가 열려요. 점선 안에 반려견 옆모습이 들어오게 맞춰 주세요',
       // 촬영 버튼: 기기 카메라(파일 입력 capture)
-      toggleRec: async () => { if (s.busy) return; if (shots >= 16) return this.toast('영상 16개를 모두 첨부했어요'); const f = await this.props.pickFile(true); await this.addFile(f) },
+      toggleRec: async () => {
+        if (s.busy) return
+        if (camera.isRecording()) {
+          clearInterval(this.recTick); this.setState({ recSec: -1 })
+          const f = await camera.stopRecording(); this.queueUpload(f); return
+        }
+        if (shots + (s.pend || 0) >= 16) return this.toast('영상 16개를 모두 찍었어요. X 를 눌러 첨부 목록으로 가 주세요')
+        // 앱 안 카메라가 켜져 있으면 바로 녹화, 아니면 기기 카메라 앱
+        if (s.camLive && camera.startRecording()) {
+          const t0 = Date.now(); this.setState({ recSec: 0 })
+          this.recTick = setInterval(() => this.setState({ recSec: Math.floor((Date.now() - t0) / 1000) }), 250)
+          return
+        }
+        const f = await this.props.pickFile(true); await this.addFile(f)
+      },
       startAna: async () => {
         const sid = this.sessionId()
         if (!shots || !sid) return this.toast('영상을 1개 이상 첨부해 주세요')
