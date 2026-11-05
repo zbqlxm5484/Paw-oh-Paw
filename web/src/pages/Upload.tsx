@@ -1,4 +1,5 @@
 // upload.html + static/upload.js + main.py upload(): 반려견 고르기, 영상 16개까지 차례로 첨부(끌어 놓기 · 고르기), 분석 시작
+import { useFirstFrames } from '../app/thumbs'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Base } from '../app/Base'
@@ -38,6 +39,7 @@ export default function Upload() {
   const picker = useRef<HTMLInputElement>(null)
   const video = useRef<HTMLVideoElement>(null)
   const urls = useRef(new WeakMap<File, string>())
+  const thumbs = useFirstFrames(files)
 
   const go: Go | null = acct && !acct.dogs.length ? redirect('/home?modal=pet', '먼저 반려견을 등록해 주세요') : null
   useRedirect(go)
@@ -177,8 +179,9 @@ export default function Upload() {
                         <div key={i} title={done && files[i] ? files[i].name : undefined} onClick={next ? () => picker.current?.click() : undefined}
                           style={css('aspect-ratio:16 / 10;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;' +
                             'background:' + (done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
+                          {done && files[i] && thumbs.get(files[i]) ? <img src={thumbs.get(files[i])} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
-                          <span style={css('position:absolute;left:7px;top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:' + (done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
+                          <span style={css('position:absolute;left:7px;top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
                         </div>
                       )
                     })}
