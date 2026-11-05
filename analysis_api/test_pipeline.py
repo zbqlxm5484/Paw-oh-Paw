@@ -71,7 +71,8 @@ def test_track_result_is_v1(tmp_path, monkeypatch):
     assert {"stride_length_front", "stance_ratio_hind", "walk_speed", "gait_cycles",
             "rom_stifle", "angle_median_shoulder", "stifle_cycle_rom"} <= set(p["metrics"])
     assert abs(p["metrics"]["walk_speed"]["value"] - 1000 / 150) < 0.1      # 가상 개: 1000px/초, 몸통 150px
-    for key in ("measure_start", "measure_end", "checks", "reason_code", "reason", "gait"):
+    assert "validity_reason_text" in r and r["validity_reason_text"] is None
+    for key in ("measure_start", "measure_end", "checks", "reason_code", "reason", "reason_detail", "gait"):
         assert key in p
 
 
