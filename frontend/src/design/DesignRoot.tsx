@@ -55,7 +55,7 @@ export interface ProtoProps {
   sessionAna: DAna | null
   /** 숨은 파일 입력을 연다. capture=true 면 폰 카메라 */
   pickFile: (capture: boolean) => Promise<File | null>
-  openFile: (url: string) => void
+  openFile: (url: string) => boolean
 }
 
 /** 주소 → 앱 v5 화면 이름 */
@@ -173,9 +173,12 @@ export function DesignRoot() {
     if (window.history.length > 1) navigate(-1)
     else navigate(loggedIn ? '/' : '/welcome')
   }, [navigate, loggedIn])
-  const openFile = useCallback((url: string) => {
+  /** 서명 주소(PDF 등)를 연다. 앱에서는 폰 브라우저로 넘어가 내려받는다. 체험 모드의 가짜 서버는 앱 밖에서 열 수 없어 false */
+  const openFile = useCallback((url: string): boolean => {
     const u = fileUrl(url)
-    if (u) window.open(u, '_blank', 'noopener')
+    if (!u || isDemo()) return false
+    window.open(u, '_blank', 'noopener')
+    return true
   }, [])
 
   const props: ProtoProps = {
