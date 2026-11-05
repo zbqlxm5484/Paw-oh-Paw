@@ -16,6 +16,7 @@ import json
 import os
 import shutil
 import threading
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -83,10 +84,30 @@ def _valid_id(job_id: str) -> bool:
     return bool(job_id) and Path(job_id).name == job_id and not job_id.startswith(".")
 
 
+def is_job_dir_name(name: str) -> bool:
+    """작업 폴더 이름인가. 작업 ID는 uuid4 문자열(main.create_analysis)이라 그 모양인 이름만 작업 폴더로 본다"""
+    try:
+        return str(uuid.UUID(name)) == name
+    except ValueError:
+        return False
+
+
 def _job_dirs(root: Path) -> list:
-    """저장소 아래 모든 작업 폴더. job.json이 없는 폴더(업로드 도중 끊겨 영상만 남은 것)도 포함한다"""
+    """저장소 아래 작업 폴더(이름이 UUID인 폴더). job.json이 없는 폴더(업로드 도중 끊겨 영상만 남은 것)도 포함한다.
+    이름이 UUID가 아닌 폴더는 건드리지 않는다: ANALYSIS_STORAGE_DIR를 data/처럼 넓게 잘못 줘도 data/tracks/ 등이 남는다"""
     root = Path(root)
-    return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.iterdir() if p.is_dir() and is_job_dir_name(p.name))
+
+
+def _other_entries(root: Path) -> list:
+    """작업 폴더도 기록 파일도 아닌 것. 파기 명령이 지우지 않고 개수만 알린다"""
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    ours = {LOG_FILE, LOG_FILE + ".tmp"}
+    return [p for p in root.iterdir() if not (p.is_dir() and is_job_dir_name(p.name)) and p.name not in ours]
 
 
 def _parse(line: str):
@@ -121,7 +142,7 @@ def scrub_log(root: Path, job_ids: set) -> int:
 def delete_job(root: Path, job_id: str) -> tuple:
     """작업 하나를 지운다(영상·상태·결과·관절점 파일, 기록 줄). (지운 파일 수, 바이트). 없으면 (0, 0).
     폴더를 다 지우지 못하면 OSError(기록 줄은 그대로 둔다)"""
-    if not _valid_id(job_id):
+    if not (_valid_id(job_id) and is_job_dir_name(job_id)):
         return 0, 0
     folder = Path(root) / job_id
     files, size = _dir_size(folder) if folder.is_dir() else (0, 0)
@@ -142,7 +163,8 @@ def purge_stats(root: Path) -> dict:
     log = Path(root) / LOG_FILE
     if log.exists():
         files, size = files + 1, size + log.stat().st_size
-    return {"jobs": len(jobs), "files": files, "bytes": size, "unfinished": len(unfinished_jobs(root))}
+    return {"jobs": len(jobs), "files": files, "bytes": size, "unfinished": len(unfinished_jobs(root)),
+            "others": len(_other_entries(root))}
 
 
 def purge_all(root: Path) -> dict:
