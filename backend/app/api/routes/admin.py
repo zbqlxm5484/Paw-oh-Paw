@@ -17,11 +17,15 @@ from app.schemas.admin import (
     InstitutionCreate,
     InstitutionListOut,
     InstitutionUpdate,
+    PurgeOut,
+    PurgeRequest,
     StaffAdminOut,
     StaffListOut,
     StaffUpdate,
 )
 from app.services import admin as admin_service
+from app.services import purge as purge_service
+from app.storage.base import get_storage
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -88,3 +92,20 @@ def list_staff(institution_id: uuid.UUID, staff: CreamoffStaff, db: DbSession) -
 @router.patch("/staff/{staff_id}", response_model=StaffAdminOut)
 def update_staff(staff_id: uuid.UUID, body: StaffUpdate, staff: AdminStaff, db: DbSession) -> StaffAdminOut:
     return admin_service.update_staff(db, staff_id, body, actor_id=staff.id)
+
+
+# ---- 자료 파기(15.9, BE-19) ----
+
+
+@router.post("/purge", response_model=PurgeOut)
+def purge(body: PurgeRequest, staff: AdminStaff, db: DbSession) -> PurgeOut:
+    """자료 파기(관리자만). dry_run 기본 true. DOG는 자기 기관의 반려견 하나, INSTITUTION은 자기 기관 전체."""
+    return purge_service.purge(
+        db,
+        get_storage(),
+        body.scope,
+        institution_id=staff.institution_id,
+        target_id=body.target_id,
+        dry_run=body.dry_run,
+        executed_by=staff.id,
+    )

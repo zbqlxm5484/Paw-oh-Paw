@@ -16,8 +16,10 @@ Oct 19, 2026 · @조영운
 | v1.15 | 2026-11-02 | 작업 단위 9 구현(S15P31A404-195): 보고서 모듈 `report/`(8절 입력 dict 모양은 `report/inputs.py` 머리말, 문장은 김지윤 템플릿 전 자리 표시), 보고서 풀·`services/report_input.py`(12.4), 보고서 API 19~21(15.7). 오차 범위(`settings.tolerance`)는 197에서 채운다 |
 | v1.16 | 2026-11-03 | 195 리뷰 반영(김지윤, MR !80): 8절 3번에 문장 템플릿 확정과 보호자용 요약 둘째 문장 규칙(좌우 차이도 15.8 오차 범위 표와 견줌), 8절 7번 목록은 김지윤 초안이 현재본이고 용어 설명은 명사형, 15.8에 보고서도 같은 표를 쓴다고 적음. 표 쓰임은 조영운 확정(11-03). 박규원 리뷰 반영: 11.11 `file_url`의 `now`(두 주소의 만료를 맞춤), 15.7 주소 재사용과 ASCII 대체 파일 이름, 8절 3번 한쪽 유효 통과 4회 이하는 범위와 견주지 않음 |
 | v1.17 | 2026-11-04 | 보고서 수치 자동 대조(작업 단위 9의 7번 첫 항목, S15P31A404-196): 8절 7번에 대조 방식(실린 숫자 목록 ↔ DB `session_metric` 값·15.7 다리 비교 계산값, `report/verify.py`·`services/report_numbers.py`, 값이 다르거나 기준에 없으면 `REPORT_CHECK_FAILED`, 싣지 않은 수치는 불일치 아님), 12.4 보고서 한 건에 붙이기 전 대조 줄. 리뷰 반영(MR !85): 12.4에 거두는 중 DB 오류와 맡은 작업 없는 GENERATING 처리. |
-| v1.19 | 2026-11-04 | 198 이력·비교·추이 구현에 맞춰 15.8 보충: `base`가 BASELINE·PREVIOUS·UUID 형식이 아니거나 추이의 `metric_code`가 12.3 표에 없으면 422, 추이 `series`는 그 수치의 다리 전부(점 없는 다리는 빈 배열)이고 `lr_diff` 쌍은 관심 다리 쌍 먼저, 비교 API도 오차 범위 파일을 워커와 같은 함수로 읽는다 |
 | v1.18 | 2026-11-04 | 보고서 판정 기준 설정 파일 반영(작업 단위 9, S15P31A404-197): `config/tolerance.yaml`에 통합본 9-3 임시값(15.8의 예시를 실제 값으로), `services/tolerance.py`가 읽어 보고서 입력 `settings.tolerance`에 넣음(워커 시작 때, 없으면 빈 것·모양이 틀리면 시작 실패, 16절), 판정 함수 `report/judge.py`(15.8 판정 표, Decimal, 비교 API와 공용), 8절 2번에 직전 회차 값 옆 변화 표시(증가·감소·범위 안), 17.4 BE-15 한 줄. 고관절·무릎은 박규원 MR 80 답변의 5°·8°로 올리고 팔꿈치는 뺌. 10절 Q6·12.3의 최소 주기 수는 2개로 둔다(조유진, S15P31A404-183 실측, 11-04). 리뷰 반영(MR !86): 오차 범위와 견주는 곳을 `n_passes` 8 이상으로 통일(5절, 8절 2·3번, 15.8 판정 3, 좌우 차이는 5회에서 8회로). |
+| v1.19 | 2026-11-04 | 198 이력·비교·추이 구현에 맞춰 15.8 보충: `base`가 BASELINE·PREVIOUS·UUID 형식이 아니거나 추이의 `metric_code`가 12.3 표에 없으면 422, 추이 `series`는 그 수치의 다리 전부(점 없는 다리는 빈 배열)이고 `lr_diff` 쌍은 관심 다리 쌍 먼저, 비교 API도 오차 범위 파일을 워커와 같은 함수로 읽는다 |
+| v1.20 | 2026-11-04 | 199 자료 파기 구현에 맞춰 15.9 보충: `INSTITUTION`에 `target_id`를 보내면 422, 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 적용, `rows`는 반려견·회차·촬영·통과·수치·보고서 행 수의 합, `purge_log.target_id`·`executed_by` 값, 전체 파기 스크립트는 `--execute` 없이는 세기만 하고 기관·계정·코드는 남긴다 |
+| v1.21 | 2026-11-04 | 200 견본 PDF·20초 측정(S15P31A404-200): 8절에 견본 보고서(D-08) 경우 목록·스크립트·기업 서버용 대조 기준값(`reference_from_result`, `metrics`에서 다시 계산) 문단, 17.4 BE-15의 20초 확인 방법을 회차 DONE 기준으로 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -360,6 +362,8 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 8. 저장: 팀 서비스는 파일 저장소에 넣고 report 행을 갱신한다
 
 모든 판본에 "보행 평가 보조 자료" 문구를 고정으로 넣는다. WeasyPrint는 시스템 라이브러리가 필요해 requirements.txt만으로는 설치되지 않으므로, 그 전제를 실행 가이드(D-09)에 적는다(PR-C-07).
+
+**견본 보고서(D-08)**: 경우 목록은 `app/report/samples.py`(첫 회차, 재측정, 분석 모델 바뀜, 측정 불가 수치 포함, 한쪽 방향만 촬영, 유효 통과 0건. 기업 승인 전 제안)이고, `python -m scripts.report_samples <폴더>`가 경우 × 판본의 입력 JSON과 PDF를 만들며 생성 시간을 잰다(KPI-29, 결과는 `docs/report/reportTiming.md`). 기업 서버는 `report/verify.py`의 `reference_from_result`로 분석 결과(15.7 모양)에서 대조 기준값을 만들어 같은 `compare_numbers`를 부른다. `reference_from_result`는 `metrics`만 읽고 다리 비교 값을 12.3 식으로 다시 계산한다(`report/pairs.py`). 그래서 입력의 `limb_compare`는 같은 `metrics`로 계산한 값이어야 대조를 통과한다. 보고서 입력과 같은 dict를 넘기면 수치 값 자체는 증명하지 못하므로, 기업 서버는 따로 가진 분석 결과를 넘긴다.
 
 ## 9. 일정
 
@@ -954,7 +958,7 @@ CREATE TABLE purge_log (
 - 상태·결과 조회에서 분석 API가 작업이 없다고 답하면(404·410. 재시작으로 작업을 잃었거나 보관 기간이 지남) 기다려도 오지 않으므로 바로 FAILED(`ANALYSIS_FAILED`)다. 409(아직 결과 없음)·5xx·연결 실패는 다음 바퀴에 다시 묻고 시간 초과가 끝을 낸다. 결과를 DB에 넣다가 오류가 나면 방금 쓴 파일을 지우고 그 촬영만 건너뛴다(다음 바퀴에 다시). 한 촬영의 오류가 같은 바퀴의 다른 촬영·가져오기·제출을 막지 않는다. 결과 JSON의 값은 DB 범위(`pass_no` SMALLINT, 프레임 INTEGER)까지 미리 검사해 저장 중 형식 오류가 나지 않게 한다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
-* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다. 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
+* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석, 자료 파기)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다(파기는 대상 회차 행 전부. 15.9). 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
 * **API가 만든 파일**: 업로드처럼 요청 안에서 파일을 만들면 그 키를 `db.info["created_files"]`에 넣는다. commit이 실패하면 `get_db`가 그 파일을 지운다(11.7). 지울 때는 12.5 순서대로 파일을 먼저 지운다. 행 삭제가 실패해 파일 없는 행이 남는 것은 괜찮다(파기 때 함께 지워진다). 반대로 DB에 키가 없는 파일이 남으면 파기에서 빠진다.
 * **보고서 행 값**: `template_version`에는 보고서 모듈의 `report.TEMPLATE_VERSION` 상수를 넣는다.
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
@@ -1912,7 +1916,10 @@ stance_ratio: 5.0 # pct
 - `dry_run`의 기본값은 true다. 지울 행·파일·용량만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 분명히 보낸다.
 - 실제로 지우면 `purge_log`에 1행을 남기고 그 ID를 `purge_log_id`로 돌려준다. 파기 확인서(D-13)의 근거다.
 - `INSTITUTION`은 반려견과 그 아래 자료를 모두 지우고, 기관과 담당자 계정은 남긴다.
-- 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다.
+- 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다. 실제로 지울 때는 대상 회차 행을 모두 `SELECT … FOR UPDATE`로 잠근 뒤 이 검사를 하고 파일·행을 지운다(12.4 잠금. 워커가 그사이 UPLOADED 촬영을 가져가 분석 API로 보내는 틈을 막는다). 워커가 먼저 잠갔으면 파기는 기다렸다가 SUBMITTED를 보고 409를 내고, 파기가 먼저면 워커는 지워진 행을 보고 건너뛴다. `dry_run`은 세기만 하므로 잠그지 않는다.
+- `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 자기 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
+- `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
+- `python -m scripts.purge --all`은 지울 양만 세고, `--execute`를 붙여야 지운다(확인 문구를 묻고 `--yes`면 묻지 않는다). 기관·담당자 계정·디바이스 코드는 `INSTITUTION`과 같이 남긴다(계정 정리는 10절 Q27과 함께 정한다).
 
 **크림오프 관리자 API** (BE-24, 11.6 역할 검사: 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`. 기관·코드·계정 메타데이터까지만 다루고 고객 자료는 열지 않는다. 10절 Q31)
 
@@ -2098,7 +2105,7 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-14: 측정 불가 수치는 `value`가 `null`이고 사유가 있으며, 0이 나오지 않는다.
 - [ ] BE-14: 화면에 내려가는 수치가 `session_metric`과 분석 결과 JSON의 값과 같다(PR-F09-05).
 - [ ] BE-21: `limb_compare`가 15.7의 정렬을 따르고, 왼쪽 31.0·오른쪽 38.2이면 `diff`는 −7.2, `symmetry_index`는 20.81이다.
-- [ ] BE-15: 회차가 DONE이 된 뒤 두 판본이 20초 안에 DONE이 된다(KPI-29, `generation_ms`로 확인).
+- [ ] BE-15: 회차가 DONE이 된 뒤 두 판본이 20초 안에 DONE이 된다(KPI-29, `measure_session.aggregated_at`과 두 보고서 행의 `updated_at`으로 확인. `generation_ms`는 한 판본 생성 시간이라 주 반복 대기가 빠진다).
 - [ ] BE-15: 수치 대조나 금지 표현 검사에 걸리면 PDF를 내보내지 않고 FAILED·`REPORT_CHECK_FAILED`가 된다.
 - [ ] BE-15: 모든 판본에 "보행 평가 보조 자료" 문구가 있다.
 - [ ] BE-15: 직전 회차가 있으면 표의 괄호 안 값 옆에 5절 규칙의 변화(증가·감소·범위 안)가 오차 범위가 있고 두 회차 모두 `n_passes`가 8 이상인 값에만 붙고, 분석 모델이 다르면 붙지 않는다.

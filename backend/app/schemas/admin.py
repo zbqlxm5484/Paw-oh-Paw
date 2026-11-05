@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints, field_validator
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationInfo, field_validator
 
 from app.core.config import get_settings
 from app.schemas.common import OutModel, UtcDateTime
@@ -142,3 +142,39 @@ class StaffUpdate(BaseModel):
     """PATCH /admin/staff/{id}(15.9): 중지·재개만. 역할·비밀번호를 바꾸는 필드는 없다."""
 
     is_active: bool
+
+
+# ---- 자료 파기(15.9, BE-19) ----
+
+
+class PurgeRequest(BaseModel):
+    """POST /admin/purge 요청. DOG는 target_id(반려견 ID) 필수, INSTITUTION은 자기 기관 전체라 target_id가 없다.
+
+    여러 기관을 지우는 ALL은 API로 열지 않는다(scripts/purge.py). dry_run 기본값은 true: 세기만 하고 지우지 않는다.
+    """
+
+    scope: Literal["DOG", "INSTITUTION"]
+    target_id: uuid.UUID | None = Field(default=None, validate_default=True)
+    dry_run: bool = True
+
+    @field_validator("target_id")
+    @classmethod
+    def target_matches_scope(cls, value: uuid.UUID | None, info: ValidationInfo) -> uuid.UUID | None:
+        scope = info.data.get("scope")
+        if scope == "DOG" and value is None:
+            raise ValueError("scope가 DOG면 반려견 ID가 필요합니다")
+        if scope == "INSTITUTION" and value is not None:
+            raise ValueError("scope가 INSTITUTION이면 target_id를 보내지 않습니다(자기 기관 전체)")
+        return value
+
+
+class PurgeOut(BaseModel):
+    """파기 결과 또는 dry_run 집계(15.9). rows는 반려견·회차·촬영·통과·수치·보고서 행 수의 합."""
+
+    scope: str
+    target_id: uuid.UUID | None
+    dry_run: bool
+    rows: int
+    files: int
+    bytes: int
+    purge_log_id: uuid.UUID | None = None
