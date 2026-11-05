@@ -18,6 +18,7 @@ from typing import Optional
 
 from engine.camera_side import heading
 from engine.gait_events import PAWS, detect_pass
+from engine.reasons import REASON_TEXT, pass_reason_detail, shot_reason_detail
 
 VALIDITY_VERSION = "v1"
 CONFIG_PATH = Path(__file__).resolve().parent / "validity.yaml"
@@ -27,20 +28,6 @@ NEAR_LEGS = {"right": (8, 9, 10, 11, 12, 18, 19, 20, 21), "left": (3, 4, 5, 6, 7
 # 기업 판별 기준 문서 2절의 무효 사유. 이 사유가 붙은 통과가 있으면 촬영 전체가 무효다
 SHOT_INVALID_REASONS = {"GAIT_PACE", "RUNNING", "TURNED", "STOPPED", "SITTING", "PARTIAL_PASS", "OVERLAP"}
 
-REASON_TEXT = {   # 백엔드 명세(backend/docs/backend-spec.md) 14.3과 같은 문구
-    "NO_DOG": "반려견이 화면에 없습니다.",
-    "OCCLUDED": "몸이 가려졌습니다.",
-    "NOT_SIDE_VIEW": "옆모습이 찍히지 않았습니다.",
-    "PARTIAL_PASS": "측정 구간을 일부만 지났습니다.",
-    "TOWARD_CAMERA": "카메라 쪽으로 걸었습니다. 옆으로 일직선으로 걷게 해 주세요.",
-    "TURNED": "중간에 돌아섰습니다.",
-    "SITTING": "중간에 앉거나 엎드렸습니다.",
-    "STOPPED": "중간에 멈췄습니다.",
-    "RUNNING": "뛰었습니다. 천천히 걷게 해 주세요.",
-    "GAIT_PACE": "측대보라 수치 계산에서 뺐습니다.",
-    "NO_VALID_PASS": "쓸 수 있는 통과가 없습니다. 다시 찍어 주세요.",
-    "FEW_VALID_PASSES": "쓸 수 있는 통과가 일부만 있습니다.",
-}
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
@@ -129,10 +116,13 @@ def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
     n_in = max(1, sum(present))
 
     # 개 없음, 가림
-    found["NO_DOG"] = 1 - n / len(frames) > rules["no_dog_frame_ratio"]
+    ev = {}   # 사유 문장(engine/reasons.py)에 쓰는 측정값. checks에 함께 남긴다
+    ev["no_dog_ratio"] = 1 - n / len(frames)
+    found["NO_DOG"] = ev["no_dog_ratio"] > rules["no_dog_frame_ratio"]
     hidden = [k is not None and sum(not _ok(k[i], conf) for i in NEAR_LEGS[side]) / len(NEAR_LEGS[side])
               >= rules["occluded_point_ratio"] for k in kps]
-    found["OCCLUDED"] = sum(hidden) / n_in > rules["occluded_frame_ratio"]
+    ev["occluded_ratio"] = sum(hidden) / n_in
+    found["OCCLUDED"] = ev["occluded_ratio"] > rules["occluded_frame_ratio"]
 
     # 옆모습
     heads = [heading(k, conf) if k else None for k in kps]
@@ -145,14 +135,16 @@ def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
     exit_edge = width * rules["exit_margin"]
     not_out = last_box is not None and ((head > 0 and last_box[2] < width - exit_edge) or
                                         (head < 0 and last_box[0] > exit_edge))
-    found["PARTIAL_PASS"] = sum(present) / fps < rules["min_inside_s"] or (ends_with_video and not_out)
+    ev["ends_before_exit"] = bool(ends_with_video and not_out)
+    found["PARTIAL_PASS"] = sum(present) / fps < rules["min_inside_s"] or ev["ends_before_exit"]
 
     # 카메라 쪽으로 걸음: 상자 높이가 처음과 끝에서 크게 다름
     heights = [f["box"][3] - f["box"][1] for f, ok in zip(frames, inside) if ok]
     if heights:
         k = max(1, len(heights) // 5)
         h0, h1 = statistics.median(heights[:k]), statistics.median(heights[-k:])
-        found["TOWARD_CAMERA"] = max(h0, h1) / max(1e-6, min(h0, h1)) > rules["toward_camera_scale"]
+        ev["height_scale"] = max(h0, h1) / max(1e-6, min(h0, h1))
+        found["TOWARD_CAMERA"] = ev["height_scale"] > rules["toward_camera_scale"]
 
     # 돌아섬: 반대 방향 프레임, 몸통이 거꾸로 움직인 시간
     opposite = sum(h == -head for h in side_frames) / max(1, len(side_frames))
@@ -164,8 +156,8 @@ def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
         speeds.append(None if not (a and b) else (b[2] - a[2]) * head * fps / body)
     smooth = _median_filter(speeds, max(3, round(0.1 * fps) | 1))
     backwards = [s is not None and s < 0 for s in smooth]
-    found["TURNED"] = (opposite > rules["turned_frame_ratio"] or
-                       _longest_run(backwards) / fps > rules["turned_reverse_s"])
+    ev["opposite_ratio"], ev["reverse_s"] = opposite, _longest_run(backwards) / fps
+    found["TURNED"] = opposite > rules["turned_frame_ratio"] or ev["reverse_s"] > rules["turned_reverse_s"]
 
     # 앉음: 골반 높이(카메라 쪽 뒷발끝과 장골능의 세로 거리)가 크게 낮아짐
     toe = PAWS[side]["hind"]
@@ -174,13 +166,15 @@ def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
     valid_pelvis = [p for p in pelvis if p is not None]
     if valid_pelvis:
         low = rules["sitting_height_ratio"] * statistics.median(valid_pelvis)
-        found["SITTING"] = _longest_run([p is not None and p < low for p in pelvis]) / fps > rules["sitting_min_s"]
+        ev["sitting_s"] = _longest_run([p is not None and p < low for p in pelvis]) / fps
+        found["SITTING"] = ev["sitting_s"] > rules["sitting_min_s"]
     else:
         found["SITTING"] = False
 
     # 멈춤, 뛰기
     slow = [s is not None and abs(s) < rules["stopped_speed"] for s in smooth]
-    found["STOPPED"] = _longest_run(slow) / fps > rules["stopped_min_s"]
+    ev["stopped_s"] = _longest_run(slow) / fps
+    found["STOPPED"] = ev["stopped_s"] > rules["stopped_min_s"]
     moving = [abs(s) for s in smooth if s is not None]
     pace_speed = statistics.median(moving) if moving else 0.0
     found["RUNNING"] = pace_speed > rules["running_speed"]
@@ -205,6 +199,7 @@ def check_pass(video: dict, start: int, end: int, head: int, cfg: dict) -> dict:
             "side_view_ratio": round(len(side_frames) / n_in, 2),
             "inside_s": round(sum(present) / fps, 2),
             "found": sorted(r for r, v in found.items() if v),
+            **{k: (round(v, 2) if isinstance(v, float) else v) for k, v in ev.items()},
         },
     }
 
@@ -253,6 +248,7 @@ def judge_shot(video: dict, cfg: Optional[dict] = None) -> dict:
                 "heading": "right" if head > 0 else "left", "camera_side": r["camera_side"],
                 "gait": None, "valid": code is None,
                 "reason_code": code, "reason": REASON_TEXT.get(code) if code else None,
+                "reason_detail": pass_reason_detail(code, r["checks"], cfg) if code else None,
                 "measure_start": r["measure_start"], "measure_end": r["measure_end"],
                 "checks": r["checks"],
             })
@@ -273,6 +269,7 @@ def judge_shot(video: dict, cfg: Optional[dict] = None) -> dict:
         "validity_version": VALIDITY_VERSION,
         "validity": validity,
         "validity_reason": reason,
+        "validity_reason_text": shot_reason_detail(reason, passes, cfg, found_ratio) if reason else None,
         "summary": {"passes": len(passes), "used": len(used), "excluded": len(passes) - len(used)},
         "passes": passes,
     }
