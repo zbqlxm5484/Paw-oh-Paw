@@ -254,7 +254,7 @@ function DemoPill({ screen }: { screen: string }) {
   return (
     <button
       type="button"
-      onClick={demo ? exitDemo : enterDemo}
+      onClick={() => (demo ? exitDemo() : enterDemo())}
       style={{
         position: 'fixed',
         // 화면 위쪽은 헤더(로고·알림·기관 칩)와 겹쳐서 아래 탭바 바로 위에 둔다
