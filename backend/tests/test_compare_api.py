@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -111,6 +112,60 @@ def test_default_compares_baseline_to_latest_and_covers_every_judgement(
     unmeasurable = items[("TROT", "LH", "rom_hip")]
     assert (unmeasurable["judgement"], unmeasurable["note"]["code"]) == ("NOT_COMPARABLE", "LOW_CONFIDENCE")
     assert (unmeasurable["base_value"], unmeasurable["target_value"], unmeasurable["diff"]) == (None, 40.0, None)
+
+
+def test_pass_count_rule_holds_for_either_side_and_starts_at_eight(
+    client: TestClient, db: Session, dog, staff, auth_headers, tolerance
+) -> None:
+    """오차 범위와 견주는 조건(5절, 197): 두 회차 모두 그 수치·그 다리의 n_passes가 8 이상. 어느 쪽이든 7이면 값만."""
+    tolerance({"rom_stifle": 3.0, "rom_hip": 5.0})
+    base = make_session(db, dog, staff, date(2026, 10, 1))
+    target = make_session(db, dog, staff, date(2026, 10, 20))
+    add_metric(db, base, "rom_stifle", "LH", 30.0, n_passes=8)  # target 쪽이 7
+    add_metric(db, target, "rom_stifle", "LH", 36.0, n_passes=7)
+    add_metric(db, base, "rom_stifle", "RH", 30.0, n_passes=7)  # base 쪽이 7
+    add_metric(db, target, "rom_stifle", "RH", 36.0, n_passes=8)
+    add_metric(db, base, "rom_hip", "LH", 40.0, n_passes=8)  # 경계: 둘 다 8이면 판정한다
+    add_metric(db, target, "rom_hip", "LH", 46.0, n_passes=8)
+    add_metric(db, base, "rom_hip", "RH", 40.0, n_passes=8)  # 8과 9
+    add_metric(db, target, "rom_hip", "RH", 42.0, n_passes=9)
+
+    items = _by_key(_get(client, auth_headers, dog).json())
+    for limb in ("LH", "RH"):
+        few = items[("TROT", limb, "rom_stifle")]
+        assert (few["judgement"], few["note"]["code"], few["diff"]) == ("UNKNOWN", "RANGE_NOT_SET", 6.0)
+    assert items[("TROT", "LH", "rom_hip")]["judgement"] == "INCREASE"
+    assert items[("TROT", "RH", "rom_hip")]["judgement"] == "WITHIN_RANGE"
+
+
+def test_compare_reads_metric_rows_of_the_two_chosen_sessions_only(
+    client: TestClient, db: Session, dog, staff, auth_headers, tolerance
+) -> None:
+    """회차가 늘어도 비교는 고른 두 회차의 수치 행만 읽는다(198 리뷰). 사이 회차의 행은 쿼리에 들어가지 않는다."""
+    tolerance({"rom_stifle": 3.0})
+    base = make_session(db, dog, staff, date(2026, 10, 1))
+    middle = make_session(db, dog, staff, date(2026, 10, 10))
+    target = make_session(db, dog, staff, date(2026, 10, 20))
+    for session, value in ((base, 30.0), (middle, 50.0), (target, 31.0)):
+        add_metric(db, session, "rom_stifle", "LH", value)
+    seen: list[str] = []
+    connection = db.connection()
+
+    def record(_conn, _cursor, statement: str, parameters, _context, _many) -> None:
+        if "FROM session_metric" in statement:
+            seen.append(repr(parameters))
+
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        response = _get(client, auth_headers, dog)
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+
+    assert response.status_code == 200, response.text
+    assert _by_key(response.json())[("TROT", "LH", "rom_stifle")]["diff"] == 1.0
+    (parameters,) = seen  # 수치 행을 읽는 쿼리는 하나뿐이다
+    assert str(base.id) in parameters and str(target.id) in parameters
+    assert str(middle.id) not in parameters
 
 
 def test_empty_tolerance_file_makes_every_comparable_item_unknown(

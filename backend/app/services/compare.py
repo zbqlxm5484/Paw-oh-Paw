@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCode
@@ -65,9 +65,7 @@ def _session_of_dog(db: Session, dog: Dog, session_id: uuid.UUID, done: list[Mea
         if session.id == session_id:
             return session
     session = db.scalars(
-        select(MeasureSession)
-        .where(MeasureSession.id == session_id, MeasureSession.dog_id == dog.id)
-        .options(selectinload(MeasureSession.metrics))
+        select(MeasureSession).where(MeasureSession.id == session_id, MeasureSession.dog_id == dog.id)
     ).one_or_none()
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
@@ -87,12 +85,17 @@ def _value(row: SessionMetric | None) -> float | None:
     return None if row is None or row.value is None else float(row.value)
 
 
-def _rows(session: MeasureSession, gait_type: str | None) -> dict[MetricKey, SessionMetric]:
-    return {
-        (row.gait_type, row.limb, row.metric_code): row
-        for row in session.metrics
-        if gait_type is None or row.gait_type == gait_type
-    }
+def _metric_rows(
+    db: Session, session_ids: tuple[uuid.UUID, uuid.UUID], gait_type: str | None
+) -> dict[uuid.UUID, dict[MetricKey, SessionMetric]]:
+    """고른 두 회차의 수치 행만 쿼리 하나로 읽는다. 회차가 늘어도 읽는 양이 같다(198 리뷰)."""
+    query = select(SessionMetric).where(SessionMetric.session_id.in_(session_ids))
+    if gait_type is not None:
+        query = query.where(SessionMetric.gait_type == gait_type)
+    rows: dict[uuid.UUID, dict[MetricKey, SessionMetric]] = {session_id: {} for session_id in session_ids}
+    for row in db.scalars(query):
+        rows[row.session_id][(row.gait_type, row.limb, row.metric_code)] = row
+    return rows
 
 
 def compare_rows(
@@ -156,7 +159,7 @@ def compare_sessions(
 ) -> CompareOut:
     """GET /dogs/{dog_id}/compare(BE-18). 비교할 수 없는 요청은 400 COMPARE_INVALID + detail.reason(15.8)."""
     dog = get_dog(db, institution_id, dog_id)
-    done = done_sessions(db, dog.id)
+    done = done_sessions(db, dog.id, with_metrics=False)  # 순서·기준·직전만 본다. 수치 행은 아래에서 두 회차만
     if not done:
         raise _invalid(NO_DONE_SESSION)
     target = done[-1] if target_id is None else _session_of_dog(db, dog, target_id, done)
@@ -176,9 +179,10 @@ def compare_sessions(
 
     gait = None if gait_type is None else gait_type.value
     model_changed = base_session.model_version != target.model_version
+    rows = _metric_rows(db, (base_session.id, target.id), gait)
     items = compare_rows(
-        _rows(base_session, gait),
-        _rows(target, gait),
+        rows[base_session.id],
+        rows[target.id],
         tolerance=get_tolerance(get_settings().TOLERANCE_FILE),
         model_changed=model_changed,
         focus_limb=dog.focus_limb,

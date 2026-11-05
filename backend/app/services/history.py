@@ -22,16 +22,26 @@ from app.services.sessions import side_counts
 
 
 def done_sessions(
-    db: Session, dog_id: uuid.UUID, *, date_from: date | None = None, date_to: date | None = None
+    db: Session,
+    dog_id: uuid.UUID,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    with_metrics: bool = True,
 ) -> list[MeasureSession]:
-    """반려견의 DONE 회차를 12.5 순서로. 수치 행은 한 번에 읽는다(15.1). from·to는 measured_on 기간(날짜 포함)."""
+    """반려견의 DONE 회차를 12.5 순서로. from·to는 measured_on 기간(날짜 포함).
+
+    with_metrics면 수치 행도 한 번에 읽는다(15.1, 추이가 쓴다). 회차의 순서·기준·직전만 볼 때는 False로 불러 수치 행을
+    읽지 않는다(비교는 고른 두 회차의 행만 따로 읽는다. 198 리뷰).
+    """
     query = (
         select(MeasureSession)
         .where(MeasureSession.dog_id == dog_id, MeasureSession.status == SessionStatus.DONE.value)
-        .options(selectinload(MeasureSession.metrics))
         .order_by(MeasureSession.measured_on, MeasureSession.created_at, MeasureSession.id)
         .execution_options(populate_existing=True)
     )
+    if with_metrics:
+        query = query.options(selectinload(MeasureSession.metrics))
     if date_from is not None:
         query = query.where(MeasureSession.measured_on >= date_from)
     if date_to is not None:
