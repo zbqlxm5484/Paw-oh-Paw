@@ -5,12 +5,10 @@ import main
 import pipeline
 import pytest
 import store
-from fastapi.testclient import TestClient
+from conftest import client  # 세션 동안 열어 둔 클라이언트 (conftest.py)
 from test_pipeline import VIDEO, track_file
 
 pytest.importorskip("yaml")
-
-client = TestClient(main.app)
 
 
 @pytest.fixture(autouse=True)

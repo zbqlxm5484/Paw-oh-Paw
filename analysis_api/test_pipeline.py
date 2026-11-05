@@ -5,11 +5,10 @@ import json
 import main
 import pipeline
 import pytest
-from fastapi.testclient import TestClient
+from conftest import client  # 세션 동안 열어 둔 클라이언트 (conftest.py)
 
 pytest.importorskip("yaml")   # 유효 판별 기준값(engine/validity.yaml)을 읽는 데 필요
 
-client = TestClient(main.app)
 FPS, W, H, L = 30, 1920, 1080, 150.0
 VIDEO = b"fake video bytes"
 
