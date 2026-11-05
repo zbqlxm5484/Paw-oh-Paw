@@ -35,7 +35,10 @@ form.inline { display: contents; }
 /* 인쇄 쪽 여백을 정해 둔다(브라우저 기본 여백에 따라 쪽이 다르게 잘리지 않게, 11-02). 보호자용 첫 쪽은 이 안(약 703×1032px)에 맞춘다 */
 @page { size: A4; margin: 12mm; }
 @media print {
-  body { background: #fff; }
+  /* 쪽 바탕은 흰색(11-05): '배경 그래픽'을 켜면 화면용 베이지 바탕이 쪽 가장자리에 찍혔다 */
+  html, body, .page-bg { background: #fff !important; }
+  /* 막대·띠·배지처럼 배경색으로 그린 그래픽은 '배경 그래픽'을 끄고 인쇄해도 보이게 */
+  .print-paper, .print-paper * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
   .print-paper { box-shadow: none !important; min-height: 0 !important; padding: 0 !important; }
   .print-main { padding: 0 !important; max-width: none !important; }
@@ -45,6 +48,11 @@ form.inline { display: contents; }
   .rep-map { width: 168px !important; height: 413px !important; margin: 0 auto; }
   .rep-trend { max-width: none !important; }
   .rep-p2 { break-before: page; }   /* 보호자용: 첫 쪽 = 요약·대칭 지수·다리별 수치, 둘째 쪽 = 측정 품질·지난 변화 */
+  /* 수의사용(11-05): 섹션이 쪽 사이에서 끊기지 않게. 3쪽(지난 측정과 비교)·4쪽(무릎 그래프)은 새 쪽에서 시작 */
+  .rep-sec { break-inside: avoid; }
+  .rep-pb { break-before: page; }
+  .rep-cmp-row { padding-top: 5px !important; padding-bottom: 5px !important; }   /* 3쪽에 지난 측정 비교와 무릎 변화가 같이 들어가게 */
+  .rep-trend2 { max-width: 400px !important; }
 }
 
 /* 선택 상자: 브라우저 기본 화살표는 테두리에 붙어 보여서 직접 그린다. 화살표와 글자의 좌우 여백을 같게 맞춘다(11-02) */
