@@ -245,7 +245,7 @@ export function shotDetailFor(shot: MockShot, s: MockSession, origin: string): S
     submitted_at: shot.status === 'UPLOADED' ? null : shot.uploaded_at,
     video_ready_at: ready ? (shot.analyzed_at ?? shot.uploaded_at) : null,
     // 가짜 서버는 PDF·영상 파일을 못 만든다. 공개 폴더의 견본 영상 주소(절대 주소, api-spec 1.6 "http 로 시작하면 그대로")를 준다
-    video_url: ready ? `${origin}/test_walk.mp4` : null,
+    video_url: ready ? `${origin}/assets/landing.mp4` : null, // 체험 모드 썸네일용(실제 서버는 /api/v1/shots/{id}/video 서명 주소)
     url_expires_at: ready ? exp : null,
   }
 }

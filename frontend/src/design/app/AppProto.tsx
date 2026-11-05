@@ -395,7 +395,7 @@ export class AppProto extends DCLogic<Props, any> {
       fromGallery: async () => { if (shots >= 16) return this.toast('영상 16개를 모두 첨부했어요'); const f = await this.props.pickFile(false); await this.addFile(f) },
       goCapGuide: this.goCapGuide,
       capDogName: capD.name || '',
-      slots: Array.from({ length: 16 }, (_, i) => { const done = i < shots, next = i === shots; const sh = [...(this.props.session?.shots ?? [])].sort((a: any, b: any) => a.seq_no - b.seq_no)[i]; return { n: i + 1, done, next, thumb: done && sh ? camera.shotThumbs[sh.id] ?? '' : '', bg: done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC', bs: next ? 'dashed' : 'solid', bd: done ? '#141B22' : next ? '#D2601A' : '#ECE8E2', nc: done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2', cur: next ? 'pointer' : 'default', tap: next ? this.goCapGuide : () => {} } }),
+      slots: Array.from({ length: 16 }, (_, i) => { const done = i < shots, next = i === shots; const sh = [...(this.props.session?.shots ?? [])].sort((a: any, b: any) => a.seq_no - b.seq_no)[i]; return { n: i + 1, done, next, shot: done ? sh : undefined, bg: done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC', bs: next ? 'dashed' : 'solid', bd: done ? '#141B22' : next ? '#D2601A' : '#ECE8E2', nc: done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2', cur: next ? 'pointer' : 'default', tap: next ? this.goCapGuide : () => {} } }),
       shotN: shots, shotPct: Math.round(shots / 16 * 100), moreOp: shots >= 16 ? 0.4 : 1,
       shotHint: s.busy ? '영상을 올리는 중이에요…' : shots >= 16 ? '16개를 모두 첨부했어요. 분석을 시작해 주세요.' : `${shots + 1}번째 영상을 이어서 찍어 주세요. 16개를 모두 채우면 결과가 더 정확해요.`,
       rotHint: !s.rotDone, rotDone: !!s.rotDone, rotDeg: s.rotAnim ? 90 : 0,
