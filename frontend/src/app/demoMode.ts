@@ -37,7 +37,8 @@ export function enterDemo() {
   window.location.replace('/')
 }
 
-export function exitDemo() {
+/** 체험 모드를 끝내고 next 로 새로 연다(기본 첫 화면) */
+export function exitDemo(next = '/') {
   clearTokens()
   try {
     localStorage.removeItem(DEMO_KEY)
@@ -45,7 +46,7 @@ export function exitDemo() {
   } catch {
     /* 무시 */
   }
-  window.location.replace('/')
+  window.location.replace(next)
 }
 
 /** 체험 모드에 막 들어왔을 때 한 번만 true. 가짜 계정으로 바로 로그인시키는 데 쓴다 */
