@@ -1,6 +1,8 @@
 // upload.html + static/upload.js + main.py upload(): 반려견 고르기, 영상 16개까지 차례로 첨부(끌어 놓기 · 고르기), 분석 시작
 import { useFirstFrames } from '../app/thumbs'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { dropEmptySession, openSession, PhoneCaptureModal, usePhoneShots } from './parts/PhoneCapture'
+import { MOCK } from '../store/backend'
 import { useNavigate } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
@@ -35,6 +37,19 @@ export default function Upload() {
   const [files, setFiles] = useState<File[]>([])
   const [demo, setDemo] = useState(demoQ)
   const [filt, setFilt] = useState('')
+  // 폰으로 촬영: 먼저 연 회차와 QR 창. 폰에서 올라온 영상 수는 회차를 몇 초마다 읽어 센다
+  const [phoneSid, setPhoneSid] = useState('')
+  const [showQr, setShowQr] = useState(false)
+  const phoneN = usePhoneShots(phoneSid)
+  // 이번 화면에서 새로 연 회차인지(이어 쓰는 회차면 원래 있던 영상도 센다), 분석을 시작했는지
+  const [phoneCreated, setPhoneCreated] = useState(false)
+  const leave = useRef({ sid: '', created: false, n: 0, submitted: false })
+  leave.current = { ...leave.current, sid: phoneSid, created: phoneCreated, n: phoneN }
+  // 영상 없이 화면을 떠나면 새로 연 빈 회차를 지운다
+  useEffect(() => () => {
+    const l = leave.current
+    if (l.sid && l.created && !l.n && !l.submitted) dropEmptySession(l.sid)
+  }, [])
   const [over, setOver] = useState({ drop: false, slot: false })
   const picker = useRef<HTMLInputElement>(null)
   const video = useRef<HTMLVideoElement>(null)
@@ -64,7 +79,7 @@ export default function Upload() {
   const sel = dogOf(acct, selId) || first
   const order = [first, ...acct.dogs.filter((d) => d.id !== first.id)] // 고른 반려견을 맨 위에
   const dogs = order.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name, no: d.no, breed: d.breed || '견종 미입력', kg: d.kg, ...avatar(d.id === sel.id) }))
-  const n = files.length || demo
+  const n = files.length + phoneN || demo
   const max = MAX_SHOTS
 
   // 3. 영상 첨부
@@ -82,7 +97,7 @@ export default function Upload() {
         bad++
         return
       }
-      if (next.length < max) {
+      if (next.length + phoneN < max) { // 폰에서 올라온 영상까지 합쳐 16개
         next.push(f)
         added++
       }
@@ -111,7 +126,35 @@ export default function Upload() {
     }
     fd.delete('files')
     files.forEach((f) => fd.append('files', f))
-    fd.set('demo_count', String(files.length ? 0 : demo))
+    fd.set('demo_count', String(files.length || phoneN ? 0 : demo))
+    fd.set('sid', phoneSid)
+    leave.current.submitted = true
+  }
+
+  // 반려견을 바꾸면 다른 반려견의 QR 회차는 놓는다(그 회차로 영상이 올라가지 않게). 이미 올라온 영상이 있으면 확인을 받는다
+  const pickDog = (id: string) => {
+    if (id === sel.id) return
+    if (phoneSid) {
+      const to = dogOf(acct, id)?.name ?? '다른 반려견'
+      if (phoneN && !window.confirm(`폰으로 올린 영상 ${phoneN}개는 ${sel.name}의 회차에 그대로 남아요. ${to}(으)로 바꿀까요?`)) return
+      if (!phoneN && phoneCreated) dropEmptySession(phoneSid)
+      setPhoneSid('')
+      setPhoneCreated(false)
+      setShowQr(false)
+    }
+    setSelId(id)
+  }
+
+  const startPhone = async () => {
+    try {
+      const weight = (document.querySelector('input[name=weight]') as HTMLInputElement | null)?.value ?? ''
+      const o = phoneSid ? { id: phoneSid, created: phoneCreated } : await openSession(sel.id, weight)
+      setPhoneSid(o.id)
+      setPhoneCreated(o.created)
+      setShowQr(true)
+    } catch (e) {
+      window.ppToast(e instanceof Error ? e.message : '회차를 열지 못했어요')
+    }
   }
 
   return (
@@ -121,6 +164,7 @@ export default function Upload() {
         <PostForm id="upForm" action="/analyze" encType="multipart/form-data" onBefore={onBefore} style={css('display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;margin:0')}>
           <input type="hidden" name="dog" value={sel.id} />
           <input type="hidden" name="demo_count" value="0" />
+          <input type="hidden" name="sid" value={phoneSid} />
           <input type="file" id="fileInput" ref={picker} accept="video/*,.mp4,.mov,.m4v" multiple hidden
             onChange={(e) => {
               if (e.currentTarget.files) add(e.currentTarget.files)
@@ -133,7 +177,7 @@ export default function Upload() {
               <div style={css('max-height:264px;overflow-y:auto;border:1px solid #ECE8E2;border-radius:14px;background:#fff')}>
                 {dogs.map((d, i) => (
                   // 환자가 많아서 이름·동물번호로 걸러 본다
-                  <div key={d.id} className="up-dog hv-row" data-id={d.id} data-kg={d.kg} data-name={d.name} data-key={`${d.name} ${d.no}`} onClick={() => setSelId(d.id)}
+                  <div key={d.id} className="up-dog hv-row" data-id={d.id} data-kg={d.kg} data-name={d.name} data-key={`${d.name} ${d.no}`} onClick={() => pickDog(d.id)}
                     style={css(`display:${!filt || `${d.name} ${d.no}`.indexOf(filt) >= 0 ? 'flex' : 'none'};align-items:center;gap:12px;padding:9px 14px;border-top:${i ? '1px solid #F2EFEA' : 'none'};cursor:pointer`)}>
                     <div className="av" style={css(`width:34px;height:34px;flex:none;border-radius:50%;background:${d.av};color:${d.avc};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;box-shadow:${d.ring}`)}>{d.init}</div>
                     <span className="nm" style={css(`font-size:15px;color:${d.nc};font-weight:${d.nw}`)}>{d.name}</span>
@@ -143,7 +187,7 @@ export default function Upload() {
               </div>
               <span data-pet="new" style={css('align-self:flex-start;font-size:14.5px;font-weight:700;color:#D2601A;cursor:pointer')}>+ 새 반려견 등록</span>
             </div>
-            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:16px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '폰 촬영 회차를 연 뒤에는 체중을 바꿀 수 없어요' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:16px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
             <div style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:16px;font-weight:700')}>오늘 바이탈 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span>
               <div style={css('display:grid;grid-template-columns:repeat(4,minmax(0,140px));gap:10px')}>
                 {VITALS.map(([nm, label, ph]) => (
@@ -154,6 +198,12 @@ export default function Upload() {
             <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>측정한 사람</span><input className="inp author-inp" name="author" placeholder="예) 박민준 테크니션" style={css('height:48px;width:100%;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:15px;outline:none')} /></label>
             <div style={css('display:flex;flex-direction:column;gap:12px')}>
               <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:12px')}><b style={css('font-size:16px')}>3. 영상 올리기</b><span id="shotN" style={css('font-size:15px;font-weight:700;color:#B4501A;font-variant-numeric:tabular-nums')}>{n + ' / ' + max}</span></div>
+              {!MOCK ? (
+                <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
+                  <button type="button" className="bt hv-border" onClick={startPhone} style={css('height:42px;padding:0 16px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700')}>📱 폰으로 촬영하기</button>
+                  <span style={css('font-size:13px;color:#5B6472')}>{phoneSid ? (phoneN ? `폰에서 영상 ${phoneN}개가 올라왔어요` : 'QR 을 찍어 폰에서 촬영해 주세요') : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있어요'}</span>
+                </div>
+              ) : null}
               <div id="dropZone" className="drop" onClick={() => picker.current?.click()} {...dragProps('drop')}
                 style={css(`aspect-ratio:16 / 7;border-radius:18px;border:2px dashed ${over.drop ? '#D2601A' : '#D9D2C7'};background:${over.drop ? '#FFF6EE' : '#fff'};display:${n ? 'none' : 'flex'};flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;text-align:center;padding:24px`)}>
                 <div style={css('width:56px;height:56px;border-radius:16px;background:#FCEEE3;color:#D2601A;display:flex;align-items:center;justify-content:center')}><svg width="28" height="28" viewBox="0 0 24 24"><use href="#w-up"></use></svg></div>
@@ -175,11 +225,14 @@ export default function Upload() {
                     {Array.from({ length: max }, (_, i) => {
                       const done = i < n
                       const next = i === n
+                      const fromPhone = i < phoneN // 폰에서 올라온 영상(이 브라우저에 파일이 없다)
+                      const file = fromPhone ? undefined : files[i - phoneN]
                       return (
-                        <div key={i} title={done && files[i] ? files[i].name : undefined} onClick={next ? () => picker.current?.click() : undefined}
+                        <div key={i} title={done && file ? file.name : fromPhone ? '폰에서 올린 영상' : undefined} onClick={next ? () => picker.current?.click() : undefined}
                           style={css('aspect-ratio:16 / 10;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;' +
                             'background:' + (done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
-                          {done && files[i] && thumbs.get(files[i]) ? <img src={thumbs.get(files[i])} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
+                          {file && thumbs.get(file) ? <img src={thumbs.get(file)} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
+                          {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{phoneCreated ? '폰' : '올린 영상'}</span> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
                           <span style={css('position:absolute;left:7px;top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
                         </div>
@@ -194,6 +247,7 @@ export default function Upload() {
             <button className="bt" type="submit" id="startBtn" style={css(`align-self:flex-end;width:240px;height:58px;border-radius:14px;background:${n ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700`)}>분석 시작</button>
           </div>
         </PostForm>
+        {showQr && phoneSid ? <PhoneCaptureModal sid={phoneSid} shots={phoneN} onClose={() => setShowQr(false)} /> : null}
       </main>
     </Base>
   )

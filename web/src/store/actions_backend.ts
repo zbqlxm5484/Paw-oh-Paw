@@ -135,18 +135,26 @@ if (!MOCK) {
     const dog = f(fd, 'dog'), weight = f(fd, 'weight').trim()
     if (!dogOf(acct, dog)) return redirect('/upload', '반려견을 골라 주세요')
     const files = fd.getAll('files').filter((x): x is File => x instanceof File && !!x.name)
-    if (!files.length) return redirect(`/upload?dog=${dog}`, '보행 영상을 1개 이상 올려 주세요')
+    // 폰으로 촬영(QR)으로 이미 연 회차. 폰에서 올린 영상이 있으면 이 브라우저에서 고른 파일이 없어도 된다
+    const phoneSid = f(fd, 'sid')
+    const phoneSess = phoneSid ? await api.session(phoneSid).catch(() => null) : null
+    // QR 회차가 다른 반려견 것이면 그 회차로 올리지 않는다
+    if (phoneSess && phoneSess.dog_id !== dog) return redirect(`/upload?dog=${dog}`, 'QR 로 연 회차가 다른 반려견의 회차예요. 화면을 새로 불러온 뒤 다시 시도해 주세요')
+    const phoneShots = phoneSess?.shots.length ?? 0
+    if (!files.length && !phoneShots) return redirect(`/upload?dog=${dog}`, '보행 영상을 1개 이상 올려 주세요')
     // 회차 열기. 이미 측정 중인 회차가 있으면(앞서 업로드가 끊긴 경우 등) 그 회차에 이어서 올린다
-    let sid = '', created = false
-    try {
-      sid = (await api.startSession(dog, weight ? { weight_kg: Number(weight) } : {})).id
-      created = true
-    } catch (e) {
-      const open = e instanceof ApiError && e.code === 'SESSION_ALREADY_OPEN' ? (await api.dog(dog).catch(() => null))?.open_session_id : null
-      if (!open) return redirect(`/upload?dog=${dog}`, msg(e))
-      sid = open
+    let sid = phoneSid, created = false
+    if (!sid) {
+      try {
+        sid = (await api.startSession(dog, weight ? { weight_kg: Number(weight) } : {})).id
+        created = true
+      } catch (e) {
+        const open = e instanceof ApiError && e.code === 'SESSION_ALREADY_OPEN' ? (await api.dog(dog).catch(() => null))?.open_session_id : null
+        if (!open) return redirect(`/upload?dog=${dog}`, msg(e))
+        sid = open
+      }
     }
-    const n = Math.min(files.length, config.MAX_SHOTS)
+    const n = Math.min(files.length, config.MAX_SHOTS - phoneShots)
     try {
       for (const file of files.slice(0, n)) await api.uploadShot(sid, file)
     } catch (e) {
@@ -158,9 +166,10 @@ if (!MOCK) {
     try {
       await api.completeSession(sid)
     } catch (e) {
-      return redirect(`/upload?dog=${dog}`, msg(e))
+      // 폰 앱에서 먼저 분석을 시작했으면 회차가 이미 닫혀 있다. 실패가 아니라 그 분석을 따라간다
+      if (!(e instanceof ApiError && e.code === 'SESSION_CLOSED')) return redirect(`/upload?dog=${dog}`, msg(e))
     }
-    remember(acct, { id: sid, inst: acct.id, dog, started: Date.now(), n, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
+    remember(acct, { id: sid, inst: acct.id, dog, started: Date.now(), n: n + phoneShots, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
     return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸어요')
   })
 
