@@ -12,6 +12,8 @@ data/
 *.png
 # frontend assets (logo, intro images) are allowed; videos are still ignored
 !frontend/public/**/*.png
+# 안드로이드 런처 아이콘·스플래시(디자인 로고로 만든 것). 없으면 새로 받은 저장소에서 APK 빌드가 실패한다
+!frontend/android/app/src/main/res/**/*.png
 !frontend/public/assets/landing.mp4
 !docs/readme/*.png
 *.pth

@@ -123,6 +123,23 @@ export interface ReportOut {
 export interface SessionReportsOut { session_id: string; session_status: string; reports: ReportOut[] }
 /** 서버가 준 파일 주소(/api/v1/...)를 이 웹에서 열 주소로. S3 처럼 이미 절대 주소면 그대로 */
 export const fileHref = (u: string): string => (/^https?:\/\//.test(u) ? u : `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ''}${u}`)
+/** GET /dogs/{id}/sessions 한 줄(15.8 측정 이력) */
+export interface SessionHistoryItem {
+  id: string; measured_on: string; weight_kg: number | null; status: string; is_baseline: boolean
+  valid_passes: { LEFT: number; RIGHT: number }; model_version: string | null; reports: { OWNER: string | null; VET: string | null }
+}
+/** GET /dogs/{id}/compare 항목(15.8). judgement = INCREASE·DECREASE·WITHIN_RANGE·RANGE_NOT_SET·UNKNOWN·NOT_COMPARABLE */
+export interface CompareItemOut {
+  metric_code: string; limb: string; gait_type: string; unit: string
+  base_value: number | null; target_value: number | null; diff: number | null; judgement: string; note: ReasonOut | null
+}
+export interface CompareOut {
+  dog_id: string
+  base: { session_id: string; measured_on: string; model_version: string | null; kind: string }
+  target: { session_id: string; measured_on: string; model_version: string | null }
+  model_changed: boolean
+  items: CompareItemOut[]
+}
 export interface DeviceCodeVerifyOut { institution: { id: string; name: string }; remaining_accounts: number }
 export interface InstitutionAdminOut extends InstitutionOut { staff_count: number; device_code_count: number; created_at: string }
 export interface DeviceCodeOut { id: string; code: string; institution_id: string; max_accounts: number; active_accounts: number; revoked_at: string | null; note: string | null; created_at: string }
@@ -158,6 +175,11 @@ export const api = {
     fd.append('file', file, file.name)
     return request<ShotOut>(`/sessions/${sessionId}/shots`, { method: 'POST', body: fd })
   },
+  /** 측정 이력(15.8, 백엔드 !91). 아직 없는 서버면 404 */
+  dogSessions: (dogId: string, page = 1, size = 100) => request<Paged<SessionHistoryItem>>(`/dogs/${dogId}/sessions?page=${page}&size=${size}`),
+  /** 회차 비교(15.8). base = BASELINE·PREVIOUS·회차 id, target 을 빼면 최근 DONE 회차 */
+  compare: (dogId: string, base: string, target?: string, gait?: string) =>
+    request<CompareOut>(`/dogs/${dogId}/compare?base=${encodeURIComponent(base)}${target ? `&target=${target}` : ''}${gait ? `&gait_type=${gait}` : ''}`),
   sessionReports: (sessionId: string) => request<SessionReportsOut>(`/sessions/${sessionId}/reports`),
   regenerateReport: (reportId: string) => request<ReportOut>(`/reports/${reportId}/regenerate`, { method: 'POST' }),
   institutions: () => request<{ items: InstitutionAdminOut[] }>('/admin/institutions'),

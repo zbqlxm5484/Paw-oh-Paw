@@ -7,6 +7,7 @@ import { ApiError } from './api/client'
 import { AuthProvider } from './app/auth'
 import { isDemo } from './app/demoMode'
 import { router } from './app/router'
+import { listenDeepLinks } from './app/deepLinks'
 import './styles/global.css'
 
 const queryClient = new QueryClient({
@@ -33,7 +34,21 @@ async function enableMocking() {
   }
 }
 
+// 안드로이드 뒤로 가기: 앱 안에서 이전 화면으로. 더 갈 곳이 없을 때만 앱을 내린다(@capacitor/app 이 없으면 바로 꺼졌다)
+async function nativeBackButton() {
+  const { Capacitor } = await import('@capacitor/core')
+  if (!Capacitor.isNativePlatform()) return
+  const { App } = await import('@capacitor/app')
+  await App.addListener('backButton', ({ canGoBack }) => {
+    if (canGoBack) window.history.back()
+    else void App.minimizeApp()
+  })
+}
+void nativeBackButton()
+
 enableMocking().then(() => {
+  // 링크(웹 QR)로 열리면 그 화면으로
+  void listenDeepLinks((path) => void router.navigate(path))
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
