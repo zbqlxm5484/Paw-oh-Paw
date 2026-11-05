@@ -1,6 +1,6 @@
 # 크림오프 팀 서비스 백엔드
 
-명세: `크림오프_팀서비스_백엔드_기능명세` v1.13. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 8(측정 종료·회차 집계·회차 결과), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003), 13(디바이스 코드 확인·회원가입), 14(크림오프 관리자 API 9개, 비밀번호 변경·내 정보 수정, seed 계약 종료일·이메일), 15(반려견 수정 낙관적 잠금 `version`·409 `DOG_MODIFIED`), 16(이메일 링크 비밀번호 재설정, SMTP 메일)이다. 12~16은 팀장 티켓 S15P31A404-192 "회원가입·로그인 기능 구현"이다.
+명세: `크림오프_팀서비스_백엔드_기능명세` v1.19. 지금 들어 있는 것은 작업 단위 1(서버 뼈대), 2(DB 모델·마이그레이션·seed), 3(로그인·기관 분리), 4(반려견 API·체급 분류), 5(회차 시작·조회·취소, 영상 업로드 검사·저장, 파일 저장소), 6(분석 클라이언트, 워커의 분석 제출·상태 조회·결과 저장), 7(촬영 상세·다시 분석·삭제, 결과 영상 렌더 워커·골격 그리기·사람 얼굴 가리기), 8(측정 종료·회차 집계·회차 결과), 9(보고서 모듈·워커·API, 수치 대조, 오차 범위 판정), 10(측정 이력·회차 비교·추이), 12(아이디+비밀번호 로그인, 역할 ADMIN·STAFF·CLIENT와 계산값 GUEST, 기관 계약 종료일, 인증 캐시, 마이그레이션 0003), 13(디바이스 코드 확인·회원가입), 14(크림오프 관리자 API 9개, 비밀번호 변경·내 정보 수정, seed 계약 종료일·이메일), 15(반려견 수정 낙관적 잠금 `version`·409 `DOG_MODIFIED`), 16(이메일 링크 비밀번호 재설정, SMTP 메일)이다. 12~16은 팀장 티켓 S15P31A404-192 "회원가입·로그인 기능 구현"이다.
 
 | 들어 있는 것 | 위치 |
 | --- | --- |
@@ -30,6 +30,7 @@
 | 보고서 모듈(8절): 입력 dict 검사 → 보행 유형별 수치 표(측정 불가는 사유, 직전 회차 값과 오차 범위 기준 변화 증가·감소·범위 안) → 문장(김지윤 템플릿, 보호자용은 용어 설명 자동) → 차트(matplotlib Figure) → HTML(Jinja2) → 검사 → PDF(WeasyPrint). `generate_report(입력 JSON, 출력 PDF)` 하나를 자식 프로세스가 부른다. 미리보기 `python -m scripts.make_report` | `app/report/`(inputs·numbers·sentences·charts·html·pdf·generate, `templates/report.html.j2`) |
 | 보고서 워커(12.4): 회차 DONE 때 생긴 OWNER·VET 행을 PENDING → GENERATING → DONE(PDF 저장소)·FAILED(`REPORT_CHECK_FAILED`·`REPORT_FAILED`). 보고서 풀 1개(결과 영상 풀과 별도), 다시 켜면 GENERATING → PENDING, 거두는 중 DB 오류는 다음 바퀴에 다시 거둠 | `app/worker/report.py`, `app/services/report_input.py`(입력 dict) |
 | 보고서 API: 판본별 상태, 다시 만들기(GENERATING이면 409), PDF 미리보기·내려받기(서명 URL, 한글 파일 이름) (15.7의 19~21) | `app/api/routes/reports.py`, `app/services/reports.py`, `app/schemas/reports.py` |
+| 측정 이력 `GET /dogs/{id}/sessions`(측정일 내림차순, 12.5 기준 회차 표시, 좌우 유효 통과 수, 판본별 보고서 상태), 회차 비교 `GET /dogs/{id}/compare`(기준·직전·지정 회차 대비, 보행 유형·다리별 합집합, `report/judge.py` 판정 + `usable_tolerance` 통과 8회 조건, 비교 불가는 400 `COMPARE_INVALID`와 `detail.reason`), 수치 추이 `GET /dogs/{id}/trends`(DONE 회차 순서, 관심 다리 먼저, 좌우 차이 추이) (5절, 12.5, 15.8) | `app/api/routes/history.py`, `app/services/history.py`·`compare.py`·`trends.py`, `app/schemas/history.py` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
 | 화면 문구 (14.5) | `messages/ko.yaml` |
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
