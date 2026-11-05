@@ -102,7 +102,14 @@ export class AppProto extends DCLogic<Props, any> {
   }
   storyRef = (el: HTMLElement | null) => { if (el) this.storyEl = el }
   repBox = (el: HTMLElement | null) => { if (!el) return; requestAnimationFrame(() => { const h = el.parentElement && el.parentElement.offsetHeight; if (h && h !== this.state.repH) this.setState({ repH: h }) }) }
+  rotAt = 0
   frame() {
+    // 안전장치: 어떤 경로로 촬영 화면에 들어오든(QR·앱 링크·첫 진입) 가로 안내가 2.5초 넘게 남아 있으면 걷고 촬영 화면 준비를 한다
+    if (this.props.screen === 'capGuide' && !this.state.rotDone && !this.state.splash) {
+      const n = performance.now()
+      if (!this.rotAt) this.rotAt = n
+      else if (n - this.rotAt > 2500) { console.info('[capture] rotation hint stuck, forcing'); this.rotAt = 0; this.rotSeen = true; this.setState({ rotDone: true, rotAnim: true }); void camera.setNavBarHidden(true) }
+    } else this.rotAt = 0
     if (this.props.screen === 'story' && this.state.page === 2) { const n = performance.now(); if (!this.lastMo || n - this.lastMo > 33) { this.lastMo = n; this.forceUpdate() } }
     for (const v of this.vids) {
       if (!v.isConnected) { this.vids.delete(v); continue }
