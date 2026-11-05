@@ -115,7 +115,21 @@ NO_DOG > OCCLUDED > OVERLAP > NOT_SIDE_VIEW > PARTIAL_PASS > TOWARD_CAMERA
 - **무효 정답이 1건뿐이라 KPI-11은 아직 판단할 수 없다.** 무효 99건(`not_trot` 57, `pace` 42)의 관절점이 필요하다
 - 개 한 마리(제니), 한 날의 영상이다. 다른 개·장소에서 다시 재야 한다
 
-## 7. 남은 것
+## 7. 사유 문장 (11-05, S15P31A404-185)
+
+사유 코드마다 두 가지 문장을 낸다. 코드·문장 표는 `engine/reasons.py`다.
+
+| 어디에 | 내용 |
+| --- | --- |
+| `passes[].reason` | 기본 문장. 백엔드 명세 14.3과 글자까지 같다(테스트 `tests/test_reasons.py`가 명세 표와 대조) |
+| `passes[].reason_detail` | 그 통과에서 잰 값과 기준값을 넣은 문장과 다시 찍을 때 고칠 것 |
+| `validity_reason_text` | 촬영 판정 사유의 문장. 기업 무효 사유면 "N번 통과: ..."로 어느 통과 때문인지 적는다 |
+
+예: `1번 통과: 몸통이 1초에 몸통 길이의 12.2배를 움직여 뛰기 기준(11배)보다 빨랐습니다. 천천히 걷게 해 주세요. 이 사유가 있는 통과가 있으면 촬영 전체를 쓰지 않습니다.` (제니 `not_trot` 영상)
+
+잰 값은 `checks`에 함께 남는다: `no_dog_ratio`, `occluded_ratio`, `height_scale`, `opposite_ratio`, `reverse_s`, `sitting_s`, `stopped_s`, `ends_before_exit` (기존 `speed_body_per_s`, `side_view_ratio`, `inside_s`에 더함). 기준값은 `engine/validity.yaml`에서 읽으므로 기준을 바꾸면 문장도 따라 바뀐다. 보고서 금지 표현(진단·원인·정상 여부 단정)을 쓰지 않는다.
+
+## 8. 남은 것
 
 | 할 일 | 누구와 |
 | --- | --- |
@@ -123,4 +137,3 @@ NO_DOG > OCCLUDED > OVERLAP > NOT_SIDE_VIEW > PARTIAL_PASS > TOWARD_CAMERA
 | 측대보 판정 켜기 (위상 분포 확인 또는 보행 유형 판별 연결) | 박규원 |
 | 뛰기를 네 발이 모두 뜬 구간으로 판정 (반대쪽 다리 관절점이 믿을 만한지 먼저 확인) | |
 | 매트 검출, 매트 안 측정 구간, 매트 밖 걷기 무효(기업 요청) | 장준환 (탐지) |
-| 분석 API(`run_pipeline`)에 판별 결과 연결 | |
