@@ -158,7 +158,7 @@ async def _save_video(video: UploadFile, job_id: str) -> Path:
                 if written > MAX_BYTES:
                     raise ApiError(413, "TOO_LARGE", "영상이 너무 큽니다")
                 out.write(chunk)
-    except ApiError:
+    except BaseException:   # 크기 초과(413)뿐 아니라 업로드가 끊겨도 영상만 든 폴더를 남기지 않는다
         shutil.rmtree(folder, ignore_errors=True)
         raise
     return path
@@ -262,7 +262,11 @@ def delete_analysis(job_id: str):
     if job["status"] in store.UNFINISHED:
         raise ApiError(409, "JOB_IN_PROGRESS", "분석 중인 작업은 지울 수 없습니다")
     with _LOCK:
+        try:
+            files, size = store.delete_job(STORAGE_DIR, job_id)
+        except OSError:
+            logger.exception("analysis delete failed job=%s", job_id)
+            raise ApiError(500, "DELETE_FAILED", "작업을 다 지우지 못했습니다. 다시 시도해 주세요")
         JOBS.pop(job_id, None)
-        files, size = store.delete_job(STORAGE_DIR, job_id)
     logger.info("analysis deleted job=%s files=%d bytes=%d", job_id, files, size)
     return Response(status_code=204)
