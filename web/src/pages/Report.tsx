@@ -12,6 +12,7 @@ import { DogPanel } from './parts/DogPanel'
 import { link } from '../config'
 import { MOCK } from '../store/backend'
 import { PrintPdf, ServerPdf } from './parts/ServerPdf'
+import { VetSections } from './parts/VetSections'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -210,10 +211,10 @@ export default function Report() {
                   })}
                 </div>
 
-                {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 바로 위 안내 상자에서, 수의사용은 여기서 둘째 쪽 */}
+                {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 바로 위 안내 상자에서 둘째 쪽, 수의사용은 첫 쪽 끝(11-05) */}
                 {kind === 'g' ? <OwnerGuideBox bm={bm} /> : null}
 
-                <div className={kind === 'v' ? 'rep-p2' : undefined} style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
+                <div style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
                   <b>측정 품질</b>
                   <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
                   {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
@@ -237,13 +238,8 @@ export default function Report() {
                   ) : null
                 ) : (
                   <>
-                    <div style={css('border:1px solid #ECE8E2;border-radius:10px;overflow:hidden;font-size:14.5px')}>
-                      <div style={css('display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;background:#1B2433;color:#fff;font-weight:700')}><span style={css('padding:12px 16px')}>지표 · {r.gait || '속보'}</span><span style={css('padding:12px 12px')}>왼쪽</span><span style={css('padding:12px 12px')}>오른쪽</span><span style={css('padding:12px 12px')}>차이</span></div>
-                      {(rp.rows as { n: string; l: string; r: string; d: string; bg: string }[]).map((w, i) => (
-                        <div key={i} style={css(`display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;background:${w.bg};font-variant-numeric:tabular-nums`)}><span style={css('padding:12px 16px;font-weight:600')}>{w.n}</span><span style={css('padding:12px 12px')}>{w.l}</span><span style={css('padding:12px 12px')}>{w.r}</span><span style={css('padding:12px 12px;font-weight:700')}>{w.d}</span></div>
-                      ))}
-                    </div>
-                    <KneeChart kc={rd.kc} />
+                    {/* 백엔드 보고서 시안 반영: 좌우 비교·지난 측정과 비교·무릎 가동 범위 변화·그 밖의 수치 */}
+                    <VetSections acct={acct} r={r} fromServer={fromServer} knee={<div className="rep-sec"><KneeChart kc={rd.kc} /></div>} />
                   </>
                 )}
                 <div style={css('flex:1')}></div>

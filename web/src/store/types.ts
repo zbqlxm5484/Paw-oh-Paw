@@ -95,6 +95,8 @@ export interface Result {
   gait?: string
   /** 백엔드 결과만: 분석 실패 사유 문구 */
   fail_msg?: string
+  /** 백엔드 결과만: 보행 유형(평보·속보·보행 유형 미판별)별 다리 수치. m 은 그중 대표 보행 하나 */
+  mg?: Record<string, Metrics>
 }
 
 export interface Job {
