@@ -69,3 +69,40 @@ def test_purge_refuses_while_analysis_running(storage, monkeypatch):
     upload()
     assert purge.run(["--all", "--execute", "--yes"], root=storage) == 1
     assert len(list(storage.glob("*/job.json"))) == 1
+
+
+def test_purge_counts_and_removes_folders_without_job_json(storage):
+    upload()
+    half = storage / "half-upload"                 # 업로드 도중 끊겨 영상만 남은 폴더
+    half.mkdir()
+    (half / "video.mp4").write_bytes(b"12345")
+    stats = store.purge_stats(storage)
+    assert stats["jobs"] == 2 and stats["bytes"] >= 5
+    assert purge.run(["--all", "--execute", "--yes"], root=storage) == 0
+    assert [p for p in storage.iterdir()] == []
+
+
+def test_broken_log_line_does_not_break_delete(storage):
+    keep, gone = upload(), upload()
+    with (storage / store.LOG_FILE).open("a", encoding="utf-8") as f:
+        f.write('{"id": "half-writ\n')            # 쓰다 만 줄
+    assert client.delete(f"/analyses/{gone}").status_code == 204
+    assert [row["id"] for row in store.read_log(storage)] == [keep]
+
+
+def test_delete_reports_failure_when_folder_remains(storage, monkeypatch):
+    job_id = upload()
+    monkeypatch.setattr(store.shutil, "rmtree", lambda *a, **k: None)   # 지우기가 안 되는 상황
+    r = client.delete(f"/analyses/{job_id}")
+    assert r.status_code == 500 and r.json()["error"]["code"] == "DELETE_FAILED"
+    assert [row["id"] for row in store.read_log(storage)] == [job_id]       # 기록 줄은 그대로
+
+
+def test_interrupted_upload_leaves_no_folder(storage, monkeypatch):
+    async def broken_read(self, size=-1):
+        raise ConnectionResetError("client went away")
+    from starlette.datastructures import UploadFile
+    monkeypatch.setattr(UploadFile, "read", broken_read)
+    with pytest.raises(ConnectionResetError):
+        client.post("/analyses", files={"video": ("a.mp4", b"x", "video/mp4")})
+    assert not storage.exists() or list(storage.iterdir()) == []
