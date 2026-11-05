@@ -162,6 +162,7 @@ def build_result(job: dict, video: dict, judged: dict, model: dict) -> dict:
             "index": p["index"], "start_frame": p["start_frame"], "end_frame": p["end_frame"],
             "heading": p["heading"], "camera_side": p["camera_side"], "gait": p["gait"],
             "valid": p["valid"], "reason_code": p["reason_code"], "reason": p["reason"],
+            "reason_detail": p.get("reason_detail"),
             "measure_start": p["measure_start"], "measure_end": p["measure_end"],
             "metrics": p.get("metrics") or {}, "checks": p["checks"],
         })
@@ -171,6 +172,7 @@ def build_result(job: dict, video: dict, judged: dict, model: dict) -> dict:
         "input": {"filename": job["filename"], "codec": None, "fps": video["fps"],
                   "width": video["width"], "height": video["height"], "frames": len(video["frames"])},
         "validity": judged["validity"], "validity_reason": judged["validity_reason"],
+        "validity_reason_text": judged.get("validity_reason_text"),
         "summary": judged["summary"], "passes": passes,
         "files": {"keypoints": f"/analyses/{job['id']}/files/keypoints"},
         "created_at": _now(),
