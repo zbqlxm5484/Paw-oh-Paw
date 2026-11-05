@@ -148,13 +148,15 @@ class StaffUpdate(BaseModel):
 
 
 class PurgeRequest(BaseModel):
-    """POST /admin/purge 요청. DOG는 target_id(반려견 ID) 필수, INSTITUTION은 자기 기관 전체라 target_id가 없다.
+    """POST /admin/purge 요청. DOG는 target_id(반려견 ID) 필수, INSTITUTION은 기관 전체라 target_id가 없다.
 
+    institution_id는 지울 자료가 있는 기관이다. 생략하면 부른 관리자의 기관이다(15.9).
     여러 기관을 지우는 ALL은 API로 열지 않는다(scripts/purge.py). dry_run 기본값은 true: 세기만 하고 지우지 않는다.
     """
 
     scope: Literal["DOG", "INSTITUTION"]
     target_id: uuid.UUID | None = Field(default=None, validate_default=True)
+    institution_id: uuid.UUID | None = None
     dry_run: bool = True
 
     @field_validator("target_id")
@@ -164,7 +166,7 @@ class PurgeRequest(BaseModel):
         if scope == "DOG" and value is None:
             raise ValueError("scope가 DOG면 반려견 ID가 필요합니다")
         if scope == "INSTITUTION" and value is not None:
-            raise ValueError("scope가 INSTITUTION이면 target_id를 보내지 않습니다(자기 기관 전체)")
+            raise ValueError("scope가 INSTITUTION이면 target_id를 보내지 않습니다(기관 전체)")
         return value
 
 

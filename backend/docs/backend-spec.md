@@ -21,6 +21,7 @@ Oct 19, 2026 · @조영운
 | v1.20 | 2026-11-04 | 199 자료 파기 구현에 맞춰 15.9 보충: `INSTITUTION`에 `target_id`를 보내면 422, 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 적용, `rows`는 반려견·회차·촬영·통과·수치·보고서 행 수의 합, `purge_log.target_id`·`executed_by` 값, 전체 파기 스크립트는 `--execute` 없이는 세기만 하고 기관·계정·코드는 남긴다 |
 | v1.21 | 2026-11-04 | 200 견본 PDF·20초 측정(S15P31A404-200): 8절에 견본 보고서(D-08) 경우 목록·스크립트·기업 서버용 대조 기준값(`reference_from_result`, `metrics`에서 다시 계산) 문단, 17.4 BE-15의 20초 확인 방법을 회차 DONE 기준으로 |
 | v1.22 | 2026-11-05 | 분석 API 사본 파기(199 후속, 조유진 185 계약): 6절 `AnalysisClient`에 `delete`와 API 프로세스 설정, 7절 보관과 파기, 12.2 `purge_log.analysis_jobs_deleted`(마이그레이션 0004), 12.5, 14.1 `ANALYSIS_UNAVAILABLE`, 15.2·15.9 `analysis_jobs`와 503, 17.6 |
+| v1.30 | 2026-11-05 | 병원 자료 파기(199 후속): 15.9 `POST /admin/purge`에 대상 기관 `institution_id`(생략하면 부른 관리자의 기관, 없는 기관은 404), 10절 Q31과의 관계 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -1910,19 +1911,20 @@ stance_ratio: 5.0 # pct
 
 ```json
 // 요청
-{"scope": "DOG", "target_id": "…", "dry_run": true}
+{"scope": "DOG", "target_id": "…", "institution_id": "…", "dry_run": true}
 
 // 응답 200
 {"scope": "DOG", "target_id": "…", "dry_run": true,
  "rows": 214, "files": 49, "bytes": 391000000, "analysis_jobs": 12, "purge_log_id": null}
 ```
 
-- `scope`는 `DOG`(`target_id` = 반려견 ID) 또는 `INSTITUTION`(자기 기관 전체, `target_id` 생략)이다. 여러 기관을 한꺼번에 지우는 `ALL`은 API로 열지 않고 서버에서 `python -m scripts.purge --all`로만 한다.
+- `scope`는 `DOG`(`target_id` = 반려견 ID) 또는 `INSTITUTION`(기관 전체, `target_id` 생략)이다. 기관은 `institution_id`이고 생략하면 부른 관리자의 기관이다. 여러 기관을 한꺼번에 지우는 `ALL`은 API로 열지 않고 서버에서 `python -m scripts.purge --all`로만 한다.
 - `dry_run`의 기본값은 true다. 지울 행·파일·용량만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 분명히 보낸다.
 - 실제로 지우면 `purge_log`에 1행을 남기고 그 ID를 `purge_log_id`로 돌려준다. 파기 확인서(D-13)의 근거다.
 - `INSTITUTION`은 반려견과 그 아래 자료를 모두 지우고, 기관과 담당자 계정은 남긴다.
 - 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다. 실제로 지울 때는 대상 회차 행을 모두 `SELECT … FOR UPDATE`로 잠근 뒤 이 검사를 하고 파일·행을 지운다(12.4 잠금. 워커가 그사이 UPLOADED 촬영을 가져가 분석 API로 보내는 틈을 막는다). 워커가 먼저 잠갔으면 파기는 기다렸다가 SUBMITTED를 보고 409를 내고, 파기가 먼저면 워커는 지워진 행을 보고 건너뛴다. `dry_run`은 세기만 하므로 잠그지 않는다.
-- `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 자기 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
+- `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 그 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
+- `institution_id`는 관리자(`ADMIN`, 크림오프 계정)가 병원의 자료를 지울 때 쓴다. 없는 기관이면 404 `NOT_FOUND`, UUID가 아니면 422 `VALIDATION_ERROR`(`field`는 `institution_id`)다. `DOG`는 그 기관에서만 찾으므로 다른 기관의 반려견 ID를 넣으면 404다. 응답은 개수뿐이고 반려견 이름 같은 고객 자료를 돌려주지 않는다. 고객 자료 열람(10절 Q31)은 여전히 열지 않아서, 관리자는 반려견 목록을 볼 수 없고 `DOG`의 반려견 ID는 병원에서 받아야 한다. `purge_log.executed_by`에는 부른 관리자가 남는다.
 - `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
 - `analysis_jobs`는 분석 API에서 지운(또는 지울) 작업 수이고 `purge_log.analysis_jobs_deleted`에도 남긴다. 지울 촬영 중 `job_id`가 있는 것만 세고, 이미 없던 작업(404·410)도 센다. `dry_run`은 세기만 하고 분석 API를 부르지 않는다.
 - 실제로 지우는 순서는 잠금 → 진행 중 촬영 확인 → 분석 API 사본 → 파일 → 행이다. 분석 API가 응답하지 않거나 지우지 못하면(연결 실패, 시간 초과, 5xx, 인증 실패, 설정이 빠져 mock으로 뜬 API 프로세스에 실제 작업 ID) 거기서 멈추고 503 `ANALYSIS_UNAVAILABLE`이다. 팀 서비스의 파일·행은 그대로이고 `purge_log`도 남지 않는다. 행에 `job_id`가 남아 있어 다시 부르면 이미 지운 작업은 404로 넘어가 이어서 끝난다. 분석 API가 409 `JOB_IN_PROGRESS`로 답하면 409 `SHOT_IN_PROGRESS`다.

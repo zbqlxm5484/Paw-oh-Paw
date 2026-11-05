@@ -99,13 +99,16 @@ def update_staff(staff_id: uuid.UUID, body: StaffUpdate, staff: AdminStaff, db: 
 
 @router.post("/purge", response_model=PurgeOut)
 def purge(body: PurgeRequest, staff: AdminStaff, db: DbSession, analysis: AnalysisClientDep) -> PurgeOut:
-    """자료 파기(관리자만). dry_run 기본 true. DOG는 자기 기관의 반려견 하나, INSTITUTION은 자기 기관 전체."""
+    """자료 파기(관리자만). dry_run 기본 true. DOG는 기관의 반려견 하나, INSTITUTION은 기관 전체.
+
+    기관은 body.institution_id이고 생략하면 부른 관리자의 기관이다. 응답은 개수뿐이라 고객 자료를 열지 않는다(15.9).
+    """
     return purge_service.purge(
         db,
         get_storage(),
         body.scope,
         analysis=analysis,
-        institution_id=staff.institution_id,
+        institution_id=body.institution_id or staff.institution_id,
         target_id=body.target_id,
         dry_run=body.dry_run,
         executed_by=staff.id,

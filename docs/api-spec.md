@@ -788,14 +788,15 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 
 ```json
 // 요청
-{"scope": "DOG", "target_id": "…", "dry_run": true}
+{"scope": "DOG", "target_id": "…", "institution_id": "…", "dry_run": true}
 
 // 응답 200
 {"scope": "DOG", "target_id": "…", "dry_run": true,
  "rows": 214, "files": 49, "bytes": 391000000, "analysis_jobs": 12, "purge_log_id": null}
 ```
 
-- `scope`: `DOG`(반려견 하나, `target_id` 필요) 또는 `INSTITUTION`(자기 기관 전체, `target_id` 생략).
+- `scope`: `DOG`(반려견 하나, `target_id` 필요) 또는 `INSTITUTION`(기관 전체, `target_id` 생략).
+- `institution_id`: 지울 자료가 있는 기관. 생략하면 부른 관리자의 기관이다. 없는 기관이거나 그 기관에 없는 반려견이면 404 `NOT_FOUND`다. 응답은 개수뿐이다.
 - `dry_run` 기본값은 true다. 지울 양만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 보낸다.
 - 관리자가 아니면 403 `FORBIDDEN`, 분석 중인 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
 - `analysis_jobs`는 분석 서버에서 지운(또는 지울) 작업 수다. 실제로 지울 때 분석 서버의 사본을 먼저 지우고, 지우지 못하면 팀 서비스 자료는 그대로 둔 채 503 `ANALYSIS_UNAVAILABLE`이다. 다시 부르면 이어서 끝난다.

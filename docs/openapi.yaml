@@ -2009,6 +2009,10 @@ components:
           type: [string, 'null']
           format: uuid
           description: scope가 DOG면 반려견 ID(필수). INSTITUTION이면 생략.
+        institution_id:
+          type: [string, 'null']
+          format: uuid
+          description: 지울 자료가 있는 기관. 생략하면 부른 관리자의 기관. 없는 기관이면 404.
         dry_run: {type: boolean, default: true, description: 기본 true. 실제로 지우려면 false.}
     PurgeOut:
       type: object

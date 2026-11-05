@@ -59,6 +59,8 @@ def _resolve(db: Session, scope: str, *, institution_id: uuid.UUID | None, targe
     if scope == PurgeScope.INSTITUTION:
         if institution_id is None:
             raise ValueError("INSTITUTION 파기에는 기관 ID가 필요합니다")
+        if db.get(Institution, institution_id) is None:  # 관리자가 지정한 기관이 없으면 404(15.9)
+            raise AppError(ErrorCode.NOT_FOUND)
         dog_ids = list(db.scalars(select(Dog.id).where(Dog.institution_id == institution_id)))
         return _Target(scope, institution_id, dog_ids, [institution_prefix(institution_id)])
     if scope == PurgeScope.ALL:
@@ -166,7 +168,9 @@ def purge(
     executed_by: uuid.UUID | None = None,
     analysis: AnalysisClient | None = None,
 ) -> PurgeOut:
-    """파기 또는 dry_run 집계(15.9). institution_id는 부른 담당자의 기관(ALL이면 없음), executed_by는 담당자 ID.
+    """파기 또는 dry_run 집계(15.9). institution_id는 지울 자료의 기관(ALL이면 없음), executed_by는 부른 담당자 ID.
+
+    기관은 관리자가 지정할 수 있어 부른 담당자의 기관과 다를 수 있다. 없는 기관, 그 기관에 없는 반려견은 404다.
 
     analysis는 분석 API 사본을 지울 클라이언트다. 지울 작업이 없으면(ALL, 세기만 할 때) 쓰지 않는다.
     """

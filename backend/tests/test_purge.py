@@ -313,6 +313,95 @@ def test_unknown_dog_is_404(client: TestClient, admin_headers) -> None:
     assert response.status_code == 404
 
 
+# ---- 대상 기관 지정(15.9. 크림오프 관리자가 병원 자료를 지운다) ----
+
+
+def test_admin_purges_another_institution_and_own_is_untouched(
+    client: TestClient, db: Session, dog, staff, other_staff, admin: Staff, admin_headers
+) -> None:
+    own_rows = _fill(db, dog, staff, sessions=1)
+    foreign = another_dog(db, other_staff.institution_id, name="남의 개")
+    foreign_rows = _fill(db, foreign, other_staff, sessions=2)
+    body = {"scope": "INSTITUTION", "institution_id": str(other_staff.institution_id)}
+
+    counted = client.post(PURGE, json=body, headers=admin_headers)  # dry_run 기본값
+    assert counted.status_code == 200, counted.text
+    assert (counted.json()["target_id"], counted.json()["rows"]) == (str(other_staff.institution_id), foreign_rows)
+    assert _rows_of_dog(db, foreign.id) == foreign_rows
+
+    response = client.post(PURGE, json={**body, "dry_run": False}, headers=admin_headers)
+    assert response.status_code == 200, response.text
+    assert (response.json()["rows"], response.json()["files"]) == (foreign_rows, _expected_files(2)[0])
+    assert db.get(Dog, foreign.id) is None
+    assert get_storage().stat_prefix(institution_prefix(other_staff.institution_id)) == (0, 0)
+    # 기관·담당자 계정은 남고, 부른 관리자의 기관 자료는 그대로다
+    assert db.get(Institution, other_staff.institution_id) is not None
+    assert db.get(Staff, other_staff.id) is not None
+    assert _rows_of_dog(db, dog.id) == own_rows
+    assert get_storage().stat_prefix(institution_prefix(admin.institution_id)) == _expected_files(1)
+    (log,) = _purge_logs(db)
+    assert (log.scope, log.target_id, log.executed_by) == ("INSTITUTION", other_staff.institution_id, admin.id)
+
+
+def test_admin_purges_one_dog_of_another_institution(
+    client: TestClient, db: Session, dog, staff, other_staff, admin: Staff, admin_headers
+) -> None:
+    foreign = another_dog(db, other_staff.institution_id, name="남의 개")
+    kept = another_dog(db, other_staff.institution_id, name="남는 개")
+    foreign_rows = _fill(db, foreign, other_staff, sessions=1)
+    kept_rows = _fill(db, kept, other_staff, sessions=1)
+    body = {"scope": "DOG", "target_id": str(foreign.id), "dry_run": False}
+
+    # 기관을 지정하지 않으면 자기 기관에서 찾으므로 없는 것과 같다(15.1)
+    assert client.post(PURGE, json=body, headers=admin_headers).status_code == 404
+    assert _rows_of_dog(db, foreign.id) == foreign_rows
+
+    response = client.post(
+        PURGE, json={**body, "institution_id": str(other_staff.institution_id)}, headers=admin_headers
+    )
+    assert response.status_code == 200, response.text
+    assert (response.json()["target_id"], response.json()["rows"]) == (str(foreign.id), foreign_rows)
+    assert db.get(Dog, foreign.id) is None
+    assert _rows_of_dog(db, kept.id) == kept_rows
+    assert get_storage().stat_prefix(dog_prefix(other_staff.institution_id, kept.id)) == _expected_files(1)
+    (log,) = _purge_logs(db)
+    assert (log.scope, log.target_id, log.executed_by) == ("DOG", foreign.id, admin.id)
+
+
+def test_unknown_institution_and_a_dog_outside_it_are_404(
+    client: TestClient, db: Session, dog, staff, other_staff, admin_headers
+) -> None:
+    rows = _fill(db, dog, staff, sessions=1)
+    unknown = {"scope": "INSTITUTION", "institution_id": str(uuid.uuid4()), "dry_run": False}
+    assert client.post(PURGE, json=unknown, headers=admin_headers).status_code == 404
+    # 자기 기관의 반려견이라도 지정한 기관에 없으면 404다
+    wrong = {
+        "scope": "DOG",
+        "target_id": str(dog.id),
+        "institution_id": str(other_staff.institution_id),
+        "dry_run": False,
+    }
+    assert client.post(PURGE, json=wrong, headers=admin_headers).status_code == 404
+    assert _rows_of_dog(db, dog.id) == rows
+    assert _purge_logs(db) == []
+
+
+def test_institution_id_does_not_let_a_non_admin_purge(
+    client: TestClient, db: Session, dog, staff, other_staff, auth_headers
+) -> None:
+    rows = _fill(db, dog, staff, sessions=1)
+    body = {"scope": "INSTITUTION", "institution_id": str(staff.institution_id), "dry_run": False}
+    assert client.post(PURGE, json=body, headers=auth_headers).status_code == 403  # 자기 기관을 적어도 CLIENT는 안 된다
+    assert client.post(PURGE, json=body, headers=bearer(other_staff)).status_code == 403
+    assert _rows_of_dog(db, dog.id) == rows
+
+
+def test_institution_id_must_be_a_uuid(client: TestClient, admin_headers) -> None:
+    response = client.post(PURGE, json={"scope": "INSTITUTION", "institution_id": "x"}, headers=admin_headers)
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["detail"]["fields"][0]["field"] == "institution_id"
+
+
 # ---- 분석 API 사본(7절, 15.9, 조유진 185) ----
 
 
