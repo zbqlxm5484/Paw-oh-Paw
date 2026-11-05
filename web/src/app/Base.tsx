@@ -167,7 +167,7 @@ export function Base({ acct, me, nav = '', q = '', toast = '', jobId = '', topba
         </defs>
       </svg>
 
-      <div style={{ overflowX: 'clip', minHeight: '100vh', background: '#FAF9F6', position: 'relative' }}>
+      <div className="page-bg" style={{ overflowX: 'clip', minHeight: '100vh', background: '#FAF9F6', position: 'relative' }}>
         {topbar !== undefined ? topbar || null : acct ? <TopBar acct={acct} nav={nav} q={q} /> : null}
         {children}
       </div>

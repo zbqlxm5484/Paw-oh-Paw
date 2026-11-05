@@ -15,6 +15,8 @@ import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
 import { enterDemo, exitDemo, isDemo, takeDemoAutologin } from '../app/demoMode'
 import { AppProto } from './app/AppProto'
+import { AppVetSections, mainGaitOf } from './app/AppVetSections'
+import { useCompare, useTrends } from '../api/results'
 import { reportStatusLine, toAna, type DAna } from './adapter'
 import { useCompareData, useDesignActions, useDesignData, useReportData, type DesignData } from './useDesignData'
 
@@ -46,12 +48,14 @@ export interface ProtoProps {
   setUi: (p: Partial<UiSel>) => void
   compare: ReturnType<typeof useCompareData> | null
   reports: ReportsOut | undefined
+  /** 보고서 수의사용 탭의 추가 섹션(AppVetSections) */
+  vetReport: React.ReactNode
   reportStatus: (r: ReportOut | undefined, model: string) => string
   session: SessionDetailOut | undefined
   sessionAna: DAna | null
   /** 숨은 파일 입력을 연다. capture=true 면 폰 카메라 */
   pickFile: (capture: boolean) => Promise<File | null>
-  openFile: (url: string) => void
+  openFile: (url: string) => boolean
 }
 
 /** 주소 → 앱 v5 화면 이름 */
@@ -123,6 +127,13 @@ export function DesignRoot() {
   const cmpDog = route.screen === 'compare' ? data.dogs.find((d) => d.id === route.params.dogId) : undefined
   const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null)
   const reportsQ = useReportData(route.screen === 'report' ? route.params.sessionId : undefined)
+  // 보고서 수의사용 탭: 이 회차를 직전 회차와 비교(서버 판정)하고 무릎 가동 범위 추이를 읽는다(웹 수의사용 보고서와 같은 구성)
+  // 회차 결과 화면도 보고서와 같은 본문을 쓴다
+  const repR = route.screen === 'report' || route.screen === 'detail' ? data.results.find((r) => r.id === route.params.sessionId) : undefined
+  const repGait = mainGaitOf(repR?.result)
+  const repCmpQ = useCompare(repR?.dog, { target: repR?.id, base: 'PREVIOUS', gait_type: repGait })
+  const repTrQ = useTrends(repR?.dog, { metric_code: 'rom_stifle', gait_type: repGait })
+  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} /> : null
 
   // 숨은 파일 입력(영상 선택·촬영)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -162,9 +173,12 @@ export function DesignRoot() {
     if (window.history.length > 1) navigate(-1)
     else navigate(loggedIn ? '/' : '/welcome')
   }, [navigate, loggedIn])
-  const openFile = useCallback((url: string) => {
+  /** 서명 주소(PDF 등)를 연다. 앱에서는 폰 브라우저로 넘어가 내려받는다. 체험 모드의 가짜 서버는 앱 밖에서 열 수 없어 false */
+  const openFile = useCallback((url: string): boolean => {
     const u = fileUrl(url)
-    if (u) window.open(u, '_blank', 'noopener')
+    if (!u || isDemo()) return false
+    window.open(u, '_blank', 'noopener')
+    return true
   }, [])
 
   const props: ProtoProps = {
@@ -173,7 +187,7 @@ export function DesignRoot() {
       updateMe: async (b: { name?: string; email?: string }) => setStaff(await authApi.updateMe(b)),
       changePassword: async (current: string, next: string) => setStaff(await authApi.changePassword(current, next)),
     }, nav, back, ui, setUi,
-    compare: route.screen === 'compare' ? compare : null, reports: reportsQ.data, reportStatus: reportStatusLine,
+    compare: route.screen === 'compare' ? compare : null, reports: reportsQ.data, vetReport, reportStatus: reportStatusLine,
     session: sessQ.data, sessionAna, pickFile, openFile,
   }
 
@@ -198,7 +212,7 @@ function AppShell(props: ProtoProps) {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#E9E6E1', padding: '24px 0' }}>
         <AppProto {...props} rootStyle={{ maxHeight: 'calc(100dvh - 48px)' }} />
-        <DemoPill />
+        <DemoPill screen={props.screen} />
       </div>
     )
   }
@@ -207,8 +221,10 @@ function AppShell(props: ProtoProps) {
   // --safe-area-inset-* 는 Capacitor(SystemBars)가 넣고, 브라우저는 env() 를 쓴다
   return (
     <div style={{ height: '100dvh', paddingBottom: SAFE_BOTTOM, background: '#FAF9F6' }}>
+      {/* 디자인의 가짜 상태 표시줄(9:41)은 데스크톱 시안 틀에서만. 폰에서는 진짜 상태 표시줄과 겹친다 */}
+      <style>{'.pp-fakebar{display:none !important}'}</style>
       <AppProto {...props} rootStyle={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }} />
-      <DemoPill />
+      <DemoPill screen={props.screen} />
     </div>
   )
 }
@@ -221,25 +237,28 @@ if (landingPreload) {
   landingPreload.src = '/assets/landing.mp4'
 }
 
-const SAFE_TOP ='var(--safe-area-inset-top, env(safe-area-inset-top, 0px))'
 const SAFE_BOTTOM = 'var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))'
 
 /** 체험 모드 버튼. 로그인 전에는 "서버 없이 둘러보기", 체험 중에는 "체험 모드 끝내기"(src/app/demoMode.ts) */
-function DemoPill() {
+/** 체험 모드 버튼은 첫 화면·로그인·홈·마이페이지에서만 띄운다(결과·보고서·촬영 화면의 내용을 가리지 않게) */
+const PILL_SCREENS = new Set(['landing', 'login', 'home', 'my'])
+
+function DemoPill({ screen }: { screen: string }) {
   const { loggedIn, login } = useAuth()
   const demo = isDemo()
   useEffect(() => {
     // 체험 모드에 막 들어왔으면 가짜 계정으로 바로 로그인한다(가짜 서버는 아무 아이디·비밀번호나 받는다)
     if (demo && !loggedIn && takeDemoAutologin()) void login({ login_id: 'demo', password: 'demo' })
   }, [demo, loggedIn, login])
-  if (!demo && loggedIn) return null
+  if ((!demo && loggedIn) || !PILL_SCREENS.has(screen)) return null
   return (
     <button
       type="button"
       onClick={demo ? exitDemo : enterDemo}
       style={{
         position: 'fixed',
-        top: `calc(${SAFE_TOP} + 8px)`,
+        // 화면 위쪽은 헤더(로고·알림·기관 칩)와 겹쳐서 아래 탭바 바로 위에 둔다
+        bottom: `calc(${SAFE_BOTTOM} + 124px)`,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,

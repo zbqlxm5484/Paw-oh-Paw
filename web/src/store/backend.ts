@@ -69,7 +69,7 @@ export async function syncFromBackend(me?: StaffOut): Promise<string> {
       if (dogs.length >= r.total || !r.items.length) break
     }
     acct.dogs = dogs.map((o) => toDog(o, acct.dogs.find((d) => d.id === o.id)))
-    await syncSessions(acct).catch(() => undefined)   // 이 브라우저에서 연 회차·측정 중 회차의 상태·결과
+    await syncSessions(acct, true).catch(() => undefined)   // 측정 이력의 끝난 회차, 이 브라우저에서 연 회차·측정 중 회차의 상태·결과
   }
   changed()
   return st.id

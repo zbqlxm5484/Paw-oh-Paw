@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.creamoff.pawohpaw",
+      "sha256_cert_fingerprints": [
+        "81:F8:37:FB:41:47:0E:40:7F:E5:8A:89:8D:AD:A6:8E:2A:C0:90:33:C5:70:7A:7D:B1:B4:59:0C:10:5B:D3:B8"
+      ]
+    }
+  }
+]

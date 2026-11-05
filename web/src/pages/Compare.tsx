@@ -1,5 +1,5 @@
 // compare.html + main.py compare(): 경과 비교(기준·직전 회차 대비, 회차별 추이)
-import { useEffect, type MouseEvent } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
@@ -8,6 +8,9 @@ import { redirect, setToast, type Go } from '../app/session'
 import { dogOf } from '../store/db'
 import { compare_view, seg, TREND_KEYS, valid } from '../views/views'
 import { link } from '../config'
+import { api, type CompareOut } from '../api/client'
+import { MOCK } from '../store/backend'
+import { serverCompareRows } from '../views/vet'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -26,6 +29,19 @@ export default function Compare() {
   const loc = useLocation()
   const d = acct ? dogOf(acct, dog_id) : undefined
   useTitle(`${d ? d.name : ''} 경과 비교 · Paw oh Paw`)
+  const cmpKey = query.get('cmp') === 'prev' ? 'prev' : 'base'
+  const remoteDog = !MOCK && !!d && !!acct?.results.some((r) => r.dog === d.id && (r.src ?? '').startsWith('backend:'))
+  const [srv, setSrv] = useState<{ key: string; o: CompareOut } | null>(null)
+  useEffect(() => {
+    if (!remoteDog || !d) return
+    let alive = true
+    api.compare(d.id, cmpKey === 'base' ? 'BASELINE' : 'PREVIOUS')
+      .then((o) => alive && setSrv({ key: cmpKey, o }))
+      .catch(() => alive && setSrv(null)) // 비교 API 가 없거나 비교할 수 없으면 이 브라우저 계산 그대로
+    return () => {
+      alive = false
+    }
+  }, [remoteDog, d, cmpKey])
   let go: Go | null = null
   if (acct && !d) go = redirect('/home')
   else if (acct && d && valid(acct, d.id).length < 2) go = redirect(`/dogs/${dog_id}`, '유효한 회차가 2개 이상 있어야 비교할 수 있어요')
@@ -37,7 +53,9 @@ export default function Compare() {
   const cmp = cmp0 === 'base' || cmp0 === 'prev' ? cmp0 : 'base'
   const tk = TREND_KEYS.some(([k]) => k === tk0) ? tk0 : 'rom'
   const trend = TREND_KEYS.map(([k, label]) => ({ key: k, label, on: k === tk }))
-  const cp = compare_view(acct, d, cmp, tk)
+  const cp0 = compare_view(acct, d, cmp, tk)
+  // 백엔드 회차면 증가·감소 판정은 서버 비교 API(15.8, 수치별 오차 범위·통과 8회 조건)를 쓴다. 추이 그림은 그대로
+  const cp = cp0.has && srv && srv.key === cmp ? { ...cp0, ...serverCompareRows(srv.o, d.focus) } : cp0
   const segs = seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], cmp)
   // href="?cmp=..." 는 상대 주소라 Base 가 가로채지 않는다 → 새로 불러오지 않게 여기서 이동
   const rel = (href: string) => (e: MouseEvent) => {
@@ -92,7 +110,7 @@ export default function Compare() {
                 <span style={css('font-size:13px;color:#5B6472')}>{cp.focusNote}</span>
               </div>
             </div>
-            <span style={css('font-size:13px;color:#8E949C')}>증가·감소는 측정 오차 범위(±1)를 넘을 때만 표시해요. 변화의 의미는 수의사가 판단해요.</span>
+            <span style={css('font-size:13px;color:#8E949C')}>{srv ? '증가·감소는 수치마다 정한 측정 오차 범위를 넘을 때만 표시해요(두 회차 모두 걸음 8회 이상일 때). ' : '증가·감소는 측정 오차 범위(±1)를 넘을 때만 표시해요. '}변화의 의미는 수의사가 판단해요.</span>
           </>
         )}
       </main>
