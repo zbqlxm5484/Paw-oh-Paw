@@ -1,7 +1,7 @@
 // upload.html + static/upload.js + main.py upload(): 반려견 고르기, 영상 16개까지 차례로 첨부(끌어 놓기 · 고르기), 분석 시작
 import { useFirstFrames } from '../app/thumbs'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
-import { dropEmptySession, openSession, PhoneCaptureModal, usePhoneShots } from './parts/PhoneCapture'
+import { cancelPhoneSession, dropEmptySession, openSession, PhoneCaptureModal, shotAction, usePhoneShots } from './parts/PhoneCapture'
 import { MOCK } from '../store/backend'
 import { useNavigate } from 'react-router-dom'
 import { Base } from '../app/Base'
@@ -40,7 +40,8 @@ export default function Upload() {
   // 폰으로 촬영: 먼저 연 회차와 QR 창. 폰에서 올라온 영상 수는 회차를 몇 초마다 읽어 센다
   const [phoneSid, setPhoneSid] = useState('')
   const [showQr, setShowQr] = useState(false)
-  const phoneN = usePhoneShots(phoneSid)
+  const { shots: phoneShots, reload: reloadPhone } = usePhoneShots(phoneSid)
+  const phoneN = phoneShots.length
   // 이번 화면에서 새로 연 회차인지(이어 쓰는 회차면 원래 있던 영상도 센다), 분석을 시작했는지
   const [phoneCreated, setPhoneCreated] = useState(false)
   const leave = useRef({ sid: '', created: false, n: 0, submitted: false })
@@ -145,6 +146,16 @@ export default function Upload() {
     setSelId(id)
   }
 
+  // 이 회차 취소: 회차와 올라온 영상이 모두 지워진다(되돌릴 수 없음). 영상이 있으면 개수를 알려 확인을 받는다
+  const cancelPhone = async () => {
+    if (phoneN && !window.confirm(`이 회차에 올라온 영상 ${phoneN}개${phoneCreated ? '' : '(앞서 올린 영상 포함)'}가 모두 지워져요. 회차를 취소할까요?`)) return
+    if (await cancelPhoneSession(phoneSid)) {
+      setPhoneSid('')
+      setPhoneCreated(false)
+      setShowQr(false)
+    }
+  }
+
   const startPhone = async () => {
     try {
       const weight = (document.querySelector('input[name=weight]') as HTMLInputElement | null)?.value ?? ''
@@ -201,6 +212,7 @@ export default function Upload() {
               {!MOCK ? (
                 <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
                   <button type="button" className="bt hv-border" onClick={startPhone} style={css('height:42px;padding:0 16px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700')}>📱 폰으로 촬영하기</button>
+                  {phoneSid ? <button type="button" className="hv-dark" onClick={cancelPhone} style={css('height:42px;padding:0 10px;background:none;border:0;font-size:13.5px;font-weight:600;color:#8E949C;text-decoration:underline;cursor:pointer')}>이 회차 취소</button> : null}
                   <span style={css('font-size:13px;color:#5B6472')}>{phoneSid ? (phoneN ? `폰에서 영상 ${phoneN}개가 올라왔어요` : 'QR 을 찍어 폰에서 촬영해 주세요') : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있어요'}</span>
                 </div>
               ) : null}
@@ -227,12 +239,17 @@ export default function Upload() {
                       const next = i === n
                       const fromPhone = i < phoneN // 폰에서 올라온 영상(이 브라우저에 파일이 없다)
                       const file = fromPhone ? undefined : files[i - phoneN]
+                      const ps = fromPhone ? phoneShots[i] : undefined
+                      const busy = !!ps && (ps.status === 'SUBMITTED' || ps.status === 'ANALYZING')
+                      const failed = ps?.status === 'FAILED'
                       return (
-                        <div key={i} title={done && file ? file.name : fromPhone ? '폰에서 올린 영상' : undefined} onClick={next ? () => picker.current?.click() : undefined}
+                        <div key={i} title={done && file ? file.name : ps ? (failed ? `분석 실패: ${ps.fail_reason?.message ?? ''}` : '폰에서 올린 영상') : undefined} onClick={next ? () => picker.current?.click() : undefined}
                           style={css('aspect-ratio:16 / 10;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;' +
-                            'background:' + (done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
+                            'background:' + (failed ? '#7A2E22' : done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
                           {file && thumbs.get(file) ? <img src={thumbs.get(file)} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
-                          {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{phoneCreated ? '폰' : '올린 영상'}</span> : null}
+                          {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
+                          {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:11px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
+                          {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지울까요? 지운 영상은 되돌릴 수 없어요.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
                           <span style={css('position:absolute;left:7px;top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
                         </div>

@@ -3,7 +3,7 @@
 // 1단계는 같은 계정 로그인 방식. 반응이 좋으면 로그인 없는 촬영 전용 링크(백엔드 토큰)로 넓힌다.
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
-import { api, ApiError } from '../../api/client'
+import { api, ApiError, type ShotOut } from '../../api/client'
 import { css } from '../../app/css'
 
 const POLL_MS = 3000
@@ -30,17 +30,21 @@ export function dropEmptySession(sid: string): void {
   void api.cancelSession(sid).catch(() => undefined)
 }
 
-/** 회차에 올라온 촬영 수를 몇 초마다 읽는다 */
-export function usePhoneShots(sid: string): number {
-  const [n, setN] = useState(0)
+/** 회차에 올라온 촬영(올린 순서)을 몇 초마다 읽는다. reload 는 지우기·다시 분석 뒤 바로 다시 읽을 때 */
+export function usePhoneShots(sid: string): { shots: ShotOut[]; reload: () => void } {
+  const [shots, setShots] = useState<ShotOut[]>([])
+  const [k, setK] = useState(0)
   useEffect(() => {
-    if (!sid) return
+    if (!sid) {
+      setShots([])
+      return
+    }
     let alive = true
     let t = 0
     const tick = async () => {
       try {
         const s = await api.session(sid)
-        if (alive) setN(s.shots.length)
+        if (alive) setShots([...s.shots].sort((a, b) => a.seq_no - b.seq_no))
       } catch {
         /* 다음에 다시 */
       }
@@ -51,8 +55,32 @@ export function usePhoneShots(sid: string): number {
       alive = false
       clearTimeout(t)
     }
-  }, [sid])
-  return n
+  }, [sid, k])
+  return { shots, reload: () => setK((x) => x + 1) }
+}
+
+/** 폰에서 올린 촬영 하나를 지운다 / 실패한 촬영을 다시 분석한다. 실패하면 서버 문구를 띄운다 */
+export async function shotAction(kind: 'delete' | 'retry', id: string, done: () => void): Promise<void> {
+  try {
+    if (kind === 'delete') await api.deleteShot(id)
+    else await api.retryShot(id)
+    window.ppToast(kind === 'delete' ? '영상을 지웠어요' : '다시 분석을 시작했어요')
+  } catch (e) {
+    window.ppToast(e instanceof ApiError ? e.message : kind === 'delete' ? '영상을 지우지 못했어요' : '다시 분석하지 못했어요')
+  }
+  done()
+}
+
+/** 폰 촬영으로 연 회차를 취소한다(아직 분석 전). 올라온 영상도 같이 지워진다 */
+export async function cancelPhoneSession(sid: string): Promise<boolean> {
+  try {
+    await api.cancelSession(sid)
+    window.ppToast('이 회차를 취소했어요')
+    return true
+  } catch (e) {
+    window.ppToast(e instanceof ApiError ? e.message : '회차를 취소하지 못했어요')
+    return false
+  }
 }
 
 export function PhoneCaptureModal({ sid, shots, onClose }: { sid: string; shots: number; onClose: () => void }) {

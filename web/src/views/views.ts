@@ -654,7 +654,7 @@ export function today_rows(acct: Account, dogs: Dog[]) {
       ...patient_row(acct, d, new Set(live.keys())), time: times.length ? minBy(times, (t) => t) : '—',
       steps: steps.map(([t, bg, c]) => ({ t, bg, c })), dx: diagnosis(d),
       who: (first ? first.author : '') || (live.has(d.id) ? live.get(d.id)!.by : '') || (vit ? vit.author : ''),
-      todo: done ? '' : '진료 기록 전',
+      todo: done ? '' : '기록 작성',
     })
   }
   return sorted(out, (r) => r.time)
