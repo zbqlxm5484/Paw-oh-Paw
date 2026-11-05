@@ -1,5 +1,5 @@
 // upload.html + static/upload.js + main.py upload(): 반려견 고르기, 영상 16개까지 차례로 첨부(끌어 놓기 · 고르기), 분석 시작
-import { useFirstFrames } from '../app/thumbs'
+import { useFirstFrames, useShotVideos } from '../app/thumbs'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { cancelPhoneSession, dropEmptySession, openSession, PhoneCaptureModal, shotAction, usePhoneShots } from './parts/PhoneCapture'
 import { MOCK } from '../store/backend'
@@ -56,6 +56,14 @@ export default function Upload() {
   const video = useRef<HTMLVideoElement>(null)
   const urls = useRef(new WeakMap<File, string>())
   const thumbs = useFirstFrames(files)
+  const phoneVideos = useShotVideos(phoneShots)
+  // 폰에서 16개가 다 올라오면 QR 창을 닫는다(폰도 촬영 화면을 닫는다)
+  useEffect(() => {
+    if (phoneN >= MAX_SHOTS && showQr) {
+      setShowQr(false)
+      window.ppToast(`폰에서 영상 ${MAX_SHOTS}개가 모두 올라왔어요`)
+    }
+  }, [phoneN, showQr])
 
   const go: Go | null = acct && !acct.dogs.length ? redirect('/home?modal=pet', '먼저 반려견을 등록해 주세요') : null
   useRedirect(go)
@@ -247,6 +255,7 @@ export default function Upload() {
                           style={css('aspect-ratio:16 / 10;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;' +
                             'background:' + (failed ? '#7A2E22' : done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
                           {file && thumbs.get(file) ? <img src={thumbs.get(file)} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
+                          {ps && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
                           {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:11px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
                           {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지울까요? 지운 영상은 되돌릴 수 없어요.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
