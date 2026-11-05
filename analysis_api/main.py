@@ -30,7 +30,7 @@ from typing import Optional
 import store
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pipeline import (
     API_VERSION,
     VERSIONS,
@@ -173,7 +173,7 @@ def _record(job: dict, started: float) -> None:
     """끝난 작업을 analyses.jsonl에 한 줄. 기록을 못 남겨도 분석 결과는 그대로 둔다"""
     result = job.get("result") or {}
     entry = {
-        "id": job["id"], "shot_id": job["shot_id"], "filename": job["filename"],
+        "id": job["id"], "shot_id": job["shot_id"],   # 파일 이름은 남기지 않는다(반려견 이름이 들어 있을 수 있음)
         "video_sha256": job.get("video_sha256"), "pose_source": job.get("pose_source"),
         "model": job["model"], "versions": result.get("versions") or VERSIONS,
         "status": job["status"], "error_code": (job.get("error") or {}).get("code"),
@@ -252,3 +252,17 @@ def get_keypoints(job_id: str):
     job = _get(job_id)
     _ready(job)
     return job["keypoints"]
+
+
+@app.delete("/analyses/{job_id}", status_code=204, dependencies=[Depends(require_key)])
+def delete_analysis(job_id: str):
+    """작업 하나를 지운다: 올린 영상·상태·결과·관절점 파일과 analyses.jsonl의 그 줄(자료 파기, 백엔드 명세 15.9).
+    분석 중(queued·running)이면 409 JOB_IN_PROGRESS. 없는 작업은 404라, 부르는 쪽은 404도 "이미 없음"으로 보면 된다"""
+    job = _get(job_id)
+    if job["status"] in store.UNFINISHED:
+        raise ApiError(409, "JOB_IN_PROGRESS", "분석 중인 작업은 지울 수 없습니다")
+    with _LOCK:
+        JOBS.pop(job_id, None)
+        files, size = store.delete_job(STORAGE_DIR, job_id)
+    logger.info("analysis deleted job=%s files=%d bytes=%d", job_id, files, size)
+    return Response(status_code=204)
