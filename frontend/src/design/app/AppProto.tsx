@@ -38,11 +38,15 @@ export class AppProto extends DCLogic<Props, any> {
     const loop = () => { this.frame(); this.raf = requestAnimationFrame(loop) }
     this.raf = requestAnimationFrame(loop)
     this.syncRoute()
+    // QR·앱 링크로 촬영 화면에 바로 들어온 경우(화면 전환이 없어 componentDidUpdate 가 안 불린다)
+    if (this.props.screen === 'capGuide') this.enterCapGuide()
   }
+  /** 촬영 화면에 들어올 때: 가로 안내 애니메이션, 하단바 숨김, 카메라 미리 켜기 */
+  enterCapGuide() { this.startRot(); void camera.setNavBarHidden(true); if (camera.canRecordInApp()) { this.setState({ camLoading: !camera.isLive() }); void camera.warm() } }
   componentDidUpdate(prev: Props) {
     if (prev.screen !== this.props.screen || prev.params !== this.props.params) {
       this.syncRoute()
-      if (this.props.screen === 'capGuide') { this.startRot(); void camera.setNavBarHidden(true); if (camera.canRecordInApp()) { this.setState({ camLoading: !camera.isLive() }); void camera.warm() } }
+      if (this.props.screen === 'capGuide') this.enterCapGuide()
       if (prev.screen === 'capGuide' && this.props.screen !== 'capGuide') { if (camera.isRecording()) void camera.stopRecording(); camera.stopLater(); void camera.setNavBarHidden(false); clearInterval(this.recTick); this.setState({ camLive: false, recSec: -1, camLoading: false }) }
       if (this.props.screen === 'story') this.setState({ page: 0 })
     }
