@@ -7,7 +7,8 @@
     python purge.py --all --execute  # 실제로 지운다. 확인 문구 PURGE를 입력해야 한다(--yes면 묻지 않는다)
 
 분석 중인 작업이 있으면 지우지 않고 끝낸다. 분석 API를 끈 뒤 돌리는 것이 안전하다.
-관절점 파일(data/tracks/)과 models.yaml은 지우지 않는다.
+관절점 파일(data/tracks/)과 models.yaml은 지우지 않는다. 이름이 작업 ID(UUID) 모양인 폴더와 analyses.jsonl만 지우므로,
+ANALYSIS_STORAGE_DIR를 잘못 줘도 다른 폴더는 남는다(남긴 개수를 알린다).
 """
 import argparse
 import os
@@ -38,6 +39,9 @@ def run(argv: Optional[list] = None, *, ask: Callable[[str], str] = input, root:
         print(f"분석 중인 작업이 {stats['unfinished']}개 있어 지우지 않았습니다. 분석 API를 끈 뒤 다시 실행하세요",
               file=sys.stderr)
         return 1
+    if stats["others"]:
+        print(f"작업 폴더가 아닌 것 {stats['others']}개는 지우지 않습니다(이름이 작업 ID 모양이 아님). "
+              f"ANALYSIS_STORAGE_DIR가 맞는지 확인하세요: {root}", file=sys.stderr)
     if not args.execute:
         print(f"지울 양(dry run, 아무것도 지우지 않음): 작업 {stats['jobs']}개, 파일 {stats['files']}개, {stats['bytes']} bytes")
         return 0
