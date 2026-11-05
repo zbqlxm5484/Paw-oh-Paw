@@ -1,6 +1,7 @@
 // 앱 보고서 · 수의사용 탭(웹 수의사용 보고서와 같은 구성, S15P31A404-210·103):
-// 왼쪽과 오른쪽 비교(관절별 위아래 막대), 지난 측정과 비교(서버 비교 API), 무릎 가동 범위 변화(서버 추이 API).
+// 왼쪽과 오른쪽 비교(관절별 위아래 막대), 뒷무릎 각도·보행 주기, 지난 측정과 비교(서버 비교 API), 무릎 가동 범위 변화(서버 추이 API).
 import type { CompareItem, CompareOut, SessionResultOut, TrendsOut } from '../../api/types'
+import kneeCycle from './knee_cycle.json'
 
 const BLUE = '#3B6FE0'
 const ORANGE = '#D2601A'
@@ -102,6 +103,64 @@ function CmpList({ cmp }: { cmp: CompareOut | undefined }) {
   )
 }
 
+/** 이 회차 무릎 가동 범위·입각기 비율에 맞춰 늘이고 줄인 한 걸음 곡선(웹 knee_chart·fit_curve 와 같은 계산) */
+const TEMPLATE_STANCE = 60.0
+function fitCurve(base: number[], rom: number | null, stance: number | null): number[] {
+  const n = base.length
+  const mean = base.reduce((a, b) => a + b, 0) / n
+  const amp = Math.max(...base) - Math.min(...base) || 1
+  const k = rom ? rom / amp : 1
+  const c = base.map((v) => mean + (v - mean) * k)
+  if (!stance) return c
+  const a = TEMPLATE_STANCE / 100
+  const b = Math.min(0.8, Math.max(0.35, stance / 100))
+  return c.map((_, i) => {
+    const p = i / n
+    const x = (p < b ? (p / b) * a : a + ((p - b) / (1 - b)) * (1 - a)) * n
+    const j = Math.trunc(x) % n
+    const f = x - Math.trunc(x)
+    return c[j] * (1 - f) + c[(j + 1) % n] * f
+  })
+}
+
+function KneeCycle({ result }: { result: SessionResultOut }) {
+  const g = result.gaits.find((x) => x.gait_type === mainGaitOf(result))
+  const val = (code: string, limb: string) => g?.metrics.find((m) => m.metric_code === code && m.limb === limb && m.measurable)?.value ?? null
+  if (!g || val('rom_stifle', 'LH') == null || val('rom_stifle', 'RH') == null) return null
+  const [L, R] = (['LH', 'RH'] as const).map((leg) => fitCurve(kneeCycle.base, val('rom_stifle', leg), val('stance_ratio', leg)))
+  const ref = kneeCycle.ref
+  const all = [...L, ...R, ...ref.min, ...ref.max]
+  const lo = Math.floor(Math.min(...all) / 10) * 10, hi = Math.ceil(Math.max(...all) / 10) * 10
+  const x0 = 44, x1 = 300, y0 = 12, y1 = 120
+  const Y = (v: number) => y1 - ((v - lo) / (hi - lo)) * (y1 - y0)
+  const pt = (c: number[]) => c.map((v, i) => `${(x0 + ((x1 - x0) * i) / c.length).toFixed(1)},${Y(v).toFixed(1)}`)
+  const line = (c: number[]) => pt(c).join(' ')
+  const mid = Math.floor((lo + hi) / 2)
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <h3 style={H2}>뒷무릎 각도 · 보행 주기</h3>
+      <svg viewBox="0 0 320 150" style={{ width: '100%', display: 'block', fontFamily: 'inherit' }}>
+        <g stroke="#ECE8E2" strokeDasharray="3 4">{[hi, mid, lo].map((v) => <line key={v} x1={x0} y1={Y(v)} x2={x1} y2={Y(v)} />)}</g>
+        <g fontSize="9.5" fill="#8E949C">
+          {[hi, mid, lo].map((v) => <text key={v} x={x0 - 5} y={Y(v) + 3} textAnchor="end">{v}°</text>)}
+          {[0, 50, 100].map((p) => <text key={'x' + p} x={x0 + ((x1 - x0) * p) / 100} y="133" textAnchor="middle">{p}</text>)}
+          <text x={(x0 + x1) / 2} y="146" textAnchor="middle">한 걸음 (뒷발 착지 → 다음 착지, %)</text>
+          <text x="10" y="66" textAnchor="middle" transform="rotate(-90 10 66)">무릎 각도</text>
+        </g>
+        <polygon points={[...pt(ref.max), ...pt(ref.min).reverse()].join(' ')} fill="#E9E6E1" opacity=".75" />
+        <polyline points={line(ref.mean)} fill="none" stroke="#A0A7B2" strokeWidth="1.3" strokeDasharray="2 3" />
+        <polyline points={line(L)} fill="none" stroke={BLUE} strokeWidth="2" />
+        <polyline points={line(R)} fill="none" stroke="#E5604D" strokeWidth="2" strokeDasharray="5 4" />
+      </svg>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '11.5px', color: '#5B6472' }}>
+        <span><span style={{ display: 'inline-block', width: 16, borderTop: `2px solid ${BLUE}`, verticalAlign: 'middle', marginRight: 5 }} />왼쪽</span>
+        <span><span style={{ display: 'inline-block', width: 16, borderTop: '2px dashed #E5604D', verticalAlign: 'middle', marginRight: 5 }} />오른쪽</span>
+        <span><span style={{ display: 'inline-block', width: 16, height: 9, background: '#E9E6E1', verticalAlign: 'middle', marginRight: 5 }} />정상 참고 범위</span>
+      </div>
+    </section>
+  )
+}
+
 function KneeTrend({ trend }: { trend: TrendsOut | undefined }) {
   const pick = (limb: string) => trend?.series.find((s) => s.limb === limb)?.points ?? []
   const L = pick('LH'), R = pick('RH')
@@ -139,6 +198,7 @@ export function AppVetSections({ result, cmp, trend }: { result: SessionResultOu
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <LrBars result={result} />
+      <KneeCycle result={result} />
       <CmpList cmp={cmp} />
       <KneeTrend trend={trend} />
     </div>
