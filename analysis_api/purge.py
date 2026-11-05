@@ -46,7 +46,11 @@ def run(argv: Optional[list] = None, *, ask: Callable[[str], str] = input, root:
         if answer.strip() != CONFIRM_WORD:
             print("취소했습니다. 아무것도 지우지 않았습니다", file=sys.stderr)
             return 1
-    done = store.purge_all(root)
+    try:
+        done = store.purge_all(root)
+    except OSError as error:
+        print(f"다 지우지 못했습니다: {error}. 권한이나 사용 중인 파일을 확인하고 다시 실행하세요", file=sys.stderr)
+        return 1
     print(f"지운 양: 작업 {done['jobs']}개, 파일 {done['files']}개, {done['bytes']} bytes")
     return 0
 
