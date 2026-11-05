@@ -13,6 +13,7 @@ import { useSession } from '../api/sessions'
 import type { LoginIn, ReportOut, ReportsOut, SessionDetailOut } from '../api/types'
 import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
+import { enterDemo, exitDemo, isDemo, takeDemoAutologin } from '../app/demoMode'
 import { AppProto } from './app/AppProto'
 import { reportStatusLine, toAna, type DAna } from './adapter'
 import { useCompareData, useDesignActions, useDesignData, useReportData, type DesignData } from './useDesignData'
@@ -197,8 +198,64 @@ function AppShell(props: ProtoProps) {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#E9E6E1', padding: '24px 0' }}>
         <AppProto {...props} rootStyle={{ maxHeight: 'calc(100dvh - 48px)' }} />
+        <DemoPill />
       </div>
     )
   }
-  return <AppProto {...props} rootStyle={{ width: '100%', height: '100dvh', borderRadius: 0, boxShadow: 'none' }} />
+  // 안드로이드 15 이상은 화면이 내비게이션 바 밑까지 그려져 하단 버튼이 걸린다. 화면 안의 요소가 모두 absolute 라
+  // 바깥 틀 아래에 그만큼 여백을 둔다(위는 첫 화면 영상이 상태 표시줄 밑까지 보이는 디자인이라 그대로).
+  // --safe-area-inset-* 는 Capacitor(SystemBars)가 넣고, 브라우저는 env() 를 쓴다
+  return (
+    <div style={{ height: '100dvh', paddingBottom: SAFE_BOTTOM, background: '#FAF9F6' }}>
+      <AppProto {...props} rootStyle={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }} />
+      <DemoPill />
+    </div>
+  )
+}
+
+// 첫 화면(시작 로고 2.2초 뒤)의 배경 영상을 로고가 떠 있는 동안 미리 받아 둔다. 붙이지 않은 video 라 화면에는 안 보인다
+const landingPreload = typeof document !== 'undefined' ? document.createElement('video') : null
+if (landingPreload) {
+  landingPreload.muted = true
+  landingPreload.preload = 'auto'
+  landingPreload.src = '/assets/landing.mp4'
+}
+
+const SAFE_TOP ='var(--safe-area-inset-top, env(safe-area-inset-top, 0px))'
+const SAFE_BOTTOM = 'var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))'
+
+/** 체험 모드 버튼. 로그인 전에는 "서버 없이 둘러보기", 체험 중에는 "체험 모드 끝내기"(src/app/demoMode.ts) */
+function DemoPill() {
+  const { loggedIn, login } = useAuth()
+  const demo = isDemo()
+  useEffect(() => {
+    // 체험 모드에 막 들어왔으면 가짜 계정으로 바로 로그인한다(가짜 서버는 아무 아이디·비밀번호나 받는다)
+    if (demo && !loggedIn && takeDemoAutologin()) void login({ login_id: 'demo', password: 'demo' })
+  }, [demo, loggedIn, login])
+  if (!demo && loggedIn) return null
+  return (
+    <button
+      type="button"
+      onClick={demo ? exitDemo : enterDemo}
+      style={{
+        position: 'fixed',
+        top: `calc(${SAFE_TOP} + 8px)`,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 1000,
+        height: '30px',
+        padding: '0 12px',
+        border: 'none',
+        borderRadius: '15px',
+        background: demo ? '#D2601A' : 'rgba(27,36,51,.55)',
+        color: '#fff',
+        fontSize: '12px',
+        fontWeight: 600,
+        fontFamily: 'inherit',
+        cursor: 'pointer',
+      }}
+    >
+      {demo ? '체험 모드 · 끝내기' : '서버 없이 둘러보기'}
+    </button>
+  )
 }

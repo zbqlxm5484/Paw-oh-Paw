@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom'
 
 import { ApiError } from './api/client'
 import { AuthProvider } from './app/auth'
+import { isDemo } from './app/demoMode'
 import { router } from './app/router'
 import './styles/global.css'
 
@@ -21,7 +22,8 @@ const queryClient = new QueryClient({
 
 async function enableMocking() {
   const mode = import.meta.env.VITE_MOCK
-  if (mode === '1') {
+  // 체험 모드(src/app/demoMode.ts)는 빌드 설정과 상관없이 전부 가짜 서버로 간다
+  if (mode === '1' || isDemo()) {
     const { worker } = await import('./mocks/browser')
     await worker.start()
   } else if (mode === 'partial') {
