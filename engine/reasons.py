@@ -61,7 +61,7 @@ def pass_reason_detail(code: Optional[str], checks: dict, cfg: dict) -> Optional
     if code == "STOPPED" and has("stopped_s"):
         return f"{c['stopped_s']:.1f}초 동안 멈췄습니다(기준 {r['stopped_min_s']:g}초). 멈추지 않고 지나가게 해 주세요."
     if code == "SITTING" and has("sitting_s"):
-        return (f"골반 높이가 통과 중앙값의 {_pct(r['sitting_height_ratio'])} 아래로 {c['sitting_s']:.1f}초 낮아졌습니다"
+        return (f"골반 높이가 이 통과의 평소 높이의 {_pct(r['sitting_height_ratio'])} 아래로 {c['sitting_s']:.1f}초 낮아졌습니다"
                 f"(기준 {r['sitting_min_s']:g}초). 앉거나 엎드리지 않고 지나가게 해 주세요.")
     if code == "TURNED" and has("opposite_ratio", "reverse_s"):
         if c["opposite_ratio"] > r["turned_frame_ratio"]:
