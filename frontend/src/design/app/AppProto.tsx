@@ -410,7 +410,13 @@ export class AppProto extends DCLogic<Props, any> {
         if (s.busy) return
         if (camera.isRecording()) {
           clearInterval(this.recTick); this.setState({ recSec: -1 })
-          const f = await camera.stopRecording(); this.queueUpload(f); return
+          const f = await camera.stopRecording()
+          const total = this.shots() + (this.state.pend || 0) + (f ? 1 : 0)
+          this.queueUpload(f)
+          // 16번째까지 찍었으면 촬영 화면을 닫는다(카메라도 꺼진다). 남은 영상은 첨부 목록 화면에서 계속 올라간다
+          const sid = this.sessionId()
+          if (total >= 16 && sid) { this.toast('영상 16개를 모두 찍었어요'); this.nav('capReview', `/sessions/${sid}`, true); setTimeout(() => camera.stopPreview(), 0) }
+          return
         }
         if (shots + (s.pend || 0) >= 16) return this.toast('영상 16개를 모두 찍었어요. X 를 눌러 첨부 목록으로 가 주세요')
         // 앱 안 카메라가 켜져 있으면 바로 녹화, 아니면 기기 카메라 앱
