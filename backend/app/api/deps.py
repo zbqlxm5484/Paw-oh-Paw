@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
+from app.clients.analysis import AnalysisClient, HttpAnalysisClient, build_analysis_client
 from app.core.auth_cache import AuthStaff, auth_cache
 from app.core.db import SessionLocal
 from app.core.errors import AppError, ErrorCode
@@ -123,6 +124,19 @@ def require_creamoff(staff: CurrentStaff) -> AuthStaff:
 
 AdminStaff = Annotated[AuthStaff, Depends(require_admin)]
 CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
+
+
+def get_analysis_client() -> Iterator[AnalysisClient]:
+    """자료 파기가 분석 API 사본을 지울 때 쓴다(15.9). 테스트는 dependency_overrides로 바꿔 끼운다."""
+    client = build_analysis_client()
+    try:
+        yield client
+    finally:
+        if isinstance(client, HttpAnalysisClient):
+            client.close()
+
+
+AnalysisClientDep = Annotated[AnalysisClient, Depends(get_analysis_client)]
 
 
 # ---- 서명 URL로 여는 파일 (11.6, 15.2의 16·21번) ----

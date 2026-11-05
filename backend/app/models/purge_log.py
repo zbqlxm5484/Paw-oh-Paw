@@ -6,7 +6,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, Uuid, func
+from sqlalchemy import BigInteger, DateTime, Integer, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -24,6 +24,8 @@ class PurgeLog(Base):
     rows_deleted: Mapped[int] = mapped_column(Integer)
     files_deleted: Mapped[int] = mapped_column(Integer)
     bytes_deleted: Mapped[int] = mapped_column(BigInteger)
+    # 분석 API에 지우기를 부른 작업 수(15.9). ALL은 작업마다 부르지 않아 0이다
+    analysis_jobs_deleted: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     # 실행한 담당자 ID. 외래키 없음
     executed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

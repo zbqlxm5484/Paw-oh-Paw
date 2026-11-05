@@ -9,6 +9,9 @@
 
 지운 뒤에는 파기 기록 ID와 행·파일 수·바이트를 출력한다(파기 확인서 D-13에 붙인다). 분석 중인 촬영이 있으면 지우지
 않고 끝낸다.
+
+분석 API 저장소의 사본은 이 스크립트가 지우지 않는다. 분석 API를 끈 뒤 analysis_api 폴더에서
+python purge.py --all --execute를 따로 돌린다(15.9).
 """
 
 from __future__ import annotations
@@ -27,6 +30,9 @@ from app.services.purge import purge
 from app.storage.base import get_storage
 
 CONFIRM_WORD = "PURGE"
+ANALYSIS_NOTE = (
+    "분석 API 저장소의 사본은 따로 지웁니다: 분석 API를 끈 뒤 analysis_api 폴더에서 python purge.py --all --execute"
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -65,6 +71,7 @@ def run(argv: list[str] | None = None, *, ask: Callable[[str], str] = input) -> 
     print(f"{label}: 행 {result.rows}개, 파일 {result.files}개, {result.bytes} bytes")
     if result.purge_log_id is not None:
         print(f"파기 기록 ID: {result.purge_log_id}")
+    print(ANALYSIS_NOTE)
     return 0
 
 

@@ -169,7 +169,10 @@ class PurgeRequest(BaseModel):
 
 
 class PurgeOut(BaseModel):
-    """파기 결과 또는 dry_run 집계(15.9). rows는 반려견·회차·촬영·통과·수치·보고서 행 수의 합."""
+    """파기 결과 또는 dry_run 집계(15.9). rows는 반려견·회차·촬영·통과·수치·보고서 행 수의 합.
+
+    analysis_jobs는 분석 API에서 지운(또는 지울) 작업 수이고 이미 없던 작업도 센다. ALL은 작업마다 부르지 않아 0이다.
+    """
 
     scope: str
     target_id: uuid.UUID | None
@@ -177,4 +180,5 @@ class PurgeOut(BaseModel):
     rows: int
     files: int
     bytes: int
+    analysis_jobs: int = 0
     purge_log_id: uuid.UUID | None = None

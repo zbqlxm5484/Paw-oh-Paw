@@ -138,7 +138,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 21 | `GET /reports/{report_id}/file` | PDF 미리보기·내려받기 (서명 주소) | S6 | 200 | 403 `FILE_LINK_EXPIRED` |
 | 22 | `GET /dogs/{dog_id}/compare` | 회차 비교 | S8 | 200 | 400 `COMPARE_INVALID` |
 | 23 | `GET /dogs/{dog_id}/trends` | 수치 추이 | S8 | 200 | — |
-| 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS` |
+| 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 25 | `GET /health` | 서버 상태 | — | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | — | 200 | — |
 | 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (토큰 없음) | 가입 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
@@ -792,12 +792,13 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 
 // 응답 200
 {"scope": "DOG", "target_id": "…", "dry_run": true,
- "rows": 214, "files": 49, "bytes": 391000000, "purge_log_id": null}
+ "rows": 214, "files": 49, "bytes": 391000000, "analysis_jobs": 12, "purge_log_id": null}
 ```
 
 - `scope`: `DOG`(반려견 하나, `target_id` 필요) 또는 `INSTITUTION`(자기 기관 전체, `target_id` 생략).
 - `dry_run` 기본값은 true다. 지울 양만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 보낸다.
 - 관리자가 아니면 403 `FORBIDDEN`, 분석 중인 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
+- `analysis_jobs`는 분석 서버에서 지운(또는 지울) 작업 수다. 실제로 지울 때 분석 서버의 사본을 먼저 지우고, 지우지 못하면 팀 서비스 자료는 그대로 둔 채 503 `ANALYSIS_UNAVAILABLE`이다. 다시 부르면 이어서 끝난다.
 
 ### 크림오프 관리자 API
 
@@ -934,6 +935,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | `detail.fields`로 입력칸 표시 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | |
 | `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | |
+| `ANALYSIS_UNAVAILABLE` | 503 | 분석 서버의 자료를 지우지 못해 파기를 멈췄습니다. 잠시 뒤 다시 시도해 주세요. | |
 
 `{min_sec}`처럼 중괄호가 든 문구는 서버가 값을 채워서 보낸다.
 

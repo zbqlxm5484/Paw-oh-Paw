@@ -11,6 +11,10 @@
   같은 행을 잠그므로, 확인과 삭제 사이에 촬영이 분석 API로 나가는 틈이 없다(199 리뷰, 조유진). 워커가 먼저 잠갔으면
   파기는 기다렸다가 SUBMITTED를 보고 409, 파기가 먼저면 워커는 commit 뒤 지워진 행을 보고 건너뛴다. 잠금은 파일을
   지우는 동안도 쥐고 있다(파일 → 행 순서가 한 트랜잭션 안이어야 하므로). dry_run은 지우지 않으니 잠그지 않는다.
+- 분석 API도 작업마다 영상·결과·관절점 사본을 들고 있어 DOG·INSTITUTION은 파일보다 먼저 작업마다 지운다. 가장 흔한
+  실패(분석 API 무응답)에서 팀 서비스 쪽을 하나도 지우지 않은 채 멈추기 위해서다. 실패하면 503
+  ANALYSIS_UNAVAILABLE이고 행에 job_id가 남아 다시 부르면 이어서 끝난다(이미 지운 작업은 404라 성공). 분석 중이라는
+  409는 SHOT_IN_PROGRESS로 돌려준다. ALL은 작업마다 부르지 않고 분석 API의 전체 파기 명령으로 나눈다.
 - INSTITUTION·ALL은 반려견과 그 아래 자료만 지우고 기관·담당자 계정·디바이스 코드는 남긴다(15.9). ALL은 API로 열지 않고
   scripts/purge.py만 부른다.
 - 로그에는 개수만 남긴다(11.8: 반려견 이름·파일 경로 금지).
@@ -25,6 +29,7 @@ from dataclasses import dataclass
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
+from app.clients.analysis import AnalysisClient, AnalysisClientError
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, WalkPass
 from app.models.enums import PurgeScope
@@ -86,6 +91,32 @@ def _has_shot_in_progress(db: Session, dog_ids: list[uuid.UUID]) -> bool:
     return found is not None
 
 
+def _job_ids(db: Session, target: _Target) -> list[str]:
+    """분석 API에서 지울 작업 ID. 아직 제출하지 않은 촬영은 없고, ALL은 작업마다 부르지 않는다(15.9)."""
+    if target.scope == PurgeScope.ALL or not target.dog_ids:
+        return []
+    query = select(Shot.job_id).where(Shot.session_id.in_(_sessions_of(target.dog_ids)), Shot.job_id.is_not(None))
+    return [job_id for job_id in db.scalars(query) if job_id]
+
+
+def _delete_analysis_copies(analysis: AnalysisClient | None, job_ids: list[str]) -> None:
+    """분석 API 사본을 지운다. 처음 실패한 곳에서 멈춘다. 지운 것은 다시 부르면 404라 이어서 끝난다."""
+    if not job_ids:
+        return
+    if analysis is None:
+        raise ValueError("분석 작업이 있는 파기에는 분석 클라이언트가 필요합니다")
+    for done, job_id in enumerate(job_ids):
+        try:
+            analysis.delete(job_id)
+        except AnalysisClientError as error:
+            logger.warning(
+                "purge stopped: analysis delete failed status=%s done=%d/%d", error.status_code, done, len(job_ids)
+            )
+            raise AppError(
+                ErrorCode.SHOT_IN_PROGRESS if error.job_in_progress else ErrorCode.ANALYSIS_UNAVAILABLE
+            ) from None
+
+
 def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
     """dry_run: 지울 행 수. 반려견 + 회차 + 촬영 + 통과 + 수치 + 보고서."""
     if not dog_ids:
@@ -133,25 +164,44 @@ def purge(
     target_id: uuid.UUID | None = None,
     dry_run: bool = True,
     executed_by: uuid.UUID | None = None,
+    analysis: AnalysisClient | None = None,
 ) -> PurgeOut:
-    """파기 또는 dry_run 집계(15.9). institution_id는 부른 담당자의 기관(ALL이면 없음), executed_by는 담당자 ID."""
+    """파기 또는 dry_run 집계(15.9). institution_id는 부른 담당자의 기관(ALL이면 없음), executed_by는 담당자 ID.
+
+    analysis는 분석 API 사본을 지울 클라이언트다. 지울 작업이 없으면(ALL, 세기만 할 때) 쓰지 않는다.
+    """
     target = _resolve(db, scope, institution_id=institution_id, target_id=target_id)
     if not dry_run:
         _lock_sessions(db, target.dog_ids)  # 잠근 뒤 확인한다(12.4). 세기만 하는 dry_run은 잠그지 않는다
     if _has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
 
+    job_ids = _job_ids(db, target)
     files = total_bytes = 0
     if dry_run:
         for prefix in target.prefixes:
             count, size = storage.stat_prefix(prefix)
             files, total_bytes = files + count, total_bytes + size
         rows = _count_rows(db, target.dog_ids)
-        logger.info("purge dry run scope=%s rows=%d files=%d bytes=%d", target.scope, rows, files, total_bytes)
+        logger.info(
+            "purge dry run scope=%s rows=%d files=%d bytes=%d analysis_jobs=%d",
+            target.scope,
+            rows,
+            files,
+            total_bytes,
+            len(job_ids),
+        )
         return PurgeOut(
-            scope=target.scope, target_id=target.target_id, dry_run=True, rows=rows, files=files, bytes=total_bytes
+            scope=target.scope,
+            target_id=target.target_id,
+            dry_run=True,
+            rows=rows,
+            files=files,
+            bytes=total_bytes,
+            analysis_jobs=len(job_ids),
         )
 
+    _delete_analysis_copies(analysis, job_ids)  # 파일·행보다 먼저. 실패하면 팀 서비스 쪽은 그대로다
     for prefix in target.prefixes:
         count, size = storage.delete_prefix(prefix)
         files, total_bytes = files + count, total_bytes + size
@@ -162,12 +212,19 @@ def purge(
         rows_deleted=rows,
         files_deleted=files,
         bytes_deleted=total_bytes,
+        analysis_jobs_deleted=len(job_ids),
         executed_by=executed_by,
     )
     db.add(log)
     db.flush()
     logger.info(
-        "purge done scope=%s rows=%d files=%d bytes=%d purge_log=%s", target.scope, rows, files, total_bytes, log.id
+        "purge done scope=%s rows=%d files=%d bytes=%d analysis_jobs=%d purge_log=%s",
+        target.scope,
+        rows,
+        files,
+        total_bytes,
+        len(job_ids),
+        log.id,
     )
     return PurgeOut(
         scope=target.scope,
@@ -176,5 +233,6 @@ def purge(
         rows=rows,
         files=files,
         bytes=total_bytes,
+        analysis_jobs=len(job_ids),
         purge_log_id=log.id,
     )

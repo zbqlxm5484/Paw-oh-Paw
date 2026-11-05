@@ -215,6 +215,46 @@ def test_http_errors_flag_auth_and_missing_jobs() -> None:
     assert caught.value.status_code == 409 and not caught.value.job_gone and not caught.value.auth_failed
 
 
+@pytest.mark.parametrize("status", [204, 404, 410])
+def test_http_delete_counts_missing_jobs_as_success(status: int) -> None:
+    # 조유진 185: 204 = 지움, 404 = 이미 없음. 410도 조회와 같이 없는 것으로 본다
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(method=request.method, path=request.url.path, api_key=request.headers.get("x-api-key"))
+        return httpx.Response(status)
+
+    assert _http(handler).delete("job-1") is None
+    assert seen == {"method": "DELETE", "path": "/analyses/job-1", "api_key": "k1"}
+
+
+def test_http_delete_in_progress_is_flagged_and_failures_raise() -> None:
+    with pytest.raises(AnalysisClientError, match="JOB_IN_PROGRESS") as caught:
+        _http(lambda request: _rejection(409, "JOB_IN_PROGRESS")).delete("job-1")
+    assert caught.value.job_in_progress and caught.value.status_code == 409
+    for status, code in ((500, "DELETE_FAILED"), (401, "AUTH_REQUIRED")):
+        with pytest.raises(AnalysisClientError, match=code) as caught:
+            _http(lambda request, s=status, c=code: _rejection(s, c)).delete("job-1")
+        assert caught.value.status_code == status and not caught.value.job_in_progress
+
+
+def test_http_delete_connection_failure_is_a_client_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("slow")
+
+    with pytest.raises(AnalysisClientError, match="ConnectTimeout") as caught:
+        _http(handler).delete("job-1")
+    assert caught.value.status_code is None and not caught.value.job_in_progress
+
+
+def test_mock_delete_accepts_only_its_own_job_ids(video: Path) -> None:
+    # API 프로세스에 설정이 빠져 mock으로 떠도 실제 작업의 사본을 지운 것으로 치지 않는다(6절)
+    client = MockAnalysisClient(0)
+    assert client.delete(client.submit(video, INFO)) is None
+    with pytest.raises(AnalysisClientError, match="Mock 작업 ID가 아닙니다"):
+        client.delete("3f2a9c1e5b7d4e8a9c217d4e5f6a8b90")
+
+
 def test_http_connection_failure_is_a_client_error(video: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("refused")

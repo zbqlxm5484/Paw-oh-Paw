@@ -13,7 +13,7 @@
 | 디바이스 코드 확인·회원가입 `POST /auth/device-codes/verify`·`POST /auth/signup`(가입 계정은 CLIENT, 코드별 활성 계정 상한) (12.5, 13.5, 15.4) | `app/services/signup.py`, `app/services/device_codes.py` |
 | 비밀번호 재설정 `POST /auth/password-reset/request`·`/confirm`(토큰 30분, 해시만 저장)과 SMTP 메일 보내기 (11.6 메일, 13.8, 15.4) | `app/services/password_reset.py`, `app/core/mail.py` |
 | 크림오프 관리자 API `/admin/*` 9개: 기관·디바이스 코드·계정 중지(조회는 ADMIN·STAFF, 쓰기는 ADMIN, 기관 필터 없음) (13.6, 15.9) | `app/api/routes/admin.py`, `app/services/admin.py`, `app/schemas/admin.py` |
-| 자료 파기 `POST /admin/purge`(ADMIN만. 반려견 하나 또는 자기 기관 전체, `dry_run` 기본 true, 12.5 순서로 파일 → 행, `purge_log` 기록, 분석 중 촬영이 있으면 409)와 전체 파기 스크립트 `python -m scripts.purge --all [--execute]`(기관·계정·코드는 남김) (7절, 12.5, 15.9) | `app/services/purge.py`, `scripts/purge.py`, `app/api/routes/admin.py` |
+| 자료 파기 `POST /admin/purge`(ADMIN만. 반려견 하나 또는 자기 기관 전체, `dry_run` 기본 true, 분석 API 사본 → 파일 → 행 순서, `purge_log` 기록, 분석 중 촬영이 있으면 409, 분석 API가 지우지 못하면 503)와 전체 파기 스크립트 `python -m scripts.purge --all [--execute]`(기관·계정·코드는 남김. 분석 API 저장소는 그쪽 `python purge.py --all --execute`로 따로) (6절, 7절, 12.5, 15.9) | `app/services/purge.py`, `scripts/purge.py`, `app/api/routes/admin.py` |
 | 반려견 목록·등록·상세·수정, 수정은 `version` 낙관적 잠금 (12.5, 13.2, 15.5) | `app/api/routes/dogs.py`, `app/services/dogs.py`, `app/schemas/dogs.py` |
 | 체급 분류 `classify_size`(체중 기준)와 견종 이름 목록 (12.5) | `app/services/size_class.py`, `config/breeds.yaml` |
 | 회차 비교 오차 범위 `config/tolerance.yaml`(통합본 9-3 임시값, 11-05 재측정 값으로 교체)과 읽기(없으면 빈 것, 모양이 틀리면 워커 시작 실패), 변화 판정(5절 비교 규칙·15.8 판정 표, Decimal 계산, 보고서·비교 API 공용) | `app/services/tolerance.py`, `app/report/judge.py` |

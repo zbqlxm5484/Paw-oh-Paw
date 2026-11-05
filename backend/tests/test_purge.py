@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
@@ -12,6 +13,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_analysis_client
+from app.clients.analysis import AnalysisClientError
 from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, Staff, WalkPass
 from app.schemas.admin import PurgeOut
 from app.services.purge import purge
@@ -108,6 +111,7 @@ def test_dry_run_is_the_default_and_counts_without_deleting(
         "rows": rows,
         "files": files,
         "bytes": size,
+        "analysis_jobs": 0,
         "purge_log_id": None,
     }
     assert _rows_of_dog(db, dog.id) == rows
@@ -309,6 +313,202 @@ def test_unknown_dog_is_404(client: TestClient, admin_headers) -> None:
     assert response.status_code == 404
 
 
+# ---- 분석 API 사본(7절, 15.9, 조유진 185) ----
+
+
+class _FakeAnalysis:
+    """분석 클라이언트 자리. 지운 작업을 기록하고, fail에 든 작업에서는 그 오류를 낸다."""
+
+    MARK = "analysis.delete"
+
+    def __init__(self, events: list[str] | None = None) -> None:
+        self.events = events
+        self.deleted: list[str] = []
+        self.fail: dict[str, AnalysisClientError] = {}
+
+    def delete(self, job_id: str) -> None:
+        if self.events is not None:
+            self.events.append(self.MARK)
+        if job_id in self.fail:
+            raise self.fail[job_id]
+        self.deleted.append(job_id)
+
+
+@pytest.fixture
+def analysis(api_app) -> Iterator[_FakeAnalysis]:
+    """POST /admin/purge가 쓸 분석 클라이언트를 가짜로 바꿔 끼운다."""
+    fake = _FakeAnalysis()
+    api_app.dependency_overrides[get_analysis_client] = lambda: fake
+    yield fake
+    api_app.dependency_overrides.pop(get_analysis_client, None)
+
+
+def _give_job_ids(db: Session, dog) -> list[str]:
+    """반려견의 촬영마다 작업 ID를 넣고 돌려준다(분석 API에 제출한 촬영)."""
+    shots = db.scalars(
+        select(Shot).join(MeasureSession, Shot.session_id == MeasureSession.id).where(MeasureSession.dog_id == dog.id)
+    ).all()
+    for shot in shots:
+        shot.job_id = f"job-{shot.id}"
+    db.flush()
+    return [shot.job_id for shot in shots]
+
+
+def _purge_dog(client: TestClient, dog, headers, *, dry_run: bool = False):
+    return client.post(PURGE, json={"scope": "DOG", "target_id": str(dog.id), "dry_run": dry_run}, headers=headers)
+
+
+def test_analysis_copies_go_after_the_lock_and_before_files_and_rows(db: Session, dog, staff) -> None:
+    """분석 API를 먼저 불러야 가장 흔한 실패(무응답)에서 팀 서비스 쪽을 하나도 지우지 않고 멈출 수 있다."""
+    _fill(db, dog, staff, sessions=2)
+    job_ids = _give_job_ids(db, dog)
+    with _recorded_sql(db) as events:
+        fake = _FakeAnalysis(events)
+        storage = _MarkingStorage(get_storage(), events)
+        result = purge(
+            db, storage, "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
+        )
+    lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
+    first_call = events.index(_FakeAnalysis.MARK)
+    last_call = len(events) - 1 - events[::-1].index(_FakeAnalysis.MARK)
+    files = events.index(_MarkingStorage.MARK)
+    first_delete = next(i for i, statement in enumerate(events) if statement.lstrip().upper().startswith("DELETE"))
+    assert lock < first_call <= last_call < files < first_delete
+    assert sorted(fake.deleted) == sorted(job_ids)
+    assert result.analysis_jobs == 2
+    (log,) = _purge_logs(db)
+    assert log.analysis_jobs_deleted == 2
+
+
+def test_dry_run_counts_analysis_jobs_without_calling(
+    client: TestClient, db: Session, dog, staff, admin_headers, analysis: _FakeAnalysis
+) -> None:
+    _fill(db, dog, staff, sessions=2)
+    _give_job_ids(db, dog)
+    response = _purge_dog(client, dog, admin_headers, dry_run=True)
+    assert response.status_code == 200, response.text
+    assert response.json()["analysis_jobs"] == 2
+    assert analysis.deleted == []
+
+
+def test_only_submitted_shots_of_the_target_are_deleted_from_the_analysis_api(
+    client: TestClient, db: Session, dog, staff, admin_headers, analysis: _FakeAnalysis
+) -> None:
+    _fill(db, dog, staff, sessions=1)
+    job_ids = _give_job_ids(db, dog)
+    never_submitted = make_session(db, dog, staff, date(2026, 10, 20))
+    add_shot(db, never_submitted, 1, status="UPLOADED", passes={})  # job_id가 없다
+    keep = another_dog(db, staff.institution_id)
+    _fill(db, keep, staff, sessions=1)
+    kept_jobs = _give_job_ids(db, keep)
+
+    response = _purge_dog(client, dog, admin_headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["analysis_jobs"] == 1
+    assert analysis.deleted == job_ids
+    assert not set(kept_jobs) & set(analysis.deleted)
+
+
+def test_institution_purge_deletes_every_job_of_the_institution_only(
+    client: TestClient, db: Session, dog, staff, other_staff, admin_headers, analysis: _FakeAnalysis
+) -> None:
+    _fill(db, dog, staff, sessions=2)
+    job_ids = _give_job_ids(db, dog)
+    foreign = another_dog(db, other_staff.institution_id, name="남의 개")
+    _fill(db, foreign, other_staff, sessions=1)
+    _give_job_ids(db, foreign)
+
+    response = client.post(PURGE, json={"scope": "INSTITUTION", "dry_run": False}, headers=admin_headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["analysis_jobs"] == 2
+    assert sorted(analysis.deleted) == sorted(job_ids)
+
+
+def test_analysis_failure_stops_before_anything_is_deleted_and_a_retry_finishes(
+    client: TestClient, db: Session, dog, staff, admin_headers, analysis: _FakeAnalysis
+) -> None:
+    """무응답이면 멈춘다(조영운 결정 11-05). job_id가 행에 남아 있어야 사본을 다시 찾을 수 있다."""
+    rows = _fill(db, dog, staff, sessions=2)
+    files, size = _expected_files(2)
+    job_ids = _give_job_ids(db, dog)
+    for job_id in job_ids:
+        analysis.fail[job_id] = AnalysisClientError("연결 실패")
+
+    response = _purge_dog(client, dog, admin_headers)
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "ANALYSIS_UNAVAILABLE"
+    assert _rows_of_dog(db, dog.id) == rows
+    assert get_storage().stat_prefix(dog_prefix(dog.institution_id, dog.id)) == (files, size)
+    assert _purge_logs(db) == []
+    assert sum(1 for job_id in job_ids if db.scalar(select(Shot.id).where(Shot.job_id == job_id))) == 2
+
+    analysis.fail.clear()
+    retry = _purge_dog(client, dog, admin_headers)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["analysis_jobs"] == 2
+    assert _rows_of_dog(db, dog.id) == 0
+    (log,) = _purge_logs(db)
+    assert log.analysis_jobs_deleted == 2
+
+
+@pytest.mark.parametrize(
+    ("status", "code", "http_status"),
+    [
+        (409, "SHOT_IN_PROGRESS", 409),
+        (401, "ANALYSIS_UNAVAILABLE", 503),
+        (500, "ANALYSIS_UNAVAILABLE", 503),
+    ],
+)
+def test_analysis_answers_map_to_our_error_codes(
+    client: TestClient,
+    db: Session,
+    dog,
+    staff,
+    admin_headers,
+    analysis: _FakeAnalysis,
+    status: int,
+    code: str,
+    http_status: int,
+) -> None:
+    rows = _fill(db, dog, staff, sessions=1)
+    for job_id in _give_job_ids(db, dog):
+        analysis.fail[job_id] = AnalysisClientError("거절", status_code=status)
+    response = _purge_dog(client, dog, admin_headers)
+    assert response.status_code == http_status, response.text
+    assert response.json()["error"]["code"] == code
+    assert _rows_of_dog(db, dog.id) == rows
+
+
+def test_api_process_left_on_mock_refuses_real_job_ids(
+    client: TestClient, db: Session, dog, staff, admin_headers
+) -> None:
+    """API 프로세스에 ANALYSIS_API_*가 빠져 mock으로 뜨면 실제 사본을 지운 것으로 치지 않고 멈춘다(6절)."""
+    rows = _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)  # Mock이 만든 형식이 아닌 작업 ID
+    response = _purge_dog(client, dog, admin_headers)
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "ANALYSIS_UNAVAILABLE"
+    assert _rows_of_dog(db, dog.id) == rows
+
+
+def test_a_purge_with_jobs_needs_a_client(db: Session, dog, staff) -> None:
+    _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    with pytest.raises(ValueError, match="분석 클라이언트"):
+        purge(db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False)
+
+
+def test_all_scope_leaves_the_analysis_copies_to_the_other_command(db: Session, dog, staff) -> None:
+    """ALL은 작업마다 부르지 않는다. 버려진 작업까지 쓸어 가는 분석 API 전체 파기 명령으로 나눈다(15.9)."""
+    _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    assert purge(db, get_storage(), "ALL").analysis_jobs == 0
+    result = purge(db, get_storage(), "ALL", dry_run=False)  # 클라이언트 없이 끝난다
+    assert result.analysis_jobs == 0
+    (log,) = _purge_logs(db)
+    assert log.analysis_jobs_deleted == 0
+
+
 # ---- 전체 파기(ALL): 서비스와 스크립트 ----
 
 
@@ -390,6 +590,7 @@ def test_script_execute_asks_for_the_confirm_word(fake_purge: list[dict], capsys
     assert fake_purge == [{"scope": "ALL", "dry_run": False}]
     out = capsys.readouterr().out
     assert "지운 양" in out and "파기 기록 ID: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90" in out
+    assert "python purge.py --all --execute" in out  # 분석 API 저장소는 그쪽 명령으로 따로 지운다
 
 
 def test_script_yes_skips_the_question_and_all_is_required(fake_purge: list[dict]) -> None:

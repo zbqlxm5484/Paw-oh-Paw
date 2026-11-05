@@ -7,7 +7,7 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.api.deps import AdminStaff, CreamoffStaff, DbSession
+from app.api.deps import AdminStaff, AnalysisClientDep, CreamoffStaff, DbSession
 from app.schemas.admin import (
     DeviceCodeCreate,
     DeviceCodeListOut,
@@ -98,12 +98,13 @@ def update_staff(staff_id: uuid.UUID, body: StaffUpdate, staff: AdminStaff, db: 
 
 
 @router.post("/purge", response_model=PurgeOut)
-def purge(body: PurgeRequest, staff: AdminStaff, db: DbSession) -> PurgeOut:
+def purge(body: PurgeRequest, staff: AdminStaff, db: DbSession, analysis: AnalysisClientDep) -> PurgeOut:
     """자료 파기(관리자만). dry_run 기본 true. DOG는 자기 기관의 반려견 하나, INSTITUTION은 자기 기관 전체."""
     return purge_service.purge(
         db,
         get_storage(),
         body.scope,
+        analysis=analysis,
         institution_id=staff.institution_id,
         target_id=body.target_id,
         dry_run=body.dry_run,

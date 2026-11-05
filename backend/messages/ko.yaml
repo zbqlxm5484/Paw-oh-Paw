@@ -37,6 +37,7 @@ VIDEO_TOO_LARGE: "영상 파일이 너무 큽니다. 최대 {max_mb} MB까지 �
 VALIDATION_ERROR: "입력값을 확인해 주세요."
 INTERNAL_ERROR: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
 MAIL_UNAVAILABLE: "지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요."
+ANALYSIS_UNAVAILABLE: "분석 서버의 자료를 지우지 못해 파기를 멈췄습니다. 잠시 뒤 다시 시도해 주세요."
 
 # --- 14.2 처리 실패 사유 (fail_reason) ---
 ANALYSIS_SUBMIT_FAILED: "분석 서버에 보내지 못했습니다. 다시 분석을 눌러 주세요."
