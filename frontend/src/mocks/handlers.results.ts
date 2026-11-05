@@ -5,7 +5,8 @@ import type { Edition, ReportOut } from '../api/types'
 import { findDog, reason, sessions, type MockSession } from './db'
 import { anglesFor, compareFor, resultFor, shotDetailFor, trendsFor } from './metrics'
 
-const BASE = '/api/v1'
+// 앱(Capacitor)은 VITE_API_BASE 로 절대 주소를 부르므로 가짜 서버도 같은 주소를 받는다(체험 모드). 웹은 빈 값이라 '/api/v1'
+const BASE = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ''}/api/v1`
 const TOKEN = 'mock-token'
 
 function err(status: number, code: string, message: string, detail: Record<string, unknown> | null = null) {

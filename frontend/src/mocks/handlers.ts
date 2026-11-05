@@ -7,7 +7,8 @@ import { HttpResponse, delay, http } from 'msw'
 import type { DogCreate, DogUpdate, LoginIn, SessionCreate } from '../api/types'
 import { MOCK_STAFF, classifySize, dogs, findDog, historyOf, newId, reason, sessions, simulateAggregation, simulateAnalysis, toDogOut, toSessionDetail, toSessionOut, type MockShot } from './db'
 
-const BASE = '/api/v1'
+// 앱(Capacitor)은 VITE_API_BASE 로 절대 주소를 부르므로 가짜 서버도 같은 주소를 받는다(체험 모드). 웹은 빈 값이라 '/api/v1'
+const BASE = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ''}/api/v1`
 const TOKEN = 'mock-token'
 const TODAY = () => new Date().toISOString().slice(0, 10)
 
