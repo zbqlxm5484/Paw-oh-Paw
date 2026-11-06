@@ -62,7 +62,8 @@ export interface LoginIn {
 
 export interface DeviceCodeVerifyOut {
   institution: { id: string; name: string }
-  remaining_accounts: number
+  /** 백엔드 192(기관당 코드 하나, 계정 수 제한 없음) 뒤에는 응답에 없다 */
+  remaining_accounts?: number
 }
 
 export interface SignupIn {

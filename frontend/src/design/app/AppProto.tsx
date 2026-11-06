@@ -285,7 +285,7 @@ export class AppProto extends DCLogic<Props, any> {
     const setSo = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ so: { ...st.so, [k]: v } })); if (k === 'dev') this.checkDev(v) }
     const devHint = !s.so.dev.trim() ? '측정 기기 뒷면 라벨에 적혀 있어요.'
       : !s.devChk || s.devChk.code !== s.so.dev.trim() ? '기기 번호를 확인하는 중…'
-      : s.devChk.err ? s.devChk.err : `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개`
+      : s.devChk.err ? s.devChk.err : typeof s.devChk.left === 'number' ? `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개` : `${s.devChk.org} · 확인됐어요`
     const devHc = s.devChk && s.devChk.code === s.so.dev.trim() && s.devChk.err ? '#C2412D' : s.devChk && s.devChk.code === s.so.dev.trim() ? '#2E7D4F' : '#5B6472'
     const setPet = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ pet: { ...st.pet, [k]: v } })) }
     const setF = (g: string, k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ [g]: { ...st[g], [k]: v } })) }
