@@ -10,7 +10,7 @@ import { dogKeys } from '../api/dogs'
 
 import { fileUrl } from '../api/labels'
 import { useSession } from '../api/sessions'
-import type { LoginIn, ReportOut, ReportsOut, SessionDetailOut } from '../api/types'
+import type { DeviceCodeVerifyOut, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
 import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
 import { enterDemo, exitDemo, isDemo, takeDemoAutologin } from '../app/demoMode'
@@ -22,7 +22,7 @@ import { useCompareData, useDesignActions, useDesignData, useReportData, type De
 
 export interface RouteInfo {
   screen: string
-  params: { sessionId?: string; dogId?: string; petNew?: boolean; petEdit?: string }
+  params: { sessionId?: string; dogId?: string; petNew?: boolean; petEdit?: string; legal?: string }
 }
 
 export interface UiSel {
@@ -38,6 +38,8 @@ export interface ProtoProps {
   actions: ReturnType<typeof useDesignActions>
   auth: {
     login: (b: LoginIn) => Promise<unknown>
+    signup: (b: SignupIn) => Promise<unknown>
+    verifyDeviceCode: (code: string) => Promise<DeviceCodeVerifyOut>
     logout: () => void
     updateMe: (b: { name?: string; email?: string }) => Promise<unknown>
     changePassword: (current: string, next: string) => Promise<unknown>
@@ -72,6 +74,7 @@ export function parseRoute(pathname: string): RouteInfo {
   if (p === '/account') return { screen: 'account', params: {} }
   if (p === '/notifications') return { screen: 'notif', params: {} }
   if (p === '/capture') return { screen: 'capSelect', params: {} }
+  if (seg[0] === 'legal' && seg[1]) return { screen: 'legal', params: { legal: seg[1] } } // 약관·개인정보·사업자 정보·고객센터
   if (seg[0] === 'sessions' && seg[1]) {
     const sessionId = seg[1]
     if (seg[2] === 'result') return { screen: 'detail', params: { sessionId } }
@@ -95,7 +98,7 @@ const PUBLIC = new Set(['landing', 'story', 'login', 'signupOrg', 'splash'])
 export function DesignRoot() {
   const loc = useLocation()
   const navigate = useNavigate()
-  const { loggedIn, checking, login, logout, setStaff } = useAuth()
+  const { loggedIn, checking, login, signup, logout, setStaff } = useAuth()
   const route = useMemo(() => parseRoute(loc.pathname), [loc.pathname])
   const query = useMemo(() => new URLSearchParams(loc.search), [loc.search])
 
@@ -183,7 +186,7 @@ export function DesignRoot() {
 
   const props: ProtoProps = {
     screen: route.screen, params: route.params, query, data, actions, auth: {
-      login, logout,
+      login, signup, logout, verifyDeviceCode: authApi.verifyDeviceCode,
       updateMe: async (b: { name?: string; email?: string }) => setStaff(await authApi.updateMe(b)),
       changePassword: async (current: string, next: string) => setStaff(await authApi.changePassword(current, next)),
     }, nav, back, ui, setUi,

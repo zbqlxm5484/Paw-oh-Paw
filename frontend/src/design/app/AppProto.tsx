@@ -14,6 +14,7 @@ import { ST, STEPS, type DDog, type DGait, type DRes } from '../adapter'
 import type { ProtoProps } from '../DesignRoot'
 import { EMPTY_PET, LIMB, LINES, PREP, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_ } from '../shared'
 import { AppView } from './AppView'
+import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
 import './app-view.css'
 
 /** 409 DOG_MODIFIED: 다른 담당자가 먼저 고쳤다. 목록은 다시 불러온 상태다(useDesignActions.updateDog) */
@@ -25,7 +26,7 @@ export class AppProto extends DCLogic<Props, any> {
   static View = AppView
   state: any = {
     splash: false, joint: false, line: 0, sheet: null, toast: '', viaTab: true,
-    li: { id: '', pw: '' }, so: { org: '', loc: '', dev: '', id: '', pw: '', pw2: '' }, to: [false, false, false, false],
+    li: { id: '', pw: '' }, so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null as null | { code: string; org?: string; left?: number; err?: string }, signupBusy: false, to: [false, false, false, false],
     af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
     capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
@@ -123,6 +124,17 @@ export class AppProto extends DCLogic<Props, any> {
   }
 
   /* ---------- 이동 ---------- */
+  devTimer: ReturnType<typeof setTimeout> | null = null
+  /** 기기 번호를 입력하면 잠깐 기다렸다 서버에 확인해 기관명·남은 계정 수를 보여 준다 */
+  checkDev(v: string) {
+    if (this.devTimer) clearTimeout(this.devTimer)
+    const code = v.trim()
+    if (!code) return this.setState({ devChk: null })
+    this.devTimer = setTimeout(async () => {
+      try { const r = await this.props.auth.verifyDeviceCode(code); if (this.state.so.dev.trim() === code) this.setState({ devChk: { code, org: r.institution.name, left: r.remaining_accounts } }) }
+      catch (e) { if (this.state.so.dev.trim() === code) this.setState({ devChk: { code, err: errMsg(e, '기기 번호를 확인하지 못했어요') } }) }
+    }, 500)
+  }
   PATH: Record<string, string> = { splash: '/welcome', landing: '/welcome', story: '/intro', login: '/login', signupOrg: '/signup', home: '/', results: '/results', my: '/my', account: '/account', notif: '/notifications', capSelect: '/capture', petNew: '/dogs/new' }
   nav = (screen: string, path?: string, replace?: boolean) => { this.setState({ sheet: null, viaTab: false }); this.props.nav(path || this.PATH[screen] || '/', { replace }) }
   back = () => { this.setState({ sheet: null }); this.props.back() }
@@ -259,12 +271,19 @@ export class AppProto extends DCLogic<Props, any> {
     }
 
     const reqOrg = [s.to[0], s.to[1], s.to[2]].every(Boolean)
-    const orgOk = reqOrg && s.so.org && s.so.dev && s.so.id.length >= 4 && s.so.pw.length >= 4 && s.so.pw === s.so.pw2
-    const setSo = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ so: { ...st.so, [k]: v } })) }
+    // 백엔드 규칙(schemas/auth.py): 아이디 영문 소문자·숫자·._- 4~50자, 비밀번호 8자 이상, 이름·이메일 필수. 기관은 기기 번호가 정한다
+    const idOk = /^[a-z0-9._-]{4,50}$/.test(s.so.id), emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.so.email.trim())
+    const devOk = !!s.devChk && s.devChk.code === s.so.dev.trim() && !s.devChk.err
+    const orgOk = reqOrg && devOk && !!s.so.name.trim() && emailOk && idOk && s.so.pw.length >= 8 && s.so.pw === s.so.pw2
+    const setSo = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ so: { ...st.so, [k]: v } })); if (k === 'dev') this.checkDev(v) }
+    const devHint = !s.so.dev.trim() ? '측정 기기 뒷면 라벨에 적혀 있어요.'
+      : !s.devChk || s.devChk.code !== s.so.dev.trim() ? '기기 번호를 확인하는 중…'
+      : s.devChk.err ? s.devChk.err : `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개`
+    const devHc = s.devChk && s.devChk.code === s.so.dev.trim() && s.devChk.err ? '#C2412D' : s.devChk && s.devChk.code === s.so.dev.trim() ? '#2E7D4F' : '#5B6472'
     const setPet = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ pet: { ...st.pet, [k]: v } })) }
     const setF = (g: string, k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ [g]: { ...st[g], [k]: v } })) }
     const setLi = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ li: { ...st.li, [k]: v } })) }
-    const termRows = (key: string, labels: [string, boolean][]) => labels.map(([label, view], i) => ({ label, view, c: chk(s[key][i]), toggle: () => this.setState((st: any) => { const a = [...st[key]]; a[i] = !a[i]; return { [key]: a } }) }))
+    const termRows = (key: string, labels: [string, boolean][]) => labels.map(([label, view], i) => ({ label, view, c: chk(s[key][i]), open: (e: any) => { e.stopPropagation(); this.nav('legal', `/legal/${TERM_LINKS[i] ?? 'terms'}`) }, toggle: () => this.setState((st: any) => { const a = [...st[key]]; a[i] = !a[i]; return { [key]: a } }) }))
 
     const showTabs = li && ['home', 'results', 'my', 'story'].includes(sc)
     // 소개 장의 그림 높이: 4번째 장(보고서 견본) 높이에 맞추되, 짧은 폰에서는 아래 글이 잘리지 않게 화면의 절반 남짓으로 줄인다
@@ -305,7 +324,7 @@ export class AppProto extends DCLogic<Props, any> {
       rootStyle: this.props.rootStyle || {},
       isSplash: sc === 'splash', isLanding: sc === 'landing', isLogin: sc === 'login', isSignupOrg: sc === 'signupOrg',
       isHome: sc === 'home', isDog: sc === 'dog', isPetNew: sc === 'petNew', isNotif: sc === 'notif', isStory: sc === 'story', isCapSelect: sc === 'capSelect', isCapGuide: sc === 'capGuide',
-      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account',
+      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
       vid: this.vid, storyRef: this.storyRef, repBox: this.repBox, back: this.back,
       jointOp: s.joint ? 1 : 0, jointTr: s.joint ? 'opacity 0.5s ease-out' : 'none', replaySplash: () => this.startSplash(),
       lines: LINES.map((t, i) => ({ t, op: i === s.line ? 1 : 0, ty: i === s.line ? 0 : (i < s.line ? -14 : 14) })),
@@ -323,17 +342,28 @@ export class AppProto extends DCLogic<Props, any> {
       },
       loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '가입할 때 만든 아이디',
       orgFields: [
-        { label: '기관명', ph: '예) 한빛동물병원', type: 'text', val: s.so.org, on: setSo('org') },
-        { label: '기관 주소', ph: '주소 검색', type: 'text', val: s.so.loc, on: setSo('loc') },
-        { label: '디바이스 번호', ph: '예) PP-2410-0381', type: 'text', val: s.so.dev, on: setSo('dev'), hint: '측정 기기 뒷면 라벨에 적혀 있어요.', hc: '#5B6472' }],
+        { label: '디바이스 번호', ph: '예) PP-2410-0381', type: 'text', val: s.so.dev, on: setSo('dev'), hint: devHint, hc: devHc }],
       orgAcctFields: [
-        { label: '아이디', ph: '영문·숫자 4~16자', type: 'text', val: s.so.id, on: setSo('id') },
-        { label: '비밀번호', ph: '4자 이상', type: 'password', val: s.so.pw, on: setSo('pw') },
+        { label: '담당자 이름', ph: '예) 김수의', type: 'text', val: s.so.name, on: setSo('name') },
+        { label: '이메일', ph: '비밀번호를 잊었을 때 써요', type: 'email', val: s.so.email, on: setSo('email'), hint: s.so.email && !emailOk ? '이메일 형식이 아니에요' : false, hc: '#C2412D' },
+        { label: '아이디', ph: '영문 소문자·숫자 4자 이상', type: 'text', val: s.so.id, on: setSo('id'), hint: s.so.id && !idOk ? '영문 소문자·숫자·._- 로 4~50자' : false, hc: '#C2412D' },
+        { label: '비밀번호', ph: '8자 이상', type: 'password', val: s.so.pw, on: setSo('pw'), hint: s.so.pw && s.so.pw.length < 8 ? '8자 이상이어야 해요' : false, hc: '#C2412D' },
         { label: '비밀번호 확인', ph: '한 번 더 입력', type: 'password', val: s.so.pw2, on: setSo('pw2'), hint: s.so.pw2 && s.so.pw !== s.so.pw2 ? '비밀번호가 달라요' : false, hc: '#C2412D' }],
       allOrgC: chk(s.to.every(Boolean)), allOrgToggle: () => this.setState((st: any) => ({ to: st.to.map(() => !st.to.every(Boolean)) })),
       termsOrg: termRows('to', [['[필수] 서비스 이용약관', true], ['[필수] 개인정보 수집 및 이용', true], ['[필수] 측정 기기 연동 및 위치정보 이용', true], ['[선택] 마케팅 정보 수신', true]]),
       signOrgBg: orgOk ? '#D2601A' : '#C3C8CF',
-      doSignupOrg: () => { if (!orgOk) return this.toast(!reqOrg ? '필수 약관에 동의해 주세요' : (s.so.pw2 && s.so.pw !== s.so.pw2) ? '비밀번호가 서로 달라요' : '입력하지 않은 항목이 있어요'); this.toast('회원가입은 준비 중이에요. 기관 관리자에게 계정을 요청해 주세요') },
+      doSignupOrg: async () => {
+        if (!orgOk) return this.toast(!reqOrg ? '필수 약관에 동의해 주세요' : !devOk ? (s.devChk && s.devChk.err ? s.devChk.err : '기기 번호를 확인해 주세요') : (s.so.pw2 && s.so.pw !== s.so.pw2) ? '비밀번호가 서로 달라요' : '입력하지 않았거나 형식이 맞지 않는 항목이 있어요')
+        if (s.signupBusy) return
+        this.setState({ signupBusy: true })
+        try {
+          await this.props.auth.signup({ code: s.so.dev.trim(), login_id: s.so.id.trim(), password: s.so.pw, name: s.so.name.trim(), email: s.so.email.trim() })
+          this.toast(`${s.devChk?.org ?? '기관'} 담당자로 가입했어요`)
+          this.setState({ so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null, to: [false, false, false, false], viaTab: true })
+          this.props.nav('/', { replace: true })
+        } catch (e) { this.toast(errMsg(e, '가입하지 못했어요. 잠시 후 다시 시도해 주세요.')) }
+        finally { this.setState({ signupBusy: false }) }
+      },
 
       acctKind: '기관', acctName: acct.name, acctInit: (acct.name || '?').slice(0, 1),
       goNotif: () => this.nav('notif'), tabMy: () => this.tab('my'), tabHome: () => this.tab('home'), tabResults: () => this.tab('results'), tabStory: () => this.tab('story'), tabCapture: () => this.tab('capSelect'),
@@ -463,10 +493,9 @@ export class AppProto extends DCLogic<Props, any> {
 
       cp, cmpSegs: seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], this.props.ui.cmp, (k) => this.props.setUi({ cmp: k as 'base' | 'prev' })),
       trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 지수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),
-      reanalyze: () => this.toast(PREP),
 
       isOrg, isUser: false, myName: acct.name, myDev: acct.dev || '-',
-      goAccount: () => this.nav('account'), help: () => this.toast(PREP), settings: () => this.toast(PREP),
+      goAccount: () => this.nav('account'), help: () => this.nav('legal', '/legal/support'), settings: () => this.toast(PREP),
       myDogs: dogs.map((d) => ({ init: d.name[0], name: d.name, desc: desc(d) + ' · ' + SEX[d.sex || 'm'], edit: () => this.nav('petNew', `/dogs/${d.id}/edit`), del: () => this.setState({ sheet: 'del', delId: d.id }) })),
       myDogCount: dogs.length + '마리',
       tgBg: s.notifOn ? '#D2601A' : '#DDD7CE', tgX: s.notifOn ? 22 : 2, toggleNotif: () => this.setState((st: any) => ({ notifOn: !st.notifOn })),
