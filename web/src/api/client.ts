@@ -82,7 +82,7 @@ export async function request<T>(path: string, opts: { method?: string; body?: u
 
 // ── 응답 모양(backend/app/schemas, 백엔드 명세 15.3) ──
 export interface InstitutionOut { id: string; code: string; name: string; contract_ends_at: string | null; contract_status: string }
-export interface StaffOut { id: string; login_id: string; name: string; email: string | null; role: string; effective_role: string; institution: InstitutionOut }
+export interface StaffOut { id: string; login_id: string; name: string; email: string | null; role: string; effective_role: string; notif_on?: boolean; institution: InstitutionOut }
 export interface TokenOut { access_token: string; token_type: string; expires_at: string; staff: StaffOut }
 export interface DogOut {
   id: string; name: string; breed: string; weight_kg: number; size_class: string; size_class_manual: boolean
@@ -142,20 +142,25 @@ export interface CompareOut {
   model_changed: boolean
   items: CompareItemOut[]
 }
-export interface DeviceCodeVerifyOut { institution: { id: string; name: string }; remaining_accounts: number }
+/** 192 뒤 remaining_accounts 는 없다(기관당 코드 하나, 계정 수 상한 없음) */
+export interface DeviceCodeVerifyOut { institution: { id: string; name: string }; remaining_accounts?: number }
 export interface InstitutionAdminOut extends InstitutionOut { staff_count: number; device_code_count: number; created_at: string }
-export interface DeviceCodeOut { id: string; code: string; institution_id: string; max_accounts: number; active_accounts: number; revoked_at: string | null; note: string | null; created_at: string }
-export interface StaffAdminOut { id: string; login_id: string; name: string; email: string | null; role: string; is_active: boolean; device_code_id: string | null; created_at: string }
+export interface DeviceCodeOut { id: string; code: string; institution_id: string; max_accounts?: number; active_accounts: number; revoked_at: string | null; note: string | null; created_at: string }
+export interface StaffAdminOut { id: string; login_id: string; name: string; email: string | null; role: string; is_active: boolean; withdrawn_at?: string | null; device_code_id: string | null; created_at: string }
+/** 가입 약관 동의(192). 필수 셋은 true 여야 서버가 받는다, marketing 만 선택 */
+export interface TermsIn { version: string; service: boolean; privacy: boolean; device_location: boolean; marketing: boolean }
 
 // ── 호출(지금 develop 에 있는 것만) ──
 export const api = {
   login: (login_id: string, password: string) => request<TokenOut>('/auth/login', { method: 'POST', body: { login_id, password }, auth: false }),
   me: () => request<StaffOut>('/auth/me'),
-  updateMe: (body: { name?: string; email?: string }) => request<StaffOut>('/auth/me', { method: 'PATCH', body }),
+  updateMe: (body: { name?: string; email?: string; notif_on?: boolean }) => request<StaffOut>('/auth/me', { method: 'PATCH', body }),
+  /** 회원 탈퇴(192): 계정 중지. 400 PASSWORD_MISMATCH, 기관의 마지막 활성 계정이면 409 LAST_ACCOUNT */
+  withdraw: (password: string) => request<void>('/auth/me', { method: 'DELETE', body: { password } }),
   changePassword: (current_password: string, new_password: string) =>
     request<StaffOut>('/auth/password', { method: 'PATCH', body: { current_password, new_password } }),
   verifyCode: (code: string) => request<DeviceCodeVerifyOut>('/auth/device-codes/verify', { method: 'POST', body: { code }, auth: false }),
-  signup: (body: { code: string; login_id: string; password: string; name: string; email: string }) =>
+  signup: (body: { code: string; login_id: string; password: string; name: string; email: string; terms?: TermsIn }) =>
     request<TokenOut>('/auth/signup', { method: 'POST', body, auth: false }),
   resetRequest: (login_id: string) => request<void>('/auth/password-reset/request', { method: 'POST', body: { login_id }, auth: false }),
   resetConfirm: (token: string, new_password: string) =>
@@ -191,9 +196,10 @@ export const api = {
   updateInstitution: (id: string, body: { name?: string; contract_ends_at?: string | null }) =>
     request<InstitutionAdminOut>(`/admin/institutions/${id}`, { method: 'PATCH', body }),
   deviceCodes: (instId: string) => request<{ items: DeviceCodeOut[] }>(`/admin/institutions/${instId}/device-codes`),
-  createDeviceCode: (instId: string, body: { max_accounts?: number; note?: string }) =>
+  /** 기관에 쓸 수 있는 코드가 이미 있으면 409 DEVICE_CODE_EXISTS(192) */
+  createDeviceCode: (instId: string, body: { note?: string }) =>
     request<DeviceCodeOut>(`/admin/institutions/${instId}/device-codes`, { method: 'POST', body }),
-  updateDeviceCode: (id: string, body: { max_accounts?: number; note?: string }) =>
+  updateDeviceCode: (id: string, body: { note?: string | null }) =>
     request<DeviceCodeOut>(`/admin/device-codes/${id}`, { method: 'PATCH', body }),
   revokeDeviceCode: (id: string) => request<DeviceCodeOut>(`/admin/device-codes/${id}/revoke`, { method: 'POST' }),
   institutionStaff: (instId: string) => request<{ items: StaffAdminOut[] }>(`/admin/institutions/${instId}/staff`),

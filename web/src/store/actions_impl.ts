@@ -14,7 +14,6 @@ import {
 import { start_job } from '../views/analysis'
 import { f, on } from './actions'
 import {
-  activeCount,
   activeJobs,
   byCode,
   byLogin,
@@ -128,18 +127,17 @@ function _verify(code: string): [DeviceCode | null, Account | null, string, numb
   const c = byCode(norm_code(code))
   const acct = c ? getAccount(c.inst) : undefined
   if (!c || c.revoked || !acct || contractStatus(acct) === 'EXPIRED') return [null, null, '유효한 디바이스 코드가 아닙니다.', 404]
-  if (activeCount(c.id) >= c.max_accounts)
-    return [null, null, '이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요.', 409]
+  // 192: 코드 하나로 만들 수 있는 계정 수에 상한이 없다
   return [c, acct, '', 200]
 }
 
 /** POST /api/device-codes/verify. 오류면 {error} (시제품은 404·409 상태 코드도 같이) */
 export function api_device_code_verify(code: string):
   | { error: string }
-  | { institution: { id: string; name: string }; remaining_accounts: number } {
+  | { institution: { id: string; name: string } } {
   const [c, acct, err] = _verify(code)
   if (err || !c || !acct) return { error: err }
-  return { institution: { id: acct.id, name: acct.name }, remaining_accounts: c.max_accounts - activeCount(c.id) }
+  return { institution: { id: acct.id, name: acct.name } }
 }
 
 const LOGIN_RE = /^[a-z0-9._-]{4,50}$/
@@ -207,6 +205,16 @@ post('/account/profile', (_p, fd) => {
   return redirect('/account', '저장했어요')
 })
 
+post('/account/withdraw', (_p, fd) => {
+  if (!current()) return need_login()
+  const s = currentStaff()!
+  if (s.password !== f(fd, 'password')) return redirect('/account', '현재 비밀번호가 맞지 않습니다.')
+  if (!Object.values(db.staff).some((x) => x.inst === s.inst && x.active && x.id !== s.id)) return redirect('/account', '기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요.')
+  s.active = false
+  setLogin(null)
+  return redirect('/login', '탈퇴했어요. 그동안 이용해 주셔서 감사합니다')
+})
+
 post('/account/password', (_p, fd) => {
   if (!current()) return need_login()
   const s = currentStaff()!
@@ -244,12 +252,14 @@ post('/admin/institutions/:inst', (p, fd) => {
 })
 
 post('/admin/institutions/:inst/codes', (p, fd) => {
-  const max_accounts = I(fd, 'max_accounts', 3), note = f(fd, 'note')
+  const note = f(fd, 'note')
   const a = getAccount(p.inst)
   if (!admin_write() || !a) return redirect('/admin', '조회 전용 계정이에요')
+  // 기관마다 쓸 수 있는 코드는 하나(192). 회수한 뒤 발급한다
+  if (Object.values(db.codes).some((x) => x.inst === p.inst && !x.revoked)) return redirect('/admin', '이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요.')
   const code = randChoice(CODE_CHARS, 20)
   const c: DeviceCode = {
-    id: new_id('c'), inst: p.inst, code, max_accounts: Math.max(1, Math.min(max_accounts, 10)), revoked: false,
+    id: new_id('c'), inst: p.inst, code, revoked: false,
     note: [...note].slice(0, 100).join(''), created: isoToday(),
   }
   db.codes[c.id] = c
@@ -257,15 +267,15 @@ post('/admin/institutions/:inst/codes', (p, fd) => {
 })
 
 post('/admin/codes/:cid', (p, fd) => {
-  const max_accounts = I(fd, 'max_accounts', 3), revoke = f(fd, 'revoke')
+  const revoke = f(fd, 'revoke')
   const c = db.codes[p.cid]
   if (!admin_write() || !c) return redirect('/admin', '조회 전용 계정이에요')
   if (revoke) {
     c.revoked = true
     return redirect('/admin', '코드를 회수했어요. 기존 계정은 그대로 쓸 수 있어요')
   }
-  c.max_accounts = Math.max(1, Math.min(max_accounts, 10))
-  return redirect('/admin', '계정 상한을 바꿨어요')
+  c.note = [...f(fd, 'note')].slice(0, 100).join('')
+  return redirect('/admin', '메모를 바꿨어요')
 })
 
 post('/admin/staff/:sid', (p) => {

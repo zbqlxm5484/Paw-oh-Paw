@@ -190,9 +190,11 @@ export interface DAcct {
   dev: string
   staffName: string
   email: string
+  /** 서버 알림 설정(192). 예전 서버면 undefined */
+  notifOn?: boolean
 }
 export function toAcct(s: StaffOut | null): DAcct {
-  return { type: 'org', name: s?.institution.name ?? '', id: s?.login_id ?? '', loc: '-', dev: '-', staffName: s?.name ?? '', email: s?.email ?? '' }
+  return { type: 'org', name: s?.institution.name ?? '', id: s?.login_id ?? '', loc: '-', dev: '-', staffName: s?.name ?? '', email: s?.email ?? '', notifOn: s?.notif_on }
 }
 
 /* ---------- 경과 비교 (api-spec 8절 → 디자인 cp 모양) ---------- */

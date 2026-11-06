@@ -101,7 +101,7 @@ export async function syncAdmin(): Promise<void> {
     remote.add(i.id)
     for (const c of (await api.deviceCodes(i.id)).items) {
       db.codes[c.id] = { id: c.id, inst: i.id, code: c.code.replace(/-/g, ''),  // 서버 표기의 하이픈은 빼고 저장(show_code 가 다시 넣는다)
-        max_accounts: c.max_accounts, revoked: !!c.revoked_at, note: c.note || '', created: c.created_at.slice(0, 10) }
+        revoked: !!c.revoked_at, note: c.note || '', created: c.created_at.slice(0, 10) }
     }
     for (const s of (await api.institutionStaff(i.id)).items) {
       db.staff[s.id] = {

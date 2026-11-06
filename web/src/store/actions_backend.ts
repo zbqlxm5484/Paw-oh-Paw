@@ -8,6 +8,7 @@ import { on, f, BACKEND, type Handler } from './actions'
 import { api, MOCK, SEX_OUT, SIZE_OUT, syncFromBackend, tokenStore, isRemote, syncAdmin } from './backend'
 import { db, dogOf, resultOf } from './db'
 import { remember } from './sessions_backend'
+import { LEGAL } from '../legal/content'
 
 /** 백엔드 처리 함수 등록: 로컬(시제품) 처리 함수보다 언제나 먼저 불린다 */
 const onB = (pattern: string, h: Handler) => on(pattern, h, BACKEND)
@@ -47,7 +48,9 @@ if (!MOCK) {
     if (!(f(fd, 't0') && f(fd, 't1') && f(fd, 't2'))) return redirect('/signup', '필수 약관에 동의해 주세요')
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/signup', '비밀번호가 서로 달라요')
     try {
-      const t = await api.signup({ code: f(fd, 'code'), login_id: f(fd, 'login_id'), password: f(fd, 'pw'), name: f(fd, 'name').trim(), email: f(fd, 'email').trim() })
+      // 약관 동의(192): 필수 셋은 위에서 확인했고, 버전은 약관 본문의 갱신일
+      const terms = { version: LEGAL.terms.updated, service: true, privacy: true, device_location: true, marketing: !!f(fd, 't3') }
+      const t = await api.signup({ code: f(fd, 'code'), login_id: f(fd, 'login_id'), password: f(fd, 'pw'), name: f(fd, 'name').trim(), email: f(fd, 'email').trim(), terms })
       return await enter(t, `${t.staff.institution.name} 담당자로 가입했어요`)
     } catch (e) {
       return redirect('/signup', msg(e))
@@ -79,6 +82,19 @@ if (!MOCK) {
     try {
       await syncFromBackend(await api.updateMe({ name: f(fd, 'name').trim(), email: f(fd, 'email').trim() }))
       return redirect('/account', '저장했어요')
+    } catch (e) {
+      return redirect('/account', msg(e))
+    }
+  })
+
+  // 회원 탈퇴(192): 서버가 계정을 중지하면 토큰을 버리고 로그인 화면으로. 비밀번호 오류·마지막 계정(409 LAST_ACCOUNT)은 서버 문구 그대로
+  onB('/account/withdraw', async (_p, fd) => {
+    if (!current()) return need_login()
+    try {
+      await api.withdraw(f(fd, 'password'))
+      tokenStore.clear()
+      setLogin(null)
+      return redirect('/login', '탈퇴했어요. 그동안 이용해 주셔서 감사합니다')
     } catch (e) {
       return redirect('/account', msg(e))
     }
@@ -224,7 +240,7 @@ if (!MOCK) {
     const no = adminOnly()
     if (no) return no
     try {
-      await api.createDeviceCode(p.inst, { max_accounts: Number(f(fd, 'max_accounts') || 3), note: f(fd, 'note') || undefined })
+      await api.createDeviceCode(p.inst, { note: f(fd, 'note') || undefined }) // 쓸 수 있는 코드가 있으면 409 DEVICE_CODE_EXISTS(회수한 뒤 발급)
       return await after('디바이스 코드를 발급했어요')
     } catch (e) {
       return redirect('/admin', msg(e))
@@ -235,8 +251,8 @@ if (!MOCK) {
     if (no) return no
     try {
       if (f(fd, 'revoke')) await api.revokeDeviceCode(p.cid)
-      else await api.updateDeviceCode(p.cid, { max_accounts: Number(f(fd, 'max_accounts') || 3) })
-      return await after(f(fd, 'revoke') ? '코드를 회수했어요' : '계정 상한을 바꿨어요')
+      else await api.updateDeviceCode(p.cid, { note: f(fd, 'note') || null })
+      return await after(f(fd, 'revoke') ? '코드를 회수했어요. 새 코드는 발급 버튼으로' : '메모를 바꿨어요')
     } catch (e) {
       return redirect('/admin', msg(e))
     }

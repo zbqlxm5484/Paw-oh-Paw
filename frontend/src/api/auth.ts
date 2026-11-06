@@ -9,9 +9,14 @@ export function me(): Promise<StaffOut> {
   return request<StaffOut>('/auth/me')
 }
 
-/** 담당자 이름·이메일 수정(보낸 필드만). 계약 만료(GUEST)는 403 CONTRACT_EXPIRED */
-export function updateMe(body: { name?: string; email?: string }): Promise<StaffOut> {
+/** 담당자 이름·이메일·알림 설정 수정(보낸 필드만). 계약 만료(GUEST)는 403 CONTRACT_EXPIRED */
+export function updateMe(body: { name?: string; email?: string; notif_on?: boolean }): Promise<StaffOut> {
   return request<StaffOut>('/auth/me', { method: 'PATCH', body })
+}
+
+/** 회원 탈퇴(192): 계정을 중지한다. 400 PASSWORD_MISMATCH, 기관의 마지막 활성 계정이면 409 LAST_ACCOUNT. 계약 만료(GUEST)도 된다 */
+export function withdraw(password: string): Promise<void> {
+  return request<void>('/auth/me', { method: 'DELETE', body: { password } })
 }
 
 /** 비밀번호 변경. 현재 비밀번호가 틀리면 400 PASSWORD_MISMATCH, 새 비밀번호 규칙(8자 이상, 현재와 다름)은 422. 받은 토큰은 그대로 쓴다 */
@@ -19,7 +24,7 @@ export function changePassword(current_password: string, new_password: string): 
   return request<StaffOut>('/auth/password', { method: 'PATCH', body: { current_password, new_password } })
 }
 
-/** 디바이스 코드 확인: 기관명·남은 계정 수. 404 DEVICE_CODE_INVALID, 409 DEVICE_CODE_FULL */
+/** 디바이스 코드 확인: 기관명. 404 DEVICE_CODE_INVALID (192 뒤에는 남은 계정 수·409 가 없다) */
 export function verifyDeviceCode(code: string): Promise<DeviceCodeVerifyOut> {
   return request<DeviceCodeVerifyOut>('/auth/device-codes/verify', { method: 'POST', body: { code }, auth: false })
 }

@@ -12,7 +12,7 @@ import AuthBar, { usePublicPage } from './parts/AuthBar'
 const BTN = 'height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:600;cursor:pointer'
 const INP = 'height:40px;border-radius:10px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:14px;color:#1B2433'
 
-interface CodeRow { id: string; code: string; max: number; used: number; revoked: boolean; note: string }
+interface CodeRow { id: string; code: string; used: number; revoked: boolean; note: string }
 interface StaffRow { id: string; login_id: string; name: string; email: string; active: boolean; joined: string }
 interface InstRow { id: string; code: string; name: string; ends: string; status: string; codes: CodeRow[]; staff: StaffRow[] }
 
@@ -31,7 +31,7 @@ function admin_rows(me: Staff): InstRow[] {
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
     .map((a) => ({
       id: a.id, code: a.code || '-', name: a.name, ends: a.contract_ends || '', status: contractStatus(a),
-      codes: codesOf(a.id).map((c) => ({ id: c.id, code: show_code(c.code), max: c.max_accounts, used: activeCount(c.id), revoked: c.revoked, note: c.note })),
+      codes: codesOf(a.id).map((c) => ({ id: c.id, code: show_code(c.code), used: activeCount(c.id), revoked: c.revoked, note: c.note })),
       staff: staffOf(a.id).map((s) => ({ id: s.id, login_id: s.login_id, name: s.name, email: s.email, active: s.active, joined: s.joined })),
     }))
 }
@@ -68,13 +68,13 @@ function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
   return (
     <div style={css(`display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${c.revoked ? '.5' : '1'}`)}>
       <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했어요' : '복사하지 못했어요. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
-      <span style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{c.revoked ? '회수됨' : `계정 ${c.used} / ${c.max}`}</span>
+      <span style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{c.revoked ? '회수됨' : `가입 계정 ${c.used}`}</span>
       {can_write && !c.revoked && (
         <PostForm action={`/admin/codes/${c.id}`} style={css('display:flex;gap:6px')}
           onBefore={(fd) => {
             if (revoke.current && !fd.has('revoke')) fd.set('revoke', '1')
             revoke.current = false
-          }}><input type="number" name="max_accounts" min="1" max="10" defaultValue={c.max} style={css(`${INP};width:64px`)} /><button type="submit" onClick={() => { revoke.current = false }} style={css(BTN)}>상한</button><button type="submit" name="revoke" value="1" onClick={() => { revoke.current = true }} style={css(`${BTN};color:#C2412D`)}>회수</button></PostForm>
+          }}><input name="note" defaultValue={c.note} placeholder="메모" style={css(`${INP};width:120px`)} /><button type="submit" onClick={() => { revoke.current = false }} style={css(BTN)}>메모</button><button type="submit" name="revoke" value="1" onClick={() => { revoke.current = true }} style={css(`${BTN};color:#C2412D`)}>회수</button></PostForm>
       )}
     </div>
   )
@@ -124,7 +124,8 @@ export default function Admin() {
             <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:18px')}>
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>디바이스 코드</b>
                 {i.codes.map((c) => <CodeLine key={c.id} c={c} can_write={can_write} />)}
-                {can_write && <PostForm action={`/admin/institutions/${i.id}/codes`} style={css('display:flex;gap:8px;margin-top:4px')}><input name="note" placeholder="메모 (예: 2호기)" style={css(`${INP};flex:1`)} /><input type="number" name="max_accounts" min="1" max="10" defaultValue="3" style={css(`${INP};width:64px`)} /><button type="submit" style={css(BTN)}>코드 발급</button></PostForm>}
+                {can_write && <PostForm action={`/admin/institutions/${i.id}/codes`} style={css('display:flex;gap:8px;margin-top:4px')}><input name="note" placeholder="메모 (예: 2호기)" style={css(`${INP};flex:1`)} /><button type="submit" style={css(BTN)}>코드 발급</button></PostForm>}
+                <span style={css('font-size:12px;color:#A0A7B2')}>기관마다 쓸 수 있는 코드는 하나예요. 새로 발급하려면 먼저 회수하세요. 가입 계정 수에 제한은 없어요.</span>
               </div>
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>담당자 계정</b>
                 {i.staff.map((st) => (
