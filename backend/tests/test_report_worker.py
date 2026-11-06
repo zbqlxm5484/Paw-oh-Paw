@@ -485,3 +485,19 @@ def test_generating_report_without_a_job_goes_back_and_a_job_in_flight_is_left_a
         assert sorted(rows.values()) == ["GENERATING", "PENDING"]
         assert [report_id for report_id, status in rows.items() if status == "GENERATING"] == list(reporter.jobs)
     assert len(executor.calls) == 1
+
+
+# ---- 휴지통(12.5, 199 리뷰 박규원) ----
+
+
+def test_reports_of_a_dog_in_the_trash_are_still_generated(db: Session, dog, staff) -> None:
+    """워커는 휴지통을 보지 않고 일한다. 휴지통에 넣은 뒤에도 보고서를 끝까지 만들어 두어야 복원했을 때 결과가 있다."""
+    session = _done_session(db, dog, staff)
+    dog.deleted_at = datetime.now(UTC)
+    db.flush()
+    db.commit()
+    settings = _settings()
+    reporter = _reporter(settings, FakeExecutor())
+    for _ in range(3):
+        _run(db, reporter, settings)
+    assert {row.status for row in _reports(db, session).values()} == {"DONE"}

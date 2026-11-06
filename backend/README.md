@@ -120,6 +120,13 @@ python -m app.worker.main
 - 보고서(12.4 "보고서 한 건"): 회차가 DONE이 되는 같은 트랜잭션에서 OWNER·VET 두 행이 PENDING으로 생기고, 주 반복이 보고서 풀(1개)에 맡긴다. 입력은 `services/report_input.py`가 회차 결과(`GET /sessions/{id}/result`와 같은 값)·반려견·직전 DONE 회차로 만들어 `UPLOAD_TMP_DIR/worker/report-{id}/input.json`에 쓰고, 자식은 `app/report/generate.py`만 부른다. 검사(금지 표현·전문 용어·고정 문구)에 걸리면 `REPORT_CHECK_FAILED`, 그 밖의 실패는 `REPORT_FAILED`. 다시 켜면 GENERATING 행을 PENDING으로 돌린다. **WeasyPrint는 시스템 라이브러리가 있어야 PDF를 만든다**(Linux: libpango-1.0-0·libpangoft2-1.0-0, Windows 개발 PC: GTK 런타임. `GTK3-Runtime Win64`를 Program Files나 `%LOCALAPPDATA%\Programs`에 설치하면 `app/report/pdf.py`가 bin 폴더를 찾아 `WEASYPRINT_DLL_DIRECTORIES`로 넣고, 다른 곳이면 그 변수를 직접 둔다). 없으면 보고서는 `REPORT_FAILED`가 되고 HTML 미리보기(`scripts/make_report.py --html`)만 된다. 한글 글꼴은 시스템 글꼴(맑은 고딕·나눔고딕·Noto CJK)을 쓴다.
 - 결과 영상 처리 시간: 1080p 60fps 8초 1건이 이 PC에서 약 20초(얼굴 검출 0.05초 간격), 골격만이면 3초다. 측정 방법·표는 `docs/report/renderTiming.md`, 다시 재려면 `python -m scripts.measure_render <영상.mp4>`(관절점 파일이 없으면 합성한다).
 - 팀 서버 배포 점검 기록(2026-11-04, 199): `backend/docs/deploy-check-2026-11-04.md`. 서버 응답, compose·Dockerfile·배포 스크립트에서 본 것, 허정원 배포 티켓으로 넘긴 항목(워커 한 대, Pango·한글 글꼴, 전체 파기 명령).
+- 자동 파기(12.4, 12.5): 워커는 켤 때 한 번, 그 뒤 한 시간마다 휴지통에 30일 넘게 있던 반려견을 영구 삭제하고, 계약이 끝난 지 90일이 지난 기관의 측정 자료와 가입 계정(CLIENT)을 지운다. 한 차례는 `WORKER_SWEEP_MAX_SEC`(기본 60초)까지만 쓰고 남은 것은 5분 뒤에 잇는다. 계약 종료 뒤 파기는 워커를 켠 뒤 한 시간이 지나야 처음 돌고, 켤 때 대상 기관이 있으면 수와 기관 ID를 경고 로그로 남긴다.
+- **배포 전 확인(되돌릴 수 없는 삭제)**: 계약 종료 뒤 자동 파기가 처음 들어가는 배포에서는 워커를 켜기 전에 아래 SQL로 대상 기관을 본다. `contract_ends_at`은 "즉시 만료시키는 용도로 과거 날짜"를 받아 왔으므로, 시험하려고 오래된 날짜를 넣어 둔 기관이 있으면 그 기관의 반려견과 CLIENT 계정이 지워진다. 남길 기관은 종료일을 고치거나 NULL(기한 없음)로 둔 뒤 워커를 켠다. 새로 넣는 값은 오늘 − 90일보다 더 지난 날짜를 422로 막지만 이미 있는 값은 막지 못한다.
+
+  ```sql
+  SELECT id, code, name, contract_ends_at FROM institution WHERE contract_ends_at < current_date - 90;
+  ```
+
 - Ctrl+C(SIGINT)나 SIGTERM을 받으면 하던 바퀴를 끝내고 멈춘다. 상태가 DB에 있어 다시 켜면 이어서 한다.
 
 ## 테스트

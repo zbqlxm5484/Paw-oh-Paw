@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClientError
 from app.models import Dog, MeasureSession
 from app.services.dogs import TRASH_RETENTION_DAYS
+from app.services.purge import SweepResult
 from app.services.trash import purge_expired
 from app.storage.base import get_storage
 from app.storage.keys import dog_prefix
@@ -23,7 +25,9 @@ from tests.test_purge import (
     _FakeAnalysis,
     _fill,
     _give_job_ids,
+    _is_dog_lock,
     _purge_logs,
+    _recorded_sql,
     _rows_of_dog,
     admin,  # noqa: F401  (픽스처)
     admin_headers,  # noqa: F401  (픽스처)
@@ -188,7 +192,7 @@ def test_the_sweep_empties_only_what_stayed_thirty_days(
     _age_trash(db, fresh, TRASH_RETENTION_DAYS - 1)
     fake = _FakeAnalysis()
 
-    assert purge_expired(db, get_storage(), fake) == (1, 0)
+    assert purge_expired(db, get_storage(), fake) == SweepResult(1, 0)
     assert fake.deleted == [job_id]
     assert _rows_of_dog(db, old_id) == 0
     assert get_storage().stat_prefix(dog_prefix(institution_id, old_id)) == (0, 0)
@@ -197,9 +201,9 @@ def test_the_sweep_empties_only_what_stayed_thirty_days(
     (log,) = _purge_logs(db)
     assert (log.scope, log.target_id, log.executed_by) == ("DOG", old_id, None)  # 사람이 누른 것이 아니다
     # 한 번 더 돌려도 더 지우지 않는다
-    assert purge_expired(db, get_storage(), fake) == (0, 0)
+    assert purge_expired(db, get_storage(), fake) == SweepResult(0, 0)
     # 30일이 되는 순간부터 대상이다
-    assert purge_expired(db, get_storage(), fake, now=datetime.now(UTC) + timedelta(days=2)) == (1, 0)
+    assert purge_expired(db, get_storage(), fake, now=datetime.now(UTC) + timedelta(days=2)) == SweepResult(1, 0)
     assert _rows_of_dog(db, fresh_id) == 0
 
 
@@ -218,13 +222,13 @@ def test_the_sweep_stops_when_the_analysis_api_is_down(
         assert _trash(client, target.id, auth_headers).status_code == 204
         _age_trash(db, target, TRASH_RETENTION_DAYS + 5)
 
-    assert purge_expired(db, get_storage(), fake) == (0, 2)  # 첫 실패에서 멈추고 둘 다 남긴다
+    assert purge_expired(db, get_storage(), fake) == SweepResult(0, 2)  # 첫 실패에서 멈추고 둘 다 남긴다
     assert (_rows_of_dog(db, first_id), _rows_of_dog(db, second_id)) == (rows, rows)
     assert get_storage().stat_prefix(dog_prefix(institution_id, first_id)) == _expected_files(1)
     assert _purge_logs(db) == []
     assert sorted(_trash_ids(client, auth_headers)) == sorted([str(first_id), str(second_id)])
     fake.fail.clear()
-    assert purge_expired(db, get_storage(), fake) == (2, 0)
+    assert purge_expired(db, get_storage(), fake) == SweepResult(2, 0)
 
 
 def test_admin_purge_reaches_dogs_in_the_trash(
@@ -256,3 +260,65 @@ def test_trash_query_accepts_boolean_spellings(client: TestClient, auth_headers,
     response = client.get(DOGS, params={"trash": value}, headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["items"] == []
+
+
+# ---- 잠금과 시간 상한(12.4, 199 리뷰 박규원) ----
+
+
+def test_trash_and_restore_lock_the_dog_row(client: TestClient, db: Session, dog, staff, auth_headers) -> None:
+    """넣기·복원은 반려견 행을 잠근 뒤 본다. 파기도 같은 행을 잠그므로 '복원했다'고 답한 반려견이 지워지지 않는다."""
+    with _recorded_sql(db) as events:
+        assert _trash(client, dog.id, auth_headers).status_code == 204
+    assert any(_is_dog_lock(statement) for statement in events)
+    with _recorded_sql(db) as events:
+        assert client.post(f"{DOGS}/{dog.id}/restore", headers=auth_headers).status_code == 200
+    assert any(_is_dog_lock(statement) for statement in events)
+
+
+def test_the_sweep_skips_a_dog_that_was_restored_after_it_was_listed(
+    client: TestClient, db: Session, dog, staff, auth_headers
+) -> None:
+    """후보를 읽은 뒤 복원한 반려견은 지우지 않는다. 잠근 뒤 아직 휴지통에 있는지 다시 본다."""
+    institution_id = staff.institution_id
+    second = another_dog(db, institution_id, name="둘째")
+    first_id, second_id = dog.id, second.id
+    _fill(db, dog, staff, sessions=1)
+    second_rows = _fill(db, second, staff, sessions=1)
+    _give_job_ids(db, dog)
+    for target in (dog, second):
+        assert _trash(client, target.id, auth_headers).status_code == 204
+    _age_trash(db, dog, TRASH_RETENTION_DAYS + 9)  # 먼저 넣은 것부터 지운다
+    _age_trash(db, second, TRASH_RETENTION_DAYS + 5)
+    fake = _FakeAnalysis()
+    # 첫째의 분석 사본을 지우는 사이 담당자가 둘째를 복원했다
+    fake.hook = lambda job_id: db.execute(update(Dog).where(Dog.id == second_id).values(deleted_at=None))
+
+    assert purge_expired(db, get_storage(), fake) == SweepResult(1, 0)
+    assert _rows_of_dog(db, first_id) == 0
+    assert _rows_of_dog(db, second_id) == second_rows
+    assert client.get(f"{DOGS}/{second_id}", headers=auth_headers).status_code == 200
+    assert len(_purge_logs(db)) == 1
+
+
+def test_the_sweep_stops_at_the_time_limit_and_finishes_later(
+    client: TestClient, db: Session, dog, staff, auth_headers
+) -> None:
+    """시간 상한에 닿으면 남은 것을 다음 차례로 미룬다. 그때까지 지운 분석 사본은 다시 불러도 성공이라 이어진다."""
+    dog_id = dog.id
+    rows = _fill(db, dog, staff, sessions=2)
+    job_ids = _give_job_ids(db, dog)
+    assert _trash(client, dog_id, auth_headers).status_code == 204
+    _age_trash(db, dog, TRASH_RETENTION_DAYS + 1)
+    fake = _FakeAnalysis()
+    fake.hook = lambda job_id: time.sleep(0.05)  # 분석 API가 느리게 답한다
+
+    result = purge_expired(db, get_storage(), fake, deadline=time.monotonic() + 0.02)
+    assert result == SweepResult(0, 0, out_of_time=True)
+    assert len(fake.deleted) == 1 and _rows_of_dog(db, dog_id) == rows and _purge_logs(db) == []
+    # 이미 지난 상한이면 시작하지 않는다
+    assert purge_expired(db, get_storage(), fake, deadline=time.monotonic() - 1) == SweepResult(0, 0, out_of_time=True)
+    assert len(fake.deleted) == 1
+
+    fake.hook = None
+    assert purge_expired(db, get_storage(), fake) == SweepResult(1, 0)
+    assert _rows_of_dog(db, dog_id) == 0 and set(fake.deleted) == set(job_ids)

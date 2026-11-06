@@ -85,3 +85,10 @@ def test_empty_value_means_default(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_invalid_combinations(values: dict, message: str) -> None:
     with pytest.raises(ValidationError, match=message):
         _settings(**values)
+
+
+def test_the_sweep_time_limit_is_sixty_seconds_and_must_be_positive() -> None:
+    # 16절: 휴지통 비우기·계약 종료 뒤 파기 한 차례가 워커의 주 반복을 붙잡는 시간의 상한(12.4)
+    assert _settings().WORKER_SWEEP_MAX_SEC == 60
+    with pytest.raises(ValidationError, match="WORKER_SWEEP_MAX_SEC"):
+        _settings(WORKER_SWEEP_MAX_SEC=0)

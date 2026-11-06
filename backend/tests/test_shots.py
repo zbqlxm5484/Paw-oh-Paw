@@ -6,9 +6,10 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.clients.analysis import AnalysisClientError
 from app.core.config import get_settings
 from app.core.security import make_signed_url, verify_signed_url
 from app.models import MeasureSession, Shot, WalkPass
@@ -17,6 +18,10 @@ from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
 from app.worker.main import run_once
 from tests.conftest import bearer
+from tests.test_purge import (
+    _FakeAnalysis,
+    analysis,  # noqa: F401  (픽스처)
+)
 from tests.test_sessions import _pass, _shot, _start
 from tests.test_worker import FakeClient, _settings
 from tests.test_worker import _session as _worker_session
@@ -132,10 +137,16 @@ def test_shot_detail_not_found_cases(client: TestClient, db: Session, auth_heade
 
 
 def test_retry_resets_the_failed_shot_and_the_worker_sends_it_again(
-    client: TestClient, db: Session, auth_headers: dict, dog, staff
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
 ) -> None:
     # 15.6: fail_reason·job_id를 비우고 attempt_count 0, video_status PENDING, 남은 통과 행 삭제.
     # 17.3 BE-06: 다시 분석하면 워커가 처음부터 다시 보낸다
+    # 199 리뷰(조유진): job_id를 비우기 전에 실패했던 작업의 분석 API 사본을 지운다
     session = _worker_session(db, dog, staff)
     shot = _worker_shot(
         db,
@@ -171,9 +182,9 @@ def test_retry_resets_the_failed_shot_and_the_worker_sends_it_again(
         "PENDING",
     )
     assert db.scalar(select(WalkPass.id).where(WalkPass.shot_id == shot.id)) is None
+    assert analysis.deleted == ["old-job"]
 
-    analysis = FakeClient()
-    stats = run_once(db, analysis, _settings(), get_storage())
+    stats = run_once(db, FakeClient(), _settings(), get_storage())
     assert stats.claimed == 1 and stats.submitted == 1
     db.expire_all()
     row = db.get(Shot, shot.id)
@@ -392,3 +403,125 @@ def test_video_is_404_when_not_ready_gone_or_not_on_local_storage(
     url = _video_url(client, auth_headers, on_s3)
     monkeypatch.setattr(shot_service, "get_storage", lambda: object())  # LocalStorage가 아닌 저장소
     assert _not_found(client.get(url))
+
+
+# ---- 분석 API 사본(15.6, 199 리뷰 조유진) ----
+
+
+@pytest.mark.parametrize(
+    ("answer", "http_status", "code"),
+    [(None, 503, "ANALYSIS_UNAVAILABLE"), (500, 503, "ANALYSIS_UNAVAILABLE"), (409, 409, "SHOT_IN_PROGRESS")],
+)
+def test_retry_stops_when_the_analysis_copy_cannot_be_deleted(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+    answer: int | None,
+    http_status: int,
+    code: str,
+) -> None:
+    """job_id를 비우면 그 사본을 다시 찾을 수 없으므로, 못 지우면 멈추고 촬영은 FAILED 그대로 둔다.
+
+    409는 팀 서비스가 시간 초과로 FAILED로 둔 촬영을 분석 API가 아직 돌리고 있는 경우다.
+    """
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_TIMEOUT", job_id="old-job", attempt_count=1)
+    analysis.fail["old-job"] = AnalysisClientError("거절", status_code=answer)
+
+    response = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert response.status_code == http_status, response.text
+    assert response.json()["error"]["code"] == code
+    db.expire_all()
+    row = db.get(Shot, shot.id)
+    assert (row.status, row.job_id, row.fail_reason) == ("FAILED", "old-job", "ANALYSIS_TIMEOUT")
+
+
+def test_retry_of_a_shot_that_was_never_submitted_does_not_call_the_analysis_api(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_SUBMIT_FAILED", attempt_count=3)
+    analysis.hook = lambda job_id: pytest.fail("제출한 적 없는 촬영인데 분석 API를 불렀다")
+    assert client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers).status_code == 200
+
+
+def test_retry_also_deletes_a_job_that_changed_while_waiting(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """분석 API는 회차 행을 잠그기 전에 부른다. 그사이 작업이 바뀌었으면 잠근 뒤 그것도 지운다."""
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_FAILED", job_id="old-job", attempt_count=1)
+    shot_id = shot.id
+
+    def meanwhile(job_id: str) -> None:
+        if job_id == "old-job":
+            db.execute(update(Shot).where(Shot.id == shot_id).values(job_id="new-job"))
+
+    analysis.hook = meanwhile
+    assert client.post(f"/api/v1/shots/{shot_id}/retry", headers=auth_headers).status_code == 200
+    assert analysis.deleted == ["old-job", "new-job"]
+    db.expire_all()
+    assert db.get(Shot, shot_id).job_id is None
+
+
+def test_delete_shot_deletes_the_analysis_copy_first_and_stops_if_it_cannot(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """행을 지우면 그 사본을 다시 찾을 수 없으므로 먼저 지운다. 못 지우면 503이고 파일·행은 그대로다."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.job_id = "job-9"
+    db.flush()
+    storage = get_storage()
+    prefix = shot_prefix(dog.institution_id, dog.id, session.id, shot.id)
+    storage.write_bytes(f"{prefix}original.mp4", b"video")
+    analysis.fail["job-9"] = AnalysisClientError("연결 실패")
+
+    stopped = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+    assert stopped.status_code == 503, stopped.text
+    assert stopped.json()["error"]["code"] == "ANALYSIS_UNAVAILABLE"
+    assert storage.stat_prefix(prefix) == (1, 5)
+    assert db.scalar(select(Shot.job_id).where(Shot.id == shot.id)) == "job-9"
+
+    analysis.fail.clear()
+    assert client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers).status_code == 204
+    assert analysis.deleted == ["job-9"]
+    assert storage.stat_prefix(prefix) == (0, 0)
+    assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) is None
+
+
+def test_requests_that_will_be_refused_leave_the_analysis_copy_alone(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """조건이 안 맞는 요청은 분석 API를 부르기 전에 걸러진다. 거절될 요청 때문에 사본이 지워지면 안 된다."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.job_id = "job-1"
+    session.status = "DONE"
+    db.flush()
+    closed = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+    assert (closed.status_code, closed.json()["error"]["code"]) == (409, "SESSION_CLOSED")
+    not_failed = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert (not_failed.status_code, not_failed.json()["error"]["code"]) == (409, "SHOT_NOT_FAILED")
+    assert analysis.deleted == []

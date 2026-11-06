@@ -127,7 +127,10 @@ CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
 
 
 def get_analysis_client() -> Iterator[AnalysisClient]:
-    """자료 파기가 분석 API 사본을 지울 때 쓴다(15.9). 테스트는 dependency_overrides로 바꿔 끼운다."""
+    """분석 API 사본을 지울 때 쓴다: 자료 파기(15.9), 촬영 삭제·다시 분석·측정 취소(15.6).
+
+    테스트는 dependency_overrides로 바꿔 끼운다.
+    """
     client = build_analysis_client()
     try:
         yield client

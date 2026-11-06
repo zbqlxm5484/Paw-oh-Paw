@@ -5,6 +5,9 @@
 서명이 맞으면 기관 확인을 다시 하지 않기 때문이다(15.6).
 상태를 바꾸는 다시 분석·삭제는 그 회차 행을 FOR UPDATE로 잠근 뒤 조건을 본다(12.4 잠금). 워커가 UPLOADED 촬영을
 가져갈 때 같은 잠금을 잡으므로, 지우는 사이에 워커가 그 촬영을 보내거나 결과를 쓰는 일이 없다(13.3).
+둘 다 분석 API에 남은 그 촬영의 사본(영상·결과·관절점)을 먼저 지운다(199 리뷰 조유진). job_id를 비우거나 행을
+지우면 그 사본을 다시 찾을 수 없기 때문이다. 분석 API는 HTTP라 잠그기 전에 부르고(조건은 미리 한 번 본다), 잠근
+뒤에는 조건을 다시 보고 그사이 작업이 바뀌었을 때만 한 번 더 부른다(services/analysis_copies.py).
 Spring에 빗대면 @Transactional 없이 flush까지만 하는 서비스이고, commit은 get_db가 한다(11.7).
 """
 
@@ -16,11 +19,13 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.clients.analysis import AnalysisClient
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog, MeasureSession, Shot, WalkPass
 from app.models.enums import SessionStatus, ShotStatus, VideoStatus
 from app.schemas.common import reason_out
 from app.schemas.shots import PassOut, ShotDetailOut, ShotOut
+from app.services.analysis_copies import delete_copies
 from app.services.dogs import in_institution
 from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
@@ -153,19 +158,47 @@ def _lock_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID)
     return session
 
 
-def retry_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID) -> Shot:
+def _session_status(db: Session, session_id: uuid.UUID) -> str | None:
+    """잠그지 않고 회차 상태만 읽는다(분석 API를 부르기 전 미리 보기용)."""
+    return db.scalar(select(MeasureSession.status).where(MeasureSession.id == session_id))
+
+
+def _require_retryable(shot_status: str, session_status: str | None) -> None:
+    if session_status is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    if shot_status != ShotStatus.FAILED:
+        raise AppError(ErrorCode.SHOT_NOT_FAILED)
+    if session_status != SessionStatus.MEASURING:
+        raise AppError(ErrorCode.SESSION_CLOSED)
+
+
+def _require_deletable(shot_status: str, session_status: str | None) -> None:
+    if session_status is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    if session_status != SessionStatus.MEASURING:
+        raise AppError(ErrorCode.SESSION_CLOSED)
+    if shot_status in IN_PROGRESS_STATUSES:
+        raise AppError(ErrorCode.SHOT_IN_PROGRESS)
+
+
+def retry_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, analysis: AnalysisClient | None) -> Shot:
     """POST /shots/{id}/retry(BE-10, 13.3): FAILED이고 회차가 MEASURING일 때만 UPLOADED로 되돌린다.
 
     fail_reason·job_id를 비우고 attempt_count를 0, video_status를 PENDING으로 돌리며 남은 통과 행을 지운다(15.6).
     uploaded_at은 그대로라 워커는 올린 순서대로 다시 가져간다(12.4 FAILED → UPLOADED).
+    job_id를 비우기 전에 실패했던 작업의 분석 API 사본을 지운다. 못 지우면 503 ANALYSIS_UNAVAILABLE, 분석 API가
+    아직 그 작업을 돌리고 있으면 409 SHOT_IN_PROGRESS이고 촬영은 FAILED 그대로다.
     """
     shot = get_shot(db, institution_id, shot_id)
+    # 잠그기 전에 미리 본다. 조건이 안 맞는 요청 때문에 사본을 지우지 않게
+    _require_retryable(shot.status, _session_status(db, shot.session_id))
+    first_job = shot.job_id
+    delete_copies(analysis, [first_job] if first_job else [])
     session = _lock_session(db, institution_id, shot.session_id)
     db.refresh(shot)  # 잠근 뒤의 상태로 다시 본다
-    if shot.status != ShotStatus.FAILED:
-        raise AppError(ErrorCode.SHOT_NOT_FAILED)
-    if session.status != SessionStatus.MEASURING:
-        raise AppError(ErrorCode.SESSION_CLOSED)
+    _require_retryable(shot.status, session.status)
+    if shot.job_id and shot.job_id != first_job:  # 그사이 다시 제출됐다가 실패했다. 드물다
+        delete_copies(analysis, [shot.job_id])
     db.execute(delete(WalkPass).where(WalkPass.shot_id == shot.id))
     shot.status = ShotStatus.UPLOADED.value
     shot.fail_reason = None
@@ -177,18 +210,22 @@ def retry_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID) -> Sh
     return shot
 
 
-def delete_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID) -> None:
+def delete_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, analysis: AnalysisClient | None) -> None:
     """DELETE /shots/{id}(BE-10, 13.3): 회차가 MEASURING이고 촬영이 SUBMITTED·ANALYZING이 아닐 때만.
 
-    12.5 순서: 파일(촬영 접두어 전체: 원본·분석 JSON·결과 영상) → walk_pass → shot. 남은 촬영의 seq_no는 그대로다(15.6).
+    12.5 순서: 분석 API 사본 → 파일(촬영 접두어 전체: 원본·분석 JSON·결과 영상) → walk_pass → shot. 남은 촬영의
+    seq_no는 그대로다(15.6). 분석 API 사본을 못 지우면 503 ANALYSIS_UNAVAILABLE이고 아무것도 지우지 않는다.
     """
     shot = get_shot(db, institution_id, shot_id)
+    # 잠그기 전에 미리 본다. 조건이 안 맞는 요청 때문에 사본을 지우지 않게
+    _require_deletable(shot.status, _session_status(db, shot.session_id))
+    first_job = shot.job_id
+    delete_copies(analysis, [first_job] if first_job else [])
     session = _lock_session(db, institution_id, shot.session_id)
     db.refresh(shot)
-    if session.status != SessionStatus.MEASURING:
-        raise AppError(ErrorCode.SESSION_CLOSED)
-    if shot.status in IN_PROGRESS_STATUSES:
-        raise AppError(ErrorCode.SHOT_IN_PROGRESS)
+    _require_deletable(shot.status, session.status)
+    if shot.job_id and shot.job_id != first_job:  # 그사이 다시 제출됐다가 끝났다. 드물다
+        delete_copies(analysis, [shot.job_id])
     get_storage().delete_prefix(shot_prefix(institution_id, session.dog_id, session.id, shot.id))
     db.execute(delete(WalkPass).where(WalkPass.shot_id == shot.id))
     db.execute(delete(Shot).where(Shot.id == shot.id))

@@ -152,6 +152,7 @@ class KeypointClient:
         self.error = error
         self.calls: list[str] = []
         self.submits: list[SubmitInfo] = []
+        self.deleted: list[str] = []
 
     def submit(self, video: Path, info: SubmitInfo) -> str:
         self.submits.append(info)
@@ -162,6 +163,9 @@ class KeypointClient:
 
     def get_result(self, job_id: str) -> dict[str, Any]:
         raise AssertionError("이 테스트는 결과 조회를 하지 않는다")
+
+    def delete(self, job_id: str) -> None:
+        self.deleted.append(job_id)
 
     def get_keypoints(self, job_id: str) -> dict[str, Any]:
         self.calls.append(job_id)
@@ -273,7 +277,7 @@ def test_shot_deleted_or_changed_during_render_discards_the_file(
     renderer = _renderer(settings, client, executor)
     assert _run(db, renderer, settings, client).render_started == 2
 
-    delete_shot(db, staff.institution_id, deleted.id)  # DONE 촬영은 만드는 중에도 지울 수 있다(13.3)
+    delete_shot(db, staff.institution_id, deleted.id, client)  # DONE 촬영은 만드는 중에도 지울 수 있다(13.3)
     db.execute(update(Shot).where(Shot.id == changed.id).values(status="UPLOADED"))  # 다시 분석에 들어간 것처럼
     db.commit()
     executor.finish(0)

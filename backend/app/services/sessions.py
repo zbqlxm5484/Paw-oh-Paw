@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.clients.analysis import AnalysisClient
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode, NoticeCode
@@ -23,6 +24,7 @@ from app.schemas.sessions import (
     SideProgressOut,
     StaffBriefOut,
 )
+from app.services.analysis_copies import delete_copies
 from app.services.dogs import classify, in_institution
 from app.services.shots import to_shot_out
 from app.services.vitals import save_vital
@@ -94,11 +96,11 @@ def start_session(
     return session
 
 
-def session_query(institution_id: uuid.UUID, session_id: uuid.UUID):
+def session_query(institution_id: uuid.UUID, session_id: uuid.UUID, *, include_trashed: bool = False):
+    """기관으로 거른 회차 조회. include_trashed는 워커의 보고서 생성만 쓴다(휴지통의 반려견도 만든다, 12.5)."""
+    owner = Dog.institution_id == institution_id if include_trashed else in_institution(institution_id)
     return (
-        select(MeasureSession)
-        .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(MeasureSession.id == session_id, in_institution(institution_id))
+        select(MeasureSession).join(Dog, MeasureSession.dog_id == Dog.id).where(MeasureSession.id == session_id, owner)
     )
 
 
@@ -182,6 +184,7 @@ def count_in_progress_shots(db: Session, session_id: uuid.UUID) -> int:
 def delete_session_tree(db: Session, session: MeasureSession, institution_id: uuid.UUID) -> None:
     """12.5 삭제 순서: 파일 → walk_pass → shot → session_metric → report → dog.baseline_session_id NULL
     → measure_session. 차트 자료는 지우지 않고, 이 회차를 가리키던 session_id만 NULL로 돌린다.
+    분석 API 사본은 부르는 쪽(cancel_session)이 이보다 먼저 지운다.
 
     DB 연쇄 삭제(ON DELETE CASCADE)는 쓰지 않는다.
     파일을 먼저 지우는 이유는 DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다.
@@ -222,11 +225,35 @@ def complete_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UU
     return session
 
 
-def cancel_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID) -> None:
-    """측정 취소(BE-10, 13.3): MEASURING이고 SUBMITTED·ANALYZING 촬영이 없을 때만. 회차와 딸린 것을 모두 지운다."""
-    session = get_session(db, institution_id, session_id, for_update=True)
+def _job_ids(db: Session, session_id: uuid.UUID) -> list[str]:
+    """회차의 촬영 중 분석 API에 제출한 적이 있는 것의 작업 ID."""
+    query = select(Shot.job_id).where(Shot.session_id == session_id, Shot.job_id.is_not(None))
+    return [job_id for job_id in db.scalars(query) if job_id]
+
+
+def _require_cancellable(db: Session, session: MeasureSession) -> None:
     if session.status != SessionStatus.MEASURING:
         raise AppError(ErrorCode.SESSION_CLOSED)
     if count_in_progress_shots(db, session.id):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
+
+
+def cancel_session(
+    db: Session, institution_id: uuid.UUID, session_id: uuid.UUID, analysis: AnalysisClient | None
+) -> None:
+    """측정 취소(BE-10, 13.3): MEASURING이고 SUBMITTED·ANALYZING 촬영이 없을 때만. 회차와 딸린 것을 모두 지운다.
+
+    촬영 행을 지우면 분석 API 사본을 다시 찾을 수 없으므로 먼저 지운다(199 리뷰 조유진). 못 지우면 503
+    ANALYSIS_UNAVAILABLE이고 회차는 그대로다. 분석 API는 HTTP라 회차 행을 잠그기 전에 부르고(조건은 미리 본다),
+    잠근 뒤 조건을 다시 보고 그사이 생긴 작업만 마저 지운다(12.4 잠금).
+    """
+    session = get_session(db, institution_id, session_id)
+    _require_cancellable(db, session)
+    first_jobs = _job_ids(db, session.id)
+    delete_copies(analysis, first_jobs)
+    session = get_session(db, institution_id, session_id, for_update=True)
+    db.refresh(session)  # 잠근 뒤의 상태로 다시 본다
+    _require_cancellable(db, session)
+    already = set(first_jobs)
+    delete_copies(analysis, [job_id for job_id in _job_ids(db, session.id) if job_id not in already])
     delete_session_tree(db, session, institution_id)
