@@ -1,4 +1,4 @@
-"""촬영 API(15.6): 상세, 다시 분석, 삭제, 결과 영상 재생(서명 URL). 관절 각도는 다음 작업에서 더한다."""
+"""촬영 API(15.6): 상세, 다시 분석, 삭제, 결과 영상 재생(서명 URL), 통과별 관절 각도."""
 
 import uuid
 
@@ -7,8 +7,10 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, check_file_link
 from app.core.config import get_settings
-from app.schemas.shots import ShotDetailOut, ShotOut
+from app.schemas.shots import ShotAnglesOut, ShotDetailOut, ShotOut
+from app.services import shot_angles as angle_service
 from app.services import shots as shot_service
+from app.storage.base import get_storage
 
 router = APIRouter(prefix="/shots", tags=["회차 측정"])
 
@@ -30,6 +32,12 @@ def delete_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession, analysis
     """촬영을 지운다(BE-10). 분석 API 사본 → 파일 → 행 순서다(12.5)."""
     shot_service.delete_shot(db, staff.institution_id, shot_id, analysis)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{shot_id}/angles", response_model=ShotAnglesOut)
+def get_shot_angles(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> ShotAnglesOut:
+    """유효 통과의 프레임별 관절 각도(BE-14). 워커가 써 둔 angles.json을 읽는다. 없으면 passes가 빈 배열이다."""
+    return angle_service.shot_angles(db, get_storage(), staff.institution_id, shot_id)
 
 
 @router.get("/{shot_id}/video", response_class=FileResponse)

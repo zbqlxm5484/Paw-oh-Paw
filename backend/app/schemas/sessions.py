@@ -70,6 +70,38 @@ class SessionOut(BaseModel):
     created_at: UtcDateTime
 
 
+class DogNameOut(OutModel):
+    """반려견의 ID와 이름만(기관 회차 목록)."""
+
+    id: uuid.UUID
+    name: str
+
+
+class SessionListItem(BaseModel):
+    """기관 회차 목록의 한 줄(15.6 GET /sessions). symmetry_score는 12.3의 대칭 점수다."""
+
+    id: uuid.UUID
+    measured_on: date
+    status: str
+    fail_reason: ReasonOut | None
+    dog: DogNameOut
+    staff: StaffBriefOut
+    weight_kg: float | None
+    model_version: str | None
+    symmetry_score: int | None
+    completed_at: UtcDateTime | None
+    created_at: UtcDateTime
+
+
+class SessionListOut(BaseModel):
+    """페이지 목록(11.5): items, total, page, size."""
+
+    items: list[SessionListItem]
+    total: int
+    page: int
+    size: int
+
+
 class SessionDetailOut(SessionOut):
     """GET /sessions/{id}: SessionOut + 반려견 요약, 진행, 안내, 촬영 목록(seq_no 내림차순)."""
 

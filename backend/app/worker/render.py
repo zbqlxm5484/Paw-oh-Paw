@@ -18,6 +18,8 @@
   (BE-10 "만드는 도중에 지워도 파일이 남지 않는다"). 실패면 같은 조건으로 FAILED와 fail_reason=VIDEO_RENDER_FAILED
   (14.2). 결과 영상이 실패해도 판정 결과는 그대로다.
 - 관절점을 못 받으면: 분석 API에 작업이 없거나(404·410) 요청을 거부하면 바로 FAILED, 연결 실패·5xx면 다음 바퀴에 다시.
+- 관절 각도 파일: 관절점 파일을 받은 김에 통과별 각도를 뽑아 촬영 키의 angles.json에 쓴다(12.4 관절 각도 파일,
+  services/shot_angles.py). 주 반복에서 바로 하고(가벼운 일), 실패해도 결과 영상은 그대로 맡긴다.
 - 자식이 죽으면(BrokenProcessPool): 풀을 새로 만들고 그 풀에서 실행 중이던 작업은 모두 FAILED다(12.4).
 - 워커가 멈추면 풀을 닫고 작업 폴더를 지운다. 만들던 촬영은 PENDING 그대로라 다시 켜면 처음부터 다시 만든다(12.4).
 
@@ -51,8 +53,10 @@ from app.core.db import db_error_code
 from app.core.errors import FailReason
 from app.models import Dog, MeasureSession, Shot
 from app.models.enums import ShotStatus, VideoStatus
+from app.services.analysis_results import ResultFormatError
+from app.services.shot_angles import build_angles, dump_angles
 from app.storage.base import StorageError, StorageService
-from app.storage.keys import result_key
+from app.storage.keys import angles_key, result_key
 from app.video.render import RenderResult, VideoRenderError, render_video
 
 logger = logging.getLogger("app.worker.render")
@@ -98,6 +102,8 @@ class _Candidate:
     job_id: str | None
     original_key: str
     result_key: str
+    analysis_key: str | None = None
+    angles_key: str | None = None
 
 
 def _now() -> datetime:
@@ -186,7 +192,15 @@ class VideoRenderer:
     def _candidates(self, db: Session, limit: int) -> list[_Candidate]:
         """status=DONE AND video_status=PENDING인 촬영을 analyzed_at, id 순으로 limit개. 맡겨 둔 것은 뺀다."""
         query = (
-            select(Shot.id, Shot.job_id, Shot.original_key, MeasureSession.id, Dog.id, Dog.institution_id)
+            select(
+                Shot.id,
+                Shot.job_id,
+                Shot.original_key,
+                Shot.analysis_key,
+                MeasureSession.id,
+                Dog.id,
+                Dog.institution_id,
+            )
             .join(MeasureSession, Shot.session_id == MeasureSession.id)
             .join(Dog, MeasureSession.dog_id == Dog.id)
             .where(Shot.status == DONE, Shot.video_status == PENDING)
@@ -196,8 +210,17 @@ class VideoRenderer:
         if self.jobs:
             query = query.where(Shot.id.not_in(list(self.jobs)))
         return [
-            _Candidate(shot_id, job_id, original_key, result_key(institution_id, dog_id, session_id, shot_id))
-            for shot_id, job_id, original_key, session_id, dog_id, institution_id in db.execute(query).all()
+            _Candidate(
+                shot_id,
+                job_id,
+                original_key,
+                result_key(institution_id, dog_id, session_id, shot_id),
+                analysis_key,
+                angles_key(institution_id, dog_id, session_id, shot_id),
+            )
+            for shot_id, job_id, original_key, analysis_key, session_id, dog_id, institution_id in db.execute(
+                query
+            ).all()
         ]
 
     def _fetch_keypoints(self, db: Session, candidate: _Candidate, stats: Any) -> dict[str, Any] | None:
@@ -220,10 +243,34 @@ class VideoRenderer:
                 )
             return None
 
+    def _store_angles(self, db: Session, candidate: _Candidate, keypoints: dict[str, Any]) -> None:
+        """통과별 관절 각도를 angles.json에 써 둔다(12.4 관절 각도 파일). 실패해도 결과 영상은 만든다.
+
+        쓴 뒤 촬영이 그대로인지(DONE이고 job_id가 같음) 다시 보고, 아니면 방금 쓴 파일을 지운다.
+        """
+        shot_id = candidate.shot_id
+        if not candidate.analysis_key or not candidate.angles_key:
+            return
+        try:
+            result = json.loads(self.storage.read_bytes(candidate.analysis_key))
+            doc = build_angles(result, keypoints, shot_id=shot_id, job_id=candidate.job_id)
+            self.storage.write_bytes(candidate.angles_key, dump_angles(doc))
+        except (StorageError, OSError, ValueError, ResultFormatError) as error:
+            # 분석 결과를 읽을 수 없거나 저장소에 쓰지 못했다. 경로가 섞일 수 있어 종류만 남긴다(11.8)
+            logger.error("angles store failed shot=%s: %s", shot_id, describe_error(error))
+            return
+        unchanged = db.scalar(
+            select(Shot.id).where(Shot.id == shot_id, Shot.status == DONE, Shot.job_id == candidate.job_id)
+        )
+        if unchanged is None:
+            self._discard(candidate.angles_key, shot_id)
+            logger.warning("shot %s changed before its angles were stored; angles.json discarded", shot_id)
+
     def _start(self, db: Session, candidate: _Candidate, stats: Any) -> None:
         keypoints = self._fetch_keypoints(db, candidate, stats)
         if keypoints is None:
             return
+        self._store_angles(db, candidate, keypoints)
         shot_id = candidate.shot_id
         job_dir = self.tmp_root / str(shot_id)
         stack = ExitStack()
@@ -316,7 +363,7 @@ class VideoRenderer:
         try:
             self.storage.delete(key)
         except (StorageError, OSError) as error:
-            logger.error("result video discard failed shot=%s: %s", shot_id, describe_error(error))
+            logger.error("file discard failed shot=%s: %s", shot_id, describe_error(error))
 
     def _fail_shot(self, db: Session, shot_id: uuid.UUID, stats: Any) -> bool:
         """결과 영상을 FAILED(VIDEO_RENDER_FAILED)로. 그사이 촬영 상태가 달라졌으면 건드리지 않는다."""

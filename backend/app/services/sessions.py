@@ -17,9 +17,11 @@ from app.models.enums import CameraSide, SessionStatus, ShotStatus
 from app.schemas.common import ReasonOut, reason_out
 from app.schemas.sessions import (
     DogBriefOut,
+    DogNameOut,
     ProgressOut,
     SessionCreate,
     SessionDetailOut,
+    SessionListItem,
     SessionOut,
     SideProgressOut,
     StaffBriefOut,
@@ -27,6 +29,7 @@ from app.schemas.sessions import (
 from app.services.analysis_copies import delete_copies
 from app.services.dogs import classify, in_institution
 from app.services.shots import to_shot_out
+from app.services.symmetry import session_scores
 from app.services.vitals import save_vital
 from app.storage.base import get_storage
 from app.storage.keys import session_prefix
@@ -102,6 +105,64 @@ def session_query(institution_id: uuid.UUID, session_id: uuid.UUID, *, include_t
     return (
         select(MeasureSession).join(Dog, MeasureSession.dog_id == Dog.id).where(MeasureSession.id == session_id, owner)
     )
+
+
+def list_sessions(
+    db: Session,
+    institution_id: uuid.UUID,
+    *,
+    staff_id: uuid.UUID | None,
+    status: str | None,
+    page: int,
+    size: int,
+) -> tuple[list[SessionListItem], int]:
+    """GET /sessions(BE-33, 15.6). 기관의 모든 회차를 measured_on 내림차순, 같으면 created_at 내림차순으로.
+
+    휴지통의 반려견은 뺀다. 반려견 이름은 같은 쿼리로, 담당자는 joinedload로, 대칭 점수는 이 페이지의 DONE 회차만
+    쿼리 한 번으로 읽는다(15.1 N+1 금지).
+    """
+    conditions = [in_institution(institution_id)]
+    if staff_id is not None:
+        conditions.append(MeasureSession.staff_id == staff_id)
+    if status is not None:
+        conditions.append(MeasureSession.status == status)
+    rows = db.execute(
+        select(MeasureSession, Dog.name)
+        .join(Dog, MeasureSession.dog_id == Dog.id)
+        .where(*conditions)
+        .options(joinedload(MeasureSession.staff))
+        .order_by(MeasureSession.measured_on.desc(), MeasureSession.created_at.desc(), MeasureSession.id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .execution_options(populate_existing=True)
+    ).all()
+    total = (
+        db.scalar(
+            select(func.count())
+            .select_from(MeasureSession)
+            .join(Dog, MeasureSession.dog_id == Dog.id)
+            .where(*conditions)
+        )
+        or 0
+    )
+    scores = session_scores(db, [session.id for session, _ in rows if session.status == SessionStatus.DONE.value])
+    items = [
+        SessionListItem(
+            id=session.id,
+            measured_on=session.measured_on,
+            status=session.status,
+            fail_reason=reason_out(session.fail_reason),
+            dog=DogNameOut(id=session.dog_id, name=dog_name),
+            staff=StaffBriefOut.model_validate(session.staff),
+            weight_kg=session.weight_kg,
+            model_version=session.model_version,
+            symmetry_score=scores.get(session.id),
+            completed_at=session.completed_at,
+            created_at=session.created_at,
+        )
+        for session, dog_name in rows
+    ]
+    return items, total
 
 
 def get_session(

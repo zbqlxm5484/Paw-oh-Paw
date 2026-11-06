@@ -8,7 +8,7 @@
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 54개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 55개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
@@ -131,7 +131,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 14 | `POST /shots/{shot_id}/retry` | 실패한 촬영 다시 분석 | S3·S4 | 200 | 409 `SHOT_NOT_FAILED`, `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 15 | `DELETE /shots/{shot_id}` | 촬영 삭제 | S3·S4 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 16 | `GET /shots/{shot_id}/video` | 결과 영상 재생 (서명 주소) | S4 | 200·206 | 403 `FILE_LINK_EXPIRED` |
-| 17 | `GET /shots/{shot_id}/angles` | 프레임별 관절 각도 (권장) | S5 | 200 | — |
+| 17 | `GET /shots/{shot_id}/angles` | 통과별 프레임 관절 각도 (권장) | S5 | 200 | — |
 | 18 | `GET /sessions/{session_id}/result` | 회차 수치·다리 비교 요약 | S5 | 200 | 409 `SESSION_NOT_DONE` |
 | 19 | `GET /sessions/{session_id}/reports` | 판본별 보고서 상태 | S6 | 200 | — |
 | 20 | `POST /reports/{report_id}/regenerate` | 보고서 다시 만들기 | S6 | 200 | 409 `REPORT_IN_PROGRESS` |
@@ -169,10 +169,11 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 52 | `POST /dogs/{dog_id}/notes/batch` | 여러 건을 같은 시각으로 쓰기(SOAP) | 차트 | 201 | — |
 | 53 | `PATCH /notes/{note_id}` | 메모·진료 기록 고치기(이전 내용은 이력으로) | 차트 | 200 | — |
 | 54 | `GET /notes/{note_id}/revisions` | 수정 이력(최신이 앞) | 차트 | 200 | — |
+| 55 | `GET /sessions` | 기관 회차 목록(최신순, 담당자·상태로 거름) | 홈 | 200 | — |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
-2026-11-02 develop 기준으로 8, 17, 19~24, 26번은 아직 구현 전이다.
+26번(`GET /metrics`)만 아직 구현 전이다.
 
 ---
 
@@ -627,6 +628,41 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - `vital`을 보내면 그날 바이탈로 함께 저장된다(다섯 값 모두 필요, 5절 차트 자료). `weight_kg`를 빼고 `vital`만 보내면 `vital.weight_kg`가 회차 체중이 되고, 둘을 다 보냈는데 값이 다르면 422다.
 - 이미 측정 중인 회차가 있으면 409 `SESSION_ALREADY_OPEN`이고 `detail.session_id`에 그 회차 ID가 온다. 화면은 그 회차로 이동한다.
 
+### `GET /sessions?staff_id=…&status=DONE&page=1&size=20` — 기관 회차 목록
+
+홈의 분석 목록과 촬영 담당자 보기에 쓴다. 반려견마다 측정 이력을 따로 부르지 않아도 된다.
+
+| 쿼리 | 필수 | 규칙 |
+| --- | --- | --- |
+| `staff_id` | 선택 | 담당자 ID. 그 담당자가 측정한 회차만 |
+| `status` | 선택 | `MEASURING`·`AGGREGATING`·`DONE`·`FAILED` 중 하나 |
+| `page` | 선택 | 1 이상, 기본 1 |
+| `size` | 선택 | 1~100, 기본 20 |
+
+- 응답 200: `{"items": [SessionListItem, …], "total": 132, "page": 1, "size": 20}`
+- 정렬: 측정일이 늦은 순서, 같으면 만든 시각이 늦은 순서. 휴지통에 있는 반려견의 회차는 빠진다.
+
+```json
+// SessionListItem
+{
+  "id": "…",
+  "measured_on": "2026-10-20",
+  "status": "DONE",
+  "fail_reason": null,
+  "dog": {"id": "…", "name": "보리"},
+  "staff": {"id": "…", "name": "김담당"},
+  "weight_kg": 28.1,
+  "model_version": "v1",
+  "symmetry_score": 87,
+  "completed_at": "2026-10-20T01:12:00Z",
+  "created_at": "2026-10-20T01:00:00Z"
+}
+```
+
+- `symmetry_score`: 대칭 점수(7절). 완료(DONE)가 아니거나 계산할 쌍이 없으면 `null`.
+- `total`은 거른 뒤의 회차 수다. `staff_id`와 `status=FAILED`를 함께 보내고 `size=1`로 부르면 그 담당자의 실패 수만 알 수 있다.
+- 담당자별 합계(회차 수, 반려견 수, 마지막 측정일)를 한 번에 주는 API는 없다.
+
 ### `GET /sessions/{session_id}` — 회차 상태·진행·촬영 목록
 
 측정하는 내내 2~3초마다 부른다. 한 번에 화면 전체를 그릴 수 있게 모두 담았다. 응답 200 **SessionDetailOut** = SessionOut의 모든 필드 + 아래.
@@ -736,8 +772,10 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 
 - 유효 통과의 유효 구간만 담는다. 배열의 i번째 값은 `start_frame + i` 프레임의 각도(°)이고, 관절점을 못 찾은 프레임은 `null`이다. 그래프는 `null`에서 선을 끊는다.
 - 다리는 `camera_side` 쪽이다(RIGHT면 오른쪽 앞다리·뒷다리).
-- 촬영이 DONE이 아니면 `passes`가 빈 배열이다.
-- 분석 API가 프레임별 각도를 주기로 정해져야 쓸 수 있다(조유진과 합의 중).
+- 유효 구간은 통과 안에서 수치를 잰 구간이다. `start_frame`은 그 구간의 첫 프레임이라 촬영 상세의 통과 `start_frame`(통과 전체의 시작)보다 늦을 수 있다.
+- `passes`가 빈 배열일 수 있다: 촬영이 DONE이 아닐 때, 유효 통과가 없을 때, 각도 자료가 아직 없을 때. 각도 자료는 분석이 끝난 뒤 결과 영상을 만들기 시작할 때 생기므로 DONE 직후 잠깐 비어 있을 수 있다. 이 기능이 들어가기 전에 분석한 촬영은 계속 비어 있다. 오류로 오지 않으니 비어 있으면 그래프를 숨긴다.
+- `fps`로 프레임을 시간으로 바꾼다(초 = 프레임 ÷ `fps`).
+- 한 걸음(보행 주기)으로 자른 곡선은 이 응답에 없다. 걸음 경계가 없어서 화면이 자를 수도 없다(분석 API 쪽 확인 대기).
 
 ---
 

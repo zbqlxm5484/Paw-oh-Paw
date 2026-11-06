@@ -693,6 +693,34 @@ paths:
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
+  /sessions:
+    get:
+      tags: [회차 측정]
+      operationId: listSessions
+      summary: 기관 회차 목록 (BE-33, 홈)
+      description: 기관의 모든 회차를 measured_on 내림차순, 같으면 created_at 내림차순으로 준다. 휴지통에 있는 반려견의 회차는 빠진다.
+      parameters:
+        - name: staff_id
+          in: query
+          description: 그 담당자가 측정한 회차만. 다른 기관의 담당자 ID면 빈 목록이다.
+          schema: {type: string, format: uuid}
+        - name: status
+          in: query
+          description: 그 상태의 회차만.
+          schema: {$ref: '#/components/schemas/SessionStatus'}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 회차 목록 한 페이지
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionListPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
   /sessions/{session_id}:
     parameters:
       - $ref: '#/components/parameters/SessionId'
@@ -924,8 +952,11 @@ paths:
     get:
       tags: [회차 결과·보고서]
       operationId: getShotAngles
-      summary: 프레임별 관절 각도 (BE-14, S5 그래프, 권장)
-      description: 유효 통과의 유효 구간만 담는다. 배열의 i번째 값은 start_frame + i 프레임의 각도(°), 못 찾은 프레임은 null.
+      summary: 통과별 프레임 관절 각도 (BE-14, S5 그래프, 권장)
+      description: |
+        유효 통과의 유효 구간(수치를 잰 구간)만 담는다. 배열의 i번째 값은 start_frame + i 프레임의 각도(°), 못 찾은 프레임은 null.
+        passes가 빈 배열일 수 있다: 촬영이 DONE이 아닐 때, 유효 통과가 없을 때, 각도 자료가 아직 없을 때
+        (DONE 직후 결과 영상을 만들기 시작하기 전의 잠깐, 이 기능 전에 분석한 촬영). 오류로 답하지 않는다.
       responses:
         '200':
           description: 관절 각도
@@ -2542,6 +2573,43 @@ components:
           type: array
           items: {$ref: '#/components/schemas/SessionHistoryItem'}
         total: {type: integer, example: 5}
+        page: {type: integer, example: 1}
+        size: {type: integer, example: 20}
+    SessionListItem:
+      type: object
+      required: [id, measured_on, status, fail_reason, dog, staff, weight_kg, model_version, symmetry_score,
+                 completed_at, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-20'}
+        status: {$ref: '#/components/schemas/SessionStatus'}
+        fail_reason:
+          oneOf: [{$ref: '#/components/schemas/Reason'}, {type: 'null'}]
+        dog:
+          type: object
+          required: [id, name]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+            name: {type: string, example: 보리}
+        staff: {$ref: '#/components/schemas/StaffBrief'}
+        weight_kg: {type: [number, 'null'], example: 28.1}
+        model_version: {type: [string, 'null'], example: v1}
+        symmetry_score:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 대칭 점수. DONE이 아니거나 계산할 쌍이 없으면 null
+          example: 87
+        completed_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T01:12:00Z'}
+        created_at: {type: string, format: date-time, example: '2026-10-20T01:00:00Z'}
+    SessionListPage:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/SessionListItem'}
+        total: {type: integer, example: 132}
         page: {type: integer, example: 1}
         size: {type: integer, example: 20}
     CompareSessionRef:

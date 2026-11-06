@@ -21,6 +21,27 @@ class PassOut(BaseModel):
     end_frame: int
 
 
+class AnglePassOut(BaseModel):
+    """유효 통과 하나의 프레임별 관절 각도(15.6). angles의 i번째 값은 start_frame + i 프레임의 각도(°)다.
+
+    관절점을 못 찾은 프레임은 null이다. 다리는 camera_side 쪽이다.
+    """
+
+    pass_no: int
+    camera_side: str
+    gait_type: str
+    start_frame: int
+    angles: dict[str, list[float | None]]
+
+
+class ShotAnglesOut(BaseModel):
+    """GET /shots/{id}/angles(15.6). 줄 것이 없으면 passes가 빈 배열이다."""
+
+    shot_id: uuid.UUID
+    fps: float
+    passes: list[AnglePassOut]
+
+
 class ShotOut(BaseModel):
     """촬영 1건. passes는 status가 DONE이 되기 전에는 빈 배열이고 pass_no 오름차순이다."""
 
