@@ -37,6 +37,7 @@ from pipeline import (
     AnalysisFailed,
     current_model,
     model_config,
+    model_files_ok,
     pose_source,
     sha256_of,
 )
@@ -211,7 +212,7 @@ def health():
     """Docker 상태 확인용이라 인증 없이 연다"""
     cfg = model_config()
     return {"status": "ok", "model": current_model(), "pose_source": pose_source(),
-            "model_known": cfg["known"] or pose_source() == "sample"}
+            "model_known": (cfg["known"] and (pose_source() != "model" or model_files_ok())) or pose_source() == "sample"}
 
 
 @app.post("/analyses", status_code=202, dependencies=[Depends(require_key)])

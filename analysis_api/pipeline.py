@@ -4,7 +4,8 @@
 - sample(기본): samples/의 견본 결과를 돌려준다. 모델·엔진 없이 팀 서비스 연동을 시험할 때
 - track: 미리 뽑아 둔 관절점 파일(기업 video_kpi.py track 형식, ANALYSIS_TRACK_FILE)에서 올린 영상과
   SHA-256이 같은 영상을 찾아 엔진을 돌린다. GPU·모델 없이 실제 엔진 결과를 낼 수 있다
-- 모델로 영상에서 바로 관절점을 뽑는 경로는 MMPose 실행 환경(허정원)이 정해지면 이 자리에 더한다
+- model: 올린 영상의 프레임마다 기업 모델(RTMDet 개 탐지 + RTMPose 관절 22점, ANALYSIS_MODEL_DIR의 run.py)로
+  관절점을 뽑아 track과 같은 형식으로 만든 뒤 같은 엔진을 돌린다. GPU와 mmdet·mmpose가 있는 서버용
 
 모델은 models.yaml에서 고른다(ANALYSIS_MODEL, 없으면 default). 관절점 파일·가중치 해시도 모델마다 그 파일에 둔다.
 
@@ -19,6 +20,7 @@ import hashlib
 import json
 import os
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -58,6 +60,18 @@ def pose_source() -> str:
     return os.environ.get("ANALYSIS_POSE_SOURCE", "sample")
 
 
+def model_dir() -> Path:
+    """기업 모델 폴더(run.py, det.py, pose.py, det.pth, pose.pth). model 모드에서만 쓴다"""
+    return Path(os.environ.get("ANALYSIS_MODEL_DIR") or Path.home() / "models" / "company-orig")
+
+
+MODEL_FILES = ("run.py", "det.py", "pose.py", "det.pth", "pose.pth")
+
+
+def model_files_ok() -> bool:
+    return all((model_dir() / name).is_file() for name in MODEL_FILES)
+
+
 def load_models(path: Optional[Path] = None) -> dict:
     """models.yaml → {"default": 이름, "models": {이름: 항목}}"""
     import yaml  # 설정을 읽을 때만 필요하다
@@ -85,6 +99,10 @@ def current_model() -> dict:
     if pose_source() == "track":
         cfg = model_config()
         return {"name": cfg["name"], "version": f"{API_VERSION}/{ANGLE_DEF}/{cfg['weights_sha256'][:8] or 'unknown'}"}
+    if pose_source() == "model":
+        cfg = model_config()
+        sha = cfg["weights_sha256"] or pose_weights_sha256()
+        return {"name": cfg["name"], "version": f"{API_VERSION}/{ANGLE_DEF}/{sha[:8] or 'unknown'}"}
     return dict(SAMPLE_MODEL)
 
 
@@ -98,6 +116,17 @@ def sha256_of(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+@lru_cache(maxsize=2)
+def _pose_sha(path: str) -> str:
+    return sha256_of(Path(path))
+
+
+def pose_weights_sha256() -> str:
+    """model 모드에서 실제로 쓰는 pose.pth의 SHA-256. 파일이 없으면 빈 문자열(health가 죽지 않게)"""
+    f = model_dir() / "pose.pth"
+    return _pose_sha(str(f)) if f.is_file() else ""
 
 
 @lru_cache(maxsize=4)
@@ -189,12 +218,89 @@ def run_sample(job: dict) -> tuple:
     return result, keypoints
 
 
+# ---- model 모드: 영상 → 관절점 ----
+
+_MODEL_LOCK = threading.Lock()   # 모델은 한 번에 한 영상만 돌린다(GPU 메모리·스레드 안전)
+_MODEL_CACHE: dict = {}          # 모델 폴더 → (run 모듈, det, pose). 처음 한 번만 올린다
+
+
+def _load_models() -> tuple:
+    d = model_dir()
+    if not model_files_ok():
+        raise AnalysisFailed("POSE_UNAVAILABLE", f"모델 파일이 없습니다 (ANALYSIS_MODEL_DIR={d})")
+    key = str(d)
+    if key not in _MODEL_CACHE:
+        import importlib.util
+        try:
+            spec = importlib.util.spec_from_file_location("company_run", d / "run.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _MODEL_CACHE[key] = (mod, mod.load_det(), mod.load_pose())
+        except Exception as e:   # mmdet·mmpose·torch 없음, CUDA 오류 등
+            raise AnalysisFailed("POSE_UNAVAILABLE", f"모델을 올리지 못했습니다: {type(e).__name__}: {e}") from e
+    return _MODEL_CACHE[key]
+
+
+def frame_entry(box, det_score, keypoints, scores) -> dict:
+    """모델이 한 프레임에서 낸 값 → 관절점 파일의 프레임 하나. 엔진이 kp(관절 22점)와 box(개 상자 x1 y1 x2 y2)를 읽는다"""
+    return {"box": [float(v) for v in box], "det_score": float(det_score),
+            "kp": [[float(x), float(y), float(s)] for (x, y), s in zip(keypoints, scores)]}
+
+
+def extract_track(video_path: Path) -> dict:
+    """영상을 프레임마다 모델에 넣어 관절점 파일의 영상 하나와 같은 형식으로 만든다.
+    {"video", "fps", "width", "height", "frames": [{"box", "det_score", "kp": [[x, y, score] x 22]} 또는 None(개를 못 찾은 프레임)]}"""
+    try:
+        import cv2
+    except ImportError as e:
+        raise AnalysisFailed("POSE_UNAVAILABLE", "opencv(cv2)가 없습니다") from e
+    cap = cv2.VideoCapture(str(video_path))
+    try:
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0)
+        if not cap.isOpened() or fps <= 0:
+            raise AnalysisFailed("DECODE_FAILED", "영상을 읽을 수 없습니다")
+        with _MODEL_LOCK:
+            mod, det, pose = _load_models()
+            frames, width, height = [], 0, 0
+            while True:
+                ok, img = cap.read()
+                if not ok:
+                    break
+                height, width = img.shape[:2]
+                try:
+                    found = mod.pose_from_image(det, pose, img)
+                except Exception as e:   # CUDA out of memory 등
+                    raise AnalysisFailed("INTERNAL", f"추론 실패: {type(e).__name__}: {e}") from e
+                if found is None:
+                    frames.append(None)
+                    continue
+                frames.append(frame_entry(*found))
+    finally:
+        cap.release()
+    if not frames:
+        raise AnalysisFailed("DECODE_FAILED", "영상에서 프레임을 읽지 못했습니다")
+    if not any(frames):
+        raise AnalysisFailed("POSE_UNAVAILABLE", "영상에서 개를 찾지 못했습니다")
+    return {"video": Path(video_path).name, "fps": fps, "width": width, "height": height, "frames": frames}
+
+
+def run_model(video_path: Path, job: dict) -> tuple:
+    cfg = model_config()
+    cfg["weights_sha256"] = cfg["weights_sha256"] or pose_weights_sha256()
+    return _analyze(extract_track(video_path), cfg, job)
+
+
 def run_track(video_path: Path, job: dict) -> tuple:
     cfg = model_config()
     video, meta = find_track(video_path, job.get("filename"), cfg["track_file"], job.get("video_sha256"))
     made_by = (meta.get("model") or {}).get("name")
     if made_by and made_by != cfg["name"]:   # 다른 모델로 뽑은 관절점에 이 모델 이름을 붙이지 않는다
         raise AnalysisFailed("POSE_UNAVAILABLE", f"관절점 파일의 모델({made_by})이 고른 모델({cfg['name']})과 다릅니다")
+    return _analyze(video, cfg, job)
+
+
+def _analyze(video: dict, cfg: dict, job: dict) -> tuple:
+    """관절점(영상 하나) → 결과 JSON·관절점 파일. track과 model이 같이 쓴다"""
     if not video.get("frames") or not video.get("fps"):
         raise AnalysisFailed("DECODE_FAILED", "영상의 프레임 정보를 읽을 수 없습니다")
     cfg_validity = load_config()
@@ -205,7 +311,7 @@ def run_track(video_path: Path, job: dict) -> tuple:
             events = detect_pass(kps, video["fps"], p["camera_side"])   # 두 계산이 같은 착지·이지를 쓴다
             p["metrics"] = {**pass_metrics(kps, video["fps"], p["camera_side"], events),
                             **joint_metrics(kps, video["fps"], p["camera_side"], events)}
-    model = current_model()
+    model = {"name": cfg["name"], "version": f"{API_VERSION}/{ANGLE_DEF}/{cfg['weights_sha256'][:8] or 'unknown'}"}
     model.update(angle_def=ANGLE_DEF, weights_sha256=cfg["weights_sha256"] or None)
     return build_result(job, video, judged, model), build_keypoints(video, judged["passes"])
 
@@ -216,4 +322,6 @@ def run(video_path: Path, job: dict) -> tuple:
         raise AnalysisFailed("DECODE_FAILED", "영상을 읽을 수 없습니다")
     if pose_source() == "track":
         return run_track(Path(video_path), job)
+    if pose_source() == "model":
+        return run_model(Path(video_path), job)
     return run_sample(job)
