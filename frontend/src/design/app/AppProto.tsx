@@ -12,9 +12,16 @@ import { BREEDS } from '../../api/labels'
 import { DCLogic } from '../DCLogic'
 import { ST, STEPS, type DDog, type DGait, type DRes } from '../adapter'
 import type { ProtoProps } from '../DesignRoot'
-import { EMPTY_PET, LIMB, LINES, PREP, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_ } from '../shared'
+import { EMPTY_PET, LIMB, LINES, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_ } from '../shared'
 import { AppView } from './AppView'
 import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
+import { HELP_CARDS, HELP_CONTACT } from '../help'
+
+// 기기에만 남는 설정(백엔드에 알림 설정 저장 API 가 생기면 PATCH /me 로 옮긴다)
+const NOTIF_ON_KEY = 'pp.notif.on', NOTIF_READ_KEY = 'pp.notif.read'
+const lsGet = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
+const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* 저장 못 해도 화면은 돈다 */ } }
+const readKeys = (): string[] => { try { const a = JSON.parse(lsGet(NOTIF_READ_KEY) || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
 import './app-view.css'
 
 /** 409 DOG_MODIFIED: 다른 담당자가 먼저 고쳤다. 목록은 다시 불러온 상태다(useDesignActions.updateDog) */
@@ -29,7 +36,7 @@ export class AppProto extends DCLogic<Props, any> {
     li: { id: '', pw: '' }, so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null as null | { code: string; org?: string; left?: number; err?: string }, signupBusy: false, to: [false, false, false, false],
     af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
-    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: true, rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
+    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: lsGet(NOTIF_ON_KEY) !== '0', notifRead: readKeys(), rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
   }
   vids = new Set<HTMLVideoElement>()
   recTick: any; raf: any; t1: any; t2: any; tt: any; r1: any; r2: any; storyEl?: HTMLElement; lastMo = 0; moStart = 0
@@ -135,7 +142,7 @@ export class AppProto extends DCLogic<Props, any> {
       catch (e) { if (this.state.so.dev.trim() === code) this.setState({ devChk: { code, err: errMsg(e, '기기 번호를 확인하지 못했어요') } }) }
     }, 500)
   }
-  PATH: Record<string, string> = { splash: '/welcome', landing: '/welcome', story: '/intro', login: '/login', signupOrg: '/signup', home: '/', results: '/results', my: '/my', account: '/account', notif: '/notifications', capSelect: '/capture', petNew: '/dogs/new' }
+  PATH: Record<string, string> = { splash: '/welcome', landing: '/welcome', story: '/intro', login: '/login', signupOrg: '/signup', home: '/', results: '/results', my: '/my', account: '/account', notif: '/notifications', settings: '/settings', help: '/help', capSelect: '/capture', petNew: '/dogs/new' }
   nav = (screen: string, path?: string, replace?: boolean) => { this.setState({ sheet: null, viaTab: false }); this.props.nav(path || this.PATH[screen] || '/', { replace }) }
   back = () => { this.setState({ sheet: null }); this.props.back() }
   tab = (screen: string) => {
@@ -312,19 +319,24 @@ export class AppProto extends DCLogic<Props, any> {
     const bExact = BREEDS.includes(s.pet.breed)
 
     // 알림: 회차 상태에서 만든다(알림 API 없음)
-    const notifs = [
-      ...(ana && anaDog ? [{ title: `${anaDog.name} 분석이 진행 중이에요`, body: `영상 ${ana.n}개의 관절점을 찾고 있어요. 끝나면 알려 드릴게요.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
+    // 알림은 백엔드 API 가 없어 회차 상태로 만든다. 읽음은 기기에 key 로 남긴다(전체 확인 버튼·홈 종 점)
+    const rawNotifs: { key: string; title: string; body: string; when: string; dot: string; open: () => void }[] = [
+      ...(ana && anaDog ? [{ key: `ana:${ana.sessionId}`, title: `${anaDog.name} 분석이 진행 중이에요`, body: `영상 ${ana.n}개의 관절점을 찾고 있어요. 끝나면 알려 드릴게요.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
       ...results.slice(0, 6).map((r) => { const d = dogById(r.dog); return r.st === 'fail'
-        ? { title: `${d?.name ?? ''} 분석에 실패했어요`, body: r.result?.fail_reason?.message || '쓸 수 있는 통과가 없었어요. 다시 촬영해 주세요.', when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
-        : { title: `${d?.name ?? ''} ${r.rep ? '보고서가 만들어졌어요' : '분석이 끝났어요'}`, body: r.rep ? '보호자용·수의사용 보고서를 확인해 보세요.' : '회차 결과를 확인해 보세요.', when: r.date, dot: r.rep ? '#D2601A' : '#C9C4BC', open: () => this.openRes(r.id) } }),
+        ? { key: `res:${r.id}:fail`, title: `${d?.name ?? ''} 분석에 실패했어요`, body: r.result?.fail_reason?.message || '쓸 수 있는 통과가 없었어요. 다시 촬영해 주세요.', when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
+        : { key: `res:${r.id}:${r.rep ? 'rep' : 'done'}`, title: `${d?.name ?? ''} ${r.rep ? '보고서가 만들어졌어요' : '분석이 끝났어요'}`, body: r.rep ? '보호자용·수의사용 보고서를 확인해 보세요.' : '회차 결과를 확인해 보세요.', when: r.date, dot: r.rep ? '#D2601A' : '#C9C4BC', open: () => this.openRes(r.id) } }),
     ]
-    if (!notifs.length) notifs.push({ title: '가입을 환영해요', body: '반려견을 등록하고 첫 보행 영상을 찍어 보세요.', when: '방금', dot: '#D2601A', open: this.goPetNew })
+    if (!rawNotifs.length) rawNotifs.push({ key: 'welcome', title: '가입을 환영해요', body: '반려견을 등록하고 첫 보행 영상을 찍어 보세요.', when: '방금', dot: '#D2601A', open: this.goPetNew })
+    const readSet = new Set<string>(s.notifRead)
+    const markRead = (keys: string[]) => { const next = Array.from(new Set([...s.notifRead, ...keys])).slice(-200); lsSet(NOTIF_READ_KEY, JSON.stringify(next)); this.setState({ notifRead: next }) }
+    const notifs = rawNotifs.map((n) => { const read = readSet.has(n.key); return { ...n, dot: read ? '#E2DCD3' : n.dot, tc: read ? '#5B6472' : '#1B2433', open: () => { markRead([n.key]); n.open() } } })
+    const hasUnread = rawNotifs.some((n) => !readSet.has(n.key))
 
     return {
       rootStyle: this.props.rootStyle || {},
       isSplash: sc === 'splash', isLanding: sc === 'landing', isLogin: sc === 'login', isSignupOrg: sc === 'signupOrg',
       isHome: sc === 'home', isDog: sc === 'dog', isPetNew: sc === 'petNew', isNotif: sc === 'notif', isStory: sc === 'story', isCapSelect: sc === 'capSelect', isCapGuide: sc === 'capGuide',
-      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
+      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', isSettings: sc === 'settings', isHelp: sc === 'help', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
       vid: this.vid, storyRef: this.storyRef, repBox: this.repBox, back: this.back,
       jointOp: s.joint ? 1 : 0, jointTr: s.joint ? 'opacity 0.5s ease-out' : 'none', replaySplash: () => this.startSplash(),
       lines: LINES.map((t, i) => ({ t, op: i === s.line ? 1 : 0, ty: i === s.line ? 0 : (i < s.line ? -14 : 14) })),
@@ -399,7 +411,7 @@ export class AppProto extends DCLogic<Props, any> {
         finally { this.setState({ busy: false }) }
       },
 
-      notifs,
+      notifs, hasUnread, readAll: () => { markRead(rawNotifs.map((n) => n.key)); this.toast('알림을 모두 확인했어요') },
 
       storyBack: !li || !s.viaTab, storyTitlePad: !li || !s.viaTab ? 0 : 12, storyBottom: showTabs ? 96 : 0,
       onStory: (e: any) => { const p = Math.round(e.target.scrollLeft / e.target.clientWidth); if (p !== this.state.page) { if (p === 2) this.moStart = Date.now(); this.setState({ page: p }) } },
@@ -495,10 +507,20 @@ export class AppProto extends DCLogic<Props, any> {
       trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 지수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),
 
       isOrg, isUser: false, myName: acct.name, myDev: acct.dev || '-',
-      goAccount: () => this.nav('account'), help: () => this.nav('legal', '/legal/support'), settings: () => this.toast(PREP),
+      goAccount: () => this.nav('account'), help: () => this.nav('help'), settings: () => this.nav('settings'), goSupport: () => this.nav('legal', '/legal/support'),
+      settingRows: [
+        { label: '기본 정보', right: acct.name, on: () => this.nav('account') },
+        { label: '비밀번호 변경', right: '', on: () => this.setState({ sheet: 'pw', pf: { cur: '', nw: '', nw2: '' } }) },
+        { label: '이용약관', right: '', on: () => this.nav('legal', '/legal/terms') },
+        { label: '개인정보 처리방침', right: '', on: () => this.nav('legal', '/legal/privacy') },
+        { label: '사업자 정보', right: '', on: () => this.nav('legal', '/legal/business') },
+        { label: '서비스 소개', right: '', on: () => this.nav('story') },
+      ],
+      helpCards: HELP_CARDS, helpContact: HELP_CONTACT.map((c) => ({ ...c, open: () => { if (c.href) window.location.href = c.href } })),
+      helpLinks: [{ label: '고객센터 안내 전체 보기', on: () => this.nav('legal', '/legal/support') }, { label: '서비스 소개', on: () => this.nav('story') }],
       myDogs: dogs.map((d) => ({ init: d.name[0], name: d.name, desc: desc(d) + ' · ' + SEX[d.sex || 'm'], edit: () => this.nav('petNew', `/dogs/${d.id}/edit`), del: () => this.setState({ sheet: 'del', delId: d.id }) })),
       myDogCount: dogs.length + '마리',
-      tgBg: s.notifOn ? '#D2601A' : '#DDD7CE', tgX: s.notifOn ? 22 : 2, toggleNotif: () => this.setState((st: any) => ({ notifOn: !st.notifOn })),
+      tgBg: s.notifOn ? '#D2601A' : '#DDD7CE', tgX: s.notifOn ? 22 : 2, toggleNotif: () => this.setState((st: any) => { lsSet(NOTIF_ON_KEY, st.notifOn ? '0' : '1'); return { notifOn: !st.notifOn } }),
       askLogout: () => this.setState({ sheet: 'logout' }),
       acctRows: [['계정 유형', '기관 회원'], ['기관명', acct.name], ['담당자', acct.staffName || '-'], ['이메일', acct.email || '-'], ['아이디', acct.id || '-'], ['기관 주소', acct.loc || '-'], ['디바이스 번호', acct.dev || '-']].map(([k, v], i) => ({ k, v, bt: i ? '1px solid #F2EFEA' : 'none' })),
       // 기본 정보 수정(이름·이메일)과 비밀번호 변경은 아래 시트에서. 서버 오류 문구는 그대로 보여 준다
