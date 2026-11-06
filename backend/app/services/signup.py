@@ -17,31 +17,23 @@ from app.models import Staff
 from app.models.enums import StaffRole
 from app.schemas.auth import DeviceCodeVerifyOut, InstitutionBriefOut, SignupIn
 from app.services.auth import snapshot_of
-from app.services.device_codes import find_usable_code, remaining_accounts
+from app.services.device_codes import find_usable_code
 
 
 def verify_code(db: Session, raw: str) -> DeviceCodeVerifyOut:
-    """코드가 쓸 수 있는지와 남은 계정 수(15.4). DB를 바꾸지 않는다. 자리가 없으면 409 DEVICE_CODE_FULL."""
+    """코드가 쓸 수 있는지 보고 그 기관을 돌려준다(15.4). DB를 바꾸지 않는다. 계정 수 상한은 없다(v1.32)."""
     code = find_usable_code(db, raw)
-    remaining = remaining_accounts(db, code)
-    if remaining <= 0:
-        raise AppError(ErrorCode.DEVICE_CODE_FULL)
-    return DeviceCodeVerifyOut(
-        institution=InstitutionBriefOut(id=code.institution_id, name=code.institution.name),
-        remaining_accounts=remaining,
-    )
+    return DeviceCodeVerifyOut(institution=InstitutionBriefOut(id=code.institution_id, name=code.institution.name))
 
 
 def signup(db: Session, data: SignupIn) -> AuthStaff:
-    """가입(15.4 순서): 코드 검사 → 코드 행 잠금 → 활성 계정 수 재확인 → 아이디 중복 → CLIENT 계정 생성 → 스냅샷.
+    """가입(15.4 순서): 코드 검사 → 아이디 중복 → CLIENT 계정 생성 → 스냅샷.
 
     입력 규칙(422)은 SignupIn이 먼저 본다. bcrypt는 DB 작업 전에 끝낸다(트랜잭션을 길게 잡지 않는다).
     같은 아이디로 동시에 가입해 uq_staff_login에 걸리면 409 LOGIN_ID_TAKEN이다.
     """
     password_hash = hash_password(data.password)
-    code = find_usable_code(db, data.code, for_update=True)
-    if remaining_accounts(db, code) <= 0:
-        raise AppError(ErrorCode.DEVICE_CODE_FULL)
+    code = find_usable_code(db, data.code)
     if db.scalar(select(Staff.id).where(Staff.login_id == data.login_id)) is not None:
         raise AppError(ErrorCode.LOGIN_ID_TAKEN)
 

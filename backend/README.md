@@ -10,7 +10,7 @@
 | 요청 DB 세션, 로그인 담당자 스냅샷·계약 검사·역할 확인(ADMIN, 크림오프) (11.6, 11.7) | `app/api/deps.py` |
 | 담당자 스냅샷 캐시 `AuthStaff`(effective_role·contract_status 계산) (11.6 인증 캐시) | `app/core/auth_cache.py` |
 | 로그인·내 정보 `POST /auth/login`·`GET /auth/me`, 비밀번호 변경·내 정보 수정 `PATCH /auth/password`·`PATCH /auth/me` (13.4, 13.7, 15.4) | `app/api/routes/auth.py`, `app/services/auth.py`, `app/schemas/auth.py` |
-| 디바이스 코드 확인·회원가입 `POST /auth/device-codes/verify`·`POST /auth/signup`(가입 계정은 CLIENT, 코드별 활성 계정 상한) (12.5, 13.5, 15.4) | `app/services/signup.py`, `app/services/device_codes.py` |
+| 디바이스 코드 확인·회원가입 `POST /auth/device-codes/verify`·`POST /auth/signup`(가입 계정은 CLIENT, 계정 수 상한 없음, 기관마다 쓸 수 있는 코드 하나) (12.5, 13.5, 15.4) | `app/services/signup.py`, `app/services/device_codes.py` |
 | 비밀번호 재설정 `POST /auth/password-reset/request`·`/confirm`(토큰 30분, 해시만 저장)과 SMTP 메일 보내기 (11.6 메일, 13.8, 15.4) | `app/services/password_reset.py`, `app/core/mail.py` |
 | 크림오프 관리자 API `/admin/*` 9개: 기관·디바이스 코드·계정 중지(조회는 ADMIN·STAFF, 쓰기는 ADMIN, 기관 필터 없음) (13.6, 15.9) | `app/api/routes/admin.py`, `app/services/admin.py`, `app/schemas/admin.py` |
 | 자료 파기 `POST /admin/purge`(ADMIN만. 병원 담당자는 `DELETE /dogs/{dog_id}`로 자기 기관의 반려견 하나만. 반려견 하나 또는 기관 전체, `institution_id`로 병원을 지정하고 생략하면 자기 기관, `dry_run` 기본 true, 분석 API 사본 → 파일 → 행 순서, `purge_log` 기록, 분석 중 촬영이 있으면 409, 분석 API가 지우지 못하면 503)와 전체 파기 스크립트 `python -m scripts.purge --all [--execute]`(기관·계정·코드는 남김. 분석 API 저장소는 그쪽 `python purge.py --all --execute`로 따로) (6절, 7절, 12.5, 15.9) | `app/services/purge.py`, `scripts/purge.py`, `app/api/routes/admin.py` |

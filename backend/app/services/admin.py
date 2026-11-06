@@ -142,7 +142,6 @@ def _code_out(code: DeviceCode, active: int) -> DeviceCodeOut:
         id=code.id,
         code=format_code(code.code),
         institution_id=code.institution_id,
-        max_accounts=code.max_accounts,
         active_accounts=active,
         revoked_at=code.revoked_at,
         note=code.note,
@@ -181,23 +180,32 @@ def list_device_codes(db: Session, institution_id: uuid.UUID) -> list[DeviceCode
 
 
 def create_device_code(db: Session, institution_id: uuid.UUID, data: DeviceCodeCreate) -> DeviceCodeOut:
-    """코드 발급(15.9). 20자 무작위라 중복은 사실상 없다(uq_device_code가 마지막 안전망)."""
+    """코드 발급(15.9). 기관마다 쓸 수 있는 코드는 하나라, 회수하지 않은 코드가 있으면 409 DEVICE_CODE_EXISTS다.
+
+    동시에 두 번 발급하면 uq_device_code_active가 막는다(같은 409). 코드 값은 20자 무작위라 겹칠 일이 사실상 없다.
+    """
     _require_institution(db, institution_id)
-    code = DeviceCode(
-        institution_id=institution_id, code=generate_code(), max_accounts=data.max_accounts, note=data.note
+    usable = db.scalar(
+        select(DeviceCode.id).where(DeviceCode.institution_id == institution_id, DeviceCode.revoked_at.is_(None))
     )
+    if usable is not None:
+        raise AppError(ErrorCode.DEVICE_CODE_EXISTS)
+    code = DeviceCode(institution_id=institution_id, code=generate_code(), note=data.note)
     db.add(code)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as error:
+        if db_error_code(error) == UNIQUE_VIOLATION:
+            raise AppError(ErrorCode.DEVICE_CODE_EXISTS) from None
+        raise
     db.refresh(code)
     return _code_out(code, 0)
 
 
 def update_device_code(db: Session, device_code_id: uuid.UUID, data: DeviceCodeUpdate) -> DeviceCodeOut:
-    """상한·메모 수정(보낸 필드만). 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다)."""
+    """메모 수정(보낸 필드만). note의 null은 메모 지우기다."""
     code = _require_device_code(db, device_code_id)
     changes = data.model_dump(exclude_unset=True)
-    if changes.get("max_accounts") is not None:
-        code.max_accounts = changes["max_accounts"]
     if "note" in changes:
         code.note = changes["note"]
     db.flush()

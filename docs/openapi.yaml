@@ -143,12 +143,6 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
               example: {error: {code: DEVICE_CODE_INVALID, message: "유효한 디바이스 코드가 아닙니다.", detail: null}}
-        '409':
-          description: DEVICE_CODE_FULL
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/Error'}
-              example: {error: {code: DEVICE_CODE_FULL, message: "이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요.", detail: null}}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
@@ -177,7 +171,7 @@ paths:
               schema: {$ref: '#/components/schemas/Error'}
               example: {error: {code: DEVICE_CODE_INVALID, message: "유효한 디바이스 코드가 아닙니다.", detail: null}}
         '409':
-          description: DEVICE_CODE_FULL 또는 LOGIN_ID_TAKEN(다른 기관의 아이디와 겹쳐도)
+          description: LOGIN_ID_TAKEN(다른 기관의 아이디와 겹쳐도)
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
@@ -924,7 +918,7 @@ paths:
       tags: [크림오프 관리자]
       operationId: createDeviceCode
       summary: 코드 발급 (BE-24, ADMIN)
-      description: 본문을 비우면 상한 3, 메모 없음이다.
+      description: 기관마다 쓸 수 있는 코드는 하나다. 회수하지 않은 코드가 있으면 409다. 본문은 비워도 된다.
       requestBody:
         required: false
         content:
@@ -939,6 +933,12 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: DEVICE_CODE_EXISTS(이 기관에 회수하지 않은 코드가 이미 있다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_EXISTS, message: "이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요.", detail: null}}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
@@ -966,8 +966,8 @@ paths:
     patch:
       tags: [크림오프 관리자]
       operationId: updateDeviceCode
-      summary: 상한·메모 수정 (BE-24, ADMIN)
-      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기이고 max_accounts는 비울 수 없다. 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다).
+      summary: 메모 수정 (BE-24, ADMIN)
+      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기다.
       requestBody:
         required: true
         content:
@@ -1315,7 +1315,7 @@ components:
         - SHOT_IN_PROGRESS
         - SHOT_NOT_FAILED
         - REPORT_IN_PROGRESS
-        - DEVICE_CODE_FULL
+        - DEVICE_CODE_EXISTS
         - LOGIN_ID_TAKEN
         - DOG_MODIFIED
         - SELF_DISABLE
@@ -1396,7 +1396,7 @@ components:
         code: {type: string, minLength: 1, maxLength: 40, description: 하이픈·공백·소문자는 서버가 정리한다, example: 7f3k2-qw9pa-x2m8n-h4cde}
     DeviceCodeVerifyOut:
       type: object
-      required: [institution, remaining_accounts]
+      required: [institution]
       properties:
         institution:
           type: object
@@ -1404,7 +1404,6 @@ components:
           properties:
             id: {$ref: '#/components/schemas/Uuid'}
             name: {type: string, example: 크림 재활센터}
-        remaining_accounts: {type: integer, description: 이 코드로 더 만들 수 있는 계정 수, example: 1}
     SignupIn:
       type: object
       required: [code, login_id, password, name, email]
@@ -1485,12 +1484,11 @@ components:
     DeviceCodeOut:
       type: object
       description: 코드 전체가 든 자리는 발급 응답과 코드 목록뿐이다.
-      required: [id, code, institution_id, max_accounts, active_accounts, revoked_at, note, created_at]
+      required: [id, code, institution_id, active_accounts, revoked_at, note, created_at]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         code: {type: string, example: 7F3K2-QW9PA-X2M8N-H4CDE}
         institution_id: {$ref: '#/components/schemas/Uuid'}
-        max_accounts: {type: integer, example: 3}
         active_accounts: {type: integer, example: 2}
         revoked_at: {type: [string, 'null'], format: date-time, example: null}
         note: {type: [string, 'null'], example: null}
@@ -1505,13 +1503,11 @@ components:
     DeviceCodeCreate:
       type: object
       properties:
-        max_accounts: {type: integer, minimum: 1, maximum: 32767, default: 3, description: '관리자가 코드마다 정한다', example: 3}
         note: {type: [string, 'null'], maxLength: 100, example: 2호기}
     DeviceCodeUpdate:
       type: object
-      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기이고 max_accounts는 비울 수 없다.
+      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기다.
       properties:
-        max_accounts: {type: integer, minimum: 1, maximum: 32767, description: '관리자가 코드마다 정한다', example: 5}
         note: {type: [string, 'null'], maxLength: 100, example: null}
     StaffAdminOut:
       type: object

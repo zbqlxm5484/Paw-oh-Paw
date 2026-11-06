@@ -65,7 +65,6 @@ class DeviceCodeVerifyOut(BaseModel):
     """POST /auth/device-codes/verify 응답(15.4)."""
 
     institution: InstitutionBriefOut
-    remaining_accounts: int
 
 
 # 13.5 약관 버전: 1~20자, 앞뒤 공백은 지운다

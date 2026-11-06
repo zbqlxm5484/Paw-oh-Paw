@@ -141,14 +141,14 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 25 | `GET /health` | 서버 상태 | — | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | — | 200 | — |
-| 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (토큰 없음) | 가입 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
-| 28 | `POST /auth/signup` | 회원가입 (토큰 없음) | 가입 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL`, `LOGIN_ID_TAKEN` |
+| 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (토큰 없음) | 가입 | 200 | 404 `DEVICE_CODE_INVALID` |
+| 28 | `POST /auth/signup` | 회원가입 (토큰 없음) | 가입 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `LOGIN_ID_TAKEN` |
 | 29 | `GET /admin/institutions` | 기관 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 30 | `POST /admin/institutions` | 기관 만들기 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN`, 422 `VALIDATION_ERROR`(기관 코드 중복은 `fields`에 `code`) |
 | 31 | `PATCH /admin/institutions/{institution_id}` | 기관 이름·계약 종료일 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 32 | `GET /admin/institutions/{institution_id}/device-codes` | 코드 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
-| 33 | `POST /admin/institutions/{institution_id}/device-codes` | 코드 발급 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN` |
-| 34 | `PATCH /admin/device-codes/{device_code_id}` | 상한·메모 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 33 | `POST /admin/institutions/{institution_id}/device-codes` | 코드 발급 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN`, 409 `DEVICE_CODE_EXISTS` |
+| 34 | `PATCH /admin/device-codes/{device_code_id}` | 메모 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 35 | `POST /admin/device-codes/{device_code_id}/revoke` | 코드 회수, 멱등 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 36 | `GET /admin/institutions/{institution_id}/staff` | 기관의 계정 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 37 | `PATCH /admin/staff/{staff_id}` | 계정 중지·재개 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN`, 409 `SELF_DISABLE` |
@@ -193,7 +193,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ```json
 {
   "id": "…", "code": "7F3K2-QW9PA-X2M8N-H4CDE", "institution_id": "…",
-  "max_accounts": 3, "active_accounts": 2, "revoked_at": null,
+  "active_accounts": 2, "revoked_at": null,
   "note": null, "created_at": "2026-10-30T02:00:00Z"
 }
 ```
@@ -390,11 +390,11 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 {"code": "7f3k2-qw9pa-x2m8n-h4cde"}
 
 // 응답 200
-{"institution": {"id": "…", "name": "크림 재활센터"}, "remaining_accounts": 1}
+{"institution": {"id": "…", "name": "크림 재활센터"}}
 ```
 
 - 코드 형식이 틀렸거나, 없거나, 회수됐거나, 기관 계약이 끝났으면 모두 404 `DEVICE_CODE_INVALID` 하나로 온다.
-- 이 코드로 만들 수 있는 계정을 다 썼으면 409 `DEVICE_CODE_FULL`이다.
+- 남은 자리 수(`remaining_accounts`)는 없어졌다. 코드 하나로 만들 수 있는 계정 수에 상한이 없다.
 - 하이픈·공백·소문자는 서버가 정리하므로 입력 그대로 보내면 된다. 몇 번 불러도 결과가 같다.
 
 ### `POST /auth/signup` — 회원가입 (토큰 없음)
@@ -820,8 +820,8 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 - **`POST /admin/institutions`**: 요청 `{"code": null, "name": "크림 재활센터", "contract_ends_at": "2027-10-30"}`. 응답 201 **InstitutionAdminOut**. 기관 코드가 겹치면 422 `VALIDATION_ERROR`(`fields`에 `code`)다.
 - **`PATCH /admin/institutions/{institution_id}`**: 요청 `{"name"?, "contract_ends_at"?}`. 보낸 필드만 바꾸고 `contract_ends_at`의 `null`은 기한 없음이다. 응답 200 **InstitutionAdminOut**.
 - **`GET /admin/institutions/{institution_id}/device-codes`**: 응답 200 `{"items": [DeviceCodeOut, …]}`. 회수된 코드도 들어 있고 `revoked_at`으로 구분한다.
-- **`POST /admin/institutions/{institution_id}/device-codes`**: 요청 `{"max_accounts"?: 3, "note"?: "2호기"}`. 본문을 비우면 상한 3, 메모 없음이다. 응답 201 **DeviceCodeOut**.
-- **`PATCH /admin/device-codes/{device_code_id}`**: 요청 `{"max_accounts"?, "note"?}`. 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다). 응답 200 **DeviceCodeOut**.
+- **`POST /admin/institutions/{institution_id}/device-codes`**: 요청 `{"note"?: "2호기"}`. 본문을 비워도 된다. 응답 201 **DeviceCodeOut**. 기관마다 쓸 수 있는 코드는 하나라, 회수하지 않은 코드가 있으면 409 `DEVICE_CODE_EXISTS`다. 새 코드를 주려면 먼저 회수한다.
+- **`PATCH /admin/device-codes/{device_code_id}`**: 요청 `{"note"?}`(`null`은 메모 지우기). 응답 200 **DeviceCodeOut**. `max_accounts`는 없어졌고 보내도 무시한다.
 - **`POST /admin/device-codes/{device_code_id}/revoke`**: 본문 없음. 이미 회수됐어도 200이다. 기존 계정은 그대로 쓴다(막으려면 계정 중지). 응답 200 **DeviceCodeOut**.
 - **`GET /admin/institutions/{institution_id}/staff`**: 응답 200 `{"items": [{id, login_id, name, email, role, is_active, device_code_id, created_at}, …]}`.
 - **`PATCH /admin/staff/{staff_id}`**: 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`이다.
@@ -939,7 +939,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `SHOT_IN_PROGRESS` | 409 | 분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요. | |
 | `SHOT_NOT_FAILED` | 409 | 실패한 촬영만 다시 분석할 수 있습니다. | |
 | `REPORT_IN_PROGRESS` | 409 | 보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요. | |
-| `DEVICE_CODE_FULL` | 409 | 이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요. | |
+| `DEVICE_CODE_EXISTS` | 409 | 이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요. | 관리자 화면: 회수한 뒤 발급 |
 | `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 아이디 칸 표시 |
 | `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | 반려견을 다시 조회 |
 | `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | |
@@ -1080,7 +1080,6 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | 기관 `code` | 1~20자, 유일. 비우면 서버가 `INST-` + 6자로 만든다 |
 | 기관 `name` | 1~100자 |
 | `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
-| `max_accounts` | 1 ~ 32767 |
 | `note` | 최대 100자 |
 | `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
 

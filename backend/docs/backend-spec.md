@@ -24,6 +24,7 @@ Oct 19, 2026 · @조영운
 | v1.23 | 2026-11-05 | 디바이스 코드 계정 상한의 최댓값 10을 없앰(조영운 결정, 11-05): 설정값 `DEVICE_CODE_MAX_ACCOUNTS`를 지우고 `max_accounts`는 관리자가 코드마다 1 \~ 32767(SMALLINT가 담는 값) 안에서 정한다. 기관에 코드를 더 발급하면 넘길 수 있어 제한 역할을 못 했고, 올리려면 서버 설정을 바꿔야 했다. 기본값 3은 그대로다. 12.2 DDL 주석, 13.6, 16절 |
 | v1.30 | 2026-11-05 | 병원 자료 파기(199 후속): 15.9 `POST /admin/purge`에 대상 기관 `institution_id`(생략하면 부른 관리자의 기관, 없는 기관은 404), 10절 Q31과의 관계. 15.2(42번)·15.5 `DELETE /dogs/{dog_id}`(병원 담당자의 반려견 삭제) |
 | v1.31 | 2026-11-06 | 가입 약관 동의 기록(192 후속, 통합본 결정 1번): 12.2 `staff.terms_version`·`terms_agreed_at`·`marketing_agreed`(마이그레이션 0010), 13.5 `terms`, 15.4 `POST /auth/signup` 요청에 `terms`(선택. 화면이 보내기 전까지는 없어도 가입된다) |
+| v1.32 | 2026-11-06 | 디바이스 코드 규칙 변경(조영운 결정, 11-06): 계정 수 상한을 없애고 기관마다 쓸 수 있는 코드를 하나로 한다. 12.2 `device_code.max_accounts`·`ck_device_code_max` 삭제와 `uq_device_code_active`(마이그레이션 0012), 12.5, 13.6, 14.1 `DEVICE_CODE_FULL` 삭제·`DEVICE_CODE_EXISTS` 추가, 15.2, 15.3 **DeviceCodeOut**, 15.4 확인 응답에서 `remaining_accounts` 삭제, 15.9 발급·수정, 17.2. v1.23의 상한 범위(1\~32767)는 이 판에서 없어졌다 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -159,7 +160,7 @@ Oct 19, 2026 · @조영운
 | BE-01 | 로그인·기관 분리 (필수) | 아이디·비밀번호로 로그인하고, 모든 조회를 자기 기관 데이터로 제한한다. 역할은 `ADMIN`·`STAFF`(크림오프)·`CLIENT`(고객). 계정은 디바이스 코드 가입(BE-22, `CLIENT`) 또는 `scripts/seed.py`로 만든다 | 보고서는 미리 확인된 사람만 봐야 한다. 결과 화면을 만들면 기관별 데이터 분리가 조건부 필수다 | PR-F09-04, 10-15 회의, 10-30 설계 |
 | BE-02 | 반려견 등록·수정 (필수) | 이름·견종·체중, 선택으로 생년·성별, 재활 정보(재활 시작일·관심 다리·내부 메모). 체급(소·중·대)은 기업 자료에 따로 없어서 등록 체중으로 자동 분류하고(박규원 체급 기준: 10 kg 미만 소형, 25 kg 미만 중형, 25 kg 이상 대형), 담당자가 고칠 수 있다 | 보고서 설명이 이름·체중·견종·체급에 따라 바뀐다. 보호자 이름·연락처는 쓰는 곳이 없어 받지 않는다 | PR-F08-02, REQ-CM-002 |
 | BE-03 | 반려견 목록·검색 (필수) | 이름 검색, 마지막 측정일, 회차 수, 진행 중 회차 표시 | 하루 여러 마리를 재므로 바로 찾아 들어가야 한다 | 4.1 측정 담당자 |
-| BE-22 | 디바이스 코드 가입 (필수) | 디바이스 코드 확인 → 기관명 표시 → 아이디·비밀번호·이름·이메일로 가입. 코드의 기관에 `CLIENT` 계정을 만든다. 코드별 활성 계정 상한 | 밤·주말에 가입해도 관리자 없이 바로 쓸 수 있어야 한다. 기관은 코드가 정하므로 가입자가 기관을 잘못 고를 수 없다 | 10-30 설계 |
+| BE-22 | 디바이스 코드 가입 (필수) | 디바이스 코드 확인 → 기관명 표시 → 아이디·비밀번호·이름·이메일로 가입. 코드의 기관에 `CLIENT` 계정을 만든다. 코드 하나로 만들 수 있는 계정 수에 상한은 없다(v1.32) | 밤·주말에 가입해도 관리자 없이 바로 쓸 수 있어야 한다. 기관은 코드가 정하므로 가입자가 기관을 잘못 고를 수 없다 | 10-30 설계 |
 | BE-23 | 계약 만료 차단 (필수) | 기관 계약 종료일이 지나면 그 기관 `CLIENT`는 `GUEST`로 계산되어 로그인·`/auth/me` 말고는 403 `CONTRACT_EXPIRED`. 요청마다 계산하고 60초 캐시를 둔다 | B2B 계약 기간 동안만 쓰게 한다. 역할을 자동으로 바꾸는 작업을 두지 않아 깨질 곳이 없고, 화면은 GUEST를 보고 만료 안내를 띄운다 | 10-30 설계 |
 | BE-25 | 반려견 동시 수정 보호 (권장) | 반려견 수정에 `version`을 받아 다른 담당자가 먼저 고쳤으면 409 `DOG_MODIFIED` | 같은 기관의 담당자 여럿이 같은 반려견을 고칠 수 있다 | 10-30 설계 |
 | BE-26 | 비밀번호 변경·내 정보 수정 (필수) | 로그인한 담당자가 현재 비밀번호를 확인하고 새 비밀번호로 바꾼다. 이름·이메일도 고친다 | 비밀번호와 연락처는 본인이 관리한다 | 10-30 설계 |
@@ -202,7 +203,7 @@ Oct 19, 2026 · @조영운
 | --- | --- | --- | --- | --- |
 | BE-19 | 자료 파기 (필수) | 반려견·기관·전체 단위로 DB 행과 파일을 지우고 지운 기록을 남긴다 | 과제가 끝나면 파기하고 확인서를 내야 한다 | REQ-CM-002, D-13 |
 | BE-20 | 상태 확인·로그 (권장) | /health, 요청 로그. 로그에 반려견 이름·파일 경로를 남기지 않는다 | 시연 중 문제를 빨리 찾되 식별 정보는 남기지 않는다 | PR-C-02 |
-| BE-24 | 기관·코드·계정 관리 (필수, 크림오프) | 기관 만들기·계약일 수정, 코드 발급·상한 수정·회수, 계정 중지·재개, 목록. 쓰기는 `ADMIN`, 조회는 `ADMIN`·`STAFF` | 코드 발급과 계약 연장을 운영자가 화면에서 해야 한다. 임시 스태프는 보기만 한다 | 10-30 설계 |
+| BE-24 | 기관·코드·계정 관리 (필수, 크림오프) | 기관 만들기·계약일 수정, 코드 발급(기관마다 쓸 수 있는 코드 하나)·메모 수정·회수, 계정 중지·재개, 목록. 쓰기는 `ADMIN`, 조회는 `ADMIN`·`STAFF` | 코드 발급과 계약 연장을 운영자가 화면에서 해야 한다. 임시 스태프는 보기만 한다 | 10-30 설계 |
 
 ## 5. 재활 포커스 기능
 
@@ -721,16 +722,16 @@ CREATE TABLE device_code (
   id              UUID          NOT NULL,
   institution_id  UUID          NOT NULL,
   code            VARCHAR(32)   NOT NULL,  -- 20자, 하이픈 없이 저장
-  max_accounts    SMALLINT      NOT NULL DEFAULT 3,  -- 관리자가 코드마다 정한다. 입력 범위는 13.6
   revoked_at      TIMESTAMPTZ   NULL,      -- 회수 시각. NULL이면 쓸 수 있다
   note            VARCHAR(100)  NULL,      -- 운영 메모(예: "2호기")
   created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
   CONSTRAINT uq_device_code UNIQUE (code),
-  CONSTRAINT ck_device_code_max CHECK (max_accounts >= 1),
   CONSTRAINT fk_device_code_institution FOREIGN KEY (institution_id) REFERENCES institution (id)
 );
+-- 기관마다 쓸 수 있는(회수하지 않은) 코드는 하나다(12.5). 회수한 코드는 기록으로 여러 개 남는다
+CREATE UNIQUE INDEX uq_device_code_active ON device_code (institution_id) WHERE revoked_at IS NULL;
 
 -- 담당자 계정(크림오프 쪽 ADMIN·STAFF와 고객 CLIENT 모두). 디바이스 코드 가입 또는 scripts/seed.py로 만든다
 CREATE TABLE staff (
@@ -994,7 +995,8 @@ CREATE TABLE purge_log (
   6. 회차에는 시작 시점의 체급을 따로 저장한다(`measure_session.size_class`, 팀 회의 10-22). 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(`weight_kg`, 없으면 등록 체중)으로 계산한다. 그 뒤 반려견 체중·체급이 바뀌어도 지난 회차의 체급은 그대로이고, 집계·보고서는 회차의 체급을 쓴다. 대형견도 새끼일 때는 소형 구간에 들고, 감량한 개는 그 뒤 회차부터 중형이 된다. 측정 수치는 체급과 상관없이 그대로이고 체급별 기준 문장만 회차의 체급을 따른다.
 - **기준 회차**: `baseline_session_id`가 비어 있으면 그 반려견의 가장 이른 DONE 회차를 기준으로 쓴다. 회차 순서는 언제나 (measured\_on, created\_at) 오름차순이고, 가장 이른·가장 최근·바로 앞 회차를 모두 이 순서로 정한다. 측정일을 직접 고를 수 있고 같은 날 회차가 둘일 수 있어서다.
 - **촬영 순번**: `seq_no`는 같은 회차의 가장 큰 값 + 1이다. 동시에 올려도 겹치지 않도록 업로드는 회차 행을 SELECT … FOR UPDATE로 잠근 뒤 순번을 매긴다(12.4). 그런데도 겹치면(`uq_shot_seq` 위반) 잠금이 빠진 버그이므로 500으로 끝내고 로그를 남긴다.
-- **활성 계정 수**(v1.12): 디바이스 코드 하나로 가입했고 `is_active`가 TRUE인 계정 수다. `SELECT count(*) FROM staff WHERE device_code_id = :id AND is_active`. 가입은 `device_code` 행을 `SELECT … FOR UPDATE`로 잠근 뒤 세고 넣는다. 동시에 가입해도 상한(`max_accounts`)을 넘지 않게 하기 위해서다(촬영 순번과 같은 방식). 퇴사자를 중지하면 자리가 돌아온다.
+- **활성 계정 수**(v1.12, v1.32에서 상한 삭제): 디바이스 코드 하나로 가입했고 `is_active`가 TRUE인 계정 수다. `SELECT count(*) FROM staff WHERE device_code_id = :id AND is_active`. 관리자 목록에 보여 주는 값일 뿐이고 가입을 막는 데 쓰지 않는다. 코드 하나로 만들 수 있는 계정 수에 상한이 없어서 가입 때 `device_code` 행을 잠그지 않는다.
+- **기관당 쓸 수 있는 코드 하나**(v1.32): 회수하지 않은(`revoked_at IS NULL`) 코드는 기관마다 하나다. 부분 유일 인덱스 `uq_device_code_active`가 지킨다. 새 코드를 주려면 먼저 회수한다. 회수한 코드는 지우지 않으므로 한 기관의 코드 행은 여러 개일 수 있다. 마이그레이션 0012는 쓸 수 있는 코드가 이미 여러 개인 기관에서 하나만 남기고 나머지를 회수한다. 가입에 쓰인 코드(그 코드로 만든 계정이 하나라도 있는 코드)를 먼저 남기고, 그런 코드가 여럿이거나 없으면 가장 최근에 발급한 것을 남긴다. 회수한 코드로 가입한 계정은 그대로 둔다. 상한이 없으므로 코드가 새어 나가면 그 코드로 누구나 가입할 수 있다. 그때는 코드를 회수해 새로 발급하고 모르는 계정을 중지한다.
 - **반려견 `version`**(v1.12): 수정할 때마다 1 늘고, 수정 요청은 읽었을 때의 `version`을 보내야 한다. SQLAlchemy `version_id_col`로 ORM이 `WHERE version = :old`를 붙이고, 어긋나면 `StaleDataError`를 409 `DOG_MODIFIED`로 바꾼다. JPA `@Version`과 같다. 회차·촬영은 이미 행 잠금으로 지키므로(12.4) 자유 수정이 있는 행은 반려견뿐이다.
 - **재설정 토큰**(v1.12): 계정당 하나다. 새로 요청하면 이전 토큰은 덮어써서 무효가 된다. 서버가 `secrets.token_urlsafe(32)`로 만들어 메일로 보내고, DB에는 SHA-256 해시와 만료 시각(발급 30분 뒤)만 둔다. 쓰면 지운다.
 - **도구**: PostgreSQL 17, SQLAlchemy 2(테이블을 Python 클래스로 정의), pg8000(Python에서 PostgreSQL에 접속하는 드라이버), Alembic(테이블 변경 이력을 파일로 남겨 팀원 누구나 같은 DB를 만든다. Spring의 Flyway와 같은 역할).
@@ -1104,7 +1106,6 @@ CREATE TABLE purge_log (
 | 기관 `code` | 1\~20자, 유일. 비우면 서버가 `INST-` + 6자(코드 글자)로 만든다 |
 | 기관 `name` | 1\~100자 |
 | `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
-| `max_accounts` | 1 \~ 32767. 관리자가 코드마다 정한다. 위쪽 한계는 SMALLINT가 담을 수 있는 값뿐이다 |
 | `note` | 최대 100자 |
 | `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
 
@@ -1159,7 +1160,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `SHOT_IN_PROGRESS` | 409 | 분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요. | 13.3 |
 | `SHOT_NOT_FAILED` | 409 | 실패한 촬영만 다시 분석할 수 있습니다. | 13.3 |
 | `REPORT_IN_PROGRESS` | 409 | 보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요. | 13.3 |
-| `DEVICE_CODE_FULL` | 409 | 이 디바이스 코드로 만들 수 있는 계정 수를 모두 사용했습니다. 관리자에게 문의해 주세요. | 활성 계정 수 ≥ `max_accounts`(12.5) |
+| `DEVICE_CODE_EXISTS` | 409 | 이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요. | 회수하지 않은 코드가 있는 기관에 코드 발급(12.5) |
 | `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 가입 때 아이디 중복(다른 기관이어도) |
 | `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | `version` 불일치(12.5) |
 | `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | `ADMIN`이 자기 `is_active`를 false로 |
@@ -1289,14 +1290,14 @@ STOPPED: "중간에 멈췄습니다."
 | 24 | `POST /admin/purge` | 자료 파기 (관리자) | BE-19 | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 25 | `GET /health` | 서버 상태 | BE-20 | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | BE-20 | 200 | — |
-| 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (인증 없음) | BE-22 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
-| 28 | `POST /auth/signup` | 회원가입(`CLIENT`, 인증 없음) | BE-22 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL`·`LOGIN_ID_TAKEN` |
+| 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (인증 없음) | BE-22 | 200 | 404 `DEVICE_CODE_INVALID` |
+| 28 | `POST /auth/signup` | 회원가입(`CLIENT`, 인증 없음) | BE-22 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `LOGIN_ID_TAKEN` |
 | 29 | `GET /admin/institutions` | 기관 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
 | 30 | `POST /admin/institutions` | 기관 만들기 (`ADMIN`) | BE-24 | 201 | 403 `FORBIDDEN`, 422 `VALIDATION_ERROR`(기관 코드 중복은 `fields: code`) |
 | 31 | `PATCH /admin/institutions/{id}` | 기관 이름·계약 종료일 수정 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
 | 32 | `GET /admin/institutions/{id}/device-codes` | 코드 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
-| 33 | `POST /admin/institutions/{id}/device-codes` | 코드 발급 (`ADMIN`) | BE-24 | 201 | 403 `FORBIDDEN` |
-| 34 | `PATCH /admin/device-codes/{id}` | 상한·메모 수정 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
+| 33 | `POST /admin/institutions/{id}/device-codes` | 코드 발급 (`ADMIN`. 기관마다 쓸 수 있는 코드 하나) | BE-24 | 201 | 403 `FORBIDDEN`, 409 `DEVICE_CODE_EXISTS` |
+| 34 | `PATCH /admin/device-codes/{id}` | 메모 수정 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
 | 35 | `POST /admin/device-codes/{id}/revoke` | 코드 회수, 멱등 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN` |
 | 36 | `GET /admin/institutions/{id}/staff` | 기관의 계정 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
 | 37 | `PATCH /admin/staff/{id}` | 계정 중지·재개 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN`, 409 `SELF_DISABLE` |
@@ -1332,7 +1333,7 @@ STOPPED: "중간에 멈췄습니다."
 ```json
 {
   "id": "…", "code": "7F3K2-QW9PA-X2M8N-H4CDE", "institution_id": "…",
-  "max_accounts": 3, "active_accounts": 2, "revoked_at": null,
+  "active_accounts": 2, "revoked_at": null,
   "note": null, "created_at": "2026-10-30T02:00:00Z"
 }
 ```
@@ -1510,11 +1511,11 @@ STOPPED: "중간에 멈췄습니다."
 {"code": "7f3k2-qw9pa-x2m8n-h4cde"}
 
 // 응답 200
-{"institution": {"id": "…", "name": "크림 재활센터"}, "remaining_accounts": 1}
+{"institution": {"id": "…", "name": "크림 재활센터"}}
 ```
 
 - 코드를 정리해(13.5) 찾고, `revoked_at`이 없고, 기관 계약이 `ACTIVE`여야 200이다. 아니면 404 `DEVICE_CODE_INVALID` 하나다. 응답 본문은 어느 경우든 같다.
-- `remaining_accounts` = `max_accounts` − 활성 계정 수(12.5). 0이면 409 `DEVICE_CODE_FULL`.
+- 남은 자리 수는 돌려주지 않는다. 코드 하나로 만들 수 있는 계정 수에 상한이 없다(v1.32, 12.5).
 - DB를 바꾸지 않는다. 몇 번 불러도 같다.
 
 **`POST /auth/signup`** — 회원가입 (BE-22, 인증 없음)
@@ -1531,7 +1532,7 @@ STOPPED: "중간에 멈췄습니다."
 - `terms`가 없어도 가입된다. 웹과 앱이 아직 보내지 않기 때문이다. 그때는 `terms_version`·`terms_agreed_at`이 NULL이라 동의 기록이 없는 계정이 된다. 웹과 앱이 보내기 시작하면 필수로 바꾼다.
 - `version`은 화면이 보여 준 약관의 버전을 그대로 받는다. 약관 문서와 버전 번호가 아직 없어 서버는 값을 대조하지 않는다.
 
-- 순서: 입력 규칙(422) → 코드 검사(verify와 같은 404·409) → `device_code` 행 잠금 → 활성 계정 수 재확인(409 `DEVICE_CODE_FULL`) → 아이디 중복(409 `LOGIN_ID_TAKEN`) → `staff` 생성(`role` = `CLIENT`, `institution_id` = 코드의 기관, `device_code_id` = 코드, `email`) → 토큰 발급. 가입 즉시 로그인된 상태다(화면이 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다).
+- 순서: 입력 규칙(422) → 코드 검사(verify와 같은 404) → 아이디 중복(409 `LOGIN_ID_TAKEN`) → `staff` 생성(`role` = `CLIENT`, `institution_id` = 코드의 기관, `device_code_id` = 코드, `email`) → 토큰 발급. 가입 즉시 로그인된 상태다(화면이 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다).
 - `uq_staff_login` 위반이 동시에 나면(같은 아이디로 동시에 가입) IntegrityError를 409 `LOGIN_ID_TAKEN`으로 바꾼다.
 - bcrypt 해시는 DB 작업 전에 끝낸다(트랜잭션을 길게 잡지 않는다. seed.py와 같다). 이메일은 형식만 검사하고 인증 메일은 보내지 않는다.
 
@@ -1955,8 +1956,8 @@ stance_ratio: 5.0 # pct
 - **`POST /admin/institutions`** — 요청 `{"code": null, "name": "크림 재활센터", "contract_ends_at": "2027-10-30"}`(규칙은 13.6). 응답 201 **InstitutionAdminOut**.
 - **`PATCH /admin/institutions/{id}`** — 요청 `{"name"?, "contract_ends_at"?}`(보낸 필드만, `null`은 기한 없음). 응답 200 **InstitutionAdminOut**. 바꾼 뒤 그 기관 담당자를 캐시에서 지운다.
 - **`GET /admin/institutions/{id}/device-codes`** — 응답 200 `{"items": [DeviceCodeOut, …]}`. 회수된 코드도 포함한다(`revoked_at`으로 구분).
-- **`POST /admin/institutions/{id}/device-codes`** — 요청 `{"max_accounts"?: 3, "note"?: "2호기"}`. 응답 201 **DeviceCodeOut**.
-- **`PATCH /admin/device-codes/{id}`** — 요청 `{"max_accounts"?, "note"?}`. 상한을 활성 계정 수보다 낮게 내릴 수 있다(그 뒤 가입만 막힌다). 응답 200 **DeviceCodeOut**.
+- **`POST /admin/institutions/{id}/device-codes`** — 요청 `{"note"?: "2호기"}`(본문 없이도 된다). 응답 201 **DeviceCodeOut**. 그 기관에 회수하지 않은 코드가 이미 있으면 409 `DEVICE_CODE_EXISTS`다(12.5). 새 코드를 주려면 먼저 회수한다. 동시에 두 번 불러 `uq_device_code_active`에 걸려도 같은 409다.
+- **`PATCH /admin/device-codes/{id}`** — 요청 `{"note"?}`(`null`은 메모 지우기). 응답 200 **DeviceCodeOut**. 예전 화면이 보내던 `max_accounts`는 무시한다.
 - **`POST /admin/device-codes/{id}/revoke`** — 본문 없음. `revoked_at`을 now()로. 이미 회수됐으면 그대로 200. 기존 계정은 그대로 쓴다(막으려면 계정 중지). 응답 200 **DeviceCodeOut**.
 - **`GET /admin/institutions/{id}/staff`** — 응답 200 `{"items": [{id, login_id, name, email, role, is_active, device_code_id, created_at}, …]}`.
 - **`PATCH /admin/staff/{id}`** — 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`. 바꾼 뒤 그 담당자를 캐시에서 지운다. 역할을 바꾸거나 비밀번호를 건드리는 필드는 없다.
@@ -2084,14 +2085,15 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-01: 맞는 아이디·비밀번호로 토큰을 받고, 하나라도 틀리면 401 `LOGIN_FAILED` 하나로만 답한다. 요청에 `institution_code`가 있어도 무시된다.
 - [ ] BE-01: `is_active`가 FALSE인 계정은 로그인도, 이미 받은 토큰으로 부르는 것도 403 `ACCOUNT_DISABLED`다(테스트는 캐시 TTL 0).
 - [ ] BE-01: `STAFF`가 `/admin/*` 조회는 되고 쓰기는 403 `FORBIDDEN`, `CLIENT`는 조회도 403이다.
-- [ ] BE-22: 맞는 코드는 하이픈·공백·소문자가 섞여 있어도 200과 기관명·남은 계정 수를 돌려준다.
+- [ ] BE-22: 맞는 코드는 하이픈·공백·소문자가 섞여 있어도 200과 기관명을 돌려준다.
 - [ ] BE-22: 없는 코드, 회수된 코드, 계약이 끝난 기관의 코드, 형식이 틀린 코드는 모두 404 `DEVICE_CODE_INVALID`이고 응답 본문이 같다.
 - [ ] BE-22: 가입하면 `CLIENT`이고 코드의 기관에 속하며 이메일이 소문자로 저장되고, 응답으로 받은 토큰으로 바로 `/auth/me`를 부를 수 있다. 이메일이 없거나 형식이 틀리면 422다.
-- [ ] BE-22: 같은 코드로 `max_accounts`까지 가입되고 다음은 409 `DEVICE_CODE_FULL`이다. 계정 하나를 중지하면 다시 가입된다.
+- [ ] BE-22: 같은 코드로 몇 명이든 가입된다(계정 수 상한 없음, v1.32).
 - [ ] BE-22: 다른 기관에 있는 아이디로 가입하면 409 `LOGIN_ID_TAKEN`이다. 대문자가 든 아이디는 422다.
 - [ ] BE-23: 종료일이 어제인 기관의 `CLIENT`는 로그인되고 `effective_role`이 `GUEST`이며 `/dogs`는 403 `CONTRACT_EXPIRED`다. 종료일이 오늘이면 `CLIENT`, NULL이면 `CLIENT`, `ADMIN`·`STAFF`는 종료일이 지나도 그대로다.
 - [ ] BE-23: 캐시를 켜면 두 번째 요청은 담당자 조회 쿼리가 없고, TTL이 지나면 다시 읽으며, 관리자 API로 계정을 중지하면 같은 프로세스에서 즉시 403이다.
 - [ ] BE-24: 기관 만들기 → 코드 발급 → 가입 → 계약일 수정 → 회수 → 계정 중지가 순서대로 되고, 회수된 코드로는 가입이 안 되며 기존 계정은 로그인된다.
+- [ ] BE-24: 회수하지 않은 코드가 있는 기관에 코드를 또 발급하면 409 `DEVICE_CODE_EXISTS`이고, 회수한 뒤에는 발급된다. 마이그레이션 0012를 올리면 쓸 수 있는 코드가 여러 개이던 기관에 하나만 남는다(가입에 쓰인 코드 먼저, 다음은 최근 발급). 그 코드들로 가입한 계정은 그대로다.
 - [ ] BE-24: `ADMIN`이 자기 계정을 중지하면 409 `SELF_DISABLE`이다.
 - [ ] BE-25: 읽은 `version`으로 수정하면 200이고 `version`이 1 늘며, 옛 `version`으로 다시 수정하면 409 `DOG_MODIFIED`이고 값이 바뀌지 않는다.
 - [ ] BE-26: 현재 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`, 현재와 같은 새 비밀번호는 422, 바꾸면 새 비밀번호로 로그인되고 옛 비밀번호로는 안 된다. `PATCH /auth/me`로 이메일을 바꾸면 `/auth/me`에 바로 보인다.

@@ -20,11 +20,6 @@ InstitutionName = Annotated[str, StringConstraints(strip_whitespace=True, min_le
 Note = Annotated[str, StringConstraints(max_length=100)]
 
 
-# 13.6 코드 하나의 계정 상한은 관리자가 정한다. 위쪽 한계는 SMALLINT 칸이 담을 수 있는 값뿐이다
-MAX_ACCOUNTS_LIMIT = 32767
-MaxAccounts = Annotated[int, Field(ge=1, le=MAX_ACCOUNTS_LIMIT)]
-
-
 def _not_null(value: object) -> object:
     """PATCH에서 "필드": null을 막는다(보내지 않은 것과 구분한다)."""
     if value is None:
@@ -81,7 +76,6 @@ class DeviceCodeOut(BaseModel):
     id: uuid.UUID
     code: str
     institution_id: uuid.UUID
-    max_accounts: int
     active_accounts: int
     revoked_at: UtcDateTime | None
     note: str | None
@@ -93,22 +87,15 @@ class DeviceCodeListOut(BaseModel):
 
 
 class DeviceCodeCreate(BaseModel):
-    """POST /admin/institutions/{id}/device-codes(15.9). 본문을 비우면 상한 3, 메모 없음."""
+    """POST /admin/institutions/{id}/device-codes(15.9). 본문을 비우면 메모 없음. 계정 수 상한은 없다(v1.32)."""
 
-    max_accounts: MaxAccounts = 3
     note: Note | None = None
 
 
 class DeviceCodeUpdate(BaseModel):
-    """PATCH /admin/device-codes/{id}: 보낸 필드만. note의 null은 메모 지우기, max_accounts는 비울 수 없다."""
+    """PATCH /admin/device-codes/{id}: 보낸 필드만. note의 null은 메모 지우기다."""
 
-    max_accounts: MaxAccounts | None = None
     note: Note | None = None
-
-    @field_validator("max_accounts")
-    @classmethod
-    def max_accounts_not_null(cls, value: int | None) -> int | None:
-        return _not_null(value)  # type: ignore[return-value]
 
 
 # ---- 계정 ----
