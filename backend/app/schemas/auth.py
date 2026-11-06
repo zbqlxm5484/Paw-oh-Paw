@@ -65,17 +65,41 @@ class DeviceCodeVerifyOut(BaseModel):
     """POST /auth/device-codes/verify 응답(15.4)."""
 
     institution: InstitutionBriefOut
-    remaining_accounts: int
+
+
+# 13.5 약관 버전: 1~20자, 앞뒤 공백은 지운다
+TermsVersion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+
+
+class TermsIn(BaseModel):
+    """가입 때의 약관 동의(13.5, 15.4). 필수 셋은 true여야 하고(아니면 422) marketing만 선택이다."""
+
+    version: TermsVersion
+    service: bool
+    privacy: bool
+    device_location: bool
+    marketing: bool = False
+
+    @field_validator("service", "privacy", "device_location")
+    @classmethod
+    def required_terms_are_agreed(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("필수 약관에 동의해야 합니다")
+        return value
 
 
 class SignupIn(BaseModel):
-    """POST /auth/signup 요청(13.5, 15.4). 가입 계정은 모두 CLIENT이고 이메일은 필수다(인증 메일은 없다)."""
+    """POST /auth/signup 요청(13.5, 15.4). 가입 계정은 모두 CLIENT이고 이메일은 필수다(인증 메일은 없다).
+
+    terms는 약관 동의다. 화면이 아직 보내지 않아 없어도 가입되고 그때는 기록을 남기지 않는다(15.4).
+    """
 
     code: str = Field(min_length=1, max_length=40)
     login_id: LoginId
     password: NewPassword
     name: PersonName
     email: Email
+    terms: TermsIn | None = None
 
 
 class PasswordChangeIn(BaseModel):
@@ -93,17 +117,24 @@ class PasswordChangeIn(BaseModel):
 
 
 class MeUpdate(BaseModel):
-    """PATCH /auth/me 요청(13.7): 이름·이메일, 보낸 필드만. null은 받지 않는다."""
+    """PATCH /auth/me 요청(13.7): 이름·이메일·알림 설정, 보낸 필드만. null은 받지 않는다."""
 
     name: PersonName | None = None
     email: Email | None = None
+    notif_on: bool | None = None
 
-    @field_validator("name", "email")
+    @field_validator("name", "email", "notif_on")
     @classmethod
-    def not_null(cls, value: str | None) -> str | None:
+    def not_null(cls, value: str | bool | None) -> str | bool | None:
         if value is None:
             raise ValueError("비울 수 없습니다")
         return value
+
+
+class WithdrawIn(BaseModel):
+    """DELETE /auth/me 요청(13.7, 15.4). 본인 확인용 현재 비밀번호. 길이는 검사하지 않는다(로그인과 같다)."""
+
+    password: str
 
 
 class PasswordResetRequestIn(BaseModel):
@@ -138,6 +169,7 @@ class StaffOut(OutModel):
     email: str | None
     role: str
     effective_role: str
+    notif_on: bool
     institution: InstitutionOut
 
 

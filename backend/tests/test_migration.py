@@ -14,7 +14,7 @@ from tests.conftest import TABLES, alembic_config
 # 명세 12.2 DDL의 제약 이름. 오류 처리에서 이 이름으로 어느 규칙을 어겼는지 가린다.
 EXPECTED_CONSTRAINTS = {
     "institution": {"institution_pkey", "uq_institution_code"},
-    "device_code": {"device_code_pkey", "uq_device_code", "ck_device_code_max", "fk_device_code_institution"},
+    "device_code": {"device_code_pkey", "uq_device_code", "fk_device_code_institution"},
     "staff": {"staff_pkey", "uq_staff_login", "ck_staff_role", "fk_staff_institution", "fk_staff_device_code"},
     "dog": {
         "dog_pkey",
@@ -50,7 +50,13 @@ EXPECTED_CONSTRAINTS = {
     "report": {"report_pkey", "uq_report_edition", "ck_report_edition", "ck_report_status", "fk_report_session"},
     "purge_log": {"purge_log_pkey", "ck_purge_scope"},
 }
-EXPECTED_INDEXES = {"ix_dog_institution_name", "ix_session_dog_date", "ix_shot_status", "ix_shot_video"}
+EXPECTED_INDEXES = {
+    "ix_dog_institution_name",
+    "ix_session_dog_date",
+    "ix_shot_status",
+    "ix_shot_video",
+    "uq_device_code_active",
+}
 
 
 def _tables(conn: Connection) -> set[str]:
@@ -186,5 +192,53 @@ def test_0003_turns_old_staff_into_client_and_rejects_duplicate_login_ids(engine
             assert roles == {"dup": "CLIENT", "boss": "ADMIN"}
             ends_at = conn.execute(text("SELECT contract_ends_at FROM institution WHERE id = :a"), {"a": inst_a})
             assert ends_at.scalar_one() is None
+    finally:
+        command.upgrade(config, "head")
+
+
+def test_0012_keeps_one_usable_code_per_institution(engine: Engine, clean_tables: None) -> None:
+    """0012(v1.32): 기관마다 가입에 쓰인 코드를 먼저, 없으면 가장 최근 코드를 하나 남기고 나머지를 회수한다."""
+    config = alembic_config()
+    inst_a, inst_b = uuid.uuid4(), uuid.uuid4()
+    ids = {name: uuid.uuid4() for name in ("used", "old", "new", "gone", "b_old", "b_new", "account")}
+    command.downgrade(config, "0010")
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO institution (id, code, name) VALUES (:a, 'A', '병원 A'), (:b, 'B', '병원 B')"),
+                {"a": inst_a, "b": inst_b},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO device_code (id, institution_id, code, max_accounts, revoked_at, created_at) VALUES "
+                    "(:used, :a, 'USED', 3, NULL, '2026-10-01'), (:old, :a, 'OLD', 3, NULL, '2026-09-01'), "
+                    "(:new, :a, 'NEW', 3, NULL, '2026-11-01'), (:gone, :a, 'GONE', 3, '2026-10-02', '2026-08-01'), "
+                    "(:b_old, :b, 'B1', 3, NULL, '2026-09-01'), (:b_new, :b, 'B2', 3, NULL, '2026-10-01')"
+                ),
+                {**ids, "a": inst_a, "b": inst_b},
+            )
+            # 중지한 계정이어도 그 코드는 가입에 쓰인 코드다
+            conn.execute(
+                text(
+                    "INSERT INTO staff (id, institution_id, login_id, password_hash, name, role, device_code_id, "
+                    "is_active) VALUES (:account, :a, 'kim01', 'x', '갑', 'CLIENT', :used, FALSE)"
+                ),
+                {"account": ids["account"], "a": inst_a, "used": ids["used"]},
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            usable = {str(row[0]) for row in conn.execute(text("SELECT id FROM device_code WHERE revoked_at IS NULL"))}
+            assert usable == {str(ids["used"]), str(ids["b_new"])}
+            assert not _has_column(conn, "device_code", "max_accounts")
+            # 원래 회수돼 있던 코드의 회수 시각은 건드리지 않는다
+            gone = conn.execute(text("SELECT revoked_at FROM device_code WHERE id = :id"), {"id": ids["gone"]})
+            assert gone.scalar_one().date().isoformat() == "2026-10-02"
+            # 회수한 코드와 관계없이 계정은 그대로다
+            account = conn.execute(
+                text("SELECT device_code_id, is_active FROM staff WHERE id = :id"), {"id": ids["account"]}
+            ).one()
+            assert (str(account[0]), account[1]) == (str(ids["used"]), False)
+            total = conn.execute(text("SELECT count(*) FROM device_code")).scalar_one()
+            assert total == 6
     finally:
         command.upgrade(config, "head")

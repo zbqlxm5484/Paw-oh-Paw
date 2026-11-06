@@ -6,12 +6,13 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.auth_cache import auth_cache
 from app.core.config import get_settings
 from app.core.dates import today_local
-from app.models import Institution, Staff
+from app.models import DeviceCode, Institution, Staff
 from app.services.device_codes import CODE_ALPHABET
 from tests.conftest import GOOD_PASSWORD, bearer, password_hash_for
 
@@ -131,7 +132,8 @@ def test_admin_flow(client: TestClient, db: Session, admin_headers: dict) -> Non
     code = issued.json()
     assert len(code["code"]) == 23
     assert code["code"].count("-") == 3
-    assert (code["max_accounts"], code["active_accounts"], code["revoked_at"], code["note"]) == (3, 0, None, None)
+    assert (code["active_accounts"], code["revoked_at"], code["note"]) == (0, None, None)
+    assert "max_accounts" not in code  # 계정 수 상한은 없다(v1.32)
     assert code["institution_id"] == inst_id
     listed = client.get(f"{INSTITUTIONS}/{inst_id}/device-codes", headers=admin_headers)
     assert listed.status_code == 200
@@ -259,34 +261,66 @@ def test_update_institution(client: TestClient, admin_headers: dict, staff) -> N
 
 def test_device_code_rules(client: TestClient, admin_headers: dict, staff) -> None:
     base = f"{INSTITUTIONS}/{staff.institution_id}/device-codes"
-    limit = get_settings().DEVICE_CODE_MAX_ACCOUNTS
-    for body in ({"max_accounts": 0}, {"max_accounts": limit + 1}, {"note": "메" * 101}):
-        response = client.post(base, json=body, headers=admin_headers)
-        assert response.status_code == 422, body
-        assert [item["field"] for item in response.json()["error"]["detail"]["fields"]] == [next(iter(body))]
+    too_long = client.post(base, json={"note": "메" * 101}, headers=admin_headers)
+    assert too_long.status_code == 422
+    assert [item["field"] for item in too_long.json()["error"]["detail"]["fields"]] == ["note"]
 
-    issued = client.post(base, json={"max_accounts": limit, "note": "2호기"}, headers=admin_headers)
+    issued = client.post(base, json={"note": "2호기"}, headers=admin_headers)
     assert issued.status_code == 201
-    assert (issued.json()["max_accounts"], issued.json()["note"]) == (limit, "2호기")
+    assert issued.json()["note"] == "2호기"
     code_url = f"{ADMIN}/device-codes/{issued.json()['id']}"
 
-    cleared = client.patch(code_url, json={"note": None, "max_accounts": 2}, headers=admin_headers)
-    assert cleared.status_code == 200
-    assert (cleared.json()["max_accounts"], cleared.json()["note"]) == (2, None)
+    cleared = client.patch(code_url, json={"note": None}, headers=admin_headers)
+    assert (cleared.status_code, cleared.json()["note"]) == (200, None)
+    # 예전 화면이 상한을 보내도 무시한다(칸이 없다). 422가 아니다
+    ignored = client.patch(code_url, json={"max_accounts": 1, "note": "새 메모"}, headers=admin_headers)
+    assert (ignored.status_code, ignored.json()["note"]) == (200, "새 메모")
+    assert "max_accounts" not in ignored.json()
 
-    null_max = client.patch(code_url, json={"max_accounts": None}, headers=admin_headers)
-    assert null_max.status_code == 422
+    # 계정 수 상한이 없다(v1.32): 몇 명이든 가입되고 목록에는 활성 계정 수만 보인다
+    for login_id in ("kim01", "kim02", "kim03", "kim04"):
+        assert _signup(client, issued.json()["code"], login_id).status_code == 201
+    listed = client.get(base, headers=admin_headers).json()["items"]
+    assert [item["active_accounts"] for item in listed] == [4]
+    assert client.post(VERIFY, json={"code": issued.json()["code"]}).status_code == 200
+    assert _login(client, "kim04").status_code == 200
 
-    # 상한을 활성 계정 수보다 낮게 내릴 수 있다. 그 뒤 가입만 막힌다
-    assert _signup(client, issued.json()["code"], "kim01").status_code == 201
-    assert _signup(client, issued.json()["code"], "kim02").status_code == 201
-    lowered = client.patch(code_url, json={"max_accounts": 1}, headers=admin_headers)
-    assert lowered.status_code == 200
-    assert (lowered.json()["max_accounts"], lowered.json()["active_accounts"]) == (1, 2)
-    full = client.post(VERIFY, json={"code": issued.json()["code"]})
-    assert full.status_code == 409
-    assert full.json()["error"]["code"] == "DEVICE_CODE_FULL"
-    assert _login(client, "kim02").status_code == 200
+
+def test_one_usable_code_per_institution(client: TestClient, admin_headers: dict, staff, other_staff) -> None:
+    """v1.32: 회수하지 않은 코드는 기관마다 하나다. 회수하면 새로 발급할 수 있고 회수한 코드는 목록에 남는다."""
+    base = f"{INSTITUTIONS}/{staff.institution_id}/device-codes"
+    first = client.post(base, headers=admin_headers)
+    assert first.status_code == 201
+    again = client.post(base, json={"note": "둘째"}, headers=admin_headers)
+    assert again.status_code == 409
+    assert again.json()["error"]["code"] == "DEVICE_CODE_EXISTS"
+    # 다른 기관은 따로 센다
+    other = client.post(f"{INSTITUTIONS}/{other_staff.institution_id}/device-codes", headers=admin_headers)
+    assert other.status_code == 201
+
+    assert _signup(client, first.json()["code"], "kim01").status_code == 201
+    revoked = client.post(f"{ADMIN}/device-codes/{first.json()['id']}/revoke", headers=admin_headers)
+    assert revoked.status_code == 200
+    second = client.post(base, json={"note": "둘째"}, headers=admin_headers)
+    assert second.status_code == 201
+    items = client.get(base, headers=admin_headers).json()["items"]
+    assert {item["id"]: item["revoked_at"] is None for item in items} == {
+        first.json()["id"]: False,
+        second.json()["id"]: True,
+    }
+    # 회수한 코드로는 가입이 안 되고, 그 코드로 가입한 계정은 그대로 쓴다
+    assert _signup(client, first.json()["code"], "kim02").status_code == 404
+    assert _signup(client, second.json()["code"], "kim02").status_code == 201
+    assert _login(client, "kim01").status_code == 200
+
+
+def test_the_index_stops_a_second_usable_code(db: Session, staff) -> None:
+    """발급 API의 확인을 지나쳐도(동시 발급) uq_device_code_active가 막는다."""
+    db.add(DeviceCode(institution_id=staff.institution_id, code="A" * 20))
+    db.flush()
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(DeviceCode(institution_id=staff.institution_id, code="B" * 20))
+        db.flush()
 
 
 def test_self_disable_is_409(client: TestClient, creamoff: dict[str, Staff], admin_headers: dict) -> None:

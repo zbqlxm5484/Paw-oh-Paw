@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, SmallInteger, String, UniqueConstraint, Uuid, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -14,15 +14,14 @@ class DeviceCode(Base):
     __tablename__ = "device_code"
     __table_args__ = (
         UniqueConstraint("code", name="uq_device_code"),
-        CheckConstraint("max_accounts >= 1", name="ck_device_code_max"),
+        # 기관마다 쓸 수 있는(회수하지 않은) 코드는 하나다(12.5). 회수한 코드는 기록으로 여러 개 남는다
+        Index("uq_device_code_active", "institution_id", unique=True, postgresql_where=text("revoked_at IS NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     institution_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("institution.id", name="fk_device_code_institution"))
     # 20자, 하이픈 없이 저장(13.5). 화면에는 XXXXX-XXXXX-XXXXX-XXXXX로 보여 준다
     code: Mapped[str] = mapped_column(String(32))
-    # 이 코드로 만들 수 있는 활성 계정 수(12.5). 관리자가 줄 수 있는 최댓값은 DEVICE_CODE_MAX_ACCOUNTS로 API가 막는다
-    max_accounts: Mapped[int] = mapped_column(SmallInteger, default=3, server_default=text("3"))
     # 회수 시각. NULL이면 쓸 수 있다. 지우지 않고 회수만 한다(12.5 삭제 순서)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 운영 메모(예: "2호기")

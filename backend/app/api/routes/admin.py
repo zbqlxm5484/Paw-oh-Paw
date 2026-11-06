@@ -64,7 +64,7 @@ def list_device_codes(institution_id: uuid.UUID, staff: CreamoffStaff, db: DbSes
 def create_device_code(
     institution_id: uuid.UUID, staff: AdminStaff, db: DbSession, body: DeviceCodeCreate | None = None
 ) -> DeviceCodeOut:
-    """본문을 비워도 된다(상한 3, 메모 없음)."""
+    """본문을 비워도 된다(메모 없음). 기관에 쓸 수 있는 코드가 이미 있으면 409다(15.9)."""
     return admin_service.create_device_code(db, institution_id, body or DeviceCodeCreate())
 
 

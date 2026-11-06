@@ -10,9 +10,8 @@ import uuid
 from datetime import date, timedelta
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, StringConstraints, ValidationInfo, field_validator
 
-from app.core.config import get_settings
 from app.core.dates import CONTRACT_RETENTION_DAYS, today_local
 from app.schemas.common import OutModel, UtcDateTime
 
@@ -20,17 +19,6 @@ from app.schemas.common import OutModel, UtcDateTime
 InstitutionCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
 InstitutionName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Note = Annotated[str, StringConstraints(max_length=100)]
-
-
-def _max_accounts_rule(value: int) -> int:
-    """13.6: 1 ~ DEVICE_CODE_MAX_ACCOUNTS(16절, 기본 10)."""
-    limit = get_settings().DEVICE_CODE_MAX_ACCOUNTS
-    if value > limit:
-        raise ValueError(f"{limit} 이하여야 합니다")
-    return value
-
-
-MaxAccounts = Annotated[int, Field(ge=1), AfterValidator(_max_accounts_rule)]
 
 
 def _not_null(value: object) -> object:
@@ -110,7 +98,6 @@ class DeviceCodeOut(BaseModel):
     id: uuid.UUID
     code: str
     institution_id: uuid.UUID
-    max_accounts: int
     active_accounts: int
     revoked_at: UtcDateTime | None
     note: str | None
@@ -122,22 +109,15 @@ class DeviceCodeListOut(BaseModel):
 
 
 class DeviceCodeCreate(BaseModel):
-    """POST /admin/institutions/{id}/device-codes(15.9). 본문을 비우면 상한 3, 메모 없음."""
+    """POST /admin/institutions/{id}/device-codes(15.9). 본문을 비우면 메모 없음. 계정 수 상한은 없다(v1.32)."""
 
-    max_accounts: MaxAccounts = 3
     note: Note | None = None
 
 
 class DeviceCodeUpdate(BaseModel):
-    """PATCH /admin/device-codes/{id}: 보낸 필드만. note의 null은 메모 지우기, max_accounts는 비울 수 없다."""
+    """PATCH /admin/device-codes/{id}: 보낸 필드만. note의 null은 메모 지우기다."""
 
-    max_accounts: MaxAccounts | None = None
     note: Note | None = None
-
-    @field_validator("max_accounts")
-    @classmethod
-    def max_accounts_not_null(cls, value: int | None) -> int | None:
-        return _not_null(value)  # type: ignore[return-value]
 
 
 # ---- 계정 ----
@@ -152,6 +132,7 @@ class StaffAdminOut(OutModel):
     email: str | None
     role: str
     is_active: bool
+    withdrawn_at: UtcDateTime | None = None
     device_code_id: uuid.UUID | None
     created_at: UtcDateTime
 

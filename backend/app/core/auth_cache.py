@@ -46,6 +46,7 @@ class AuthStaff:
     institution_code: str
     institution_name: str
     contract_ends_at: date | None
+    notif_on: bool = True
 
     @property
     def contract_status(self) -> str:

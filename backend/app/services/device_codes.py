@@ -1,4 +1,4 @@
-"""디바이스 코드(11.6, 12.5, 13.5): 글자 규칙, 정리, 발급, 쓸 수 있는 코드 찾기, 활성 계정 수.
+"""디바이스 코드(11.6, 12.5, 13.5): 글자 규칙, 정리, 발급, 쓸 수 있는 코드 찾기, 활성 계정 수(목록 표시용).
 
 가입(services/signup.py)과 크림오프 관리자 API(services/admin.py)가 함께 쓴다.
 """
@@ -41,7 +41,7 @@ def format_code(code: str) -> str:
 
 
 def active_accounts(db: Session, device_code_id: uuid.UUID) -> int:
-    """이 코드로 가입했고 is_active인 계정 수(12.5). 중지한 계정은 자리를 돌려준다."""
+    """이 코드로 가입했고 is_active인 계정 수(12.5). 관리자 목록에 보여 줄 뿐이고 가입을 막지 않는다."""
     return int(
         db.scalar(
             select(func.count())
@@ -52,24 +52,16 @@ def active_accounts(db: Session, device_code_id: uuid.UUID) -> int:
     )
 
 
-def remaining_accounts(db: Session, code: DeviceCode) -> int:
-    """남은 자리 = max_accounts − 활성 계정 수. 상한을 활성 수보다 낮게 내렸으면 0이다(음수를 내지 않는다)."""
-    return max(code.max_accounts - active_accounts(db, code.id), 0)
-
-
-def find_usable_code(db: Session, raw: str, *, for_update: bool = False) -> DeviceCode:
+def find_usable_code(db: Session, raw: str) -> DeviceCode:
     """가입에 쓸 수 있는 코드 행(15.4 verify).
 
     형식 오류·없음·회수됨·기관 계약 만료는 모두 404 DEVICE_CODE_INVALID 하나다. 형식이 틀리면 DB를 보지 않는다.
-    for_update면 코드 행만 잠근다(12.5 활성 계정 수. joinedload 없이, 11.7).
+    계정 수 상한이 없어 코드 행을 잠그지 않는다(v1.32).
     """
     normalized = normalize_code(raw)
     if normalized is None:
         raise AppError(ErrorCode.DEVICE_CODE_INVALID)
-    stmt = select(DeviceCode).where(DeviceCode.code == normalized)
-    if for_update:
-        stmt = stmt.with_for_update()
-    code = db.scalars(stmt).one_or_none()
+    code = db.scalars(select(DeviceCode).where(DeviceCode.code == normalized)).one_or_none()
     if code is None or code.revoked_at is not None:
         raise AppError(ErrorCode.DEVICE_CODE_INVALID)
     ends_at = code.institution.contract_ends_at

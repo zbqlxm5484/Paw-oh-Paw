@@ -10,7 +10,7 @@
 | 요청 DB 세션, 로그인 담당자 스냅샷·계약 검사·역할 확인(ADMIN, 크림오프) (11.6, 11.7) | `app/api/deps.py` |
 | 담당자 스냅샷 캐시 `AuthStaff`(effective_role·contract_status 계산) (11.6 인증 캐시) | `app/core/auth_cache.py` |
 | 로그인·내 정보 `POST /auth/login`·`GET /auth/me`, 비밀번호 변경·내 정보 수정 `PATCH /auth/password`·`PATCH /auth/me` (13.4, 13.7, 15.4) | `app/api/routes/auth.py`, `app/services/auth.py`, `app/schemas/auth.py` |
-| 디바이스 코드 확인·회원가입 `POST /auth/device-codes/verify`·`POST /auth/signup`(가입 계정은 CLIENT, 코드별 활성 계정 상한) (12.5, 13.5, 15.4) | `app/services/signup.py`, `app/services/device_codes.py` |
+| 디바이스 코드 확인·회원가입 `POST /auth/device-codes/verify`·`POST /auth/signup`(가입 계정은 CLIENT, 계정 수 상한 없음, 기관마다 쓸 수 있는 코드 하나) (12.5, 13.5, 15.4) | `app/services/signup.py`, `app/services/device_codes.py` |
 | 비밀번호 재설정 `POST /auth/password-reset/request`·`/confirm`(토큰 30분, 해시만 저장)과 SMTP 메일 보내기 (11.6 메일, 13.8, 15.4) | `app/services/password_reset.py`, `app/core/mail.py` |
 | 크림오프 관리자 API `/admin/*` 9개: 기관·디바이스 코드·계정 중지(조회는 ADMIN·STAFF, 쓰기는 ADMIN, 기관 필터 없음) (13.6, 15.9) | `app/api/routes/admin.py`, `app/services/admin.py`, `app/schemas/admin.py` |
 | 자료 파기 `POST /admin/purge`(ADMIN만. 병원 담당자의 삭제 `DELETE /dogs/{dog_id}`는 휴지통에 넣기이고 복원·영구 삭제가 따로 있으며 30일 뒤 워커가 비운다. 계약이 끝난 기관은 종료 90일 뒤 워커가 측정 자료와 가입 계정을 지운다(기관·디바이스 코드는 남김). 반려견 하나 또는 기관 전체, `institution_id`로 병원을 지정하고 생략하면 자기 기관, `dry_run` 기본 true, 분석 API 사본 → 파일 → 행 순서, `purge_log` 기록, 분석 중 촬영이 있으면 409, 분석 API가 지우지 못하면 503)와 전체 파기 스크립트 `python -m scripts.purge --all [--execute]`(기관·계정·코드는 남김. 분석 API 저장소는 그쪽 `python purge.py --all --execute`로 따로) (6절, 7절, 12.5, 15.9) | `app/services/purge.py`, `scripts/purge.py`, `app/api/routes/admin.py` |
@@ -97,7 +97,7 @@ uvicorn app.main:app --no-access-log
 ```
 
 - `.env`의 `JWT_SECRET`·`FILE_URL_SECRET`(32자 이상, 서로 다른 값)이 비어 있으면 켜지지 않고 어느 값이 문제인지 출력한다(16절). 값 만들기: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
-- 비밀번호 재설정 메일을 보내려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USER`·`SMTP_PASSWORD`·`SMTP_FROM`(STARTTLS)과 링크 앞부분 `FRONTEND_BASE_URL`을 적는다. `SMTP_HOST`가 비어 있으면 메일 없이 돌고 재설정 요청만 503이다. 디바이스 코드 하나의 계정 상한 최댓값은 `DEVICE_CODE_MAX_ACCOUNTS`(기본 10)다.
+- 비밀번호 재설정 메일을 보내려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USER`·`SMTP_PASSWORD`·`SMTP_FROM`(STARTTLS)과 링크 앞부분 `FRONTEND_BASE_URL`을 적는다. `SMTP_HOST`가 비어 있으면 메일 없이 돌고 재설정 요청만 503이다.
 - 접근 로그는 끈다(11.8). 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID를 한 줄로 남기고, 응답 헤더 `X-Request-ID`로도 돌려준다.
 - `http://localhost:8000/api/v1/health`가 `{"status": "ok", "db": "ok", "version": "1.0.0"}`이면 정상이다. DB에 못 붙으면 503이고 `status`·`db`가 `"error"`다. `storage`는 `STORAGE_ROOT`에 쓸 수 있는지 검사한 결과다.
 - 모든 오류 응답은 `{"error": {"code", "message", "detail"}}` 한 모양이다(11.5). `message`는 `messages/ko.yaml`에서 `code`로 찾는다.

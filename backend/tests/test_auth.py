@@ -50,6 +50,7 @@ def test_login_returns_token_and_staff(client: TestClient, staff) -> None:
         "email": None,
         "role": "CLIENT",
         "effective_role": "CLIENT",
+        "notif_on": True,
         "institution": {
             "id": str(staff.institution_id),
             "code": "T01",

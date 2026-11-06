@@ -23,8 +23,8 @@ UNKNOWN = "ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ"
 
 @pytest.fixture
 def device_code(db: Session, staff) -> DeviceCode:
-    """staff 기관(T01, 계약 기한 없음)의 코드. 계정 2개까지."""
-    row = DeviceCode(institution_id=staff.institution_id, code=CODE, max_accounts=2, note="1호기")
+    """staff 기관(T01, 계약 기한 없음)의 코드."""
+    row = DeviceCode(institution_id=staff.institution_id, code=CODE, note="1호기")
     db.add(row)
     db.flush()
     db.refresh(row)
@@ -75,22 +75,11 @@ def test_format_and_generate() -> None:
 # ---- 코드 확인 (BE-22) ----
 
 
-def test_verify_returns_institution_and_remaining(client: TestClient, device_code: DeviceCode) -> None:
+def test_verify_returns_the_institution_only(client: TestClient, device_code: DeviceCode) -> None:
     response = client.post(VERIFY, json={"code": " abcde-fghjk mnpqr-STUVW"})
     assert response.status_code == 200
-    assert response.json() == {
-        "institution": {"id": str(device_code.institution_id), "name": "테스트 병원"},
-        "remaining_accounts": 2,
-    }
-
-
-def test_verify_counts_only_active_accounts(client: TestClient, db: Session, device_code: DeviceCode, staff) -> None:
-    staff.device_code_id = device_code.id
-    db.flush()
-    assert client.post(VERIFY, json={"code": PRETTY}).json()["remaining_accounts"] == 1
-    staff.is_active = False
-    db.flush()
-    assert client.post(VERIFY, json={"code": PRETTY}).json()["remaining_accounts"] == 2
+    # 남은 자리 수는 없다(v1.32: 계정 수 상한 삭제)
+    assert response.json() == {"institution": {"id": str(device_code.institution_id), "name": "테스트 병원"}}
 
 
 def test_contract_ending_today_is_still_usable(client: TestClient, db: Session, device_code: DeviceCode) -> None:
@@ -184,23 +173,14 @@ def test_input_rules_are_checked_before_the_code(client: TestClient, device_code
     assert response.status_code == 422
 
 
-def test_code_cap_counts_active_accounts_only(client: TestClient, db: Session, device_code: DeviceCode) -> None:
-    assert _signup(client, login_id="kim01", email="a@x.kr").status_code == 201
-    assert _signup(client, login_id="kim02", email="b@x.kr").status_code == 201
-    third = _signup(client, login_id="kim03", email="c@x.kr")
-    assert third.status_code == 409
-    assert third.json()["error"]["code"] == "DEVICE_CODE_FULL"
-    verify = client.post(VERIFY, json={"code": PRETTY})
-    assert verify.status_code == 409
-    assert verify.json()["error"]["code"] == "DEVICE_CODE_FULL"
-    assert _count(db, "kim03") == 0
-
-    # 계정 하나를 중지하면 자리가 돌아와 다시 가입된다(12.5)
-    first = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
-    first.is_active = False
-    db.flush()
-    assert client.post(VERIFY, json={"code": PRETTY}).json()["remaining_accounts"] == 1
-    assert _signup(client, login_id="kim03", email="c@x.kr").status_code == 201
+def test_one_code_has_no_account_limit(client: TestClient, db: Session, device_code: DeviceCode) -> None:
+    """v1.32: 코드 하나로 몇 명이든 가입된다. 예전 기본 상한 3을 넘겨 본다."""
+    for number in range(1, 6):
+        response = _signup(client, login_id=f"kim0{number}", email=f"k{number}@x.kr")
+        assert response.status_code == 201, response.text
+    joined = db.scalar(select(func.count()).select_from(Staff).where(Staff.device_code_id == device_code.id))
+    assert joined == 5
+    assert client.post(VERIFY, json={"code": PRETTY}).status_code == 200
 
 
 def test_login_id_taken_in_any_institution(
@@ -222,3 +202,56 @@ def test_logs_do_not_contain_code_or_email(client: TestClient, device_code: Devi
     assert "secret@example.com" not in caplog.text
     assert "kim01@example.com" not in caplog.text
     assert CODE not in caplog.text
+
+
+# ---- 약관 동의 기록 (13.5, 15.4) ----
+
+TERMS = {"version": "2026-11-01", "service": True, "privacy": True, "device_location": True}
+
+
+def test_signup_records_the_agreed_terms(client: TestClient, db: Session, device_code: DeviceCode) -> None:
+    before = datetime.now(UTC) - timedelta(minutes=1)
+    response = _signup(client, terms={**TERMS, "version": " 2026-11-01 ", "marketing": True})
+    assert response.status_code == 201, response.text
+    assert "terms" not in response.json()["staff"]  # 응답 모양은 그대로다
+    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
+    assert (row.terms_version, row.marketing_agreed) == ("2026-11-01", True)
+    assert before <= row.terms_agreed_at <= datetime.now(UTC) + timedelta(minutes=1)
+
+
+def test_marketing_is_optional_and_defaults_to_false(client: TestClient, db: Session, device_code: DeviceCode) -> None:
+    assert _signup(client, terms=TERMS).status_code == 201
+    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
+    assert (row.terms_version, row.marketing_agreed) == ("2026-11-01", False)
+    assert row.terms_agreed_at is not None
+
+
+def test_signup_without_terms_still_works_and_leaves_no_record(
+    client: TestClient, db: Session, device_code: DeviceCode
+) -> None:
+    """웹·앱이 아직 terms를 보내지 않는다. 그 가입이 깨지면 안 되고, 동의한 것처럼 기록해도 안 된다."""
+    assert _signup(client).status_code == 201
+    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
+    assert (row.terms_version, row.terms_agreed_at, row.marketing_agreed) == (None, None, False)
+
+
+@pytest.mark.parametrize(
+    ("terms", "field"),
+    [
+        ({**TERMS, "service": False}, "terms.service"),
+        ({**TERMS, "privacy": False}, "terms.privacy"),
+        ({**TERMS, "device_location": False}, "terms.device_location"),
+        ({"version": "2026-11-01", "service": True, "privacy": True}, "terms.device_location"),  # 빠짐
+        ({**TERMS, "version": "  "}, "terms.version"),
+        ({**TERMS, "version": "v" * 21}, "terms.version"),
+        ({"service": True, "privacy": True, "device_location": True}, "terms.version"),
+        ({**TERMS, "marketing": "아마도"}, "terms.marketing"),
+    ],
+)
+def test_terms_rules_are_422_and_nothing_is_created(
+    client: TestClient, db: Session, device_code: DeviceCode, terms: dict, field: str
+) -> None:
+    response = _signup(client, terms=terms)
+    assert response.status_code == 422, response.text
+    assert [item["field"] for item in response.json()["error"]["detail"]["fields"]] == [field]
+    assert _count(db, "kim01") == 0

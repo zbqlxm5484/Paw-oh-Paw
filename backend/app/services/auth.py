@@ -1,15 +1,16 @@
 """로그인, 담당자 스냅샷, 비밀번호 변경·내 정보 수정(11.6, 13.4, 13.7, 15.4)."""
 
 import uuid
+from datetime import UTC, datetime
 from functools import lru_cache
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.auth_cache import AuthStaff, auth_cache
 from app.core.errors import AppError, ErrorCode
 from app.core.security import hash_password, verify_password
-from app.models import Staff
+from app.models import Institution, Staff
 from app.schemas.auth import InstitutionOut, MeUpdate, StaffOut
 
 
@@ -33,6 +34,7 @@ def snapshot_of(staff: Staff) -> AuthStaff:
         institution_code=institution.code,
         institution_name=institution.name,
         contract_ends_at=institution.contract_ends_at,
+        notif_on=staff.notif_on,
     )
 
 
@@ -96,16 +98,42 @@ def change_password(db: Session, staff_id: uuid.UUID, *, current_password: str, 
 
 
 def update_me(db: Session, staff_id: uuid.UUID, data: MeUpdate) -> AuthStaff:
-    """이름·이메일 수정(13.7, 15.4 BE-26). 보낸 필드만 바꾸고 자기 스냅샷을 캐시에서 지운다."""
+    """이름·이메일·알림 설정 수정(13.7, 15.4 BE-26). 보낸 필드만 바꾸고 자기 스냅샷을 캐시에서 지운다."""
     staff = _staff_row(db, staff_id)
     changes = data.model_dump(exclude_unset=True)
     if changes.get("name") is not None:
         staff.name = changes["name"]
     if changes.get("email") is not None:
         staff.email = changes["email"]
+    if changes.get("notif_on") is not None:
+        staff.notif_on = changes["notif_on"]
     db.flush()
     auth_cache.invalidate(staff.id)
     return snapshot_of(staff)
+
+
+def withdraw(db: Session, staff_id: uuid.UUID, *, password: str) -> None:
+    """회원 탈퇴(13.7, 15.4 DELETE /auth/me). 계정을 지우지 않고 중지한다(is_active FALSE, withdrawn_at에 시각).
+
+    순서: 기관 행 잠금 → 비밀번호 확인(400 PASSWORD_MISMATCH) → 그 기관에 다른 활성 계정이 있는지(없으면 409
+    LAST_ACCOUNT. 기관이 통째로 잠기지 않게) → 중지 → 캐시에서 지움. 기관 행을 잠그는 것은 마지막 두 계정이 동시에
+    탈퇴해 둘 다 통과하는 일을 막기 위해서다. 반려견·회차는 기관의 자료라 그대로 둔다.
+    """
+    staff = _staff_row(db, staff_id)
+    db.execute(select(Institution.id).where(Institution.id == staff.institution_id).with_for_update())
+    if not verify_password(password, staff.password_hash):
+        raise AppError(ErrorCode.PASSWORD_MISMATCH)
+    others = db.scalar(
+        select(func.count())
+        .select_from(Staff)
+        .where(Staff.institution_id == staff.institution_id, Staff.is_active.is_(True), Staff.id != staff.id)
+    )
+    if not others:
+        raise AppError(ErrorCode.LAST_ACCOUNT)
+    staff.is_active = False
+    staff.withdrawn_at = datetime.now(UTC)
+    db.flush()
+    auth_cache.invalidate(staff.id)
 
 
 def staff_out(staff: AuthStaff) -> StaffOut:
@@ -117,6 +145,7 @@ def staff_out(staff: AuthStaff) -> StaffOut:
         email=staff.email,
         role=staff.role,
         effective_role=staff.effective_role,
+        notif_on=staff.notif_on,
         institution=InstitutionOut(
             id=staff.institution_id,
             code=staff.institution_code,
