@@ -21,6 +21,7 @@ from app.models import Dog, MeasureSession, Shot, WalkPass
 from app.models.enums import SessionStatus, ShotStatus, VideoStatus
 from app.schemas.common import reason_out
 from app.schemas.shots import PassOut, ShotDetailOut, ShotOut
+from app.services.dogs import in_institution
 from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
 from app.storage.local import LocalStorage
@@ -94,7 +95,7 @@ def _shot_query(institution_id: uuid.UUID, shot_id: uuid.UUID):
         select(Shot)
         .join(MeasureSession, Shot.session_id == MeasureSession.id)
         .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(Shot.id == shot_id, Dog.institution_id == institution_id)
+        .where(Shot.id == shot_id, in_institution(institution_id))
     )
 
 
@@ -144,7 +145,7 @@ def _lock_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID)
     session = db.scalars(
         select(MeasureSession)
         .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(MeasureSession.id == session_id, Dog.institution_id == institution_id)
+        .where(MeasureSession.id == session_id, in_institution(institution_id))
         .with_for_update(of=MeasureSession)
     ).one_or_none()
     if session is None:  # 촬영을 읽은 뒤 회차가 통째로 지워졌다

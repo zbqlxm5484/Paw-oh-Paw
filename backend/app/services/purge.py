@@ -17,6 +17,8 @@
   409는 SHOT_IN_PROGRESS로 돌려준다. ALL은 작업마다 부르지 않고 분석 API의 전체 파기 명령으로 나눈다.
 - INSTITUTION·ALL은 반려견과 그 아래 자료만 지우고 기관·담당자 계정·디바이스 코드는 남긴다(15.9). ALL은 API로 열지 않고
   scripts/purge.py만 부른다.
+- 휴지통(12.5): 담당자의 삭제는 휴지통에 넣기일 뿐이고, 영구 삭제와 30일 뒤 자동 비우기가 이 파기를 DOG로 부른다
+  (services/trash.py). 휴지통에 있는 반려견도 DOG·INSTITUTION·ALL 파기 대상이다.
 - 로그에는 개수만 남긴다(11.8: 반려견 이름·파일 경로 금지).
 """
 
@@ -54,7 +56,8 @@ def _resolve(db: Session, scope: str, *, institution_id: uuid.UUID | None, targe
     if scope == PurgeScope.DOG:
         if institution_id is None or target_id is None:
             raise ValueError("DOG 파기에는 기관 ID와 반려견 ID가 필요합니다")
-        dog = get_dog(db, institution_id, target_id)  # 다른 기관·없는 반려견은 404(15.1)
+        # 다른 기관·없는 반려견은 404(15.1). 휴지통에 있는 반려견도 지운다
+        dog = get_dog(db, institution_id, target_id, include_trashed=True)
         return _Target(scope, dog.id, [dog.id], [dog_prefix(institution_id, dog.id)])
     if scope == PurgeScope.INSTITUTION:
         if institution_id is None:
@@ -82,7 +85,7 @@ def _lock_sessions(db: Session, dog_ids: list[uuid.UUID]) -> int:
     return len(rows)
 
 
-def _has_shot_in_progress(db: Session, dog_ids: list[uuid.UUID]) -> bool:
+def has_shot_in_progress(db: Session, dog_ids: list[uuid.UUID]) -> bool:
     if not dog_ids:
         return False
     found = db.scalar(
@@ -177,7 +180,7 @@ def purge(
     target = _resolve(db, scope, institution_id=institution_id, target_id=target_id)
     if not dry_run:
         _lock_sessions(db, target.dog_ids)  # 잠근 뒤 확인한다(12.4). 세기만 하는 dry_run은 잠그지 않는다
-    if _has_shot_in_progress(db, target.dog_ids):
+    if has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
 
     job_ids = _job_ids(db, target)

@@ -23,7 +23,7 @@ from app.schemas.sessions import (
     SideProgressOut,
     StaffBriefOut,
 )
-from app.services.dogs import classify
+from app.services.dogs import classify, in_institution
 from app.services.shots import to_shot_out
 from app.storage.base import get_storage
 from app.storage.keys import session_prefix
@@ -57,7 +57,7 @@ def start_session(
     회차 체급(12.5): 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(없으면 등록 체중)으로 정한다.
     """
     dog = db.scalars(
-        select(Dog).where(Dog.id == dog_id, Dog.institution_id == institution_id).with_for_update()
+        select(Dog).where(Dog.id == dog_id, in_institution(institution_id)).with_for_update()
     ).one_or_none()
     if dog is None:
         raise AppError(ErrorCode.NOT_FOUND)
@@ -86,7 +86,7 @@ def session_query(institution_id: uuid.UUID, session_id: uuid.UUID):
     return (
         select(MeasureSession)
         .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(MeasureSession.id == session_id, Dog.institution_id == institution_id)
+        .where(MeasureSession.id == session_id, in_institution(institution_id))
     )
 
 
