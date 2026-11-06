@@ -101,6 +101,8 @@ deploy:
     - if: $CI_COMMIT_BRANCH == "master"
       when: manual
   script:
+    # 더 새로운 커밋이 이미 develop 에 있으면 배포하지 않는다(순서 역전으로 DB 마이그레이션 번호가 어긋나는 것 방지)
+    - if bash infra/ci/is_stale.sh; then exit 0; fi
     - cp "$ENV_FILE" .env
     - bash infra/ci/deploy.sh
 
