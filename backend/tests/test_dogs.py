@@ -55,6 +55,7 @@ DOG_OUT_KEYS = {
     "owner_phone_last4",
     "stage",
     "stage_changed_on",
+    "latest_vital",
     "session_count",
     "last_measured_on",
     "open_session_id",

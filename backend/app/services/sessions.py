@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode, NoticeCode
-from app.models import Dog, MeasureSession, Report, SessionMetric, Shot, WalkPass
+from app.models import Dog, DogVital, MeasureSession, Report, SessionMetric, Shot, WalkPass
 from app.models.enums import CameraSide, SessionStatus, ShotStatus
 from app.schemas.common import ReasonOut, reason_out
 from app.schemas.sessions import (
@@ -25,6 +25,7 @@ from app.schemas.sessions import (
 )
 from app.services.dogs import classify, in_institution
 from app.services.shots import to_shot_out
+from app.services.vitals import save_vital
 from app.storage.base import get_storage
 from app.storage.keys import session_prefix
 
@@ -55,7 +56,14 @@ def start_session(
     """회차 시작(BE-04). 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다(12.4). 있으면 409 SESSION_ALREADY_OPEN.
 
     회차 체급(12.5): 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(없으면 등록 체중)으로 정한다.
+    vital을 보내면 그날 바이탈로 저장하고 이 회차와 묶는다(15.6). weight_kg가 없으면 vital의 체중이 회차 체중이고,
+    둘이 다르면 422다.
     """
+    weight = data.weight_kg
+    if data.vital is not None:
+        if weight is not None and weight != data.vital.weight_kg:
+            raise AppError(ErrorCode.VALIDATION_ERROR, {"fields": [{"field": "vital.weight_kg", "type": "mismatch"}]})
+        weight = data.vital.weight_kg
     dog = db.scalars(
         select(Dog).where(Dog.id == dog_id, in_institution(institution_id)).with_for_update()
     ).one_or_none()
@@ -68,16 +76,20 @@ def start_session(
     )
     if open_id is not None:
         raise AppError(ErrorCode.SESSION_ALREADY_OPEN, {"session_id": str(open_id)})
-    weight_for_size = data.weight_kg if data.weight_kg is not None else dog.weight_kg
+    weight_for_size = weight if weight is not None else dog.weight_kg
     session = MeasureSession(
         dog_id=dog.id,
         staff_id=staff_id,
         measured_on=data.measured_on or today_local(),
-        weight_kg=data.weight_kg,
+        weight_kg=weight,
         size_class=dog.size_class if dog.size_class_manual else classify(weight_for_size),
     )
     db.add(session)
     db.flush()
+    if data.vital is not None:  # 반려견 행을 잠근 채라 같은 날 두 줄이 생기지 않는다
+        save_vital(
+            db, dog=dog, measured_on=session.measured_on, data=data.vital, staff_id=staff_id, session_id=session.id
+        )
     db.refresh(session)
     return session
 
@@ -169,7 +181,7 @@ def count_in_progress_shots(db: Session, session_id: uuid.UUID) -> int:
 
 def delete_session_tree(db: Session, session: MeasureSession, institution_id: uuid.UUID) -> None:
     """12.5 삭제 순서: 파일 → walk_pass → shot → session_metric → report → dog.baseline_session_id NULL
-    → measure_session.
+    → measure_session. 차트 자료는 지우지 않고, 이 회차를 가리키던 session_id만 NULL로 돌린다.
 
     DB 연쇄 삭제(ON DELETE CASCADE)는 쓰지 않는다.
     파일을 먼저 지우는 이유는 DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다.
@@ -181,6 +193,12 @@ def delete_session_tree(db: Session, session: MeasureSession, institution_id: uu
     db.execute(delete(SessionMetric).where(SessionMetric.session_id == session.id))
     db.execute(delete(Report).where(Report.session_id == session.id))
     db.execute(update(Dog).where(Dog.baseline_session_id == session.id).values(baseline_session_id=None))
+    # updated_at을 그대로 두려고 같은 값을 다시 넣는다(onupdate가 지금 시각으로 바꾸지 않게)
+    db.execute(
+        update(DogVital)
+        .where(DogVital.session_id == session.id)
+        .values(session_id=None, updated_at=DogVital.updated_at)
+    )
     db.execute(delete(MeasureSession).where(MeasureSession.id == session.id))
     db.expunge(session)
 

@@ -2,7 +2,8 @@
 
 반려견(DOG)·기관(INSTITUTION)·전체(ALL) 단위로 파일과 DB 행을 지우고 purge_log에 1행을 남긴다(파기 확인서 D-13의 근거).
 
-- 순서는 12.5: 파일 → walk_pass → shot → session_metric → report → dog.baseline_session_id NULL → measure_session → dog.
+- 순서는 12.5: 파일 → walk_pass → shot → session_metric → report → 차트 자료(dog_vital) → dog.baseline_session_id NULL
+  → measure_session → dog.
   파일을 먼저 지우는 이유는 DB에 키가 없는 파일이 남으면 다음 파기에서 빠지기 때문이다. S3는 지우기 오류가 하나라도
   있으면 예외를 내 DB 행을 지우기 전에 멈춘다(11.11).
 - dry_run이면 세기만 한다(stat_prefix, count). 어느 쪽이든 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409
@@ -36,7 +37,18 @@ from sqlalchemy.orm import Session
 from app.clients.analysis import AnalysisClient, AnalysisClientError
 from app.core.auth_cache import auth_cache
 from app.core.errors import AppError, ErrorCode
-from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, Staff, WalkPass
+from app.models import (
+    Dog,
+    DogVital,
+    Institution,
+    MeasureSession,
+    PurgeLog,
+    Report,
+    SessionMetric,
+    Shot,
+    Staff,
+    WalkPass,
+)
 from app.models.enums import PurgeScope, StaffRole
 from app.schemas.admin import PurgeOut
 from app.services.dogs import get_dog
@@ -126,7 +138,7 @@ def _delete_analysis_copies(analysis: AnalysisClient | None, job_ids: list[str])
 
 
 def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
-    """dry_run: 지울 행 수. 반려견 + 회차 + 촬영 + 통과 + 수치 + 보고서."""
+    """dry_run: 지울 행 수. 반려견 + 회차 + 촬영 + 통과 + 수치 + 보고서 + 차트 자료(15.9 rows)."""
     if not dog_ids:
         return 0
     sessions = _sessions_of(dog_ids)
@@ -142,6 +154,7 @@ def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
         + count(WalkPass, WalkPass.shot_id.in_(shots))
         + count(SessionMetric, SessionMetric.session_id.in_(sessions))
         + count(Report, Report.session_id.in_(sessions))
+        + count(DogVital, DogVital.dog_id.in_(dog_ids))
     )
 
 
@@ -156,6 +169,8 @@ def _delete_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
     deleted += db.execute(delete(Shot).where(Shot.session_id.in_(sessions))).rowcount
     deleted += db.execute(delete(SessionMetric).where(SessionMetric.session_id.in_(sessions))).rowcount
     deleted += db.execute(delete(Report).where(Report.session_id.in_(sessions))).rowcount
+    # 차트 자료(v1.36). 회차와 담당자를 가리키므로 회차·계정보다 먼저 지운다
+    deleted += db.execute(delete(DogVital).where(DogVital.dog_id.in_(dog_ids))).rowcount
     db.execute(update(Dog).where(Dog.baseline_session_id.in_(sessions)).values(baseline_session_id=None))
     deleted += db.execute(delete(MeasureSession).where(MeasureSession.dog_id.in_(dog_ids))).rowcount
     deleted += db.execute(delete(Dog).where(Dog.id.in_(dog_ids))).rowcount

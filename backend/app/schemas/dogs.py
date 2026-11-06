@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from app.core.dates import today_local
 from app.models.enums import DogStage, FocusLimb, Sex, SizeClass
+from app.schemas.chart import VitalOut
 from app.schemas.common import OutModel, UtcDateTime, Weight
 
 Name50 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
@@ -114,6 +115,7 @@ class DogOut(OutModel):
 
     deleted_at·purge_at은 휴지통 목록에서만 값이 있다(휴지통에 넣은 시각, 영구 삭제 예정 시각).
     owner_phone은 상세·등록·수정 응답에만 값이 있고 목록에서는 null이다. 목록은 owner_phone_last4만 준다(v1.36).
+    latest_vital은 가장 최근 날짜의 바이탈이고 없으면 null이다.
     """
 
     id: uuid.UUID
@@ -134,6 +136,7 @@ class DogOut(OutModel):
     owner_phone_last4: str | None = None
     stage: str
     stage_changed_on: date | None
+    latest_vital: VitalOut | None = None
     version: int
     session_count: int = 0
     last_measured_on: date | None = None

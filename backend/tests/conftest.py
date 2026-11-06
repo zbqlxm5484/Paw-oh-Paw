@@ -34,6 +34,7 @@ TABLES = (
     "device_code",
     "staff",
     "dog",
+    "dog_vital",
     "measure_session",
     "shot",
     "walk_pass",

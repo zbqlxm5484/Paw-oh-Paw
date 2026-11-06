@@ -11,14 +11,15 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
-from app.models import Dog, MeasureSession
+from app.models import Dog, DogVital, MeasureSession
 from app.models.enums import SessionStatus
+from app.schemas.chart import VitalOut
 from app.schemas.dogs import DogCreate, DogOut, DogUpdate
 from app.services.size_class import classify_size
 
@@ -67,12 +68,34 @@ def set_stage(dog: Dog, stage: str) -> bool:
     return True
 
 
-def to_dog_out(dog: Dog, stats: DogStats, *, in_list: bool = False) -> DogOut:
+def latest_vitals(db: Session, dog_ids: list[uuid.UUID]) -> dict[uuid.UUID, VitalOut]:
+    """반려견별 가장 최근 날짜의 바이탈(15.3 latest_vital). 쿼리 한 번으로 읽어 N+1을 피한다(15.1).
+
+    반려견마다 가장 늦은 날짜를 GROUP BY로 구해 다시 붙인다. 하루 한 줄(uq_dog_vital_day)이라 반려견마다 한 행이다.
+    """
+    if not dog_ids:
+        return {}
+    latest = (
+        select(DogVital.dog_id.label("dog_id"), func.max(DogVital.measured_on).label("measured_on"))
+        .where(DogVital.dog_id.in_(dog_ids))
+        .group_by(DogVital.dog_id)
+        .subquery()
+    )
+    rows = db.scalars(
+        select(DogVital)
+        .options(joinedload(DogVital.staff))
+        .join(latest, (DogVital.dog_id == latest.c.dog_id) & (DogVital.measured_on == latest.c.measured_on))
+    ).all()
+    return {row.dog_id: VitalOut.model_validate(row) for row in rows}
+
+
+def to_dog_out(dog: Dog, stats: DogStats, *, in_list: bool = False, latest_vital: VitalOut | None = None) -> DogOut:
     """in_list면 보호자 연락처 전체를 빼고 뒤 4자리만 준다(15.3)."""
     return DogOut.model_validate(dog).model_copy(
         update={
             "owner_phone": None if in_list else dog.owner_phone,
             "owner_phone_last4": phone_last4(dog.owner_phone),
+            "latest_vital": latest_vital,
             "session_count": stats.session_count,
             "last_measured_on": stats.last_measured_on,
             "open_session_id": stats.open_session_id,
@@ -147,8 +170,14 @@ def list_dogs(
         count_query = count_query.where(matches)
     rows = db.execute(query.offset((page - 1) * size).limit(size)).all()
     total = db.scalar(count_query) or 0
+    vitals = latest_vitals(db, [row[0].id for row in rows])
     items = [
-        to_dog_out(dog, DogStats(session_count, last_measured_on, open_session_id), in_list=True)
+        to_dog_out(
+            dog,
+            DogStats(session_count, last_measured_on, open_session_id),
+            in_list=True,
+            latest_vital=vitals.get(dog.id),
+        )
         for dog, session_count, last_measured_on, open_session_id in rows
     ]
     return items, total
@@ -171,7 +200,11 @@ def get_dog_out(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID) -> Do
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND)
     dog, session_count, last_measured_on, open_session_id = row
-    return to_dog_out(dog, DogStats(session_count, last_measured_on, open_session_id))
+    return to_dog_out(
+        dog,
+        DogStats(session_count, last_measured_on, open_session_id),
+        latest_vital=latest_vitals(db, [dog.id]).get(dog.id),
+    )
 
 
 def create_dog(db: Session, institution_id: uuid.UUID, data: DogCreate) -> Dog:

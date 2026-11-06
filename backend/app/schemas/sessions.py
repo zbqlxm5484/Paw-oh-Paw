@@ -8,15 +8,20 @@ from datetime import date
 from pydantic import BaseModel, field_validator
 
 from app.core.dates import today_local
-from app.schemas.common import OutModel, ReasonOut, UtcDateTime, Weight
+from app.schemas.chart import VitalIn
+from app.schemas.common import OutModel, ReasonOut, StaffBriefOut, UtcDateTime, Weight
 from app.schemas.shots import ShotOut
 
 
 class SessionCreate(BaseModel):
-    """POST /dogs/{dog_id}/sessions 요청. 둘 다 선택이다. measured_on 기본값은 오늘(한국 날짜), 미래 날짜 불가(13.3)."""
+    """POST /dogs/{dog_id}/sessions 요청. 모두 선택이다. measured_on 기본값은 오늘(한국 날짜), 미래 날짜 불가(13.3).
+
+    vital을 보내면 그날 바이탈로 함께 저장한다(15.6, v1.36).
+    """
 
     measured_on: date | None = None
     weight_kg: Weight | None = None
+    vital: VitalIn | None = None
 
     @field_validator("measured_on")
     @classmethod
@@ -24,11 +29,6 @@ class SessionCreate(BaseModel):
         if value is not None and value > today_local():
             raise ValueError("미래 날짜는 쓸 수 없습니다")
         return value
-
-
-class StaffBriefOut(OutModel):
-    id: uuid.UUID
-    name: str
 
 
 class DogBriefOut(OutModel):

@@ -6,6 +6,7 @@
 - 사유 객체 Reason은 {"code", "message"}이고 사유가 없으면 null이다(15.1).
 """
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
@@ -32,6 +33,13 @@ class OutModel(BaseModel):
     """DB 모델(ORM 객체)의 속성에서 바로 만들 수 있는 응답 모델. Spring의 엔티티 → DTO 변환에 해당한다."""
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class StaffBriefOut(OutModel):
+    """담당자 요약(회차의 측정 담당자, 차트 자료를 쓴 담당자)."""
+
+    id: uuid.UUID
+    name: str
 
 
 class ReasonOut(BaseModel):

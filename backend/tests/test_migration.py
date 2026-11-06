@@ -25,6 +25,13 @@ EXPECTED_CONSTRAINTS = {
         "fk_dog_institution",
         "fk_dog_baseline",
     },
+    "dog_vital": {
+        "dog_vital_pkey",
+        "uq_dog_vital_day",
+        "fk_dog_vital_dog",
+        "fk_dog_vital_staff",
+        "fk_dog_vital_session",
+    },
     "measure_session": {
         "measure_session_pkey",
         "ck_session_status",
