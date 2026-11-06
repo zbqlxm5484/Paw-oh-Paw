@@ -165,10 +165,21 @@ export class AppProto extends DCLogic<Props, any> {
     const { dogs } = this.props.data
     if (!dogs.length) { this.toast('먼저 반려견을 등록해 주세요'); return this.goPetNew() }
     const cur = dogs.find((d) => d.id === (dogId || this.state.capDog)) || dogs[0]
-    // 측정 중인 회차가 있으면 이어서
-    if (cur.open) { this.setState({ capDog: cur.id }); return this.nav('capReview', `/sessions/${cur.open}`) }
+    // 측정 중인 회차가 있어도 반려견 선택 화면부터 보인다(다른 개를 찍을 수 있게). 이어서 할지는 촬영 시작 때 묻는다(11-06)
     this.setState({ capDog: cur.id, sessW: '' })
     this.nav('capSelect')
+  }
+  /** 회차 결과 화면의 보호자용·수의사용 PDF 버튼(보고서 화면의 PDF 받기와 같은 흐름) */
+  savePdfOf = async (R: DRes | undefined, edition: 'OWNER' | 'VET') => {
+    const rep = this.props.reports?.reports.find((x) => x.edition === edition)
+    if (!R || !rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했습니다. 보고서 화면에서 다시 만들기를 눌러 주세요' : '보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
+    if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 로그인하면 받을 수 있습니다')
+    if (this.state.pdfBusy) return
+    this.setState({ pdfBusy: true }); this.toast('PDF를 준비하는 중입니다')
+    const name = `${R.measured_on.replace(/-/g, '').slice(2)} ${this.props.data.dogs.find((d) => d.id === R.dog)?.name ?? ''} 분석 결과 (${edition === 'VET' ? '수의사용' : '보호자용'})`
+    try { const how = await this.props.openFile(rep.download_url, name); this.toast(how === 'shared' ? 'PDF를 저장할 곳을 골라 주세요' : 'PDF를 내려받는 중입니다') }
+    catch { this.toast('PDF를 받지 못했습니다. 잠시 후 다시 시도해 주세요') }
+    finally { this.setState({ pdfBusy: false }) }
   }
   /** 가로로 돌리라는 안내는 앱을 켠 뒤 처음 한 번만(16번 찍을 때마다 1.5초씩 기다리지 않게) */
   rotSeen = false
@@ -179,7 +190,8 @@ export class AppProto extends DCLogic<Props, any> {
     const sid = this.sessionId()
     if (sid) return sid
     const d = this.props.data.dogs.find((x) => x.id === this.state.capDog)
-    if (d && d.open) return d.open
+    if (d && d.open && !this.freshStart) return d.open
+    this.freshStart = false
     const w = this.state.sessW.trim() ? Number(this.state.sessW) : null
     const s = await this.props.actions.startSession(this.state.capDog, w != null && Number.isFinite(w) ? w : null)
     return s.id
@@ -230,9 +242,13 @@ export class AppProto extends DCLogic<Props, any> {
       this.setState({ busy: false })
     }
   }
+  /** 선택 화면에서 '새로 시작'을 눌렀으면 아직 data 에 남은 예전 open 회차를 다시 쓰지 않는다 */
+  freshStart = false
   goCapGuide = async () => {
     if (this.shots() >= 16) return this.toast('영상 16개를 모두 첨부했습니다')
     if (this.state.busy) return
+    const d0 = this.props.data.dogs.find((x) => x.id === this.state.capDog)
+    if (this.props.screen === 'capSelect' && d0?.open && !this.freshStart) return this.setState({ sheet: 'resume' })
     this.setState({ busy: true })
     try { const sid = await this.ensureSession(); this.nav('capGuide', `/sessions/${sid}/record`) }
     catch (e) { this.toast(errMsg(e, '회차를 시작하지 못했습니다')) }
@@ -602,7 +618,8 @@ export class AppProto extends DCLogic<Props, any> {
       shotHint: s.busy ? '영상을 올리는 중이에요…' : shots >= 16 ? '16개를 모두 첨부했습니다. 분석을 시작해 주세요.' : `${shots + 1}번째 영상을 이어서 찍어 주세요. 16개를 모두 채우면 결과가 더 정확합니다.`,
       rotHint: !s.rotDone, rotDone: !!s.rotDone, rotDeg: s.rotAnim ? 90 : 0,
       // 촬영 화면 영상 칸: 앱 안 카메라를 쓰면 견본 영상 없이 카메라만
-      capPrevOn: sc === 'capReview' && !!this.lastFileUrl, capVidSrc: camera.canRecordInApp() ? undefined : '/assets/landing.mp4', capVidPoster: camera.canRecordInApp() ? undefined : '/assets/landing-poster.webp',
+      capPrevOn: sc === 'capReview' && !!this.lastFileUrl, // 앱 안 녹화를 못 쓰는 기기에서는 샘플 영상을 틀지 않고 안내 문구만(11-06, 실기기에서 다른 개 썸네일이 보여 헷갈림)
+      capVidSrc: undefined, capVidPoster: undefined, noInAppCam: !camera.canRecordInApp(),
       camLoading: !!s.camLoading, camOp: s.camLoading ? 0 : 1,
       recTime: `영상 ${Math.min(16, shots + (s.pend || 0) + 1)}/16 · ${s.recSec >= 0 ? `00:${String(Math.min(99, s.recSec)).padStart(2, '0')} 녹화 중` : '00:00 / 00:04'}`, recPillBg: s.busy || s.recSec >= 0 ? '#C2412D' : 'rgba(14,18,23,.55)', recDot: s.busy || s.recSec >= 0 ? '#fff' : '#E5604D',
       recBtnS: s.busy || s.recSec >= 0 ? 30 : 62, recBtnR: s.busy || s.recSec >= 0 ? 8 : 31,
@@ -661,6 +678,8 @@ export class AppProto extends DCLogic<Props, any> {
       repStatus: R ? this.props.reportStatus(rep, R.model) : '',
       repSegs: seg([['g', '보호자용'], ['v', '수의사용']], s.repType, (k) => this.setState({ repType: k })),
       regenRep: async () => { if (!R || !rep) return this.toast('아직 보고서가 없습니다'); try { await this.props.actions.regenerateReport(R.id, rep.id); this.toast('보고서를 다시 만들고 있습니다') } catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없습니다')) } },
+      // 회차 결과 화면에서 바로 PDF(11-06): 보고서 화면을 한 번 더 거치지 않게
+      savePdfG: () => this.savePdfOf(R, 'OWNER'), savePdfV: () => this.savePdfOf(R, 'VET'),
       saveRep: async () => {
         if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했습니다. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
         if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 로그인하면 받을 수 있습니다')
@@ -742,7 +761,15 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       showTabs, tb: { home: tbOn('home'), story: tbOn('story'), results: tbOn('results'), my: tbOn('my') },
-      sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', sheetAcct: s.sheet === 'acct', sheetPw: s.sheet === 'pw', sheetWithdraw: s.sheet === 'withdraw', anySheet: !!s.sheet,
+      sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', sheetAcct: s.sheet === 'acct', sheetPw: s.sheet === 'pw', sheetWithdraw: s.sheet === 'withdraw', sheetResume: s.sheet === 'resume', anySheet: !!s.sheet,
+      // 중단한 촬영이 있는 반려견: 이어서 할지, 지우고 새로 할지(11-06)
+      resumeName: capD.name || '', confirmResume: () => { this.setState({ sheet: null }); if (capD.open) this.nav('capReview', `/sessions/${capD.open}`) },
+      startFresh: async () => {
+        if (!capD.open || s.busy) return
+        this.setState({ busy: true })
+        try { await this.props.actions.cancelSession(capD.open); this.freshStart = true; this.setState({ sheet: null, busy: false }); await this.goCapGuide() }
+        catch (e) { this.setState({ busy: false }); this.toast(errMsg(e, '이전 촬영을 지우지 못했습니다')) }
+      },
       closeSheet: () => this.setState({ sheet: null }),
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',
