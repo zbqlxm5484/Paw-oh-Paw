@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -10,13 +11,15 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_analysis_client
 from app.clients.analysis import AnalysisClientError
+from app.core.errors import AppError, ErrorCode
 from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, Staff, WalkPass
 from app.schemas.admin import PurgeOut
+from app.services.analysis_copies import OutOfTime
 from app.services.purge import purge
 from app.storage.base import get_storage
 from app.storage.keys import analysis_key, dog_prefix, institution_prefix, original_key, report_key, result_key
@@ -238,7 +241,15 @@ def _recorded_sql(db: Session):
 
 
 def _is_session_lock(statement: str) -> bool:
-    return "FOR UPDATE" in statement and "measure_session" in statement
+    return "FOR UPDATE" in statement and "FROM measure_session" in statement
+
+
+def _is_dog_lock(statement: str) -> bool:
+    return "FOR UPDATE" in statement and "FROM dog" in statement
+
+
+def _is_institution_lock(statement: str) -> bool:
+    return "FOR UPDATE" in statement and "FROM institution" in statement
 
 
 def test_purge_locks_the_target_sessions_before_files_and_rows(db: Session, dog, staff) -> None:
@@ -250,7 +261,7 @@ def test_purge_locks_the_target_sessions_before_files_and_rows(db: Session, dog,
     _fill(db, dog, staff, sessions=1)
     with _recorded_sql(db) as events:
         purge(db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=True)
-    assert not any(_is_session_lock(statement) for statement in events)
+    assert not any("FOR UPDATE" in statement for statement in events)
 
     with _recorded_sql(db) as events:
         storage = _MarkingStorage(get_storage(), events)
@@ -406,7 +417,10 @@ def test_institution_id_must_be_a_uuid(client: TestClient, admin_headers) -> Non
 
 
 class _FakeAnalysis:
-    """분석 클라이언트 자리. 지운 작업을 기록하고, fail에 든 작업에서는 그 오류를 낸다."""
+    """분석 클라이언트 자리. 지운 작업을 기록하고, fail에 든 작업에서는 그 오류를 낸다.
+
+    hook은 지우기 호출 도중(HTTP를 기다리는 사이)에 다른 요청이 끼어드는 상황을 만든다.
+    """
 
     MARK = "analysis.delete"
 
@@ -414,10 +428,13 @@ class _FakeAnalysis:
         self.events = events
         self.deleted: list[str] = []
         self.fail: dict[str, AnalysisClientError] = {}
+        self.hook = None
 
     def delete(self, job_id: str) -> None:
         if self.events is not None:
             self.events.append(self.MARK)
+        if self.hook is not None:
+            self.hook(job_id)
         if job_id in self.fail:
             raise self.fail[job_id]
         self.deleted.append(job_id)
@@ -447,8 +464,12 @@ def _purge_dog(client: TestClient, dog, headers, *, dry_run: bool = False):
     return client.post(PURGE, json={"scope": "DOG", "target_id": str(dog.id), "dry_run": dry_run}, headers=headers)
 
 
-def test_analysis_copies_go_after_the_lock_and_before_files_and_rows(db: Session, dog, staff) -> None:
-    """분석 API를 먼저 불러야 가장 흔한 실패(무응답)에서 팀 서비스 쪽을 하나도 지우지 않고 멈출 수 있다."""
+def test_analysis_copies_go_before_the_session_lock_and_before_files_and_rows(db: Session, dog, staff) -> None:
+    """분석 API를 먼저 불러야 가장 흔한 실패(무응답)에서 팀 서비스 쪽을 하나도 지우지 않고 멈출 수 있다.
+
+    HTTP라 오래 걸릴 수 있어 회차 행을 잠그기 전에 부른다(199 리뷰 박규원). 잠근 채 기다리면 업로드·측정 종료와
+    워커의 주 반복이 같은 행에서 멈춘다. DOG의 반려견 행은 그보다 먼저 잠가, 그사이 복원하지 못하게 한다.
+    """
     _fill(db, dog, staff, sessions=2)
     job_ids = _give_job_ids(db, dog)
     with _recorded_sql(db) as events:
@@ -457,12 +478,13 @@ def test_analysis_copies_go_after_the_lock_and_before_files_and_rows(db: Session
         result = purge(
             db, storage, "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
         )
+    dog_lock = next(i for i, statement in enumerate(events) if _is_dog_lock(statement))
     lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
     first_call = events.index(_FakeAnalysis.MARK)
     last_call = len(events) - 1 - events[::-1].index(_FakeAnalysis.MARK)
     files = events.index(_MarkingStorage.MARK)
     first_delete = next(i for i, statement in enumerate(events) if statement.lstrip().upper().startswith("DELETE"))
-    assert lock < first_call <= last_call < files < first_delete
+    assert dog_lock < first_call <= last_call < lock < files < first_delete
     assert sorted(fake.deleted) == sorted(job_ids)
     assert result.analysis_jobs == 2
     (log,) = _purge_logs(db)
@@ -692,3 +714,122 @@ def test_script_yes_skips_the_question_and_all_is_required(fake_purge: list[dict
 def test_dog_fixture_weight_is_not_touched_by_fixtures(dog) -> None:
     """history_fixtures가 반려견 행을 바꾸지 않는지(파기 집계가 반려견 1행을 세는 전제)."""
     assert dog.weight_kg == Decimal("28.40")
+
+
+# ---- 잠금과 두 단계(12.4, 199 리뷰 박규원) ----
+
+
+def _shots_of(db: Session, dog) -> list[Shot]:
+    return list(
+        db.scalars(
+            select(Shot)
+            .join(MeasureSession, Shot.session_id == MeasureSession.id)
+            .where(MeasureSession.dog_id == dog.id)
+            .order_by(MeasureSession.measured_on)
+        )
+    )
+
+
+def test_a_job_that_appears_while_waiting_is_deleted_under_the_lock(db: Session, dog, staff) -> None:
+    """1단계(잠금 밖)에서 분석 API를 기다리는 사이 생긴 작업은 2단계에서 회차 행을 잠근 뒤 마저 지운다."""
+    _fill(db, dog, staff, sessions=2)
+    first, second = _shots_of(db, dog)
+    first.job_id = "job-first"
+    db.flush()
+    second_id = second.id
+    with _recorded_sql(db) as events:
+        fake = _FakeAnalysis(events)
+
+        def meanwhile(job_id: str) -> None:
+            if job_id == "job-first":
+                db.execute(update(Shot).where(Shot.id == second_id).values(job_id="job-late"))
+
+        fake.hook = meanwhile
+        result = purge(
+            db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
+        )
+    assert fake.deleted == ["job-first", "job-late"]
+    assert result.analysis_jobs == 2
+    lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
+    calls = [i for i, statement in enumerate(events) if statement == _FakeAnalysis.MARK]
+    assert calls[0] < lock < calls[1]
+    assert _rows_of_dog(db, dog.id) == 0
+    (log,) = _purge_logs(db)
+    assert log.analysis_jobs_deleted == 2
+
+
+def test_a_shot_submitted_while_waiting_stops_the_purge_with_everything_in_place(db: Session, dog, staff) -> None:
+    """미리 볼 때는 없던 분석 중 촬영이 2단계에서 잠근 뒤 보이면 409이고 팀 서비스 쪽은 그대로다."""
+    rows = _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    waiting = add_shot(db, make_session(db, dog, staff, date(2026, 10, 20)), 1, status="UPLOADED", passes={})
+    waiting_id = waiting.id
+    fake = _FakeAnalysis()
+    fake.hook = lambda job_id: db.execute(update(Shot).where(Shot.id == waiting_id).values(status="SUBMITTED"))
+
+    with pytest.raises(AppError) as caught:
+        purge(
+            db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
+        )
+    assert caught.value.code == ErrorCode.SHOT_IN_PROGRESS
+    assert _rows_of_dog(db, dog.id) == rows + 2  # 회차와 촬영 하나가 더 있다
+    assert get_storage().stat_prefix(dog_prefix(dog.institution_id, dog.id)) == _expected_files(1)
+    assert _purge_logs(db) == []
+
+
+def test_institution_purge_locks_the_institution_then_dogs_then_sessions_after_the_calls(
+    db: Session, dog, staff
+) -> None:
+    """INSTITUTION은 분석 API를 부른 뒤에 잠근다. 기관의 반려견을 모두 쥔 채 HTTP를 기다리지 않는다.
+
+    기관 행을 잠그면 그사이 새 반려견이 생기지 못하고(FK), 반려견 행을 잠그면 회차 시작·복원이 기다린다.
+    """
+    _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    with _recorded_sql(db) as events:
+        fake = _FakeAnalysis(events)
+        purge(db, get_storage(), "INSTITUTION", institution_id=dog.institution_id, dry_run=False, analysis=fake)
+    last_call = len(events) - 1 - events[::-1].index(_FakeAnalysis.MARK)
+    institution_lock = next(i for i, statement in enumerate(events) if _is_institution_lock(statement))
+    dog_lock = next(i for i, statement in enumerate(events) if _is_dog_lock(statement))
+    session_lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
+    first_delete = next(i for i, statement in enumerate(events) if statement.lstrip().upper().startswith("DELETE"))
+    assert last_call < institution_lock < dog_lock < session_lock < first_delete
+    assert _rows_of_dog(db, dog.id) == 0
+
+
+def test_the_accounts_flag_is_refused_before_anything_is_deleted(db: Session, dog, staff) -> None:
+    rows = _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    fake = _FakeAnalysis()
+    with pytest.raises(ValueError, match="INSTITUTION"):
+        purge(
+            db,
+            get_storage(),
+            "DOG",
+            institution_id=dog.institution_id,
+            target_id=dog.id,
+            dry_run=False,
+            analysis=fake,
+            include_accounts=True,
+        )
+    assert fake.deleted == [] and _rows_of_dog(db, dog.id) == rows
+
+
+def test_a_deadline_that_has_passed_defers_the_purge_without_deleting(db: Session, dog, staff) -> None:
+    """워커의 자동 파기가 넘기는 시간 상한. 넘겼으면 OutOfTime이고 아무것도 지우지 않는다."""
+    rows = _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    fake = _FakeAnalysis()
+    with pytest.raises(OutOfTime):
+        purge(
+            db,
+            get_storage(),
+            "DOG",
+            institution_id=dog.institution_id,
+            target_id=dog.id,
+            dry_run=False,
+            analysis=fake,
+            deadline=time.monotonic() - 1,
+        )
+    assert fake.deleted == [] and _rows_of_dog(db, dog.id) == rows and _purge_logs(db) == []

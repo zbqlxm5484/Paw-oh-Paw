@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Response, status
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentStaff, DbSession, check_file_link
+from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, check_file_link
 from app.core.config import get_settings
 from app.schemas.shots import ShotDetailOut, ShotOut
 from app.services import shots as shot_service
@@ -19,15 +19,16 @@ def get_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> ShotDeta
 
 
 @router.post("/{shot_id}/retry", response_model=ShotOut)
-def retry_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> ShotOut:
-    """실패한 촬영을 다시 대기열에 넣는다(BE-10). 응답의 status는 UPLOADED다."""
-    shot = shot_service.retry_shot(db, staff.institution_id, shot_id)
+def retry_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession, analysis: AnalysisClientDep) -> ShotOut:
+    """FAILED 촬영을 다시 대기열에 넣는다(BE-10). status는 UPLOADED다. 실패했던 작업의 분석 API 사본을 먼저 지운다."""
+    shot = shot_service.retry_shot(db, staff.institution_id, shot_id, analysis)
     return shot_service.to_shot_out(shot)
 
 
 @router.delete("/{shot_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
-    shot_service.delete_shot(db, staff.institution_id, shot_id)
+def delete_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession, analysis: AnalysisClientDep) -> Response:
+    """촬영을 지운다(BE-10). 분석 API 사본 → 파일 → 행 순서다(12.5)."""
+    shot_service.delete_shot(db, staff.institution_id, shot_id, analysis)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClientError
 from app.core.dates import CONTRACT_RETENTION_DAYS, today_local
 from app.models import DeviceCode, Dog, Institution, Staff
-from app.services.retention import purge_expired_contracts
+from app.services.purge import SweepResult
+from app.services.retention import due_institution_ids, purge_expired_contracts
 from app.storage.base import get_storage
 from app.storage.keys import institution_prefix
 from tests.conftest import GOOD_PASSWORD, password_hash_for
@@ -80,7 +82,7 @@ def test_data_and_accounts_go_ninety_days_after_the_contract_ended(db: Session, 
     _end_contract(db, other_id, CONTRACT_RETENTION_DAYS)  # 딱 90일째는 아직 대상이 아니다
     fake = _FakeAnalysis()
 
-    assert purge_expired_contracts(db, get_storage(), fake) == (1, 0)
+    assert purge_expired_contracts(db, get_storage(), fake) == SweepResult(1, 0)
 
     # 측정 자료: 휴지통에 있던 것까지 행·파일·분석 사본이 모두 없다
     assert (_rows_of_dog(db, dog_id), _rows_of_dog(db, trashed_id)) == (0, 0)
@@ -100,10 +102,12 @@ def test_data_and_accounts_go_ninety_days_after_the_contract_ended(db: Session, 
     assert db.get(Staff, other_staff.id) is not None
 
     # 다 지운 기관은 다시 보지 않는다(기록도 더 남기지 않는다)
-    assert purge_expired_contracts(db, get_storage(), fake) == (0, 0)
+    assert purge_expired_contracts(db, get_storage(), fake) == SweepResult(0, 0)
     assert len(_purge_logs(db)) == 1
     # 하루가 더 지나면 그 기관도 대상이다
-    assert purge_expired_contracts(db, get_storage(), fake, today=today_local() + timedelta(days=1)) == (1, 0)
+    assert purge_expired_contracts(db, get_storage(), fake, today=today_local() + timedelta(days=1)) == SweepResult(
+        1, 0
+    )
     assert _rows_of_dog(db, foreign_id) == 0
 
 
@@ -114,7 +118,7 @@ def test_active_and_open_ended_contracts_are_never_touched(db: Session, dog, sta
     _end_contract(db, other_staff.institution_id, CONTRACT_RETENTION_DAYS - 1)
     assert db.get(Institution, staff.institution_id).contract_ends_at is None  # 기한 없음
 
-    assert purge_expired_contracts(db, get_storage(), _FakeAnalysis()) == (0, 0)
+    assert purge_expired_contracts(db, get_storage(), _FakeAnalysis()) == SweepResult(0, 0)
     assert (_rows_of_dog(db, dog.id), _rows_of_dog(db, foreign.id)) == (rows, foreign_rows)
     assert db.scalar(select(func.count()).select_from(Staff)) == 2
     assert _purge_logs(db) == []
@@ -124,7 +128,7 @@ def test_accounts_alone_are_enough_to_purge(db: Session, staff) -> None:
     """반려견이 없어도 가입 계정이 남아 있으면 지운다."""
     institution_id = staff.institution_id
     _end_contract(db, institution_id, CONTRACT_RETENTION_DAYS + 30)
-    assert purge_expired_contracts(db, get_storage(), _FakeAnalysis()) == (1, 0)
+    assert purge_expired_contracts(db, get_storage(), _FakeAnalysis()) == SweepResult(1, 0)
     assert _accounts(db, institution_id) == {}
     (log,) = _purge_logs(db)
     assert log.rows_deleted == 1
@@ -138,14 +142,14 @@ def test_nothing_is_deleted_when_the_analysis_api_is_down(db: Session, dog, staf
         fake.fail[job_id] = AnalysisClientError("연결 실패")
     _end_contract(db, institution_id, CONTRACT_RETENTION_DAYS + 1)
 
-    assert purge_expired_contracts(db, get_storage(), fake) == (0, 1)
+    assert purge_expired_contracts(db, get_storage(), fake) == SweepResult(0, 1)
     assert _rows_of_dog(db, dog_id) == rows
     assert get_storage().stat_prefix(institution_prefix(institution_id)) == _expected_files(1)
     assert db.scalar(select(func.count()).select_from(Dog).where(Dog.institution_id == institution_id)) == 1
     assert _accounts(db, institution_id) != {}  # 계정도 그대로다
     assert _purge_logs(db) == []
     fake.fail.clear()
-    assert purge_expired_contracts(db, get_storage(), fake) == (1, 0)
+    assert purge_expired_contracts(db, get_storage(), fake) == SweepResult(1, 0)
 
 
 def test_admin_purge_still_keeps_the_accounts(
@@ -189,3 +193,53 @@ def test_a_contract_end_older_than_the_retention_is_rejected(
     accepted = send(oldest_allowed)
     assert accepted.status_code in (200, 201), accepted.text
     assert accepted.json()["contract_ends_at"] == oldest_allowed
+
+
+# ---- 잠금과 시간 상한, 켤 때 알림(12.4, 199 리뷰 박규원) ----
+
+
+def test_an_institution_whose_contract_was_extended_after_it_was_listed_is_skipped(
+    db: Session, dog, staff, other_staff
+) -> None:
+    """후보를 읽은 뒤 계약을 연장한 기관은 지우지 않는다. 기관 행을 잠근 뒤 종료일을 다시 본다."""
+    first_id, second_id = staff.institution_id, other_staff.institution_id
+    _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    foreign = another_dog(db, second_id, name="남의 개")
+    foreign_id = foreign.id
+    foreign_rows = _fill(db, foreign, other_staff, sessions=1)
+    _end_contract(db, first_id, CONTRACT_RETENTION_DAYS + 10)  # 먼저 끝난 기관부터 지운다
+    _end_contract(db, second_id, CONTRACT_RETENTION_DAYS + 5)
+    fake = _FakeAnalysis()
+    # 첫 기관의 분석 사본을 지우는 사이 관리자가 둘째 기관의 계약을 연장했다
+    fake.hook = lambda job_id: db.execute(
+        update(Institution).where(Institution.id == second_id).values(contract_ends_at=today_local())
+    )
+
+    assert purge_expired_contracts(db, get_storage(), fake) == SweepResult(1, 0)
+    assert _rows_of_dog(db, foreign_id) == foreign_rows
+    assert _accounts(db, second_id) == {"staff2": "CLIENT"}
+    assert len(_purge_logs(db)) == 1
+
+
+def test_the_contract_sweep_does_not_start_past_the_time_limit(db: Session, dog, staff) -> None:
+    dog_id = dog.id
+    rows = _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    _end_contract(db, staff.institution_id, CONTRACT_RETENTION_DAYS + 1)
+    fake = _FakeAnalysis()
+    result = purge_expired_contracts(db, get_storage(), fake, deadline=time.monotonic() - 1)
+    assert result == SweepResult(0, 0, out_of_time=True)
+    assert fake.deleted == [] and _rows_of_dog(db, dog_id) == rows and _accounts(db, staff.institution_id) != {}
+
+
+def test_due_institutions_are_listed_oldest_first(db: Session, dog, staff, other_staff) -> None:
+    """워커가 켤 때 로그로 알리는 목록. 90일째인 기관은 아직 아니고 다음 날부터다."""
+    first_id, second_id = staff.institution_id, other_staff.institution_id
+    _end_contract(db, first_id, CONTRACT_RETENTION_DAYS + 1)
+    _end_contract(db, second_id, CONTRACT_RETENTION_DAYS + 30)
+    assert due_institution_ids(db) == [second_id, first_id]
+    assert due_institution_ids(db, limit=1) == [second_id]
+    _end_contract(db, first_id, CONTRACT_RETENTION_DAYS)
+    assert due_institution_ids(db) == [second_id]
+    assert due_institution_ids(db, today=today_local() + timedelta(days=1)) == [second_id, first_id]

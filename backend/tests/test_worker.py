@@ -96,6 +96,8 @@ class FakeClient:
         self.submit_hook = None
         self.result_hook = None
         self.submits: list[tuple[Path, SubmitInfo]] = []
+        self.deleted: list[str] = []
+        self.delete_error: Exception | None = None
         self.status_calls: list[str] = []
         self.result_calls: list[str] = []
 
@@ -125,6 +127,11 @@ class FakeClient:
 
     def get_keypoints(self, job_id: str) -> dict[str, Any]:
         raise NotImplementedError("관절점 파일은 결과 영상 작업에서 쓴다")
+
+    def delete(self, job_id: str) -> None:
+        if self.delete_error:
+            raise self.delete_error
+        self.deleted.append(job_id)
 
 
 class HookedStorage:
@@ -364,7 +371,7 @@ def test_submit_failures_keep_the_shot_claimed_then_give_up(db: Session, dog, st
         assert row.status == "SUBMITTED" and row.job_id is None and row.attempt_count == expected_attempts
         # 13.3: 그동안 측정 취소는 막힌다
         with pytest.raises(AppError) as caught:
-            cancel_session(db, dog.institution_id, session.id)
+            cancel_session(db, dog.institution_id, session.id, client)
         assert caught.value.code == ErrorCode.SHOT_IN_PROGRESS
 
     stats = run_once(db, client, settings, get_storage())
@@ -425,7 +432,7 @@ def test_claimed_shot_can_be_cancelled_before_claim_but_not_after(db: Session, d
     # 12.4 잠금: 취소가 먼저면 워커는 지워진 행을 보고 건너뛰고, 워커가 먼저면 취소는 SHOT_IN_PROGRESS
     session = _session(db, dog, staff)
     _shot(db, session, 1)
-    cancel_session(db, dog.institution_id, session.id)
+    cancel_session(db, dog.institution_id, session.id, FakeClient())
     db.flush()
     stats = run_once(db, FakeClient(), _settings(), get_storage())
     assert stats.claimed == 0 and stats.submitted == 0
@@ -443,6 +450,22 @@ def test_shot_deleted_during_submit_is_not_written(db: Session, dog, staff) -> N
     client.submit_hook = purge_meanwhile
     stats = run_once(db, client, _settings(), get_storage())
     assert stats.claimed == 1 and stats.submitted == 0 and _fresh(db, shot) is None
+    # job_id를 적을 행이 없어 나중에 찾을 수 없으므로 방금 만든 분석 API 사본을 바로 지운다(199 리뷰)
+    assert client.deleted == ["job-1"]
+
+
+def test_an_unrecorded_job_that_cannot_be_deleted_is_only_logged(
+    db: Session, dog, staff, caplog: pytest.LogCaptureFixture
+) -> None:
+    session = _session(db, dog, staff)
+    _shot(db, session, 1)
+    client = FakeClient()
+    client.delete_error = AnalysisClientError("JOB_IN_PROGRESS", status_code=409)
+    client.submit_hook = lambda info: db.execute(delete(Shot).where(Shot.id == info.shot_id))
+    with caplog.at_level(logging.WARNING, logger="app.worker"):
+        stats = run_once(db, client, _settings(), get_storage())
+    assert stats.claimed == 1 and stats.submitted == 0  # 바퀴는 이어 간다
+    assert "analysis copy is left behind" in caplog.text
 
 
 # ---- 상태 조회 (BE-07) ----
@@ -896,22 +919,73 @@ def test_run_forever_survives_a_failing_loop(monkeypatch: pytest.MonkeyPatch) ->
     assert worker.run_forever() == 0
 
 
-def test_run_forever_sweeps_the_trash_once_per_interval(monkeypatch: pytest.MonkeyPatch) -> None:
-    """휴지통 자동 비우기(12.4)는 켜자마자 한 번, 그 뒤로는 한 시간마다다. 주 반복마다 돌지 않는다."""
+def _fake_sweeps(monkeypatch: pytest.MonkeyPatch, results: dict[str, Any]) -> list[tuple[str, float | None]]:
+    """자동 파기 두 가지를 가짜로 바꾸고, 불린 순서와 받은 deadline을 모은다."""
+    from app.services.purge import SweepResult
     from app.worker.main import WorkerStats
 
-    sweeps: list[int] = []
+    calls: list[tuple[str, float | None]] = []
 
-    def fake_purge_expired(*args: Any, **kwargs: Any) -> tuple[int, int]:
-        sweeps.append(len(sweeps))
-        return (0, 0)
+    def fake(name: str):
+        def run(*args: Any, deadline: float | None = None, **kwargs: Any) -> SweepResult:
+            calls.append((name, deadline))
+            return results.get(name, SweepResult(0, 0))
+
+        return run
 
     monkeypatch.setattr("app.worker.main.run_once", lambda *args, **kwargs: WorkerStats())
-    monkeypatch.setattr("app.worker.main.trash_service.purge_expired", fake_purge_expired)
-    monkeypatch.setattr("app.worker.main.retention_service.purge_expired_contracts", fake_purge_expired)
+    monkeypatch.setattr("app.worker.main.trash_service.purge_expired", fake("trash"))
+    monkeypatch.setattr("app.worker.main.retention_service.purge_expired_contracts", fake("contract"))
+    monkeypatch.setattr("app.worker.main.retention_service.due_institution_ids", lambda db: [])
+    return calls
+
+
+def test_run_forever_sweeps_the_trash_once_per_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    """휴지통 자동 비우기(12.4)는 켜자마자 한 번, 그 뒤로는 한 시간마다다. 주 반복마다 돌지 않는다.
+
+    계약 종료 뒤 자동 파기는 켠 뒤 한 간격이 지나야 처음 돈다. 배포하자마자 기관의 자료가 지워지지 않게(199 리뷰).
+    """
+    calls = _fake_sweeps(monkeypatch, {})
     worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
     assert worker.run_forever(max_loops=3) == 3
-    assert len(sweeps) == 2  # 휴지통 한 번, 계약 종료 뒤 파기 한 번
+    assert [name for name, _ in calls] == ["trash"]
+    assert calls[0][1] is not None  # 시간 상한을 넘긴다
+
+    worker._contract_sweep_from = 0.0  # 한 간격이 지났다
+    worker._next_trash_sweep = 0.0
+    calls.clear()
+    assert worker.run_forever(max_loops=3) == 3
+    assert [name for name, _ in calls] == ["trash", "contract"]
+    assert calls[0][1] == calls[1][1]  # 둘이 같은 상한을 나눠 쓴다
+
+
+def test_a_sweep_that_ran_out_of_time_resumes_soon_and_skips_the_rest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """시간 상한(WORKER_SWEEP_MAX_SEC)에 닿아 남기면 그 차례의 나머지는 건너뛰고, 한 시간이 아니라 곧 다시 본다."""
+    import time
+
+    from app.services.purge import SweepResult
+    from app.worker.main import SWEEP_RESUME_SEC, TRASH_SWEEP_INTERVAL_SEC
+
+    calls = _fake_sweeps(monkeypatch, {"trash": SweepResult(1, 0, out_of_time=True)})
+    worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
+    worker._contract_sweep_from = 0.0
+    before = time.monotonic()
+    assert worker.run_forever(max_loops=1) == 1
+    assert [name for name, _ in calls] == ["trash"]
+    assert worker._next_trash_sweep - before < TRASH_SWEEP_INTERVAL_SEC
+    assert worker._next_trash_sweep - before >= SWEEP_RESUME_SEC
+
+
+def test_the_worker_warns_at_start_about_institutions_due_for_the_contract_sweep(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    _fake_sweeps(monkeypatch, {})
+    due = uuid.uuid4()
+    monkeypatch.setattr("app.worker.main.retention_service.due_institution_ids", lambda db: [due])
+    worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
+    with caplog.at_level(logging.WARNING, logger="app.worker"):
+        worker.run_forever(max_loops=1)
+    assert str(due) in caplog.text and "past the retention period" in caplog.text
 
 
 def test_a_failing_trash_sweep_does_not_stop_the_worker(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -923,5 +997,7 @@ def test_a_failing_trash_sweep_does_not_stop_the_worker(monkeypatch: pytest.Monk
     monkeypatch.setattr("app.worker.main.run_once", lambda *args, **kwargs: WorkerStats())
     monkeypatch.setattr("app.worker.main.trash_service.purge_expired", broken)
     monkeypatch.setattr("app.worker.main.retention_service.purge_expired_contracts", broken)
+    monkeypatch.setattr("app.worker.main.retention_service.due_institution_ids", broken)
     worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
+    worker._contract_sweep_from = 0.0
     assert worker.run_forever(max_loops=2) == 2

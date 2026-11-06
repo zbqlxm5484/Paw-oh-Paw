@@ -6,15 +6,20 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 
+from app.clients.analysis import AnalysisClientError
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.models import Dog, MeasureSession, Shot, WalkPass
 from app.storage.base import get_storage
 from app.storage.keys import session_prefix
 from tests.conftest import bearer
+from tests.test_purge import (
+    _FakeAnalysis,
+    analysis,  # noqa: F401  (픽스처)
+)
 
 SESSION_OUT_KEYS = {
     "id",
@@ -308,3 +313,49 @@ def test_cancel_session_rules(client: TestClient, db: Session, auth_headers: dic
     closed = client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers)
     assert closed.status_code == 409
     assert closed.json()["error"]["code"] == "SESSION_CLOSED"
+
+
+# ---- 분석 API 사본(15.6, 199 리뷰 조유진) ----
+
+
+def test_cancel_session_deletes_the_analysis_copies_first_and_stops_if_it_cannot(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """촬영 행을 지우면 분석 API 사본을 다시 찾을 수 없으므로 먼저 지운다. 못 지우면 503이고 회차는 그대로다."""
+    session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
+    done, failed = _shot(db, session, 1, "DONE"), _shot(db, session, 2, "FAILED")
+    _shot(db, session, 3, "UPLOADED")  # 제출한 적이 없어 사본이 없다
+    done.job_id, failed.job_id = "job-a", "job-b"
+    db.flush()
+    analysis.fail["job-b"] = AnalysisClientError("연결 실패")
+
+    stopped = client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers)
+    assert stopped.status_code == 503, stopped.text
+    assert stopped.json()["error"]["code"] == "ANALYSIS_UNAVAILABLE"
+    assert db.scalar(select(func.count()).select_from(Shot).where(Shot.session_id == session.id)) == 3
+
+    analysis.fail.clear()
+    assert client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers).status_code == 204
+    assert set(analysis.deleted) == {"job-a", "job-b"}
+    assert db.scalar(select(MeasureSession.id).where(MeasureSession.id == session.id)) is None
+
+
+def test_cancel_that_will_be_refused_leaves_the_analysis_copies_alone(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
+    done = _shot(db, session, 1, "DONE")
+    done.job_id = "job-a"
+    _shot(db, session, 2, "ANALYZING")
+    db.flush()
+    refused = client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers)
+    assert (refused.status_code, refused.json()["error"]["code"]) == (409, "SHOT_IN_PROGRESS")
+    assert analysis.deleted == []
