@@ -2,12 +2,14 @@
 
 {기관ID}/{반려견ID}/{회차ID}/{촬영ID}/original.{mp4|mov} · result.mp4 · analysis.json · angles.json
 {기관ID}/{반려견ID}/{회차ID}/reports/{보고서ID}.pdf
+{기관ID}/{반려견ID}/images/{사진ID}.{jpg|png}
 모든 ID는 UUID다. 반려견 이름이나 휴대폰의 원래 파일명은 키에 들어가지 않는다. 접두어는 /로 끝난다.
 """
 
 import uuid
 
 ORIGINAL_EXTENSIONS = ("mp4", "mov")
+IMAGE_EXTENSIONS = ("jpg", "png")
 
 
 def institution_prefix(institution_id: uuid.UUID) -> str:
@@ -51,3 +53,10 @@ def angles_key(institution_id: uuid.UUID, dog_id: uuid.UUID, session_id: uuid.UU
 
 def report_key(institution_id: uuid.UUID, dog_id: uuid.UUID, session_id: uuid.UUID, report_id: uuid.UUID) -> str:
     return f"{session_prefix(institution_id, dog_id, session_id)}reports/{report_id}.pdf"
+
+
+def image_key(institution_id: uuid.UUID, dog_id: uuid.UUID, image_id: uuid.UUID, ext: str) -> str:
+    """반려견 사진(12.5 사진). ext는 점 없는 소문자(jpg·png). 반려견 접두어 아래라 파기 때 함께 지워진다."""
+    if ext not in IMAGE_EXTENSIONS:
+        raise ValueError(f"사진 확장자는 {IMAGE_EXTENSIONS} 중 하나여야 합니다: {ext!r}")
+    return f"{dog_prefix(institution_id, dog_id)}images/{image_id}.{ext}"

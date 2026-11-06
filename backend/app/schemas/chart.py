@@ -1,4 +1,4 @@
-"""차트 자료 요청·응답 모델(13.9, 15.3 VitalOut·DogHistoryOut·NoteOut, 15.11): 바이탈, 진단 이력, 메모·진료 기록.
+"""차트 자료 요청·응답 모델(13.9, 15.3 VitalOut·DogHistoryOut·NoteOut, 15.11): 바이탈, 진단 이력, 메모·진료 기록, 사진.
 
 schemas/sessions.py가 VitalIn을 쓰므로(회차 시작의 vital) 이 파일은 sessions를 import하지 않는다.
 """
@@ -189,3 +189,26 @@ class NoteRevisionOut(OutModel):
 
 class NoteRevisionListOut(BaseModel):
     items: list[NoteRevisionOut]
+
+
+class ImageOut(BaseModel):
+    """반려견 사진 하나(15.11). file_url은 서명 URL이고 url_expires_at까지 쓸 수 있다.
+
+    masked_faces는 올릴 때 가린 얼굴 수다. 0보다 크면 사진의 일부가 모자이크되어 있다.
+    """
+
+    id: uuid.UUID
+    taken_on: date
+    kind: str
+    caption: str | None
+    width: int
+    height: int
+    masked_faces: int
+    staff: StaffBriefOut
+    created_at: UtcDateTime
+    file_url: str
+    url_expires_at: UtcDateTime
+
+
+class ImageListOut(BaseModel):
+    items: list[ImageOut]

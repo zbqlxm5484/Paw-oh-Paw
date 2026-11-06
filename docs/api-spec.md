@@ -8,7 +8,7 @@
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 55개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 59개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
@@ -170,6 +170,10 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 53 | `PATCH /notes/{note_id}` | 메모·진료 기록 고치기(이전 내용은 이력으로) | 차트 | 200 | — |
 | 54 | `GET /notes/{note_id}/revisions` | 수정 이력(최신이 앞) | 차트 | 200 | — |
 | 55 | `GET /sessions` | 기관 회차 목록(최신순, 담당자·상태로 거름) | 홈 | 200 | — |
+| 56 | `GET /dogs/{dog_id}/images` | 반려견 사진 목록(찍은 날 순) | 차트 | 200 | — |
+| 57 | `POST /dogs/{dog_id}/images` | 사진 올리기(얼굴을 가려 저장) | 차트 | 201 | 400 `IMAGE_FORMAT`, `IMAGE_UNREADABLE`, 413 `IMAGE_TOO_LARGE` |
+| 58 | `GET /images/{image_id}/file` | 사진 열기 (서명 URL) | 차트 | 200 | 403 `FILE_LINK_EXPIRED` |
+| 59 | `DELETE /images/{image_id}` | 사진 지우기 | 차트 | 204 | — |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
@@ -606,6 +610,35 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - **`PATCH /notes/{note_id}`:** 본문은 `body`·`category`·`important` 중 바꿀 것만. 응답 200 **NoteOut**. 고치기 전 내용이 이력으로 남고 `revision_count`가 1 늘며 `staff`는 고친 담당자가 된다. 바뀐 값이 없으면 그대로 돌려준다. 분류는 같은 종류 안에서만 바꿀 수 있다(메모를 `S`로 바꾸면 422). `session_id`는 바꿀 수 없다.
 - **`GET /notes/{note_id}/revisions`:** 응답 200 `{"items": [{"id", "body", "category", "important", "staff", "revised_at"}, …]}`. 고치기 전 내용들이고 최근에 바뀐 것부터다. `staff`는 그 내용을 쓴 담당자, `revised_at`은 그 내용이 바뀐 시각이다.
 - 지우는 API는 없다.
+
+### 사진
+
+수술 전·후 사진, 방사선 사진, 그 밖의 사진을 반려견에 붙인다. 보고서에는 들어가지 않는다.
+
+```json
+// ImageOut
+{
+  "id": "…",
+  "taken_on": "2026-08-27",
+  "kind": "POST_OP",
+  "caption": "수술 직후",
+  "width": 1600,
+  "height": 1200,
+  "masked_faces": 0,
+  "staff": {"id": "…", "name": "김담당"},
+  "created_at": "2026-08-27T05:10:00Z",
+  "file_url": "/api/v1/images/…/file?exp=1790000000&sig=…",
+  "url_expires_at": "2026-08-27T05:25:00Z"
+}
+```
+
+- **`GET /dogs/{dog_id}/images`:** 응답 200 `{"items": [ImageOut, …]}`. 찍은 날이 이른 순서, 같으면 올린 순서다. 페이지는 없다. 방문 안 썸네일과 경과 탭의 모아 보기를 이 목록 하나로 그린다.
+- **`POST /dogs/{dog_id}/images`:** `multipart/form-data`로 `file`, `kind`, `taken_on`(선택), `caption`(선택)을 보낸다. 응답 201 **ImageOut**. 규칙과 오류는 12.9다.
+- **`GET /images/{image_id}/file?exp=…&sig=…`:** `file_url`을 `<img src>`에 그대로 넣는다. 로그인 토큰 없이 열린다. `url_expires_at`이 지나면 403 `FILE_LINK_EXPIRED`이니 목록을 다시 불러 새 주소를 받는다(결과 영상과 같다).
+- **`DELETE /images/{image_id}`:** 응답 204. 되돌릴 수 없다.
+- **얼굴 가리기:** 서버는 올릴 때 사람 얼굴을 찾아 가린 사진만 저장하고 원본은 두지 않는다. `kind`가 `XRAY`면 가리지 않는다. `masked_faces`가 가린 수이고, 0보다 크면 사진의 일부가 모자이크되어 있다. 방사선 사진을 `PRE_OP`·`POST_OP`로 올리면 얼굴 찾기를 거치므로, 드물게 엉뚱한 자리가 가려질 수 있다. 그럴 때는 지우고 `XRAY`로 다시 올린다.
+- 검출기가 놓친 얼굴은 남을 수 있다. 화면은 올린 직후 사진을 보여 주고 지우기 버튼을 둔다.
+- 저장하면서 사진 속 위치·기기 정보(EXIF)가 빠지고 방향이 바로 선다. 응답의 `width`·`height`는 저장한 사진의 크기다.
 
 ---
 
@@ -1085,6 +1118,8 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | --- | --- | --- | --- |
 | `VIDEO_FORMAT` | 400 | MP4 또는 MOV 영상만 올릴 수 있습니다. | |
 | `VIDEO_UNREADABLE` | 400 | 영상을 읽을 수 없습니다. 다시 촬영해 주세요. | |
+| `IMAGE_FORMAT` | 400 | JPG 또는 PNG 사진만 올릴 수 있습니다. | |
+| `IMAGE_UNREADABLE` | 400 | 사진을 읽을 수 없습니다. 다른 파일로 다시 올려 주세요. | |
 | `VIDEO_CODEC` | 400 | H.264 또는 H.265로 찍은 영상만 올릴 수 있습니다. | |
 | `VIDEO_PORTRAIT` | 400 | 가로로 촬영한 영상만 올릴 수 있습니다. | |
 | `VIDEO_DURATION` | 400 | 영상 길이는 {min\_sec}~{max\_sec}초여야 합니다. | |
@@ -1114,6 +1149,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | |
 | `LAST_ACCOUNT` | 409 | 기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요. | 계정 화면에 안내 |
 | `VIDEO_TOO_LARGE` | 413 | 영상 파일이 너무 큽니다. 최대 {max\_mb} MB까지 올릴 수 있습니다. | |
+| `IMAGE_TOO_LARGE` | 413 | 사진이 너무 큽니다. {max\_mb} MB, {max\_mp}백만 화소까지 올릴 수 있습니다. | |
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | `detail.fields`로 입력칸 표시 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | |
 | `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | |
@@ -1297,6 +1333,12 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | 메모·진료 기록 | `body` | 필수 | 1~2,000자. 앞뒤 공백은 서버가 지운다 |
 | 메모·진료 기록 | `important` | 선택 | 기본 false |
 | 메모·진료 기록 | `session_id` | 선택 | 이 반려견의 회차 |
+| 사진 | `file` | 필수 | JPEG 또는 PNG(파일 이름이 아니라 내용으로 가린다). 20 MB 이하, 4,000만 화소 이하 |
+| 사진 | `kind` | 필수 | `PRE_OP`(수술 전)·`POST_OP`(수술 후)·`XRAY`(방사선)·`PHOTO`(사진) |
+| 사진 | `taken_on` | 선택 | 기본 오늘. 미래 날짜 불가 |
+| 사진 | `caption` | 선택 | 100자 이하. 앞뒤 공백은 서버가 지운다. 빈 값은 `null`로 저장한다 |
+
+사진 파일 검사는 크기(413 `IMAGE_TOO_LARGE`) → 형식(400 `IMAGE_FORMAT`) → 화소(413 `IMAGE_TOO_LARGE`) → 읽기(400 `IMAGE_UNREADABLE`) 순서이고 처음 걸린 하나만 온다.
 
 ## 13. 화면 흐름 예시
 

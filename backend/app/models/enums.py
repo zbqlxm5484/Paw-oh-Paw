@@ -164,6 +164,15 @@ class ReportStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class ImageKind(StrEnum):
+    """반려견 사진의 종류. XRAY는 얼굴을 가리지 않는다(12.5 사진)."""
+
+    PRE_OP = "PRE_OP"
+    POST_OP = "POST_OP"
+    XRAY = "XRAY"
+    PHOTO = "PHOTO"
+
+
 class DogBadgeCode(StrEnum):
     """홈 배지(12.5 홈 배지·변동). DB에 저장하지 않고 응답에만 쓴다."""
 

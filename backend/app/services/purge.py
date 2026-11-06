@@ -48,6 +48,7 @@ from app.core.errors import AppError, ErrorCode
 from app.models import (
     Dog,
     DogHistory,
+    DogImage,
     DogNote,
     DogNoteRevision,
     DogVital,
@@ -182,6 +183,7 @@ def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
         + count(DogNote, DogNote.dog_id.in_(dog_ids))
         + count(DogVital, DogVital.dog_id.in_(dog_ids))
         + count(DogHistory, DogHistory.dog_id.in_(dog_ids))
+        + count(DogImage, DogImage.dog_id.in_(dog_ids))
     )
 
 
@@ -202,6 +204,8 @@ def _delete_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
     deleted += db.execute(delete(DogNote).where(DogNote.dog_id.in_(dog_ids))).rowcount
     deleted += db.execute(delete(DogVital).where(DogVital.dog_id.in_(dog_ids))).rowcount
     deleted += db.execute(delete(DogHistory).where(DogHistory.dog_id.in_(dog_ids))).rowcount
+    # 사진(v1.40). 파일은 반려견 접두어 삭제에 이미 지워졌다
+    deleted += db.execute(delete(DogImage).where(DogImage.dog_id.in_(dog_ids))).rowcount
     db.execute(update(Dog).where(Dog.baseline_session_id.in_(sessions)).values(baseline_session_id=None))
     deleted += db.execute(delete(MeasureSession).where(MeasureSession.dog_id.in_(dog_ids))).rowcount
     deleted += db.execute(delete(Dog).where(Dog.id.in_(dog_ids))).rowcount
