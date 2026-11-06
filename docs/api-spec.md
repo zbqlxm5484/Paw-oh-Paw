@@ -8,7 +8,7 @@
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 45개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 54개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
@@ -117,7 +117,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | --- | --- | --- | --- | --- | --- |
 | 1 | `POST /auth/login` | 로그인(아이디·비밀번호), 토큰 발급 | 로그인 | 200 | 401 `LOGIN_FAILED`, 403 `ACCOUNT_DISABLED` |
 | 2 | `GET /auth/me` | 내 정보(`effective_role` 포함. `GUEST`도 된다) | 공통 | 200 | — |
-| 3 | `GET /dogs` | 반려견 목록·검색 | S1 | 200 | — |
+| 3 | `GET /dogs` | 반려견 목록·검색(이름·동물번호·보호자) | S1 | 200 | — |
 | 4 | `POST /dogs` | 반려견 등록 | S2 | 201 | — |
 | 5 | `GET /dogs/{dog_id}` | 반려견 상세 | S2·S7 | 200 | — |
 | 6 | `PATCH /dogs/{dog_id}` | 반려견 수정, 기준 회차 지정(`version` 필수) | S2·S7 | 200 | 400 `BASELINE_INVALID`, 409 `DOG_MODIFIED` |
@@ -160,6 +160,15 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | — | 200 | — |
 | 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제(되돌릴 수 없음) | — | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 45 | `DELETE /auth/me` | 회원 탈퇴 | 계정 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
+| 46 | `GET /dogs/{dog_id}/vitals` | 바이탈 목록(최신이 앞) | 차트 | 200 | — |
+| 47 | `PUT /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 저장(있으면 바꿈) | 차트 | 200 | — |
+| 48 | `GET /dogs/{dog_id}/history` | 진단 이력(오래된 것부터) | 차트 | 200 | — |
+| 49 | `POST /dogs/{dog_id}/history` | 진단·수술·재활 추가, 단계 변경 | 차트 | 201 | — |
+| 50 | `GET /dogs/{dog_id}/notes` | 메모·진료 기록 목록(최신이 앞) | 차트 | 200 | — |
+| 51 | `POST /dogs/{dog_id}/notes` | 메모·진료 기록 한 건 쓰기 | 차트 | 201 | — |
+| 52 | `POST /dogs/{dog_id}/notes/batch` | 여러 건을 같은 시각으로 쓰기(SOAP) | 차트 | 201 | — |
+| 53 | `PATCH /notes/{note_id}` | 메모·진료 기록 고치기(이전 내용은 이력으로) | 차트 | 200 | — |
+| 54 | `GET /notes/{note_id}/revisions` | 수정 이력(최신이 앞) | 차트 | 200 | — |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
@@ -230,6 +239,13 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
   "focus_limb": "RH",
   "baseline_session_id": null,
   "memo": null,
+  "chart_no": "A-1024",
+  "owner_name": "김보호",
+  "owner_phone": "010-1234-5678",
+  "owner_phone_last4": "5678",
+  "stage": "REHAB",
+  "stage_changed_on": null,
+  "latest_vital": null,
   "version": 0,
   "session_count": 3,
   "last_measured_on": "2026-10-20",
@@ -246,6 +262,10 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - `size_class_manual`: 담당자가 체급을 직접 고쳤으면 true. false면 등록 체중으로 자동 분류한 값이다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE. 견종은 보지 않는다).
 - `baseline_session_id`: 담당자가 지정한 기준 회차. `null`이면 가장 이른 완료 회차가 기준이다.
 - `memo`: 내부 메모. 담당자 화면에만 보이고 보고서에는 들어가지 않는다.
+- `chart_no`·`owner_name`: 동물번호(병원 차트 번호)와 보호자 이름. 없으면 `null`. 보고서에는 들어가지 않는다.
+- `owner_phone`: 보호자 연락처. **상세·등록·수정 응답에만 값이 있고 목록에서는 `null`이다.** 목록은 `owner_phone_last4`(숫자 중 뒤 4자리)만 준다.
+- `stage`: `PRE`(수술 전)·`REHAB`(재활 중)·`DONE`(종결). `stage_changed_on`은 단계가 바뀐 날이고 바뀐 적이 없으면 `null`이다. 서버가 적는 값이라 보낼 수 없다.
+- `latest_vital`: 가장 최근 날짜의 바이탈(5절 차트 자료의 VitalOut). 없으면 `null`. 목록에서도 온다.
 - `version`: 수정할 때 그대로 돌려보낸다(5절 `PATCH`). 수정될 때마다 1 늘어난다.
 
 ### SessionOut — 회차
@@ -449,7 +469,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 | 쿼리 | 필수 | 규칙 |
 | --- | --- | --- |
-| `q` | 선택 | 최대 50자. 이름에 이 글자가 들어 있으면 찾는다(대소문자 무시) |
+| `q` | 선택 | 최대 50자. 이름·동물번호·보호자 이름 중 하나에 이 글자가 들어 있으면 찾는다(대소문자 무시). 연락처로는 찾지 않는다 |
 | `page` | 선택 | 1 이상, 기본 1 |
 | `size` | 선택 | 1~100, 기본 20 |
 
@@ -468,11 +488,16 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
   "sex": "FEMALE_SPAYED",
   "rehab_start_date": "2026-10-01",
   "focus_limb": "RH",
-  "memo": null
+  "memo": null,
+  "chart_no": "A-1024",
+  "owner_name": "김보호",
+  "owner_phone": "010-1234-5678",
+  "stage": "PRE"
 }
 ```
 
 - 응답 201 **DogOut**. 필드 규칙은 12.2.
+- `chart_no`·`owner_name`·`owner_phone`·`stage`는 선택이다. `stage`를 빼면 `REHAB`이다.
 - `size_class`를 빼면 서버가 체중으로 정한다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE). 보내면 그 값을 쓰고 `size_class_manual`이 true가 된다.
 - `baseline_session_id`는 등록 때 받지 않는다. 회차가 아직 없기 때문이다.
 
@@ -489,7 +514,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 - 응답 200 **DogOut**.
 - `version`이 저장된 값과 다르면 409 `DOG_MODIFIED`이고 아무것도 바뀌지 않는다. 다른 담당자가 먼저 고친 경우이니 다시 불러온 뒤 시도한다. `version`이 없으면 422다.
-- 보내지 않은 필드는 그대로다. 값을 비우려면 `null`을 보낸다. `name`·`breed`·`weight_kg`은 비울 수 없다.
+- 보내지 않은 필드는 그대로다. 값을 비우려면 `null`을 보낸다. `name`·`breed`·`weight_kg`·`stage`는 비울 수 없다. 동물번호·보호자 정보는 빈 문자열이 아니라 `null`로 지운다.
+- `stage`를 지금과 다른 값으로 보내면 `stage_changed_on`이 오늘이 된다.
 - `weight_kg`를 바꾸면 체급을 직접 고친 적이 없을 때만 새 체중으로 체급이 다시 정해진다. `breed`를 바꿔도 체급은 그대로다.
 - `size_class`에 값을 보내면 직접 고친 것으로 저장되고, `null`을 보내면 자동 분류로 돌아간다.
 - `baseline_session_id`는 이 반려견의 완료(DONE) 회차여야 한다. 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 가장 이른 완료 회차가 기준이 된다.
@@ -505,6 +531,60 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - **`POST /dogs/{dog_id}/restore` — 복원:** 본문 없음. 응답 200 **DogOut**. 회차·영상·보고서가 그대로 돌아온다. 휴지통에 없는 반려견은 404다.
 - **`DELETE /dogs/{dog_id}/permanent` — 영구 삭제:** 응답 204. **되돌릴 수 없으니 화면에서 확인을 받은 뒤 부른다.** 휴지통에 있는 반려견만 된다(아니면 404). 분석 서버의 사본을 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 휴지통에 그대로 남는다. 잠시 뒤 다시 부르면 된다. 휴지통 전체 비우기는 목록의 반려견마다 부른다.
 
+### 차트 자료: 바이탈·진단 이력·메모·진료 기록
+
+반려견 차트 화면의 자료다. 모두 자기 기관의 반려견에만 되고, 다른 기관이거나 휴지통에 있는 반려견은 404다. 쓴 담당자(`staff`)는 서버가 로그인한 담당자로 채운다(요청으로 받지 않는다). 입력 규칙은 12.9다. "방문"은 서버에 따로 없고, 같은 날짜의 측정·바이탈·기록을 화면이 묶는다.
+
+**바이탈** — 반려견마다 하루 한 줄이다.
+
+```json
+// VitalOut
+{
+  "id": "…", "measured_on": "2026-11-06",
+  "weight_kg": 28.1, "temp_c": 38.6, "heart_rate": 92, "sbp": 132, "dbp": 84,
+  "staff": {"id": "…", "name": "김담당"}, "session_id": null,
+  "created_at": "2026-11-06T01:10:00Z", "updated_at": "2026-11-06T01:10:00Z"
+}
+```
+
+- **`GET /dogs/{dog_id}/vitals`:** 응답 200 `{"items": [VitalOut, …]}`. 최신 날짜가 앞이고 전부 온다(페이지 없음).
+- **`PUT /dogs/{dog_id}/vitals/{measured_on}`:** 본문은 다섯 값 `{"weight_kg", "temp_c", "heart_rate", "sbp", "dbp"}` 모두 필수. 응답 200 **VitalOut**. 그날 값이 없으면 만들고 있으면 바꾼다(어느 쪽이든 200). 미래 날짜는 422, 날짜 형식이 아니면 404다.
+- 회차를 시작할 때 `vital`을 함께 보내면 그날 바이탈로 저장되고 `session_id`에 그 회차가 들어간다(6절 회차 시작). 회차를 취소해도 바이탈은 남고 `session_id`만 `null`이 된다.
+
+**진단 이력** — 진단·수술·재활. 주소의 `history`는 진단 이력이고, 측정 이력은 `GET /dogs/{dog_id}/sessions`(8절)다.
+
+```json
+// DogHistoryOut
+{
+  "id": "…", "occurred_on": "2026-08-27", "kind": "SURGERY", "title": "TPLO",
+  "site": "RH", "clinician": "박수의", "staff": {"id": "…", "name": "김담당"},
+  "created_at": "2026-08-27T05:00:00Z"
+}
+```
+
+- **`GET /dogs/{dog_id}/history`:** 응답 200 `{"items": [DogHistoryOut, …]}`. 일어난 날이 오래된 것부터, 같으면 적은 순서다.
+- **`POST /dogs/{dog_id}/history`:** 본문 `{"occurred_on", "kind", "title", "site"?, "clinician"?, "stage"?}`. 응답 201 **DogHistoryOut**. `kind`는 `DIAGNOSIS`·`SURGERY`·`REHAB`, `site`는 `LF`·`RF`·`LH`·`RH`·`SP`(척추)다. `stage`를 보내면 반려견의 단계를 함께 바꾼다. 값이 지금과 다르면 반려견의 `version`이 1 늘어나므로 **그 뒤 반려견을 다시 읽는다.**
+- 고치거나 지우는 API는 없다.
+
+**메모·진료 기록** — 분류(`category`)만 다르고 모양은 같다. 메모는 `CAUTION`(주의)·`GUARDIAN`(보호자)·`BOOKING`(예약)·`OTHER`(기타), 진료 기록은 `S`·`O`·`A`·`P`다.
+
+```json
+// NoteOut
+{
+  "id": "…", "dog_id": "…", "session_id": null, "category": "CAUTION",
+  "body": "입질 있음. 입마개 필요", "important": true,
+  "staff": {"id": "…", "name": "김담당"}, "revision_count": 0,
+  "created_at": "2026-11-06T01:10:00Z", "updated_at": "2026-11-06T01:10:00Z"
+}
+```
+
+- **`GET /dogs/{dog_id}/notes?kind=memo&session_id=…&page=1&size=50`:** 응답 200 `{"items": [NoteOut, …], "total", "page", "size"}`. 쓴 시각이 늦은 것부터다. `kind`는 `memo` 또는 `chart`(빼면 둘 다), `session_id`를 주면 그 회차에 단 것만, `size`는 1~200(기본 50)이다.
+- **`POST /dogs/{dog_id}/notes`:** 본문 `{"category", "body", "important"?, "session_id"?}`. 응답 201 **NoteOut**. `session_id`가 이 반려견의 회차가 아니면 422다.
+- **`POST /dogs/{dog_id}/notes/batch`:** 본문 `{"session_id"?, "notes": [{"category", "body", "important"?}, …]}`(1~8건, 같은 분류 두 번은 422). 응답 201 `{"items": [NoteOut, …]}`(보낸 순서). 모두 `created_at`이 같아 SOAP 한 기록으로 묶기 쉽다. 하나라도 어긋나면 아무것도 저장되지 않는다.
+- **`PATCH /notes/{note_id}`:** 본문은 `body`·`category`·`important` 중 바꿀 것만. 응답 200 **NoteOut**. 고치기 전 내용이 이력으로 남고 `revision_count`가 1 늘며 `staff`는 고친 담당자가 된다. 바뀐 값이 없으면 그대로 돌려준다. 분류는 같은 종류 안에서만 바꿀 수 있다(메모를 `S`로 바꾸면 422). `session_id`는 바꿀 수 없다.
+- **`GET /notes/{note_id}/revisions`:** 응답 200 `{"items": [{"id", "body", "category", "important", "staff", "revised_at"}, …]}`. 고치기 전 내용들이고 최근에 바뀐 것부터다. `staff`는 그 내용을 쓴 담당자, `revised_at`은 그 내용이 바뀐 시각이다.
+- 지우는 API는 없다.
+
 ---
 
 ## 6. 회차 측정
@@ -514,14 +594,16 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ### `POST /dogs/{dog_id}/sessions` — 회차 시작
 
 ```json
-// 요청: 두 필드 모두 선택
-{"measured_on": "2026-10-20", "weight_kg": 28.1}
+// 요청: 모든 필드가 선택
+{"measured_on": "2026-10-20", "weight_kg": 28.1,
+ "vital": {"weight_kg": 28.1, "temp_c": 38.6, "heart_rate": 92, "sbp": 132, "dbp": 84}}
 ```
 
 - 응답 201 **SessionOut**(`status`는 MEASURING).
 - `measured_on`을 빼면 오늘(한국 날짜)이다. 미래 날짜는 안 된다.
 - `weight_kg`(그날 체중)을 빼면 `null`이고, 보고서는 반려견의 등록 체중을 쓴다.
 - 응답의 `size_class`는 그날 체중(없으면 등록 체중)으로 정한 회차 체급이다. 반려견 화면의 체급과 다를 수 있다(감량한 개는 그 뒤 회차부터 중형).
+- `vital`을 보내면 그날 바이탈로 함께 저장된다(다섯 값 모두 필요, 5절 차트 자료). `weight_kg`를 빼고 `vital`만 보내면 `vital.weight_kg`가 회차 체중이 되고, 둘을 다 보냈는데 값이 다르면 422다.
 - 이미 측정 중인 회차가 있으면 409 `SESSION_ALREADY_OPEN`이고 `detail.session_id`에 그 회차 ID가 온다. 화면은 그 회차로 이동한다.
 
 ### `GET /sessions/{session_id}` — 회차 상태·진행·촬영 목록
@@ -1067,6 +1149,10 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `focus_limb` | 선택 | `LF`·`RF`·`LH`·`RH` |
 | `baseline_session_id` | 선택(수정 때만) | 이 반려견의 완료 회차 |
 | `memo` | 선택 | 최대 1,000자 |
+| `chart_no` | 선택 | 1~30자. 같은 번호가 있어도 받는다 |
+| `owner_name` | 선택 | 1~50자 |
+| `owner_phone` | 선택 | 7~20자. 숫자와 `-`·`+`·공백만 |
+| `stage` | 선택 | `PRE`·`REHAB`·`DONE`. 등록 때 빼면 `REHAB`, 수정 때 `null`은 안 된다 |
 
 ### 12.3 회차 시작
 
@@ -1074,6 +1160,8 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | --- | --- | --- |
 | `measured_on` | 선택 | 기본 오늘, 미래 날짜 불가 |
 | `weight_kg` | 선택 | 0.5~100.0 |
+
+`vital`(선택)의 규칙은 12.9의 바이탈과 같다.
 
 ### 12.4 로그인·목록
 
@@ -1122,6 +1210,27 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `new_password`(confirm) | 12.5의 `password` 규칙 |
 
 ---
+
+### 12.9 차트 자료
+
+바이탈의 범위는 아직 제안 값이다(병원 의견을 받으면 바뀔 수 있다).
+
+| 대상 | 필드 | 필수 | 규칙 |
+| --- | --- | --- | --- |
+| 바이탈 | `weight_kg` | 필수 | 0.5~100.0, 소수 둘째 자리까지 |
+| 바이탈 | `temp_c` | 필수 | 30.0~45.0, 소수 첫째 자리까지 |
+| 바이탈 | `heart_rate` | 필수 | 정수 20~300 |
+| 바이탈 | `sbp`, `dbp` | 필수 | 정수. `sbp` 30~300, `dbp` 10~250, `dbp`가 `sbp`보다 작아야 한다 |
+| 진단 이력 | `occurred_on` | 필수 | 오늘(한국 날짜)까지 |
+| 진단 이력 | `kind` | 필수 | `DIAGNOSIS`·`SURGERY`·`REHAB` |
+| 진단 이력 | `title` | 필수 | 1~100자 |
+| 진단 이력 | `site` | 선택 | `LF`·`RF`·`LH`·`RH`·`SP` |
+| 진단 이력 | `clinician` | 선택 | 1~50자 |
+| 진단 이력 | `stage` | 선택 | `PRE`·`REHAB`·`DONE` |
+| 메모·진료 기록 | `category` | 필수 | `CAUTION`·`GUARDIAN`·`BOOKING`·`OTHER`·`S`·`O`·`A`·`P` |
+| 메모·진료 기록 | `body` | 필수 | 1~2,000자. 앞뒤 공백은 서버가 지운다 |
+| 메모·진료 기록 | `important` | 선택 | 기본 false |
+| 메모·진료 기록 | `session_id` | 선택 | 이 반려견의 회차 |
 
 ## 13. 화면 흐름 예시
 
