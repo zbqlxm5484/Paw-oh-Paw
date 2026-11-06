@@ -17,7 +17,8 @@ const TERMS = ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 
 
 interface Verified {
   institution: { id: string; name: string }
-  remaining_accounts: number
+  /** 백엔드 192(기관당 코드 하나, 계정 수 제한 없음) 뒤에는 응답에 없다 */
+  remaining_accounts?: number
 }
 
 export default function Signup() {
@@ -98,7 +99,7 @@ export default function Signup() {
                 reset()
               }}>{demo_code}</b></> : null}</span>
           )}
-          <div id="soInst" style={css(`display:${verified ? 'flex' : 'none'};height:56px;border-radius:12px;background:#F2EEE8;align-items:center;gap:12px;padding:0 18px`)}><svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#2E8B57')}><use href="#w-check"></use></svg><span style={css('font-size:13px;color:#5B6472')}>기관</span><b id="soInstName" style={css('font-size:16px')}>{inst ? inst.institution.name : ''}</b><span id="soLeft" style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{inst ? `남은 계정 ${inst.remaining_accounts}개` : ''}</span></div>
+          <div id="soInst" style={css(`display:${verified ? 'flex' : 'none'};height:56px;border-radius:12px;background:#F2EEE8;align-items:center;gap:12px;padding:0 18px`)}><svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#2E8B57')}><use href="#w-check"></use></svg><span style={css('font-size:13px;color:#5B6472')}>기관</span><b id="soInstName" style={css('font-size:16px')}>{inst ? inst.institution.name : ''}</b><span id="soLeft" style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{inst && typeof inst.remaining_accounts === 'number' ? `남은 계정 ${inst.remaining_accounts}개` : ''}</span></div>
 
           <fieldset id="soRest" disabled={!verified} style={css(`border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:18px;opacity:${verified ? '1' : '.45'}`)}>
             <b style={css('font-size:16px;margin-top:10px')}>2. 내 계정</b>
