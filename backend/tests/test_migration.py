@@ -32,6 +32,13 @@ EXPECTED_CONSTRAINTS = {
         "fk_dog_vital_staff",
         "fk_dog_vital_session",
     },
+    "dog_history": {
+        "dog_history_pkey",
+        "ck_dog_history_kind",
+        "ck_dog_history_site",
+        "fk_dog_history_dog",
+        "fk_dog_history_staff",
+    },
     "measure_session": {
         "measure_session_pkey",
         "ck_session_status",
@@ -60,6 +67,7 @@ EXPECTED_CONSTRAINTS = {
 }
 EXPECTED_INDEXES = {
     "ix_dog_institution_name",
+    "ix_dog_history_dog_date",
     "ix_session_dog_date",
     "ix_shot_status",
     "ix_shot_video",

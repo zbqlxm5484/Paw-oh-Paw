@@ -1,4 +1,4 @@
-"""차트 자료 요청·응답 모델(13.9, 15.3 VitalOut, 15.11): 바이탈.
+"""차트 자료 요청·응답 모델(13.9, 15.3 VitalOut·DogHistoryOut, 15.11): 바이탈, 진단 이력.
 
 schemas/sessions.py가 VitalIn을 쓰므로(회차 시작의 vital) 이 파일은 sessions를 import하지 않는다.
 """
@@ -10,12 +10,16 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, StringConstraints, ValidationInfo, field_validator
 
+from app.core.dates import today_local
+from app.models.enums import DogStage, HistoryKind, HistorySite
 from app.schemas.common import OutModel, StaffBriefOut, UtcDateTime, Weight
 
 # 13.9. 범위는 통합본에 없어 제안한 값이다(병원 의견을 받으면 고친다)
 TempC = Annotated[Decimal, Field(ge=Decimal("30.0"), le=Decimal("45.0"), decimal_places=1)]
+Text50 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+Text100 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
 class VitalIn(BaseModel):
@@ -57,3 +61,40 @@ class VitalListOut(BaseModel):
     """GET /dogs/{dog_id}/vitals: 전부, 최신이 앞(15.11)."""
 
     items: list[VitalOut]
+
+
+class DogHistoryCreate(BaseModel):
+    """POST /dogs/{dog_id}/history 요청(13.9). stage를 보내면 반려견의 단계를 함께 바꾼다."""
+
+    occurred_on: date
+    kind: HistoryKind
+    title: Text100
+    site: HistorySite | None = None
+    clinician: Text50 | None = None
+    stage: DogStage | None = None
+
+    @field_validator("occurred_on")
+    @classmethod
+    def not_future(cls, value: date) -> date:
+        if value > today_local():
+            raise ValueError("오늘 이전 날짜여야 합니다")
+        return value
+
+
+class DogHistoryOut(OutModel):
+    """진단 이력 한 줄(15.3). staff는 적은 담당자다."""
+
+    id: uuid.UUID
+    occurred_on: date
+    kind: str
+    title: str
+    site: str | None
+    clinician: str | None
+    staff: StaffBriefOut
+    created_at: UtcDateTime
+
+
+class DogHistoryListOut(BaseModel):
+    """GET /dogs/{dog_id}/history: 전부, 오래된 것부터(15.11)."""
+
+    items: list[DogHistoryOut]
