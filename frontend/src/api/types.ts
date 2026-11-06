@@ -50,6 +50,8 @@ export interface StaffOut {
   role: StaffRole
   /** 화면은 role 이 아니라 이 값으로 나눈다(GUEST 면 계약 만료 안내). 예전 서버는 안 보낼 수 있다 */
   effective_role?: EffectiveRole
+  /** 알림 설정(192). 예전 서버는 안 보낼 수 있다 */
+  notif_on?: boolean
   email?: string | null
   institution: InstitutionOut
 }
@@ -66,12 +68,22 @@ export interface DeviceCodeVerifyOut {
   remaining_accounts?: number
 }
 
+/** 가입 약관 동의(192). 필수 셋은 true 여야 서버가 받는다, marketing 만 선택 */
+export interface TermsIn {
+  version: string
+  service: boolean
+  privacy: boolean
+  device_location: boolean
+  marketing: boolean
+}
+
 export interface SignupIn {
   code: string
   login_id: string
   password: string
   name: string
   email: string
+  terms?: TermsIn
 }
 
 export interface TokenOut {

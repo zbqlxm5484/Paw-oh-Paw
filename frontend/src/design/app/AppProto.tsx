@@ -36,7 +36,7 @@ export class AppProto extends DCLogic<Props, any> {
     li: { id: '', pw: '' }, so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null as null | { code: string; org?: string; left?: number; err?: string }, signupBusy: false, to: [false, false, false, false],
     af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
-    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: lsGet(NOTIF_ON_KEY) !== '0', notifRead: readKeys(), rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
+    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: lsGet(NOTIF_ON_KEY) !== '0', wf: { pw: '' }, withdrawing: false, notifRead: readKeys(), rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
   }
   vids = new Set<HTMLVideoElement>()
   recTick: any; raf: any; t1: any; t2: any; tt: any; r1: any; r2: any; storyEl?: HTMLElement; lastMo = 0; moStart = 0
@@ -294,6 +294,7 @@ export class AppProto extends DCLogic<Props, any> {
       : !s.devChk || s.devChk.code !== s.so.dev.trim() ? '기기 번호를 확인하는 중…'
       : s.devChk.err ? s.devChk.err : typeof s.devChk.left === 'number' ? `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개` : `${s.devChk.org} · 확인됐어요`
     const devHc = s.devChk && s.devChk.code === s.so.dev.trim() && s.devChk.err ? '#C2412D' : s.devChk && s.devChk.code === s.so.dev.trim() ? '#2E7D4F' : '#5B6472'
+    const notifOn = acct.notifOn ?? s.notifOn
     const setPet = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ pet: { ...st.pet, [k]: v } })) }
     const setF = (g: string, k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ [g]: { ...st[g], [k]: v } })) }
     const setLi = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ li: { ...st.li, [k]: v } })) }
@@ -378,7 +379,9 @@ export class AppProto extends DCLogic<Props, any> {
         if (s.signupBusy) return
         this.setState({ signupBusy: true })
         try {
-          await this.props.auth.signup({ code: s.so.dev.trim(), login_id: s.so.id.trim(), password: s.so.pw, name: s.so.name.trim(), email: s.so.email.trim() })
+          // 약관 동의(192): 필수 셋은 orgOk 에서 확인했고, 버전은 약관 본문의 갱신일
+          const terms = { version: LEGAL.terms.updated, service: true, privacy: true, device_location: true, marketing: !!s.to[3] }
+          await this.props.auth.signup({ code: s.so.dev.trim(), login_id: s.so.id.trim(), password: s.so.pw, name: s.so.name.trim(), email: s.so.email.trim(), terms })
           this.toast(`${s.devChk?.org ?? '기관'} 담당자로 가입했어요`)
           this.setState({ so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null, to: [false, false, false, false], viaTab: true })
           this.props.nav('/', { replace: true })
@@ -529,7 +532,23 @@ export class AppProto extends DCLogic<Props, any> {
       helpLinks: [{ label: '고객센터 안내 전체 보기', on: () => this.nav('legal', '/legal/support') }, { label: '서비스 소개', on: () => this.nav('story') }],
       myDogs: dogs.map((d) => ({ init: d.name[0], name: d.name, desc: desc(d) + ' · ' + SEX[d.sex || 'm'], edit: () => this.nav('petNew', `/dogs/${d.id}/edit`), del: () => this.setState({ sheet: 'del', delId: d.id }) })),
       myDogCount: dogs.length + '마리',
-      tgBg: s.notifOn ? '#D2601A' : '#DDD7CE', tgX: s.notifOn ? 22 : 2, toggleNotif: () => this.setState((st: any) => { lsSet(NOTIF_ON_KEY, st.notifOn ? '0' : '1'); return { notifOn: !st.notifOn } }),
+      // 알림 설정: 서버가 notif_on 을 주면(192) 그 값이 기준이고 PATCH 로 저장한다. 예전 서버면 이 기기에만 둔다
+      tgBg: notifOn ? '#D2601A' : '#DDD7CE', tgX: notifOn ? 22 : 2, toggleNotif: () => {
+        const next = !notifOn
+        lsSet(NOTIF_ON_KEY, next ? '1' : '0'); this.setState({ notifOn: next })
+        if (acct.notifOn !== undefined) this.props.auth.updateMe({ notif_on: next }).catch((e) => this.toast(errMsg(e, '알림 설정을 저장하지 못했어요')))
+      },
+      // 회원 탈퇴(192): 비밀번호 확인 시트 → DELETE /auth/me → 로그아웃. 기관의 마지막 계정(409 LAST_ACCOUNT)·비밀번호 오류는 서버 문구 그대로
+      askWithdraw: () => this.setState({ sheet: 'withdraw', wf: { pw: '' } }),
+      fWdPw: s.wf.pw, onWdPw: setF('wf', 'pw'), withdrawOp: s.withdrawing ? 0.55 : 1,
+      confirmWithdraw: async () => {
+        if (!s.wf.pw) return this.toast('현재 비밀번호를 입력해 주세요')
+        if (s.withdrawing) return
+        this.setState({ withdrawing: true })
+        try { await this.props.auth.withdraw(s.wf.pw); this.setState({ sheet: null, wf: { pw: '' }, li: { id: '', pw: '' } }); this.toast('탈퇴했어요. 그동안 이용해 주셔서 감사합니다'); this.props.nav('/welcome', { replace: true }) }
+        catch (e) { this.toast(errMsg(e, '탈퇴하지 못했어요')) }
+        finally { this.setState({ withdrawing: false }) }
+      },
       askLogout: () => this.setState({ sheet: 'logout' }),
       acctRows: [['계정 유형', '기관 회원'], ['기관명', acct.name], ['담당자', acct.staffName || '-'], ['이메일', acct.email || '-'], ['아이디', acct.id || '-'], ['기관 주소', acct.loc || '-'], ['디바이스 번호', acct.dev || '-']].map(([k, v], i) => ({ k, v, bt: i ? '1px solid #F2EFEA' : 'none' })),
       // 기본 정보 수정(이름·이메일)과 비밀번호 변경은 아래 시트에서. 서버 오류 문구는 그대로 보여 준다
@@ -566,7 +585,7 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       showTabs, tb: { home: tbOn('home'), story: tbOn('story'), results: tbOn('results'), my: tbOn('my') },
-      sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', sheetAcct: s.sheet === 'acct', sheetPw: s.sheet === 'pw', anySheet: !!s.sheet,
+      sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', sheetAcct: s.sheet === 'acct', sheetPw: s.sheet === 'pw', sheetWithdraw: s.sheet === 'withdraw', anySheet: !!s.sheet,
       closeSheet: () => this.setState({ sheet: null }),
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',

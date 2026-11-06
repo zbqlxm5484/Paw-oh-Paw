@@ -41,8 +41,9 @@ export interface ProtoProps {
     signup: (b: SignupIn) => Promise<unknown>
     verifyDeviceCode: (code: string) => Promise<DeviceCodeVerifyOut>
     logout: () => void
-    updateMe: (b: { name?: string; email?: string }) => Promise<unknown>
+    updateMe: (b: { name?: string; email?: string; notif_on?: boolean }) => Promise<unknown>
     changePassword: (current: string, next: string) => Promise<unknown>
+    withdraw: (password: string) => Promise<unknown>
   }
   nav: (path: string, opts?: { replace?: boolean }) => void
   back: () => void
@@ -190,8 +191,9 @@ export function DesignRoot() {
   const props: ProtoProps = {
     screen: route.screen, params: route.params, query, data, actions, auth: {
       login, signup, logout, verifyDeviceCode: authApi.verifyDeviceCode,
-      updateMe: async (b: { name?: string; email?: string }) => setStaff(await authApi.updateMe(b)),
+      updateMe: async (b: { name?: string; email?: string; notif_on?: boolean }) => setStaff(await authApi.updateMe(b)),
       changePassword: async (current: string, next: string) => setStaff(await authApi.changePassword(current, next)),
+      withdraw: async (password: string) => { await authApi.withdraw(password); logout() },
     }, nav, back, ui, setUi,
     compare: route.screen === 'compare' ? compare : null, reports: reportsQ.data, vetReport, reportStatus: reportStatusLine,
     session: sessQ.data, sessionAna, pickFile, openFile,

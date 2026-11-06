@@ -43,7 +43,13 @@ export default function Account() {
           <input type="password" name="pw2" autoComplete="new-password" placeholder="새 비밀번호 확인" style={css(INP)} />
           <button type="submit" style={css('align-self:flex-end;height:48px;padding:0 22px;border-radius:12px;border:0;background:#1B2433;color:#fff;font-size:16px;font-weight:700;cursor:pointer')}>바꾸기</button>
         </PostForm>
-        <span data-toast="회원 탈퇴는 고객센터로 문의해 주세요" style={css('font-size:15px;color:#A0A7B2;cursor:pointer')}>회원 탈퇴</span>
+        <PostForm action="/account/withdraw" onBefore={() => window.confirm('탈퇴하면 이 계정으로 더 이상 로그인할 수 없어요. 기관의 반려견·측정 기록은 남습니다. 탈퇴할까요?')}
+          style={css('background:#fff;border:1px solid #ECE8E2;border-radius:22px;padding:28px 36px;display:flex;flex-direction:column;gap:12px')}>
+          <b style={css('font-size:19px;color:#C2412D')}>회원 탈퇴</b>
+          <span style={css('font-size:14px;color:#5B6472')}>계정만 중지돼요. 같은 기관의 다른 담당자가 반려견·측정 기록을 계속 볼 수 있고, 기관의 마지막 계정은 탈퇴할 수 없어요.</span>
+          <input type="password" name="password" autoComplete="current-password" placeholder="현재 비밀번호" required style={css(INP)} />
+          <button type="submit" style={css('align-self:flex-end;height:48px;padding:0 22px;border-radius:12px;border:1px solid #C2412D;background:#fff;color:#C2412D;font-size:16px;font-weight:700;cursor:pointer')}>탈퇴하기</button>
+        </PostForm>
       </main>
     </Base>
   )

@@ -117,7 +117,6 @@ export interface DeviceCode {
   id: string
   inst: string
   code: string
-  max_accounts: number
   revoked: boolean
   note: string
   created: string
