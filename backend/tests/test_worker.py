@@ -894,3 +894,32 @@ def test_run_forever_survives_a_failing_loop(monkeypatch: pytest.MonkeyPatch) ->
 
     worker.stop()
     assert worker.run_forever() == 0
+
+
+def test_run_forever_sweeps_the_trash_once_per_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    """휴지통 자동 비우기(12.4)는 켜자마자 한 번, 그 뒤로는 한 시간마다다. 주 반복마다 돌지 않는다."""
+    from app.worker.main import WorkerStats
+
+    sweeps: list[int] = []
+
+    def fake_purge_expired(*args: Any, **kwargs: Any) -> tuple[int, int]:
+        sweeps.append(len(sweeps))
+        return (0, 0)
+
+    monkeypatch.setattr("app.worker.main.run_once", lambda *args, **kwargs: WorkerStats())
+    monkeypatch.setattr("app.worker.main.trash_service.purge_expired", fake_purge_expired)
+    worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
+    assert worker.run_forever(max_loops=3) == 3
+    assert len(sweeps) == 1
+
+
+def test_a_failing_trash_sweep_does_not_stop_the_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.worker.main import WorkerStats
+
+    def broken(*args: Any, **kwargs: Any) -> tuple[int, int]:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("app.worker.main.run_once", lambda *args, **kwargs: WorkerStats())
+    monkeypatch.setattr("app.worker.main.trash_service.purge_expired", broken)
+    worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
+    assert worker.run_forever(max_loops=2) == 2

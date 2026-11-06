@@ -50,6 +50,7 @@ from app.core.errors import FailReason
 from app.main import configure_logging
 from app.models import Dog, MeasureSession, Shot
 from app.models.enums import SessionStatus, ShotStatus
+from app.services import trash as trash_service
 from app.services.aggregation import AggregationError, aggregate_session
 from app.services.analysis_results import ResultFormatError, apply_result, parse_result
 from app.storage.base import StorageError, StorageService, get_storage
@@ -68,6 +69,8 @@ IN_FLIGHT = (SUBMITTED, ANALYZING)
 # 회차 집계를 기다리게 하는 촬영 상태. 남은 것은 DONE·FAILED다(12.4)
 UNFINISHED = (UPLOADED, SUBMITTED, ANALYZING)
 AGGREGATING = SessionStatus.AGGREGATING.value
+# 휴지통 자동 비우기(12.5)를 보는 간격. 30일 기준이라 자주 볼 필요가 없다
+TRASH_SWEEP_INTERVAL_SEC = 3600
 
 
 @dataclass
@@ -500,10 +503,22 @@ class Worker:
         self.renderer = renderer or VideoRenderer(self.settings, self.storage, self.client)
         self.reporter = reporter or ReportGenerator(self.settings, self.storage)
         self._stop = False
+        self._next_trash_sweep = 0.0  # time.monotonic() 기준. 0이면 켜자마자 한 번 본다
 
     def stop(self, *_: object) -> None:
         """SIGINT·SIGTERM 처리기. 하던 바퀴는 끝내고 멈춘다."""
         self._stop = True
+
+    def empty_trash(self) -> None:
+        """휴지통에 30일 넘게 있던 반려견을 영구 삭제한다(12.5). 실패해도 로그만 남기고 다음 차례에 다시 한다."""
+        try:
+            with SessionLocal() as db:
+                purged, failed = trash_service.purge_expired(db, self.storage, self.client)
+                db.commit()
+            if purged or failed:
+                logger.info("trash sweep: purged=%d failed=%d", purged, failed)
+        except Exception:
+            logger.exception("trash sweep failed; retrying at the next sweep")
 
     def run_forever(self, max_loops: int | None = None) -> int:
         """주 반복. 한 바퀴가 실패해도(DB 끊김 등) 로그만 남기고 다음 바퀴를 돈다. 돈 바퀴 수를 돌려준다.
@@ -528,6 +543,9 @@ class Worker:
                         logger.info("loop: %s", stats)
                 except Exception:
                     logger.exception("worker loop failed; retrying next loop")
+                if time.monotonic() >= self._next_trash_sweep:
+                    self._next_trash_sweep = time.monotonic() + TRASH_SWEEP_INTERVAL_SEC
+                    self.empty_trash()
                 if self._stop or (max_loops is not None and loops >= max_loops):
                     break
                 time.sleep(max(0.0, self.settings.WORKER_POLL_INTERVAL_SEC - (time.monotonic() - started)))

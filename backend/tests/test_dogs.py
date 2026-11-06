@@ -52,6 +52,8 @@ DOG_OUT_KEYS = {
     "session_count",
     "last_measured_on",
     "open_session_id",
+    "deleted_at",
+    "purge_at",
     "created_at",
     "updated_at",
 }

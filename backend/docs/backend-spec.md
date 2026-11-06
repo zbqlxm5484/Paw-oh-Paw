@@ -22,6 +22,7 @@ Oct 19, 2026 · @조영운
 | v1.21 | 2026-11-04 | 200 견본 PDF·20초 측정(S15P31A404-200): 8절에 견본 보고서(D-08) 경우 목록·스크립트·기업 서버용 대조 기준값(`reference_from_result`, `metrics`에서 다시 계산) 문단, 17.4 BE-15의 20초 확인 방법을 회차 DONE 기준으로 |
 | v1.22 | 2026-11-05 | 분석 API 사본 파기(199 후속, 조유진 185 계약): 6절 `AnalysisClient`에 `delete`와 API 프로세스 설정, 7절 보관과 파기, 12.2 `purge_log.analysis_jobs_deleted`(마이그레이션 0004), 12.5, 14.1 `ANALYSIS_UNAVAILABLE`, 15.2·15.9 `analysis_jobs`와 503, 17.6 |
 | v1.30 | 2026-11-05 | 병원 자료 파기(199 후속): 15.9 `POST /admin/purge`에 대상 기관 `institution_id`(생략하면 부른 관리자의 기관, 없는 기관은 404), 10절 Q31과의 관계. 15.2(42번)·15.5 `DELETE /dogs/{dog_id}`(병원 담당자의 반려견 삭제) |
+| v1.33 | 2026-11-06 | 반려견 휴지통(199 후속, 조영운 결정 11-06): 삭제는 지우지 않고 휴지통에 넣는다. 12.2 `dog.deleted_at`(마이그레이션 0013), 12.4 워커의 자동 비우기, 12.5 휴지통 규칙(30일 뒤 자동 영구 삭제), 15.2 42번의 뜻 변경과 43·44번, 15.3 **DogOut**에 `deleted_at`·`purge_at`, 15.5 `GET /dogs?trash=true`·`DELETE /dogs/{dog_id}`·`POST /dogs/{dog_id}/restore`·`DELETE /dogs/{dog_id}/permanent`, 15.9, 17.6. v1.30의 '삭제하면 바로 지운다'는 이 판에서 바뀌었다 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -767,6 +768,7 @@ CREATE TABLE dog (
   focus_limb           VARCHAR(20)   NULL,  -- 관심 다리: 왼앞·오른앞·왼뒤·오른뒤
   baseline_session_id  UUID          NULL,  -- 기준 회차
   memo                 TEXT          NULL,  -- 내부 메모. 보고서에 넣지 않는다
+  deleted_at           TIMESTAMPTZ   NULL,  -- 휴지통에 넣은 시각(12.5). NULL이면 휴지통에 없다
   version              INTEGER       NOT NULL DEFAULT 0,  -- 낙관적 잠금(12.5). 수정할 때마다 1 는다
   created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -967,6 +969,7 @@ CREATE TABLE purge_log (
 * **API가 만든 파일**: 업로드처럼 요청 안에서 파일을 만들면 그 키를 `db.info["created_files"]`에 넣는다. commit이 실패하면 `get_db`가 그 파일을 지운다(11.7). 지울 때는 12.5 순서대로 파일을 먼저 지운다. 행 삭제가 실패해 파일 없는 행이 남는 것은 괜찮다(파기 때 함께 지워진다). 반대로 DB에 키가 없는 파일이 남으면 파기에서 빠진다.
 * **보고서 행 값**: `template_version`에는 보고서 모듈의 `report.TEMPLATE_VERSION` 상수를 넣는다.
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
+* **휴지통 자동 비우기**(v1.33): 워커는 켤 때 한 번, 그 뒤 한 시간마다 휴지통에 넣은 지 30일이 지난 반려견을 찾아 영구 삭제한다(12.5, `services/trash.py`의 `purge_expired`). 한 번에 20마리까지 보고 한 마리씩 지운다. 실패한 것은 로그만 남기고 다음 차례에 다시 한다. 분석 API가 응답하지 않으면 남은 것도 같은 이유로 실패하므로 그 차례는 거기서 멈춘다. 주 반복과 같은 스레드에서 돌기 때문에 지우는 동안 주 반복이 잠깐 늦어진다.
 * **자식 프로세스**: `video/`·`report/` 함수만 부르고 DB와 저장소를 모른다(11.3). 주 반복이 작업마다 `UPLOAD_TMP_DIR/worker/{작업 ID}/` 폴더를 만들고, 입력 경로와 출력 경로를 넘긴다. 입력은 `local_copy`로 준비하고, 작업별 `ExitStack`으로 작업이 끝날 때까지 열어 둔다. 자식 프로세스는 OpenCV 스레드를 1개(`cv2.setNumThreads(1)`)로, ffmpeg를 `-threads 2`로 묶는다.
 * **맡기기와 거두기**: 빈 자리는 그 풀에서 실행 중인 작업 수가 풀 크기보다 적을 때다. 미리 줄 세워 넣지 않는다. 결과 영상은 `status='DONE' AND video_status='PENDING'`인 촬영을 `analyzed_at, id` 순으로, 보고서는 PENDING 행을 `updated_at, id` 순으로 꺼낸다. 맡긴 ID는 메모리 집합에 두어 두 번 맡기지 않는다. 주 반복은 매 바퀴 `future.done()`으로 끝난 작업을 거둔다. `add_done_callback` 안에서는 DB를 건드리지 않는다. 성공이면 출력 파일을 `put_file`로 넣고 조건을 건 UPDATE로 붙인다. 성공·실패 모두 `ExitStack`을 닫고 작업 폴더를 지운다.
 * **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 자식이 돌려준 실린 숫자 목록을 먼저 DB의 `session_metric` 값·15.7 다리 비교 계산값과 맞추고(8절 7번), 어긋나면 PDF를 저장하지 않고 `REPORT_CHECK_FAILED`로 남긴다(DB 오류가 아닌 이유로 기준을 읽지 못하면 `REPORT_FAILED`). 맞으면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
@@ -979,6 +982,7 @@ CREATE TABLE purge_log (
 
 - **이름**: 회차 테이블은 `measure_session`, 모델 클래스는 `MeasureSession`이다. SQLAlchemy의 DB 세션(`Session`)과 이름이 겹치면 AI가 둘을 헷갈린 코드를 만들기 때문이다. API 주소와 JSON에서는 그대로 `sessions`, `session_id`를 쓴다.
 - **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`. 자료 파기는 파일 앞에 분석 API 사본을 먼저 지운다(15.9). 기관을 지우는 기능은 없으므로 `device_code`는 지우지 않고 회수(`revoked_at`)만 한다.
+- **휴지통**(v1.33): 담당자가 반려견을 삭제하면 지우지 않고 `dog.deleted_at`에 시각을 적는다(soft delete). 파일·행·분석 API 사본은 그대로다. 휴지통의 반려견은 담당자의 모든 조회·수정에서 없는 것과 같이 404다(반려견 목록·상세·수정, 회차 시작, 회차·촬영·결과·보고서, 이력·비교·추이). 조건은 `services/dogs.in_institution` 한 곳에 두고 반려견을 거치는 조회는 모두 이것을 쓴다. 복원하면 `deleted_at`을 NULL로 돌리고 모든 것이 그대로 돌아온다. 완전히 지우는 길은 셋이다: 담당자의 영구 삭제(휴지통에 있는 것만), 워커의 자동 비우기(휴지통에 넣고 30일 뒤, 12.4), 관리자 파기(15.9). 셋 다 자료 파기의 `DOG`를 불러 위 삭제 순서·오류·`purge_log`가 같다. 분석 중인 촬영(SUBMITTED·ANALYZING)이 있는 반려견은 휴지통에 넣을 수 없다(409 `SHOT_IN_PROGRESS`). 워커는 휴지통을 보지 않고 일하므로, 휴지통에 들어간 뒤에도 아직 제출하지 않은 촬영의 분석·집계·보고서 생성은 이어진다(복원했을 때 결과가 있도록). 보관 기간 30일은 코드의 상수 `TRASH_RETENTION_DAYS`다(환경 변수 아님).
 - **측정 불가**: `value`는 NULL, `measurable`은 FALSE, 사유는 `unmeasurable_reason`에 넣는다. 0을 넣지 않는다. 0은 측정값으로 오해되기 때문이다(PR-F02-05).
 - **체급 분류**: 체급은 등록 체중만으로 나눈다(박규원의 체급 기준 자료, 10-22. v1.3까지는 견종 기준이었다). 세부명세서가 체급을 쓰는 곳은 소형견이 화면에 작게 찍히는 문제(RK-09), 체급별 권장 통과 수(D-14), 보고서 맞춤 설명(PR-F08-02)인데, 분석 쪽의 체급별 KPI 집계(KPI-08·25·26)와 개 보행 임상 연구(압력 매트)가 같은 체중 경계를 쓴다. 백엔드가 견종으로 나누면 분석 쪽 집계와 보고서의 체급이 어긋나므로 같은 규칙을 쓴다. 규칙은 다음과 같다.
   1. 등록 체중이 10 kg 미만이면 SMALL, 25 kg 미만이면 MEDIUM, 25 kg 이상이면 LARGE다. 경계값은 설정값(16절)이고, 경계에 있는 값은 위 구간에 든다(10.00 kg은 MEDIUM, 25.00 kg은 LARGE).
@@ -1239,7 +1243,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ## 15. API 상세
 
-엔드포인트는 42개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42는 v1.30 반려견 삭제). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
+엔드포인트는 44개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42\~44는 반려견 휴지통(v1.30·v1.33)). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
 
 ### 15.1 공통 약속
 
@@ -1298,7 +1302,9 @@ STOPPED: "중간에 멈췄습니다."
 | 39 | `PATCH /auth/me` | 이름·이메일 수정 | BE-26 | 200 | — |
 | 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (인증 없음) | BE-27 | 204 | 503 `MAIL_UNAVAILABLE` |
 | 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (인증 없음) | BE-27 | 204 | 400 `RESET_TOKEN_INVALID` |
-| 42 | `DELETE /dogs/{dog_id}` | 반려견과 그 아래 자료 삭제 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
+| 42 | `DELETE /dogs/{dog_id}` | 반려견을 휴지통에 넣기 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS` |
+| 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | BE-19 | 200 | — |
+| 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 
 ### 15.3 공통 객체
 
@@ -1361,6 +1367,8 @@ STOPPED: "중간에 멈췄습니다."
   "session_count": 3,
   "last_measured_on": "2026-10-20",
   "open_session_id": null,
+  "deleted_at": null,
+  "purge_at": null,
   "created_at": "2026-10-19T00:30:00Z",
   "updated_at": "2026-10-19T00:30:00Z"
 }
@@ -1556,6 +1564,7 @@ STOPPED: "중간에 멈췄습니다."
 
 - 응답 200: `{"items": [DogOut, …], "total": 45, "page": 1, "size": 20}`
 - `q`는 이름에 포함되면 찾는다. 대소문자를 무시하고(`ILIKE`), 검색어 안의 `%`·`_`는 이스케이프한다. SQLAlchemy로는 `Dog.name.icontains(q, autoescape=True)`다.
+- `trash=true`를 붙이면 휴지통 목록이다(12.5). 휴지통에 있는 반려견만, 최근에 넣은 것부터 준다. 항목의 `deleted_at`은 휴지통에 넣은 시각, `purge_at`은 영구 삭제 예정 시각(`deleted_at` + 30일)이다. 기본(`trash` 없음)은 휴지통에 없는 반려견만 주고 두 값은 `null`이다. `q`·`page`·`size`는 똑같이 쓴다.
 - 정렬: `last_measured_on` 내림차순(한 번도 안 잰 반려견은 뒤. PostgreSQL은 내림차순에서 NULL을 맨 앞에 두므로 NULLS LAST를 붙인다), 같으면 `created_at` 내림차순.
 
 **`POST /dogs`** — 반려견 등록 (BE-02)
@@ -1593,12 +1602,24 @@ STOPPED: "중간에 멈췄습니다."
 - `size_class`에 값을 보내면 `size_class_manual`이 TRUE가 되고, `null`을 보내면 FALSE로 돌아가 자동 분류로 다시 정한다.
 - `baseline_session_id`가 이 반려견의 DONE 회차가 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 12.5 규칙을 따른다.
 
-**`DELETE /dogs/{dog_id}`** — 반려견 삭제 (BE-19)
+**`DELETE /dogs/{dog_id}`** — 반려견을 휴지통에 넣기 (BE-19)
+
+- 응답 204, 본문 없음. 아무것도 지우지 않고 `deleted_at`에 지금 시각을 적는다(12.5). 그때부터 이 반려견과 그 아래 회차·촬영·보고서는 모든 조회에서 404다. `purge_log`는 남기지 않는다(지운 것이 없다).
+- 자기 기관의 반려견만 넣을 수 있다. 다른 기관이거나 없거나 이미 휴지통에 있는 반려견은 404 `NOT_FOUND`(15.1)다. 역할 제한은 없고 다른 `/dogs` API와 같다.
+- SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`이고 넣지 않는다. 분석이 끝난 뒤 다시 누른다.
+- 30일이 지나면 워커가 영구 삭제한다(12.4). 그 전에는 복원할 수 있다.
+
+**`POST /dogs/{dog_id}/restore`** — 휴지통에서 복원 (BE-19)
+
+- 본문 없음. 응답 200 **DogOut**(`deleted_at`·`purge_at`은 `null`). 회차·영상·보고서가 그대로 돌아온다.
+- 휴지통에 있는 자기 기관의 반려견만 된다. 휴지통에 없거나 다른 기관이거나 없는 반려견은 404다.
+
+**`DELETE /dogs/{dog_id}/permanent`** — 휴지통의 반려견 영구 삭제 (BE-19)
 
 - 응답 204, 본문 없음. 반려견과 그 아래 회차·촬영·통과·수치·보고서 행, 파일, 분석 API 사본을 지운다. 되돌릴 수 없다.
-- 자기 기관의 반려견만 지울 수 있다. 다른 기관이거나 없는 반려견은 404 `NOT_FOUND`(15.1)다. 역할 제한은 없고 다른 `/dogs` API와 같다(계약이 끝난 `GUEST`는 403 `CONTRACT_EXPIRED`).
-- `POST /admin/purge`의 `DOG`를 `dry_run` false로 부른 것과 같은 서비스를 쓴다(15.9). 순서(잠금 → 진행 중 촬영 확인 → 분석 API 사본 → 파일 → 행)와 오류가 같다: SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`, 분석 API 사본을 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 아무것도 지우지 않는다. 다시 부르면 이어서 끝난다.
-- `purge_log`에 1행을 남긴다(`scope`는 `DOG`, `executed_by`는 부른 담당자). 세기만 하는 `dry_run`은 없다. 지우기 전에 확인을 받는 것은 화면의 일이다.
+- 휴지통에 있는 자기 기관의 반려견만 된다. 휴지통을 거치지 않은 반려견은 404다(먼저 `DELETE /dogs/{dog_id}`). 휴지통 전체를 비우려면 화면이 목록의 반려견마다 부른다.
+- `POST /admin/purge`의 `DOG`를 `dry_run` false로 부른 것과 같은 서비스를 쓴다(15.9). 순서(잠금 → 진행 중 촬영 확인 → 분석 API 사본 → 파일 → 행)와 오류가 같다: 분석 API 사본을 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 아무것도 지우지 않은 채 휴지통에 남는다. 다시 부르면 이어서 끝난다. SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
+- `purge_log`에 1행을 남긴다(`scope`는 `DOG`, `executed_by`는 부른 담당자). 워커의 자동 비우기가 지운 것은 `executed_by`가 NULL이다. 세기만 하는 `dry_run`은 없다. 지우기 전에 확인을 받는 것은 화면의 일이다.
 
 ### 15.6 회차 측정
 
@@ -1934,6 +1955,7 @@ stance_ratio: 5.0 # pct
 - `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 그 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
 - `institution_id`는 관리자(`ADMIN`, 크림오프 계정)가 병원의 자료를 지울 때 쓴다. 없는 기관이면 404 `NOT_FOUND`, UUID가 아니면 422 `VALIDATION_ERROR`(`field`는 `institution_id`)다. `DOG`는 그 기관에서만 찾으므로 다른 기관의 반려견 ID를 넣으면 404다. 응답은 개수뿐이고 반려견 이름 같은 고객 자료를 돌려주지 않는다. 고객 자료 열람(10절 Q31)은 여전히 열지 않아서, 관리자는 반려견 목록을 볼 수 없고 `DOG`의 반려견 ID는 병원에서 받아야 한다. `purge_log.executed_by`에는 부른 관리자가 남는다.
 - `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
+- 휴지통에 있는 반려견도 파기 대상이다(12.5). `DOG`는 휴지통에 있든 없든 그 기관의 반려견이면 지우고, `INSTITUTION`·`ALL`은 휴지통의 반려견까지 센다.
 - `analysis_jobs`는 분석 API에서 지운(또는 지울) 작업 수이고 `purge_log.analysis_jobs_deleted`에도 남긴다. 지울 촬영 중 `job_id`가 있는 것만 세고, 이미 없던 작업(404·410)도 센다. `dry_run`은 세기만 하고 분석 API를 부르지 않는다.
 - 실제로 지우는 순서는 잠금 → 진행 중 촬영 확인 → 분석 API 사본 → 파일 → 행이다. 분석 API가 응답하지 않거나 지우지 못하면(연결 실패, 시간 초과, 5xx, 인증 실패, 설정이 빠져 mock으로 뜬 API 프로세스에 실제 작업 ID) 거기서 멈추고 503 `ANALYSIS_UNAVAILABLE`이다. 팀 서비스의 파일·행은 그대로이고 `purge_log`도 남지 않는다. 행에 `job_id`가 남아 있어 다시 부르면 이미 지운 작업은 404로 넘어가 이어서 끝난다. 분석 API가 409 `JOB_IN_PROGRESS`로 답하면 409 `SHOT_IN_PROGRESS`다.
 - `python -m scripts.purge --all`은 지울 양만 세고, `--execute`를 붙여야 지운다(확인 문구를 묻고 `--yes`면 묻지 않는다). 기관·담당자 계정·디바이스 코드는 `INSTITUTION`과 같이 남긴다(계정 정리는 10절 Q27과 함께 정한다). `ALL`은 작업마다 분석 API를 부르지 않아 `analysis_jobs`가 0이고, 분석 API 저장소는 분석 API를 끈 뒤 그쪽 전체 파기 명령(`python purge.py --all --execute`)으로 따로 지운다.
@@ -2140,6 +2162,7 @@ ANALYSIS_API_MODE=mock
 
 - [ ] BE-19: `dry_run`이 true면 아무것도 지워지지 않는다. 실제 파기 뒤에는 대상의 DB 행과 파일이 0개이고 `purge_log`에 1행이 남는다.
 - [ ] BE-19: STAFF 계정으로 부르면 403 `FORBIDDEN`이다.
+- [ ] BE-19: 반려견을 삭제하면 휴지통에 들어가 목록·상세·회차·결과에서 404이고, DB 행·파일·`purge_log`는 그대로다. 휴지통 목록(`trash=true`)에 `deleted_at`·`purge_at`과 함께 보인다. 복원하면 모두 그대로 돌아온다. 영구 삭제는 휴지통에 있는 것만 되고(아니면 404) 행·파일·분석 사본이 0개가 되며 `purge_log`가 남는다. 분석 중인 촬영이 있으면 휴지통에 넣을 수 없다(409). 휴지통에 넣은 지 30일이 지난 것만 자동 비우기가 지우고, 분석 API가 실패하면 남긴다.
 - [ ] BE-19: 실제 파기는 지울 촬영의 작업마다 분석 API 지우기를 파일·행보다 먼저 부른다. 분석 API가 실패하면 503 `ANALYSIS_UNAVAILABLE`이고 팀 서비스의 행·파일이 그대로이며 `purge_log`가 남지 않는다. 다시 부르면 끝난다.
 - [ ] BE-20: DB를 멈추면 `/api/v1/health`가 503과 `"db": "error"`를 낸다.
 - [ ] 워커: 결과 영상 20건이 밀려 있어도 새 촬영의 판정은 2초 조회 주기대로 나온다(무거운 일이 주 반복을 막지 않는다, 12.4).

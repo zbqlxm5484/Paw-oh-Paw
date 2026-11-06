@@ -235,13 +235,17 @@ paths:
       tags: [반려견]
       operationId: listDogs
       summary: 반려견 목록·검색 (BE-03, S1)
-      description: 정렬은 last_measured_on 내림차순(한 번도 안 잰 반려견은 뒤), 같으면 created_at 내림차순.
+      description: 정렬은 last_measured_on 내림차순(한 번도 안 잰 반려견은 뒤), 같으면 created_at 내림차순. trash=true면 휴지통 목록이고 최근에 넣은 것부터다.
       parameters:
         - name: q
           in: query
           description: 이름에 포함되면 찾는다(대소문자 무시).
           schema: {type: string, maxLength: 50}
           example: 보리
+        - name: trash
+          in: query
+          description: true면 휴지통에 있는 반려견만 준다. 기본은 휴지통에 없는 반려견만.
+          schema: {type: boolean, default: false}
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
       responses:
@@ -331,8 +335,49 @@ paths:
     delete:
       tags: [반려견]
       operationId: deleteDog
-      summary: 반려견 삭제 (BE-19)
-      description: 반려견과 그 아래 회차·촬영·수치·보고서, 파일, 분석 서버의 사본을 모두 지운다. 되돌릴 수 없다. 자기 기관의 반려견만 지울 수 있다.
+      summary: 반려견을 휴지통에 넣기 (BE-19)
+      description: 지우지 않고 휴지통에 넣는다. 그때부터 이 반려견과 그 아래 회차·촬영·보고서는 404다. 30일 뒤 서버가 영구 삭제하고 그 전에는 복원할 수 있다.
+      responses:
+        '204':
+          description: 휴지통에 넣음. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    post:
+      tags: [반려견]
+      operationId: restoreDog
+      summary: 휴지통에서 복원 (BE-19)
+      description: 휴지통에 있는 반려견만 된다(아니면 404). 회차·영상·보고서가 그대로 돌아온다.
+      responses:
+        '200':
+          description: 복원한 반려견
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/permanent:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    delete:
+      tags: [반려견]
+      operationId: deleteDogPermanently
+      summary: 휴지통의 반려견 영구 삭제 (BE-19)
+      description: 반려견과 그 아래 회차·촬영·수치·보고서, 파일, 분석 서버의 사본을 모두 지운다. 되돌릴 수 없다. 휴지통에 있는 반려견만 된다(아니면 404).
       responses:
         '204':
           description: 지움. 본문 없음
@@ -347,7 +392,7 @@ paths:
               example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
         '500': {$ref: '#/components/responses/InternalError'}
         '503':
-          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 다시 부르면 이어서 끝난다)
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 휴지통에 그대로 남고 다시 부르면 끝난다)
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
@@ -1536,7 +1581,7 @@ components:
       type: object
       required: [id, name, breed, weight_kg, size_class, size_class_manual, birth_year, sex, rehab_start_date,
                  focus_limb, baseline_session_id, memo, version, session_count, last_measured_on, open_session_id,
-                 created_at, updated_at]
+                 deleted_at, purge_at, created_at, updated_at]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         name: {type: string, example: 보리}
@@ -1563,6 +1608,16 @@ components:
           type: [string, 'null']
           format: uuid
           description: MEASURING 회차의 ID
+          example: null
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+          description: 휴지통에 넣은 시각. 휴지통에 없으면 null
+          example: null
+        purge_at:
+          type: [string, 'null']
+          format: date-time
+          description: 영구 삭제 예정 시각(deleted_at + 30일). 휴지통에 없으면 null
           example: null
         created_at: {type: string, format: date-time, example: '2026-10-19T00:30:00Z'}
         updated_at: {type: string, format: date-time, example: '2026-10-19T00:30:00Z'}
