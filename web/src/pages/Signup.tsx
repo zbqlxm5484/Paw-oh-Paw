@@ -10,6 +10,7 @@ import { ApiError } from '../api/client'
 import { api, MOCK } from '../store/backend'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 import { link } from '../config'
+import { LEGAL_PATH, TERM_LINKS } from '../legal/content'
 
 const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none'
 const TERMS = ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 및 이용', '[필수] 측정 기기 연동 및 위치정보 이용', '[선택] 마케팅 정보 수신']
@@ -115,7 +116,7 @@ export default function Signup() {
                     if ((e.target as HTMLElement).classList.contains('view')) return
                     setTerms(terms.map((t, k) => (k === i ? !t : t)))
                   }}
-                  style={css('min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer')}><input type="hidden" name={`t${i}`} value={terms[i] ? '1' : ''} /><svg width="20" height="20" viewBox="0 0 24 24" style={css(`color:${check(terms[i])};flex:none`)}><use href="#w-check"></use></svg><span style={css('flex:1;font-size:15px;color:#3A4250')}>{label}</span><span className="view" data-toast="약관 전문은 준비 중이에요" style={css('font-size:13px;color:#A0A7B2;text-decoration:underline')}>보기</span></div>
+                  style={css('min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer')}><input type="hidden" name={`t${i}`} value={terms[i] ? '1' : ''} /><svg width="20" height="20" viewBox="0 0 24 24" style={css(`color:${check(terms[i])};flex:none`)}><use href="#w-check"></use></svg><span style={css('flex:1;font-size:15px;color:#3A4250')}>{label}</span><a className="lk view" href={link(LEGAL_PATH[TERM_LINKS[i]])} target="_blank" rel="noreferrer" style={css('font-size:13px;color:#A0A7B2;text-decoration:underline')}>보기</a></div>
               ))}
             </div>
           </fieldset>

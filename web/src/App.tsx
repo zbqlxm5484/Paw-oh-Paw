@@ -22,6 +22,7 @@ import Analyzing from './pages/Analyzing'
 import Results from './pages/Results'
 import Report from './pages/Report'
 import Gait3d from './pages/Gait3d'
+import Legal from './pages/Legal'
 import Compare from './pages/Compare'
 import My from './pages/My'
 import AccountPage from './pages/Account'
@@ -55,6 +56,10 @@ function Pages() {
       <Route path="/reset-password" element={<Reset />} />
       <Route path="/expired" element={<Expired />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/terms" element={<Legal kind="terms" />} />
+      <Route path="/privacy" element={<Legal kind="privacy" />} />
+      <Route path="/business" element={<Legal kind="business" />} />
+      <Route path="/support" element={<Legal kind="support" />} />
       <Route path="/jump/:idx" element={<Jump />} />
       <Route path="/home" element={<Home />} />
       <Route path="/dogs/:dog_id" element={<DogPage />} />

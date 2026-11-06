@@ -84,7 +84,7 @@ export default function Compare() {
               </div>
             </div>
             {cp.modelChanged ? (
-              <div style={css('background:#FAF1DF;border-radius:12px;padding:14px 18px;font-size:14.5px;line-height:1.5;color:#7A5410;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}><span>{cp.modelMsg}</span><span data-toast="새 모델로 재분석을 요청했어요" style={css('font-weight:700;text-decoration:underline;cursor:pointer')}>새 모델로 재분석</span></div>
+              <div style={css('background:#FAF1DF;border-radius:12px;padding:14px 18px;font-size:14.5px;line-height:1.5;color:#7A5410;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}><span>{cp.modelMsg}</span></div>
             ) : null}
             <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px;align-items:start')}>
               <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:4px 22px')}>
