@@ -51,6 +51,16 @@ services:
   web-green:
     <<: *web
 
+  # 백엔드 worker(명세 3절, 12.4): 촬영 제출·분석 상태 조회·집계·결과 영상을 도는 별도 프로세스. 반드시 한 대만 둔다
+  # (작업 큐가 DB라 두 대면 같은 촬영을 같이 집는다). 그래서 blue/green 으로 나누지 않고 deploy.sh 가 api 전환 뒤 재생성한다.
+  # api 와 같은 이미지·env·extra_hosts(분석 API 터널)·업로드 볼륨(api-data)을 쓴다
+  worker:
+    <<: *api
+    command: ["python", "-m", "app.worker.main"]
+    healthcheck:
+      disable: true            # HTTP 포트가 없다. 살아 있는지는 deploy.sh 가 기동 직후 상태로 본다
+    stop_grace_period: 60s     # SIGTERM 이면 하던 바퀴를 끝내고 멈춘다
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped

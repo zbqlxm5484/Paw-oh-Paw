@@ -66,6 +66,17 @@ if [ "$ok" != 1 ]; then
   exit 1
 fi
 
+# 5-1. worker 재생성. 한 대만 두므로 blue/green 없이 api 전환·확인이 끝난 뒤 새 코드로 갈아 끼운다.
+# 멈춘 사이 촬영 상태는 DB에 있어 재기동하면 하던 일이 이어진다. 기동 직후 죽어 있으면 배포 실패로 본다(api 는 이미 전환됨)
+"${C[@]}" build worker
+"${C[@]}" up -d --no-deps worker
+sleep 5
+WCID="$("${C[@]}" ps -q --status running worker)"
+# restart: unless-stopped 라 죽고 다시 뜨는 반복(크래시 루프)이면 running 으로 보일 수 있어 재시작 횟수도 본다
+if [ -z "$WCID" ] || [ "$(docker inspect -f '{{.RestartCount}}' "$WCID")" != 0 ]; then
+  log "worker 기동 실패"; "${C[@]}" logs --tail=50 worker || true; exit 1
+fi
+
 # 6. 이전 색 정리. 진행 중인 요청이 끝날 때까지 기다린 뒤 내린다(컨테이너·이미지는 남겨 둬 빠른 원복 가능)
 if [ "$ACTIVE" != none ]; then
   "${C[@]}" stop -t 130 "api-$ACTIVE" "web-$ACTIVE"
