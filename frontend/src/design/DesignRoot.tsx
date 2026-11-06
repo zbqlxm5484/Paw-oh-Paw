@@ -56,7 +56,8 @@ export interface ProtoProps {
   session: SessionDetailOut | undefined
   sessionAna: DAna | null
   /** 숨은 파일 입력을 연다. capture=true 면 폰 카메라 */
-  pickFile: (capture: boolean) => Promise<File | null>
+  /** capture=true 면 카메라로 한 개, false 면 갤러리에서 여러 개 */
+  pickFile: (capture: boolean) => Promise<File[]>
   openFile: (url: string) => boolean
 }
 
@@ -142,15 +143,15 @@ export function DesignRoot() {
 
   // 숨은 파일 입력(영상 선택·촬영)
   const fileRef = useRef<HTMLInputElement>(null)
-  const resolver = useRef<((f: File | null) => void) | null>(null)
+  const resolver = useRef<((f: File[]) => void) | null>(null)
   const pickFile = useCallback((capture: boolean) => {
-    return new Promise<File | null>((resolve) => {
+    return new Promise<File[]>((resolve) => {
       const el = fileRef.current
-      if (!el) return resolve(null)
-      resolver.current?.(null)
+      if (!el) return resolve([])
+      resolver.current?.([])
       resolver.current = resolve
-      if (capture) el.setAttribute('capture', 'environment')
-      else el.removeAttribute('capture')
+      if (capture) { el.setAttribute('capture', 'environment'); el.removeAttribute('multiple') }
+      else { el.removeAttribute('capture'); el.setAttribute('multiple', '') }
       el.value = ''
       el.click()
       // 선택 창을 그냥 닫은 경우: 창이 다시 활성화되고 잠시 뒤에도 파일이 없으면 null
@@ -159,7 +160,7 @@ export function DesignRoot() {
         setTimeout(() => {
           if (resolver.current === resolve) {
             resolver.current = null
-            resolve(null)
+            resolve([])
           }
         }, 800)
       }
@@ -167,10 +168,10 @@ export function DesignRoot() {
     })
   }, [])
   const onFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null
+    const fs = Array.from(e.target.files ?? [])
     const r = resolver.current
     resolver.current = null
-    r?.(f)
+    r?.(fs)
   }, [])
 
   const nav = useCallback((path: string, opts?: { replace?: boolean }) => navigate(path, opts), [navigate])
