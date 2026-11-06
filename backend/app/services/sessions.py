@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode, NoticeCode
-from app.models import Dog, DogVital, MeasureSession, Report, SessionMetric, Shot, WalkPass
+from app.models import Dog, DogNote, DogVital, MeasureSession, Report, SessionMetric, Shot, WalkPass
 from app.models.enums import CameraSide, SessionStatus, ShotStatus
 from app.schemas.common import ReasonOut, reason_out
 from app.schemas.sessions import (
@@ -198,6 +198,9 @@ def delete_session_tree(db: Session, session: MeasureSession, institution_id: uu
         update(DogVital)
         .where(DogVital.session_id == session.id)
         .values(session_id=None, updated_at=DogVital.updated_at)
+    )
+    db.execute(
+        update(DogNote).where(DogNote.session_id == session.id).values(session_id=None, updated_at=DogNote.updated_at)
     )
     db.execute(delete(MeasureSession).where(MeasureSession.id == session.id))
     db.expunge(session)

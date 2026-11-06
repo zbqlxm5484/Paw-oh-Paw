@@ -2,8 +2,8 @@
 
 반려견(DOG)·기관(INSTITUTION)·전체(ALL) 단위로 파일과 DB 행을 지우고 purge_log에 1행을 남긴다(파기 확인서 D-13의 근거).
 
-- 순서는 12.5: 파일 → walk_pass → shot → session_metric → report → 차트 자료(dog_vital → dog_history)
-  → dog.baseline_session_id NULL → measure_session → dog.
+- 순서는 12.5: 파일 → walk_pass → shot → session_metric → report → 차트 자료(dog_note_revision → dog_note →
+  dog_vital → dog_history) → dog.baseline_session_id NULL → measure_session → dog.
   파일을 먼저 지우는 이유는 DB에 키가 없는 파일이 남으면 다음 파기에서 빠지기 때문이다. S3는 지우기 오류가 하나라도
   있으면 예외를 내 DB 행을 지우기 전에 멈춘다(11.11).
 - dry_run이면 세기만 한다(stat_prefix, count). 어느 쪽이든 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409
@@ -40,6 +40,8 @@ from app.core.errors import AppError, ErrorCode
 from app.models import (
     Dog,
     DogHistory,
+    DogNote,
+    DogNoteRevision,
     DogVital,
     Institution,
     MeasureSession,
@@ -145,6 +147,8 @@ def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
     sessions = _sessions_of(dog_ids)
     shots = select(Shot.id).where(Shot.session_id.in_(sessions))
 
+    notes = select(DogNote.id).where(DogNote.dog_id.in_(dog_ids))
+
     def count(model, condition) -> int:
         return db.scalar(select(func.count()).select_from(model).where(condition)) or 0
 
@@ -155,6 +159,8 @@ def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
         + count(WalkPass, WalkPass.shot_id.in_(shots))
         + count(SessionMetric, SessionMetric.session_id.in_(sessions))
         + count(Report, Report.session_id.in_(sessions))
+        + count(DogNoteRevision, DogNoteRevision.note_id.in_(notes))
+        + count(DogNote, DogNote.dog_id.in_(dog_ids))
         + count(DogVital, DogVital.dog_id.in_(dog_ids))
         + count(DogHistory, DogHistory.dog_id.in_(dog_ids))
     )
@@ -172,6 +178,9 @@ def _delete_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
     deleted += db.execute(delete(SessionMetric).where(SessionMetric.session_id.in_(sessions))).rowcount
     deleted += db.execute(delete(Report).where(Report.session_id.in_(sessions))).rowcount
     # 차트 자료(v1.36). 회차와 담당자를 가리키므로 회차·계정보다 먼저 지운다
+    notes = select(DogNote.id).where(DogNote.dog_id.in_(dog_ids))
+    deleted += db.execute(delete(DogNoteRevision).where(DogNoteRevision.note_id.in_(notes))).rowcount
+    deleted += db.execute(delete(DogNote).where(DogNote.dog_id.in_(dog_ids))).rowcount
     deleted += db.execute(delete(DogVital).where(DogVital.dog_id.in_(dog_ids))).rowcount
     deleted += db.execute(delete(DogHistory).where(DogHistory.dog_id.in_(dog_ids))).rowcount
     db.execute(update(Dog).where(Dog.baseline_session_id.in_(sessions)).values(baseline_session_id=None))

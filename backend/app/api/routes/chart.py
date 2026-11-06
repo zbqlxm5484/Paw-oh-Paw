@@ -1,13 +1,29 @@
-"""차트 자료 API(15.11, BE-28~30): 바이탈, 진단 이력. 요청 검사 → services → 응답만 한다(11.3)."""
+"""차트 자료 API(15.11, BE-28~30): 바이탈, 진단 이력, 메모·진료 기록. 요청 검사 → services → 응답만 한다(11.3)."""
 
 import uuid
 from datetime import date
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.api.deps import CurrentStaff, DbSession
-from app.schemas.chart import DogHistoryCreate, DogHistoryListOut, DogHistoryOut, VitalIn, VitalListOut, VitalOut
+from app.schemas.chart import (
+    DogHistoryCreate,
+    DogHistoryListOut,
+    DogHistoryOut,
+    NoteBatchCreate,
+    NoteBatchOut,
+    NoteCreate,
+    NoteListOut,
+    NoteOut,
+    NoteRevisionListOut,
+    NoteUpdate,
+    VitalIn,
+    VitalListOut,
+    VitalOut,
+)
 from app.services import dog_history as history_service
+from app.services import notes as note_service
 from app.services import vitals as vital_service
 
 router = APIRouter(tags=["차트 자료"])
@@ -37,3 +53,60 @@ def add_history(dog_id: uuid.UUID, body: DogHistoryCreate, staff: CurrentStaff, 
     return history_service.add_history(
         db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, data=body
     )
+
+
+@router.get("/dogs/{dog_id}/notes", response_model=NoteListOut)
+def list_notes(
+    dog_id: uuid.UUID,
+    staff: CurrentStaff,
+    db: DbSession,
+    kind: Literal["memo", "chart"] | None = None,
+    session_id: uuid.UUID | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> NoteListOut:
+    """메모(kind=memo)와 진료 기록(kind=chart). 빼면 둘 다 준다. 쓴 시각 내림차순."""
+    items, total = note_service.list_notes(
+        db, staff.institution_id, dog_id, kind=kind, session_id=session_id, page=page, size=size
+    )
+    return NoteListOut(items=items, total=total, page=page, size=size)
+
+
+@router.post("/dogs/{dog_id}/notes", response_model=NoteOut, status_code=status.HTTP_201_CREATED)
+def create_note(dog_id: uuid.UUID, body: NoteCreate, staff: CurrentStaff, db: DbSession) -> NoteOut:
+    (note,) = note_service.create_notes(
+        db,
+        institution_id=staff.institution_id,
+        staff_id=staff.id,
+        dog_id=dog_id,
+        session_id=body.session_id,
+        items=[body],
+    )
+    return note
+
+
+@router.post("/dogs/{dog_id}/notes/batch", response_model=NoteBatchOut, status_code=status.HTTP_201_CREATED)
+def create_notes(dog_id: uuid.UUID, body: NoteBatchCreate, staff: CurrentStaff, db: DbSession) -> NoteBatchOut:
+    """여러 건을 같은 시각으로 쓴다(SOAP에서 채운 칸들). 하나라도 어긋나면 아무것도 저장하지 않는다."""
+    items = note_service.create_notes(
+        db,
+        institution_id=staff.institution_id,
+        staff_id=staff.id,
+        dog_id=dog_id,
+        session_id=body.session_id,
+        items=body.notes,
+    )
+    return NoteBatchOut(items=items)
+
+
+@router.patch("/notes/{note_id}", response_model=NoteOut)
+def update_note(note_id: uuid.UUID, body: NoteUpdate, staff: CurrentStaff, db: DbSession) -> NoteOut:
+    """고치기 전 내용은 수정 이력에 남는다. 지우는 API는 없다."""
+    return note_service.update_note(
+        db, institution_id=staff.institution_id, staff_id=staff.id, note_id=note_id, data=body
+    )
+
+
+@router.get("/notes/{note_id}/revisions", response_model=NoteRevisionListOut)
+def list_note_revisions(note_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> NoteRevisionListOut:
+    return NoteRevisionListOut(items=note_service.list_revisions(db, staff.institution_id, note_id))
