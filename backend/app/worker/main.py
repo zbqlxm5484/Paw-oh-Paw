@@ -50,6 +50,7 @@ from app.core.errors import FailReason
 from app.main import configure_logging
 from app.models import Dog, MeasureSession, Shot
 from app.models.enums import SessionStatus, ShotStatus
+from app.services import retention as retention_service
 from app.services import trash as trash_service
 from app.services.aggregation import AggregationError, aggregate_session
 from app.services.analysis_results import ResultFormatError, apply_result, parse_result
@@ -69,7 +70,7 @@ IN_FLIGHT = (SUBMITTED, ANALYZING)
 # 회차 집계를 기다리게 하는 촬영 상태. 남은 것은 DONE·FAILED다(12.4)
 UNFINISHED = (UPLOADED, SUBMITTED, ANALYZING)
 AGGREGATING = SessionStatus.AGGREGATING.value
-# 휴지통 자동 비우기(12.5)를 보는 간격. 30일 기준이라 자주 볼 필요가 없다
+# 휴지통 자동 비우기와 계약 종료 뒤 자동 파기(12.5)를 보는 간격. 30일·90일 기준이라 자주 볼 필요가 없다
 TRASH_SWEEP_INTERVAL_SEC = 3600
 
 
@@ -520,6 +521,17 @@ class Worker:
         except Exception:
             logger.exception("trash sweep failed; retrying at the next sweep")
 
+    def purge_expired_contracts(self) -> None:
+        """계약이 끝난 지 90일이 지난 기관의 자료와 가입 계정을 지운다(12.5). 실패해도 다음 차례에 다시 한다."""
+        try:
+            with SessionLocal() as db:
+                purged, failed = retention_service.purge_expired_contracts(db, self.storage, self.client)
+                db.commit()
+            if purged or failed:
+                logger.info("contract sweep: purged=%d failed=%d", purged, failed)
+        except Exception:
+            logger.exception("contract sweep failed; retrying at the next sweep")
+
     def run_forever(self, max_loops: int | None = None) -> int:
         """주 반복. 한 바퀴가 실패해도(DB 끊김 등) 로그만 남기고 다음 바퀴를 돈다. 돈 바퀴 수를 돌려준다.
 
@@ -546,6 +558,7 @@ class Worker:
                 if time.monotonic() >= self._next_trash_sweep:
                     self._next_trash_sweep = time.monotonic() + TRASH_SWEEP_INTERVAL_SEC
                     self.empty_trash()
+                    self.purge_expired_contracts()
                 if self._stop or (max_loops is not None and loops >= max_loops):
                     break
                 time.sleep(max(0.0, self.settings.WORKER_POLL_INTERVAL_SEC - (time.monotonic() - started)))

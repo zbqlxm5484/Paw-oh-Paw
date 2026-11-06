@@ -140,7 +140,8 @@ def test_permanent_delete_works_only_from_the_trash(
     assert response.status_code == 204, response.text
     assert _rows_of_dog(db, dog_id) == 0
     assert get_storage().stat_prefix(dog_prefix(institution_id, dog_id)) == (0, 0)
-    assert sorted(analysis.deleted) == sorted(job_ids)
+    # 실패 전에 먼저 지운 작업은 다시 누를 때 한 번 더 불린다(실제 분석 API는 404로 답하고 성공으로 친다)
+    assert set(analysis.deleted) == set(job_ids)
     assert _trash_ids(client, auth_headers) == []
     # 같은 기관의 다른 반려견은 그대로다
     assert _rows_of_dog(db, kept_id) == kept_rows

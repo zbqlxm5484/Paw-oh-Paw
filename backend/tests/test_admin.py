@@ -225,10 +225,9 @@ def test_institution_code_rules(client: TestClient, admin_headers: dict) -> None
     assert no_name.status_code == 422
     assert no_name.json()["error"]["detail"]["fields"] == [{"field": "name", "type": "missing"}]
 
-    # 과거 날짜도 받는다(즉시 만료)
-    past = client.post(
-        INSTITUTIONS, json={"name": "끝난 병원", "contract_ends_at": "2020-01-01"}, headers=admin_headers
-    )
+    # 과거 날짜도 받는다(즉시 만료). 90일보다 더 지난 날짜만 막는다(13.6, tests/test_retention.py)
+    yesterday = (today_local() - timedelta(days=1)).isoformat()
+    past = client.post(INSTITUTIONS, json={"name": "끝난 병원", "contract_ends_at": yesterday}, headers=admin_headers)
     assert past.status_code == 201
     assert past.json()["contract_status"] == "EXPIRED"
 
