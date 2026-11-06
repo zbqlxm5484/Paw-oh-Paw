@@ -72,6 +72,8 @@ UNFINISHED = (UPLOADED, SUBMITTED, ANALYZING)
 AGGREGATING = SessionStatus.AGGREGATING.value
 # 휴지통 자동 비우기와 계약 종료 뒤 자동 파기(12.5)를 보는 간격. 30일·90일 기준이라 자주 볼 필요가 없다
 TRASH_SWEEP_INTERVAL_SEC = 3600
+# 한 차례가 시간 상한(WORKER_SWEEP_MAX_SEC)에 닿아 남겼을 때 다시 보는 간격. 그사이 주 반복이 밀린 일을 한다
+SWEEP_RESUME_SEC = 300
 
 
 @dataclass
@@ -449,8 +451,15 @@ def send_claimed(
             stats.submitted += 1
             logger.info("submitted shot=%s job=%s", shot.id, job_id)
         else:
-            # 보내는 사이 행이 사라졌거나(파기) 상태가 바뀌었다. 분석 API 쪽 작업은 그냥 버려진다
-            logger.warning("shot %s changed before job %s was recorded; analysis job is left unused", shot.id, job_id)
+            # 보내는 사이 행이 사라졌거나(파기) 상태가 바뀌었다. job_id를 적을 행이 없어 나중에 찾을 수 없으므로
+            # 지금 사본을 지워 본다. 아직 분석 중이면(409) 못 지우고, 그때는 분석 API의 전체 파기가 거둔다
+            try:
+                client.delete(job_id)
+                logger.warning("shot %s changed before job %s was recorded; analysis copy deleted", shot.id, job_id)
+            except AnalysisClientError as e:
+                logger.warning(
+                    "shot %s changed before job %s was recorded; analysis copy is left behind: %s", shot.id, job_id, e
+                )
 
 
 # ---- 주 반복 ----
@@ -505,32 +514,81 @@ class Worker:
         self.reporter = reporter or ReportGenerator(self.settings, self.storage)
         self._stop = False
         self._next_trash_sweep = 0.0  # time.monotonic() 기준. 0이면 켜자마자 한 번 본다
+        # 계약 종료 뒤 자동 파기는 켠 뒤 한 간격이 지나야 처음 돈다. 배포하자마자 기관의 자료가 지워지지 않게
+        # 하려는 것이다(되돌릴 수 없다). 켤 때는 대상 기관을 로그로만 알린다(199 리뷰 박규원)
+        self._contract_sweep_from = time.monotonic() + TRASH_SWEEP_INTERVAL_SEC
 
     def stop(self, *_: object) -> None:
         """SIGINT·SIGTERM 처리기. 하던 바퀴는 끝내고 멈춘다."""
         self._stop = True
 
-    def empty_trash(self) -> None:
-        """휴지통에 30일 넘게 있던 반려견을 영구 삭제한다(12.5). 실패해도 로그만 남기고 다음 차례에 다시 한다."""
+    def empty_trash(self, deadline: float | None = None) -> bool:
+        """휴지통에 30일 넘게 있던 반려견을 영구 삭제한다(12.5). 실패해도 로그만 남기고 다음 차례에 다시 한다.
+
+        시간 상한(deadline)에 닿아 남겼으면 True다.
+        """
         try:
             with SessionLocal() as db:
-                purged, failed = trash_service.purge_expired(db, self.storage, self.client)
+                result = trash_service.purge_expired(db, self.storage, self.client, deadline=deadline)
                 db.commit()
-            if purged or failed:
-                logger.info("trash sweep: purged=%d failed=%d", purged, failed)
+            if result.purged or result.failed or result.out_of_time:
+                logger.info(
+                    "trash sweep: purged=%d failed=%d out_of_time=%s", result.purged, result.failed, result.out_of_time
+                )
+            return result.out_of_time
         except Exception:
             logger.exception("trash sweep failed; retrying at the next sweep")
+            return False
 
-    def purge_expired_contracts(self) -> None:
-        """계약이 끝난 지 90일이 지난 기관의 자료와 가입 계정을 지운다(12.5). 실패해도 다음 차례에 다시 한다."""
+    def purge_expired_contracts(self, deadline: float | None = None) -> bool:
+        """계약이 끝난 지 90일이 지난 기관의 자료와 가입 계정을 지운다(12.5). 실패해도 다음 차례에 다시 한다.
+
+        시간 상한(deadline)에 닿아 남겼으면 True다.
+        """
         try:
             with SessionLocal() as db:
-                purged, failed = retention_service.purge_expired_contracts(db, self.storage, self.client)
+                result = retention_service.purge_expired_contracts(db, self.storage, self.client, deadline=deadline)
                 db.commit()
-            if purged or failed:
-                logger.info("contract sweep: purged=%d failed=%d", purged, failed)
+            if result.purged or result.failed or result.out_of_time:
+                logger.info(
+                    "contract sweep: purged=%d failed=%d out_of_time=%s",
+                    result.purged,
+                    result.failed,
+                    result.out_of_time,
+                )
+            return result.out_of_time
         except Exception:
             logger.exception("contract sweep failed; retrying at the next sweep")
+            return False
+
+    def warn_contract_purge(self) -> None:
+        """켤 때 한 번: 계약 종료 뒤 자동 파기 대상 기관이 있으면 로그로 알린다(12.4). 기관 ID만 적는다."""
+        try:
+            with SessionLocal() as db:
+                due = retention_service.due_institution_ids(db)
+        except Exception:
+            logger.exception("could not list institutions due for the contract sweep; continuing")
+            return
+        if due:
+            logger.warning(
+                "contract sweep: %d institution(s) are past the retention period; their data and CLIENT accounts "
+                "will be purged in about %d min unless contract_ends_at is changed: %s",
+                len(due),
+                TRASH_SWEEP_INTERVAL_SEC // 60,
+                ", ".join(str(value) for value in due),
+            )
+
+    def sweep(self) -> bool:
+        """휴지통 자동 비우기와 계약 종료 뒤 자동 파기를 한 차례 돈다. 시간 상한에 닿아 남겼으면 True다.
+
+        둘이 합쳐 WORKER_SWEEP_MAX_SEC를 넘지 않게 같은 deadline을 쓴다. 주 반복과 같은 스레드라, 오래 걸리면 상태
+        조회가 밀려 정상 진행 중인 촬영이 ANALYSIS_TIMEOUT으로 끝날 수 있기 때문이다(199 리뷰 박규원).
+        """
+        deadline = time.monotonic() + self.settings.WORKER_SWEEP_MAX_SEC
+        out_of_time = self.empty_trash(deadline)
+        if not out_of_time and time.monotonic() >= self._contract_sweep_from:
+            out_of_time = self.purge_expired_contracts(deadline)
+        return out_of_time
 
     def run_forever(self, max_loops: int | None = None) -> int:
         """주 반복. 한 바퀴가 실패해도(DB 끊김 등) 로그만 남기고 다음 바퀴를 돈다. 돈 바퀴 수를 돌려준다.
@@ -544,6 +602,7 @@ class Worker:
                 self.reporter.reset_generating(db)
         except Exception:
             logger.exception("could not reset generating reports; continuing")
+        self.warn_contract_purge()
         try:
             while not self._stop and (max_loops is None or loops < max_loops):
                 loops += 1
@@ -556,9 +615,10 @@ class Worker:
                 except Exception:
                     logger.exception("worker loop failed; retrying next loop")
                 if time.monotonic() >= self._next_trash_sweep:
-                    self._next_trash_sweep = time.monotonic() + TRASH_SWEEP_INTERVAL_SEC
-                    self.empty_trash()
-                    self.purge_expired_contracts()
+                    out_of_time = self.sweep()
+                    # 남겼으면 한 시간을 기다리지 않고 곧 이어서 한다
+                    wait = SWEEP_RESUME_SEC if out_of_time else TRASH_SWEEP_INTERVAL_SEC
+                    self._next_trash_sweep = time.monotonic() + wait
                 if self._stop or (max_loops is not None and loops >= max_loops):
                     break
                 time.sleep(max(0.0, self.settings.WORKER_POLL_INTERVAL_SEC - (time.monotonic() - started)))
@@ -576,13 +636,15 @@ def main() -> int:
     signal.signal(signal.SIGINT, worker.stop)
     signal.signal(signal.SIGTERM, worker.stop)
     logger.info(
-        "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss render_concurrency=%d",
+        "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss render_concurrency=%d "
+        "sweep_max=%ss",
         settings.ANALYSIS_API_MODE,
         settings.WORKER_POLL_INTERVAL_SEC,
         settings.WORKER_MAX_IN_FLIGHT,
         settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION,
         settings.ANALYSIS_TIMEOUT_SEC,
         settings.WORKER_RENDER_CONCURRENCY,
+        settings.WORKER_SWEEP_MAX_SEC,
     )
     worker.run_forever()
     logger.info("worker stopped")

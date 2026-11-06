@@ -56,14 +56,15 @@ def build_report_input(db: Session, report: Report, *, tolerance: Mapping[str, f
     session: MeasureSession = report.session
     dog: Dog = session.dog
     try:
-        result = session_result(db, dog.institution_id, session.id).model_dump(mode="json")
+        # 워커는 휴지통을 보지 않고 일한다(12.5). 휴지통의 반려견이어도 보고서를 만든다(199 리뷰 박규원)
+        result = session_result(db, dog.institution_id, session.id, include_trashed=True).model_dump(mode="json")
     except AppError as error:
         raise ReportInputError("SESSION_NOT_READY", error.code.value) from error
     previous_id = previous_session_id(db, session)
     previous = None
     if previous_id is not None:
         try:
-            previous = session_result(db, dog.institution_id, previous_id).model_dump(mode="json")
+            previous = session_result(db, dog.institution_id, previous_id, include_trashed=True).model_dump(mode="json")
         except AppError:
             previous = None  # 직전 회차는 없어도 만든다(8절 1번: 없는 정보는 그 항목만 뺀다)
     return {

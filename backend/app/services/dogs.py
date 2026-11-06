@@ -126,13 +126,24 @@ def list_dogs(
     return items, total
 
 
-def get_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, *, include_trashed: bool = False) -> Dog:
+def get_dog(
+    db: Session,
+    institution_id: uuid.UUID,
+    dog_id: uuid.UUID,
+    *,
+    include_trashed: bool = False,
+    for_update: bool = False,
+) -> Dog:
     """없거나 다른 기관이거나 휴지통에 있는 반려견이면 똑같이 404 NOT_FOUND(15.1).
 
     include_trashed는 자료 파기만 쓴다. 휴지통에 있든 없든 그 기관의 반려견이면 돌려준다.
+    for_update면 반려견 행을 잠그고 잠근 뒤의 값으로 돌려준다(12.4 잠금: 휴지통에 넣기, 자료 파기).
     """
     condition = Dog.institution_id == institution_id if include_trashed else in_institution(institution_id)
-    dog = db.scalars(select(Dog).where(Dog.id == dog_id, condition)).one_or_none()
+    query = select(Dog).where(Dog.id == dog_id, condition)
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    dog = db.scalars(query).one_or_none()
     if dog is None:
         raise AppError(ErrorCode.NOT_FOUND)
     return dog
