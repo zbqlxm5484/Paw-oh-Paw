@@ -179,6 +179,39 @@ function loadThumbs(): Record<string, string> {
 /** 촬영 id → 첫 프레임 그림(data URL). 이 기기에서 올린 영상만 있다 */
 export const shotThumbs: Record<string, string> = loadThumbs()
 
+// ── 서버 결과 영상의 첫 프레임(한 번만 뽑아 기억) ──
+const SERVER_KEY = 'pp.shot.serverThumbs'
+function loadServerThumbs(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(SERVER_KEY) || '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+/** 촬영 id → 서버 결과 영상에서 뽑은 첫 프레임 그림(data URL). 목록을 다시 열어도 영상을 다시 안 불러온다 */
+export const serverThumbs: Record<string, string> = loadServerThumbs()
+
+/** 이미 받은 <video> 에서 작은 jpeg 를 뽑아 촬영 id 에 붙여 둔다. 못 뽑으면(다른 출처·0 크기) undefined */
+export function captureFrame(v: HTMLVideoElement, shotId: string): string | undefined {
+  try {
+    if (!v.videoWidth || !v.videoHeight) return undefined
+    const w = 320
+    const h = Math.round((w * v.videoHeight) / v.videoWidth)
+    const c = document.createElement('canvas')
+    c.width = w
+    c.height = h
+    c.getContext('2d')!.drawImage(v, 0, 0, w, h)
+    const d = c.toDataURL('image/jpeg', 0.7)
+    serverThumbs[shotId] = d
+    const keys = Object.keys(serverThumbs)
+    for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete serverThumbs[k]
+    try { localStorage.setItem(SERVER_KEY, JSON.stringify(serverThumbs)) } catch { /* 저장 못 하면 이번 화면에서만 */ }
+    return d
+  } catch {
+    return undefined // 교차 출처 등으로 canvas 가 막히면 영상 자체를 보인다
+  }
+}
+
 /** 영상 파일의 첫 프레임을 작은 jpeg 로 만들어 촬영 id 에 붙여 둔다(새로 불러와도 남게 저장) */
 export async function rememberFirstFrame(shotId: string, file: File): Promise<void> {
   const url = URL.createObjectURL(file)

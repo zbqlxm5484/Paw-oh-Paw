@@ -196,6 +196,13 @@ export class AppProto extends DCLogic<Props, any> {
       }
     })
   }
+  /** 갤러리에서 고른 여러 개를 차례로 올린다. 남은 칸(limit)만큼만 */
+  addFiles = async (files: File[], limit: number) => {
+    const use = files.slice(0, Math.max(0, limit))
+    if (files.length > use.length) this.toast(`영상은 16개까지라 ${use.length}개만 첨부해요`)
+    for (const f of use) await this.addFile(f)
+  }
+
   addFile = async (file: File | null) => {
     if (!file || this.state.busy) return
     this.setState({ busy: true })
@@ -321,7 +328,9 @@ export class AppProto extends DCLogic<Props, any> {
     // 알림: 회차 상태에서 만든다(알림 API 없음)
     // 알림은 백엔드 API 가 없어 회차 상태로 만든다. 읽음은 기기에 key 로 남긴다(전체 확인 버튼·홈 종 점)
     const rawNotifs: { key: string; title: string; body: string; when: string; dot: string; open: () => void }[] = [
-      ...(ana && anaDog ? [{ key: `ana:${ana.sessionId}`, title: `${anaDog.name} 분석이 진행 중이에요`, body: `영상 ${ana.n}개의 관절점을 찾고 있어요. 끝나면 알려 드릴게요.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
+      ...(ana && anaDog ? [ana.status === 'MEASURING'
+        ? { key: `ana:${ana.sessionId}:m`, title: `${anaDog.name} 촬영을 끝내지 않았어요`, body: `영상 ${ana.n}개를 첨부해 두고 측정 종료를 누르지 않았어요. 이어서 찍거나 측정을 끝내 주세요.`, when: '촬영 중', dot: '#D2601A', open: () => this.nav('capReview', `/sessions/${ana.sessionId}`) }
+        : { key: `ana:${ana.sessionId}`, title: `${anaDog.name} 분석이 진행 중이에요`, body: `영상 ${ana.n}개의 관절점을 찾고 있어요. 끝나면 알려 드릴게요.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
       ...results.slice(0, 6).map((r) => { const d = dogById(r.dog); return r.st === 'fail'
         ? { key: `res:${r.id}:fail`, title: `${d?.name ?? ''} 분석에 실패했어요`, body: r.result?.fail_reason?.message || '쓸 수 있는 통과가 없었어요. 다시 촬영해 주세요.', when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
         : { key: `res:${r.id}:${r.rep ? 'rep' : 'done'}`, title: `${d?.name ?? ''} ${r.rep ? '보고서가 만들어졌어요' : '분석이 끝났어요'}`, body: r.rep ? '보호자용·수의사용 보고서를 확인해 보세요.' : '회차 결과를 확인해 보세요.', when: r.date, dot: r.rep ? '#D2601A' : '#C9C4BC', open: () => this.openRes(r.id) } }),
@@ -382,7 +391,7 @@ export class AppProto extends DCLogic<Props, any> {
       hasDogs: dogs.length > 0, noDogs: !dogs.length, dogCount: dogs.length + '마리',
       q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) }, homeDogs, noMatch: !!qq && !shown.length,
       goPetNew: this.goPetNew, goCapture: () => this.goCapture(), dd,
-      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`), anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
+      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)), anaMeasuring: !!ana && ana.status === 'MEASURING', anaLabel: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', anaHint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았어요. 눌러서 이어가기` : '', anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
       prints: (() => { const ph = Math.floor(Date.now() / 420) % 11; return Array.from({ length: 8 }, (_, i) => { const on = ph <= 8 ? i < ph : ph === 9; const jx = [0, 6, -8, 4, -4, 10, -2, 5][i], jr = -23 + [7, -4, 10, -8, 4, -10, 8, -5][i]; return { x: (i % 2 ? 236 : 118) + jx * 2 + Math.round(Math.sin(i * 0.9) * 22), y: 656 - i * 68 + (i % 2 ? 10 : 0), r: jr, op: on ? 1 : 0, s: on ? 1 : 0.7 } }) })(),
 
       petTitle: s.petMode === 'edit' ? '반려견 정보 수정' : '반려견 등록', petCta: s.petMode === 'edit' ? '저장하기' : '등록하기',
@@ -434,7 +443,7 @@ export class AppProto extends DCLogic<Props, any> {
 
       capDogs: dogs.map((d) => { const on = d.id === s.capDog; return { init: d.name[0], name: d.name, desc: desc(d), bd: on ? '#D2601A' : '#ECE8E2', dot: on ? '#D2601A' : 'transparent', pick: () => this.setState({ capDog: d.id }) } }),
       sessW: s.sessW, onSessW: (e: any) => { const v = e.target.value; this.setState({ sessW: v }) }, sessWPh: capD.kg ? `등록 체중 ${capD.kg}` : '예) 28.1',
-      fromGallery: async () => { if (shots >= 16) return this.toast('영상 16개를 모두 첨부했어요'); const f = await this.props.pickFile(false); await this.addFile(f) },
+      fromGallery: async () => { if (shots >= 16) return this.toast('영상 16개를 모두 첨부했어요'); const fs = await this.props.pickFile(false); await this.addFiles(fs, 16 - shots) },
       goCapGuide: this.goCapGuide,
       capDogName: capD.name || '',
       slots: Array.from({ length: 16 }, (_, i) => { const done = i < shots, next = i === shots; const sh = [...(this.props.session?.shots ?? [])].sort((a: any, b: any) => a.seq_no - b.seq_no)[i]; return { n: i + 1, done, next, shot: done ? sh : undefined, bg: done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC', bs: next ? 'dashed' : 'solid', bd: done ? '#141B22' : next ? '#D2601A' : '#ECE8E2', nc: done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2', cur: next ? 'pointer' : 'default', tap: next ? this.goCapGuide : () => {} } }),
@@ -467,7 +476,7 @@ export class AppProto extends DCLogic<Props, any> {
           this.recTick = setInterval(() => this.setState({ recSec: Math.floor((Date.now() - t0) / 1000) }), 250)
           return
         }
-        const f = await this.props.pickFile(true); await this.addFile(f)
+        const [f] = await this.props.pickFile(true); await this.addFile(f ?? null)
       },
       startAna: async () => {
         const sid = this.sessionId()
