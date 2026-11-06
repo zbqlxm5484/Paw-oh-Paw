@@ -21,6 +21,7 @@ from app.models import Dog, DogVital, MeasureSession
 from app.models.enums import SessionStatus
 from app.schemas.chart import VitalOut
 from app.schemas.dogs import DogCreate, DogOut, DogUpdate
+from app.services import dog_home
 from app.services.size_class import classify_size
 
 # 휴지통에 넣고 이 날수가 지나면 워커가 영구 삭제한다(12.5)
@@ -89,10 +90,21 @@ def latest_vitals(db: Session, dog_ids: list[uuid.UUID]) -> dict[uuid.UUID, Vita
     return {row.dog_id: VitalOut.model_validate(row) for row in rows}
 
 
-def to_dog_out(dog: Dog, stats: DogStats, *, in_list: bool = False, latest_vital: VitalOut | None = None) -> DogOut:
-    """in_list면 보호자 연락처 전체를 빼고 뒤 4자리만 준다(15.3)."""
+def to_dog_out(
+    dog: Dog,
+    stats: DogStats,
+    *,
+    in_list: bool = False,
+    latest_vital: VitalOut | None = None,
+    home: dog_home.DogHome | None = None,
+) -> DogOut:
+    """in_list면 보호자 연락처 전체를 빼고 뒤 4자리만 준다(15.3). home은 홈 배지·변동(없으면 빈 값)."""
+    home = home or dog_home.DogHome()
     return DogOut.model_validate(dog).model_copy(
         update={
+            "badges": home.badges,
+            "changes": home.changes,
+            "last_symmetry": home.last_symmetry,
             "owner_phone": None if in_list else dog.owner_phone,
             "owner_phone_last4": phone_last4(dog.owner_phone),
             "latest_vital": latest_vital,
@@ -152,14 +164,33 @@ def _dogs_query(institution_id: uuid.UUID, *, trash: bool = False):
 
 
 def list_dogs(
-    db: Session, institution_id: uuid.UUID, *, q: str | None, page: int, size: int, trash: bool = False
+    db: Session,
+    institution_id: uuid.UUID,
+    *,
+    q: str | None,
+    page: int,
+    size: int,
+    trash: bool = False,
+    changed_within_days: int | None = None,
 ) -> tuple[list[DogOut], int]:
     """목록·검색(15.5). q는 이름·동물번호·보호자 이름 중 하나에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다.
 
     연락처로는 찾지 않는다. trash면 휴지통 목록. 항목의 보호자 연락처는 뒤 4자리만 준다.
+
+    changed_within_days를 주면 그 기간에 변동(12.5 홈 배지·변동)이 있는 반려견만 준다. 기관의 후보를 먼저 추려
+    변동을 계산하고, 변동이 있는 ID로 목록을 거른다. 휴지통 목록에서는 홈 배지·변동을 계산하지 않는다.
     """
     query = _dogs_query(institution_id, trash=trash)
     count_query = select(func.count()).select_from(Dog).where(in_institution(institution_id, trash=trash))
+    today = today_local()
+    days = changed_within_days or dog_home.CHANGE_DAYS
+    homes: dict[uuid.UUID, dog_home.DogHome] | None = None
+    if changed_within_days is not None and not trash:
+        candidates = dog_home.candidate_ids(db, in_institution(institution_id), days=days, today=today)
+        homes = dog_home.load(db, candidates, days=days, today=today)
+        changed = Dog.id.in_([dog_id for dog_id, home in homes.items() if home.changes])
+        query = query.where(changed)
+        count_query = count_query.where(changed)
     if q:
         matches = or_(
             Dog.name.icontains(q, autoescape=True),
@@ -170,13 +201,17 @@ def list_dogs(
         count_query = count_query.where(matches)
     rows = db.execute(query.offset((page - 1) * size).limit(size)).all()
     total = db.scalar(count_query) or 0
-    vitals = latest_vitals(db, [row[0].id for row in rows])
+    dog_ids = [row[0].id for row in rows]
+    vitals = latest_vitals(db, dog_ids)
+    if homes is None:
+        homes = {} if trash else dog_home.load(db, dog_ids, days=days, today=today)
     items = [
         to_dog_out(
             dog,
             DogStats(session_count, last_measured_on, open_session_id),
             in_list=True,
             latest_vital=vitals.get(dog.id),
+            home=homes.get(dog.id),
         )
         for dog, session_count, last_measured_on, open_session_id in rows
     ]
@@ -215,6 +250,7 @@ def get_dog_out(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID) -> Do
         dog,
         DogStats(session_count, last_measured_on, open_session_id),
         latest_vital=latest_vitals(db, [dog.id]).get(dog.id),
+        home=dog_home.load(db, [dog.id], days=dog_home.CHANGE_DAYS, today=today_local()).get(dog.id),
     )
 
 

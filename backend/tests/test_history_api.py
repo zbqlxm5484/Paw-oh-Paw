@@ -40,6 +40,7 @@ def test_history_is_newest_first_and_same_day_sessions_by_created_at(
         "is_baseline": True,
         "valid_passes": {"LEFT": 0, "RIGHT": 0},
         "model_version": "v1",
+        "symmetry_score": None,
         "reports": {"OWNER": None, "VET": None},
     }
     # 측정 중인 회차는 체중·모델 버전이 비어 있어도 키는 남는다(11.5)

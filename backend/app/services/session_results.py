@@ -26,6 +26,7 @@ from app.schemas.sessions import (
 )
 from app.services.aggregation import AGGREGATED_GAITS, METRICS
 from app.services.sessions import session_query, side_counts, to_session_out
+from app.services.symmetry import session_score
 
 METRIC_ORDER = {metric.code: position for position, metric in enumerate(METRICS)}
 LIMB_ORDER = {limb.value: position for position, limb in enumerate(Limb)}
@@ -179,5 +180,6 @@ def session_result(
         ),
         exclude_summary=_exclude_summary(session.shots),
         notices=notices,
+        symmetry_score=session_score(session.metrics),
         gaits=_gaits(session.metrics),
     )

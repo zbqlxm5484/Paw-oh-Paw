@@ -246,6 +246,9 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
   "stage": "REHAB",
   "stage_changed_on": null,
   "latest_vital": null,
+  "badges": [{"code": "SURGERY", "title": "TPLO", "site": "RH", "on": "2026-08-27"}],
+  "changes": [{"code": "GAIT_BETTER", "on": "2026-11-05", "delta": 4}],
+  "last_symmetry": 91,
   "version": 0,
   "session_count": 3,
   "last_measured_on": "2026-10-20",
@@ -266,6 +269,22 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - `owner_phone`: 보호자 연락처. **상세·등록·수정 응답에만 값이 있고 목록에서는 `null`이다.** 목록은 `owner_phone_last4`(숫자 중 뒤 4자리)만 준다.
 - `stage`: `PRE`(수술 전)·`REHAB`(재활 중)·`DONE`(종결). `stage_changed_on`은 단계가 바뀐 날이고 바뀐 적이 없으면 `null`이다. 서버가 적는 값이라 보낼 수 없다.
 - `latest_vital`: 가장 최근 날짜의 바이탈(5절 차트 자료의 VitalOut). 없으면 `null`. 목록에서도 온다.
+- `badges`: 홈 화면의 특이사항 배지. 없으면 빈 배열. 글은 화면이 만든다(서버는 코드와 재료만 준다).
+  - `SURGERY`: 가장 최근 수술. `title`(수술 이름), `site`(부위 `LF`·`RF`·`LH`·`RH`·`SP` 또는 `null`), `on`(수술한 날). "TPLO · 오른뒤 · D+71"의 71은 오늘 − `on`으로 화면이 센다.
+  - `DIAGNOSIS`: 수술이 없을 때만, 가장 최근 진단 하나. 필드는 같다.
+  - `IMPORTANT_NOTE`: 중요 표시가 켜진 메모·진료 기록이 있다. `on`은 가장 최근 것을 쓴 날, `title`·`site`는 `null`. 메모 본문은 오지 않는다.
+- `changes`: 최근 변동. 없으면 빈 배열. 기간은 기본 7일이고 `changed_within_days`를 보내면 그 날수다(N일 전 그날 포함). `on`이 늦은 순서로 온다.
+
+  | `code` | 언제 | `on` |
+  | --- | --- | --- |
+  | `SURGERY_ADDED` | 가장 최근 수술이 기간 안 | 수술한 날 |
+  | `IMPORTANT_NOTE` | 중요 메모·진료 기록을 기간 안에 씀 | 쓴 날 |
+  | `RESHOOT_NEEDED` | 가장 최근에 끝난 회차가 실패했거나, 유효 통과가 0개이거나, 무효(INVALID) 촬영이 있음 | 그 회차의 측정일 |
+  | `GAIT_BETTER`·`GAIT_WORSE` | 가장 최근에 끝난 회차의 대칭 점수가 바로 앞 점수보다 3점 이상 높음·낮음. `delta`가 점수 차(이번 − 앞) | 그 회차의 측정일 |
+
+  아래 셋은 가장 최근에 끝난 회차 하나만 본다. 그 회차의 측정일이 기간 밖이면 오지 않는다. `delta`는 `GAIT_*`에서만 값이 있고 나머지는 `null`이다.
+- `last_symmetry`: 대칭 점수가 있는 완료 회차 중 가장 최근 것의 점수(7절 `symmetry_score`). 없으면 `null`.
+- 세 값은 목록과 상세 모두에서 온다. 휴지통 목록에서는 늘 비어 있다.
 - `version`: 수정할 때 그대로 돌려보낸다(5절 `PATCH`). 수정될 때마다 1 늘어난다.
 
 ### SessionOut — 회차
@@ -474,6 +493,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | `size` | 선택 | 1~100, 기본 20 |
 
 - 응답 200: `{"items": [DogOut, …], "total": 45, "page": 1, "size": 20}`
+- `changed_within_days=7`을 붙이면 최근 7일 안에 변동(`changes`)이 있는 반려견만 온다. `total`도 그 수라서 `size=1`로 부르면 "일주일 간 변동 발생" 개수만 알 수 있다. 1~30의 정수이고 벗어나면 422다. `q`와 함께 쓸 수 있고 정렬은 그대로다. 휴지통 목록(`trash=true`)에서는 무시한다.
 - 정렬: 최근 측정일이 늦은 순서, 한 번도 안 잰 반려견은 뒤. 같으면 등록이 늦은 순서.
 
 ### `POST /dogs` — 등록
@@ -736,6 +756,7 @@ S5의 관절 각도 곡선 그래프에 쓴다.
     {"code": "STOPPED", "message": "중간에 멈췄습니다.", "count": 2}
   ],
   "notices": [],
+  "symmetry_score": 87,
   "gaits": [
     {
       "gait_type": "TROT",
@@ -767,6 +788,7 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 - **측정 불가**는 `value`가 `null`이고 `measurable`이 false이며 사유가 `unmeasurable_reason`에 온다. 0으로 그리지 말고 "측정 불가 + 사유"로 보여 준다.
 - `limb_compare`(다리 비교 요약): 앞다리 쌍(FORE: LF·RF)과 뒷다리 쌍(HIND: LH·RH)의 좌우 차이다. `diff` = 왼쪽 − 오른쪽, `symmetry_index`는 좌우 차이 비율(%)이다. **`symmetry_index`가 큰 순서로 정렬해서 오므로 맨 위가 "차이가 가장 큰 다리"다.** 그다음에 비교는 되지만 `symmetry_index`가 `null`인 항목(왼쪽 + 오른쪽이 0일 때)이 오고, 비교할 수 없는 항목(`comparable`이 false)은 맨 뒤에 `reason`과 함께 온다.
 - 서버는 "아프다", "좋아졌다" 같은 판단 단어를 내지 않는다. 화면도 쓰지 않는다.
+- `symmetry_score`(대칭 점수): 회차의 좌우 균형을 0~100의 정수 하나로 줄인 값이다. **100에 가까울수록 좌우가 비슷하다.** `limb_compare`의 `symmetry_index`(0에 가까울수록 비슷함)와 방향이 반대다. 웹 화면이 계산하던 식과 같다: 100 − 평균(대칭 지수), 대상은 `rom_stifle`·`rom_hip`·`stride_length`·`stance_ratio`의 뒷다리 쌍과 `rom_elbow`의 앞다리 쌍, 보행 유형은 TROT → WALK → OTHER 순서로 값이 있는 첫 유형 하나다. 계산할 쌍이 없으면 `null`이다(0이 아니다). 화면은 이 값을 그대로 쓰고 따로 계산하지 않는다.
 - `notices`: 한쪽 방향만 찍혔으면 `ONE_SIDE_ONLY`가 온다.
 
 ### `GET /sessions/{session_id}/reports` — 판본별 보고서 상태
@@ -812,11 +834,13 @@ S5의 관절 각도 곡선 그래프에 쓴다.
   "is_baseline": true,
   "valid_passes": {"LEFT": 8, "RIGHT": 8},
   "model_version": "v1",
+  "symmetry_score": 87,
   "reports": {"OWNER": "DONE", "VET": "FAILED"}
 }
 ```
 
 - `is_baseline`: 기준 회차인지. `reports`: 판본별 상태, 아직 없으면 `null`.
+- `symmetry_score`: 그 회차의 대칭 점수(7절). 완료(DONE)가 아니거나 계산할 쌍이 없으면 `null`. 대칭 점수 추이 그래프는 이 목록으로 그린다.
 
 ### `GET /dogs/{dog_id}/compare?target=…&base=BASELINE&gait_type=TROT` — 회차 비교
 

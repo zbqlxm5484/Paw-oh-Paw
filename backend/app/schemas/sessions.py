@@ -130,10 +130,14 @@ class GaitResultOut(BaseModel):
 
 
 class SessionResultOut(SessionOut):
-    """GET /sessions/{id}/result(15.7): SessionOut + 통과·촬영 수, 제외 사유, 안내, 보행 유형별 수치."""
+    """GET /sessions/{id}/result(15.7): SessionOut + 통과·촬영 수, 제외 사유, 안내, 보행 유형별 수치.
+
+    symmetry_score는 12.3의 대칭 점수(0~100, 100에 가까울수록 좌우가 비슷함)이고 계산할 쌍이 없으면 null이다.
+    """
 
     pass_counts: PassCountsOut
     shot_counts: ShotCountsOut
     exclude_summary: list[ExcludeSummaryOut]
     notices: list[ReasonOut]
+    symmetry_score: int | None = None
     gaits: list[GaitResultOut]

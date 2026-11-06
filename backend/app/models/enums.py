@@ -164,6 +164,24 @@ class ReportStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class DogBadgeCode(StrEnum):
+    """홈 배지(12.5 홈 배지·변동). DB에 저장하지 않고 응답에만 쓴다."""
+
+    SURGERY = "SURGERY"
+    DIAGNOSIS = "DIAGNOSIS"
+    IMPORTANT_NOTE = "IMPORTANT_NOTE"
+
+
+class DogChangeCode(StrEnum):
+    """최근 변동(12.5 홈 배지·변동). 적힌 순서가 같은 날 안의 정렬 순서다."""
+
+    RESHOOT_NEEDED = "RESHOOT_NEEDED"
+    GAIT_WORSE = "GAIT_WORSE"
+    GAIT_BETTER = "GAIT_BETTER"
+    SURGERY_ADDED = "SURGERY_ADDED"
+    IMPORTANT_NOTE = "IMPORTANT_NOTE"
+
+
 class PurgeScope(StrEnum):
     DOG = "DOG"
     INSTITUTION = "INSTITUTION"

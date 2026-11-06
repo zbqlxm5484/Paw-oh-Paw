@@ -270,6 +270,11 @@ paths:
           in: query
           description: true면 휴지통에 있는 반려견만 준다. 기본은 휴지통에 없는 반려견만.
           schema: {type: boolean, default: false}
+        - name: changed_within_days
+          in: query
+          description: 보내면 최근 N일(그날 포함) 안에 변동(changes)이 있는 반려견만 주고 changes도 그 기간으로 계산한다. 보내지 않으면 거르지 않고 changes는 7일로 계산한다. trash=true와 함께 보내면 무시한다.
+          schema: {type: integer, minimum: 1, maximum: 30}
+          example: 7
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
       responses:
@@ -1869,7 +1874,8 @@ components:
       type: object
       required: [id, name, breed, weight_kg, size_class, size_class_manual, birth_year, sex, rehab_start_date,
                  focus_limb, baseline_session_id, memo, chart_no, owner_name, owner_phone, owner_phone_last4, stage,
-                 stage_changed_on, latest_vital, version, session_count, last_measured_on, open_session_id,
+                 stage_changed_on, latest_vital, badges, changes, last_symmetry, version, session_count,
+                 last_measured_on, open_session_id,
                  deleted_at, purge_at, created_at, updated_at]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
@@ -1906,6 +1912,20 @@ components:
         latest_vital:
           oneOf: [{$ref: '#/components/schemas/VitalOut'}, {type: 'null'}]
           description: 가장 최근 날짜의 바이탈. 없으면 null
+        badges:
+          type: array
+          description: 홈 배지. 수술(없으면 진단) 하나와 중요 메모. 휴지통 목록에서는 빈 배열.
+          items: {$ref: '#/components/schemas/DogBadgeOut'}
+        changes:
+          type: array
+          description: 최근 변동(기본 7일, changed_within_days를 보내면 그 날수). on이 늦은 순서. 휴지통 목록에서는 빈 배열.
+          items: {$ref: '#/components/schemas/DogChangeOut'}
+        last_symmetry:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 대칭 점수가 있는 완료 회차 중 가장 최근 것의 점수. 없으면 null
+          example: 91
         version: {type: integer, description: 수정할 때 그대로 돌려보낸다(PATCH의 version), example: 0}
         session_count: {type: integer, description: 상태 상관없이 회차 수, example: 3}
         last_measured_on: {type: [string, 'null'], format: date, example: '2026-10-20'}
@@ -2033,6 +2053,23 @@ components:
         heart_rate: {type: integer, minimum: 20, maximum: 300, description: 심박(회/분), example: 92}
         sbp: {type: integer, minimum: 30, maximum: 300, description: 수축기 혈압(mmHg), example: 132}
         dbp: {type: integer, minimum: 10, maximum: 250, description: 이완기 혈압(mmHg). sbp보다 작아야 한다, example: 84}
+    DogBadgeOut:
+      type: object
+      required: [code, title, site, 'on']
+      description: 홈 배지 하나. 글은 화면이 만든다.
+      properties:
+        code: {type: string, enum: [SURGERY, DIAGNOSIS, IMPORTANT_NOTE]}
+        title: {type: [string, 'null'], description: 수술·진단 이름. IMPORTANT_NOTE는 null, example: TPLO}
+        site: {type: [string, 'null'], enum: [LF, RF, LH, RH, SP, null], example: RH}
+        'on': {type: string, format: date, description: '수술·진단한 날, 중요 메모를 쓴 날', example: '2026-08-27'}
+    DogChangeOut:
+      type: object
+      required: [code, 'on', delta]
+      description: 최근 변동 하나.
+      properties:
+        code: {type: string, enum: [RESHOOT_NEEDED, GAIT_WORSE, GAIT_BETTER, SURGERY_ADDED, IMPORTANT_NOTE]}
+        'on': {type: string, format: date, description: 그 일이 있은 날, example: '2026-11-05'}
+        delta: {type: [integer, 'null'], description: 'GAIT_WORSE·GAIT_BETTER에서만 대칭 점수 차(이번 − 앞)', example: 4}
     VitalOut:
       type: object
       required: [id, measured_on, weight_kg, temp_c, heart_rate, sbp, dbp, staff, session_id, created_at, updated_at]
@@ -2388,8 +2425,14 @@ components:
       allOf:
         - $ref: '#/components/schemas/SessionOut'
         - type: object
-          required: [pass_counts, shot_counts, exclude_summary, notices, gaits]
+          required: [pass_counts, shot_counts, exclude_summary, notices, symmetry_score, gaits]
           properties:
+            symmetry_score:
+              type: [integer, 'null']
+              minimum: 0
+              maximum: 100
+              description: 대칭 점수. 100 − 평균(대상 쌍의 symmetry_index), 100에 가까울수록 좌우가 비슷하다. 계산할 쌍이 없으면 null.
+              example: 87
             pass_counts:
               type: object
               required: [measured, used, excluded]
@@ -2461,7 +2504,8 @@ components:
     # ---------- 이력·비교·추이 ----------
     SessionHistoryItem:
       type: object
-      required: [id, measured_on, weight_kg, status, is_baseline, valid_passes, model_version, reports]
+      required: [id, measured_on, weight_kg, status, is_baseline, valid_passes, model_version, symmetry_score,
+                 reports]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         measured_on: {type: string, format: date, example: '2026-10-20'}
@@ -2475,6 +2519,12 @@ components:
             LEFT: {type: integer, example: 8}
             RIGHT: {type: integer, example: 8}
         model_version: {type: [string, 'null'], example: v1}
+        symmetry_score:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 대칭 점수. DONE이 아니거나 계산할 쌍이 없으면 null
+          example: 87
         reports:
           type: object
           required: [OWNER, VET]
