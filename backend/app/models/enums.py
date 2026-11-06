@@ -56,6 +56,49 @@ class FocusLimb(StrEnum):
     RH = "RH"
 
 
+class DogStage(StrEnum):
+    """반려견 단계(12.5 차트 자료): 수술 전·재활 중·종결"""
+
+    PRE = "PRE"
+    REHAB = "REHAB"
+    DONE = "DONE"
+
+
+class HistoryKind(StrEnum):
+    """진단 이력의 종류: 진단·수술·재활"""
+
+    DIAGNOSIS = "DIAGNOSIS"
+    SURGERY = "SURGERY"
+    REHAB = "REHAB"
+
+
+class HistorySite(StrEnum):
+    """진단 이력의 부위: 네 다리와 척추(SP)"""
+
+    LF = "LF"
+    RF = "RF"
+    LH = "LH"
+    RH = "RH"
+    SP = "SP"
+
+
+class NoteCategory(StrEnum):
+    """메모·진료 기록의 분류. S·O·A·P는 진료 기록, 나머지는 메모(주의·보호자·예약·기타)다."""
+
+    SUBJECTIVE = "S"
+    OBJECTIVE = "O"
+    ASSESSMENT = "A"
+    PLAN = "P"
+    CAUTION = "CAUTION"
+    GUARDIAN = "GUARDIAN"
+    BOOKING = "BOOKING"
+    OTHER = "OTHER"
+
+
+CHART_CATEGORIES = frozenset({"S", "O", "A", "P"})
+MEMO_CATEGORIES = frozenset(member.value for member in NoteCategory) - CHART_CATEGORIES
+
+
 class Limb(StrEnum):
     """회차 수치의 다리. NONE은 몸 전체 수치(walk_speed, gait_cycles)."""
 

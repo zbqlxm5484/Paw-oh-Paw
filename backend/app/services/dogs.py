@@ -10,11 +10,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.config import get_settings
+from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog, MeasureSession
 from app.models.enums import SessionStatus
@@ -50,9 +51,28 @@ def classify(weight_kg: Decimal) -> str:
     )
 
 
-def to_dog_out(dog: Dog, stats: DogStats) -> DogOut:
+def phone_last4(phone: str | None) -> str | None:
+    """연락처의 숫자 중 뒤 4자리(15.3). 숫자가 4개보다 적으면 있는 만큼, 연락처가 없으면 None."""
+    if phone is None:
+        return None
+    return "".join(char for char in phone if char.isdigit())[-4:]
+
+
+def set_stage(dog: Dog, stage: str) -> bool:
+    """단계를 바꾼다(12.5 차트 자료). 값이 바뀔 때만 stage_changed_on에 오늘(한국 날짜)을 적고 True를 돌려준다."""
+    if dog.stage == stage:
+        return False
+    dog.stage = stage
+    dog.stage_changed_on = today_local()
+    return True
+
+
+def to_dog_out(dog: Dog, stats: DogStats, *, in_list: bool = False) -> DogOut:
+    """in_list면 보호자 연락처 전체를 빼고 뒤 4자리만 준다(15.3)."""
     return DogOut.model_validate(dog).model_copy(
         update={
+            "owner_phone": None if in_list else dog.owner_phone,
+            "owner_phone_last4": phone_last4(dog.owner_phone),
             "session_count": stats.session_count,
             "last_measured_on": stats.last_measured_on,
             "open_session_id": stats.open_session_id,
@@ -111,16 +131,24 @@ def _dogs_query(institution_id: uuid.UUID, *, trash: bool = False):
 def list_dogs(
     db: Session, institution_id: uuid.UUID, *, q: str | None, page: int, size: int, trash: bool = False
 ) -> tuple[list[DogOut], int]:
-    """목록·검색(15.5). q는 이름에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다. trash면 휴지통 목록."""
+    """목록·검색(15.5). q는 이름·동물번호·보호자 이름 중 하나에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다.
+
+    연락처로는 찾지 않는다. trash면 휴지통 목록. 항목의 보호자 연락처는 뒤 4자리만 준다.
+    """
     query = _dogs_query(institution_id, trash=trash)
     count_query = select(func.count()).select_from(Dog).where(in_institution(institution_id, trash=trash))
     if q:
-        query = query.where(Dog.name.icontains(q, autoescape=True))
-        count_query = count_query.where(Dog.name.icontains(q, autoescape=True))
+        matches = or_(
+            Dog.name.icontains(q, autoescape=True),
+            Dog.chart_no.icontains(q, autoescape=True),
+            Dog.owner_name.icontains(q, autoescape=True),
+        )
+        query = query.where(matches)
+        count_query = count_query.where(matches)
     rows = db.execute(query.offset((page - 1) * size).limit(size)).all()
     total = db.scalar(count_query) or 0
     items = [
-        to_dog_out(dog, DogStats(session_count, last_measured_on, open_session_id))
+        to_dog_out(dog, DogStats(session_count, last_measured_on, open_session_id), in_list=True)
         for dog, session_count, last_measured_on, open_session_id in rows
     ]
     return items, total
@@ -161,6 +189,10 @@ def create_dog(db: Session, institution_id: uuid.UUID, data: DogCreate) -> Dog:
         rehab_start_date=data.rehab_start_date,
         focus_limb=data.focus_limb.value if data.focus_limb is not None else None,
         memo=data.memo,
+        chart_no=data.chart_no,
+        owner_name=data.owner_name,
+        owner_phone=data.owner_phone,
+        stage=data.stage.value,
     )
     db.add(dog)
     db.flush()
@@ -186,6 +218,7 @@ def update_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, data: 
     - size_class 값을 보내면 그 값 + manual=TRUE. null을 보내면 manual=FALSE로 돌리고 저장된 체중으로 다시 분류.
     - weight_kg를 바꾸면 manual=FALSE일 때만 새 체중으로 다시 분류. breed는 체급과 상관없다.
     - weight_kg와 size_class가 함께 오면 size_class가 이긴다.
+    단계(stage)는 값이 바뀔 때만 stage_changed_on을 오늘로 적는다(12.5 차트 자료).
     낙관적 잠금(12.5, BE-25): 보낸 version이 저장된 값과 다르면 409 DOG_MODIFIED이고 아무것도 바뀌지 않는다.
     읽은 뒤 flush 사이에 다른 요청이 먼저 저장해도 ORM의 WHERE version = :old가 빈손으로 끝나므로(StaleDataError)
     같은 409다.
@@ -201,6 +234,9 @@ def update_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, data: 
         if session_id is not None:
             _check_baseline(db, dog, session_id)
         dog.baseline_session_id = session_id
+
+    if "stage" in changes:
+        set_stage(dog, changes.pop("stage").value)
 
     size_class = changes.pop("size_class", "unset")
     weight_changed = "weight_kg" in changes and changes["weight_kg"] != dog.weight_kg

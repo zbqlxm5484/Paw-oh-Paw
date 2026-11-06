@@ -21,6 +21,7 @@ EXPECTED_CONSTRAINTS = {
         "ck_dog_size_class",
         "ck_dog_sex",
         "ck_dog_focus_limb",
+        "ck_dog_stage",
         "fk_dog_institution",
         "fk_dog_baseline",
     },
