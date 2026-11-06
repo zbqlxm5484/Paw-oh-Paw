@@ -7,12 +7,13 @@ services/admin.py가 본다.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, StringConstraints, ValidationInfo, field_validator
 
 from app.core.config import get_settings
+from app.core.dates import CONTRACT_RETENTION_DAYS, today_local
 from app.schemas.common import OutModel, UtcDateTime
 
 # 13.6 기관 코드 1~20자(비우면 서버가 만든다), 기관 이름 1~100자, 코드 메모 최대 100자
@@ -59,12 +60,28 @@ class InstitutionListOut(BaseModel):
     items: list[InstitutionAdminOut]
 
 
+def _contract_end_rule(value: date | None) -> date | None:
+    """13.6: 보관 기간(90일)보다 더 지난 날짜는 받지 않는다.
+
+    그런 날짜를 넣으면 다음 자동 파기 때 그 기관의 자료와 계정이 바로 지워진다(12.5). 날짜를 잘못 적은 실수로
+    되돌릴 수 없는 삭제가 일어나지 않게 입력에서 막는다.
+    """
+    if value is not None and value < today_local() - timedelta(days=CONTRACT_RETENTION_DAYS):
+        raise ValueError(f"{CONTRACT_RETENTION_DAYS}일보다 더 지난 날짜는 넣을 수 없습니다")
+    return value
+
+
 class InstitutionCreate(BaseModel):
     """POST /admin/institutions(15.9). code가 null이면 서버가 INST- + 6자로 만든다(13.6)."""
 
     code: InstitutionCode | None = None
     name: InstitutionName
     contract_ends_at: date | None = None
+
+    @field_validator("contract_ends_at")
+    @classmethod
+    def contract_end_not_too_old(cls, value: date | None) -> date | None:
+        return _contract_end_rule(value)
 
 
 class InstitutionUpdate(BaseModel):
@@ -77,6 +94,11 @@ class InstitutionUpdate(BaseModel):
     @classmethod
     def name_not_null(cls, value: str | None) -> str | None:
         return _not_null(value)  # type: ignore[return-value]
+
+    @field_validator("contract_ends_at")
+    @classmethod
+    def contract_end_not_too_old(cls, value: date | None) -> date | None:
+        return _contract_end_rule(value)
 
 
 # ---- 디바이스 코드 ----

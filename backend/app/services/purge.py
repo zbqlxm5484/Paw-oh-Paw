@@ -19,6 +19,8 @@
   scripts/purge.py만 부른다.
 - 휴지통(12.5): 담당자의 삭제는 휴지통에 넣기일 뿐이고, 영구 삭제와 30일 뒤 자동 비우기가 이 파기를 DOG로 부른다
   (services/trash.py). 휴지통에 있는 반려견도 DOG·INSTITUTION·ALL 파기 대상이다.
+- 계약 종료 뒤 자동 파기(12.5, services/retention.py)는 INSTITUTION을 include_accounts로 부른다. 그때만 그 기관의
+  가입 계정(CLIENT)까지 지운다. 기관과 디바이스 코드는 어느 경우에도 지우지 않는다.
 - 로그에는 개수만 남긴다(11.8: 반려견 이름·파일 경로 금지).
 """
 
@@ -32,9 +34,10 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClient, AnalysisClientError
+from app.core.auth_cache import auth_cache
 from app.core.errors import AppError, ErrorCode
-from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, WalkPass
-from app.models.enums import PurgeScope
+from app.models import Dog, Institution, MeasureSession, PurgeLog, Report, SessionMetric, Shot, Staff, WalkPass
+from app.models.enums import PurgeScope, StaffRole
 from app.schemas.admin import PurgeOut
 from app.services.dogs import get_dog
 from app.services.sessions import IN_PROGRESS_STATUSES
@@ -160,6 +163,19 @@ def _delete_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
     return deleted
 
 
+def _delete_client_accounts(db: Session, institution_id: uuid.UUID) -> int:
+    """기관의 가입 계정(CLIENT)을 지우고 지운 수를 돌려준다(12.5 계약 종료 뒤 자동 파기).
+
+    회차가 담당자를 가리키므로(fk_session_staff) 회차를 지운 뒤에 부른다. 크림오프 계정(ADMIN·STAFF)은 지우지 않는다.
+    """
+    deleted = db.execute(
+        delete(Staff).where(Staff.institution_id == institution_id, Staff.role == StaffRole.CLIENT.value)
+    ).rowcount
+    db.expire_all()
+    auth_cache.invalidate_institution(institution_id)
+    return deleted
+
+
 def purge(
     db: Session,
     storage: StorageService,
@@ -170,12 +186,15 @@ def purge(
     dry_run: bool = True,
     executed_by: uuid.UUID | None = None,
     analysis: AnalysisClient | None = None,
+    include_accounts: bool = False,
 ) -> PurgeOut:
     """파기 또는 dry_run 집계(15.9). institution_id는 지울 자료의 기관(ALL이면 없음), executed_by는 부른 담당자 ID.
 
     기관은 관리자가 지정할 수 있어 부른 담당자의 기관과 다를 수 있다. 없는 기관, 그 기관에 없는 반려견은 404다.
 
     analysis는 분석 API 사본을 지울 클라이언트다. 지울 작업이 없으면(ALL, 세기만 할 때) 쓰지 않는다.
+    include_accounts는 INSTITUTION을 실제로 지울 때만 뜻이 있다: 그 기관의 가입 계정(CLIENT)도 지우고 rows에 더한다.
+    계약 종료 뒤 자동 파기만 쓴다(관리자 API는 계정을 남긴다).
     """
     target = _resolve(db, scope, institution_id=institution_id, target_id=target_id)
     if not dry_run:
@@ -213,6 +232,12 @@ def purge(
         count, size = storage.delete_prefix(prefix)
         files, total_bytes = files + count, total_bytes + size
     rows = _delete_rows(db, target.dog_ids)
+    accounts = 0
+    if include_accounts:
+        if target.scope != PurgeScope.INSTITUTION or target.target_id is None:
+            raise ValueError("계정까지 지우는 파기는 INSTITUTION에서만 합니다")
+        accounts = _delete_client_accounts(db, target.target_id)
+        rows += accounts
     log = PurgeLog(
         scope=target.scope,
         target_id=target.target_id,
@@ -225,12 +250,13 @@ def purge(
     db.add(log)
     db.flush()
     logger.info(
-        "purge done scope=%s rows=%d files=%d bytes=%d analysis_jobs=%d purge_log=%s",
+        "purge done scope=%s rows=%d files=%d bytes=%d analysis_jobs=%d accounts=%d purge_log=%s",
         target.scope,
         rows,
         files,
         total_bytes,
         len(job_ids),
+        accounts,
         log.id,
     )
     return PurgeOut(

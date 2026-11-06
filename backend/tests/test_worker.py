@@ -908,9 +908,10 @@ def test_run_forever_sweeps_the_trash_once_per_interval(monkeypatch: pytest.Monk
 
     monkeypatch.setattr("app.worker.main.run_once", lambda *args, **kwargs: WorkerStats())
     monkeypatch.setattr("app.worker.main.trash_service.purge_expired", fake_purge_expired)
+    monkeypatch.setattr("app.worker.main.retention_service.purge_expired_contracts", fake_purge_expired)
     worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
     assert worker.run_forever(max_loops=3) == 3
-    assert len(sweeps) == 1
+    assert len(sweeps) == 2  # 휴지통 한 번, 계약 종료 뒤 파기 한 번
 
 
 def test_a_failing_trash_sweep_does_not_stop_the_worker(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -921,5 +922,6 @@ def test_a_failing_trash_sweep_does_not_stop_the_worker(monkeypatch: pytest.Monk
 
     monkeypatch.setattr("app.worker.main.run_once", lambda *args, **kwargs: WorkerStats())
     monkeypatch.setattr("app.worker.main.trash_service.purge_expired", broken)
+    monkeypatch.setattr("app.worker.main.retention_service.purge_expired_contracts", broken)
     worker = Worker(_settings(WORKER_POLL_INTERVAL_SEC=0), client=FakeClient(), storage=get_storage())
     assert worker.run_forever(max_loops=2) == 2
