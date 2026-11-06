@@ -73,6 +73,8 @@ export function parseRoute(pathname: string): RouteInfo {
   if (p === '/my') return { screen: 'my', params: {} }
   if (p === '/account') return { screen: 'account', params: {} }
   if (p === '/notifications') return { screen: 'notif', params: {} }
+  if (p === '/settings') return { screen: 'settings', params: {} }
+  if (p === '/help') return { screen: 'help', params: {} }
   if (p === '/capture') return { screen: 'capSelect', params: {} }
   if (seg[0] === 'legal' && seg[1]) return { screen: 'legal', params: { legal: seg[1] } } // 약관·개인정보·사업자 정보·고객센터
   if (seg[0] === 'sessions' && seg[1]) {
