@@ -18,6 +18,7 @@ from app.schemas.auth import (
     SignupIn,
     StaffOut,
     TokenOut,
+    WithdrawIn,
 )
 from app.services import auth as auth_service
 from app.services import password_reset as password_reset_service
@@ -63,8 +64,14 @@ def me(staff: CurrentStaffAny, db: DbSession) -> StaffOut:
 
 @router.patch("/me", response_model=StaffOut)
 def update_me(body: MeUpdate, staff: CurrentStaff, db: DbSession) -> StaffOut:
-    """이름·이메일 수정(보낸 필드만). GUEST는 403 CONTRACT_EXPIRED(조회만 된다)."""
+    """이름·이메일·알림 설정 수정(보낸 필드만). GUEST는 403 CONTRACT_EXPIRED(조회만 된다)."""
     return staff_out(auth_service.update_me(db, staff.id, body))
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def withdraw(body: WithdrawIn, staff: CurrentStaffAny, db: DbSession) -> None:
+    """회원 탈퇴. 계약이 끝난 CLIENT(GUEST)도 된다. 비밀번호가 틀리면 400, 기관의 마지막 계정이면 409 LAST_ACCOUNT."""
+    auth_service.withdraw(db, staff.id, password=body.password)
 
 
 @router.patch("/password", response_model=StaffOut)

@@ -33,6 +33,7 @@ DEVICE_CODE_EXISTS: "이 기관에는 쓸 수 있는 디바이스 코드가 이�
 LOGIN_ID_TAKEN: "이미 사용 중인 아이디입니다."
 DOG_MODIFIED: "다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요."
 SELF_DISABLE: "자기 계정은 중지할 수 없습니다."
+LAST_ACCOUNT: "기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요."
 VIDEO_TOO_LARGE: "영상 파일이 너무 큽니다. 최대 {max_mb} MB까지 올릴 수 있습니다."
 VALIDATION_ERROR: "입력값을 확인해 주세요."
 INTERNAL_ERROR: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."

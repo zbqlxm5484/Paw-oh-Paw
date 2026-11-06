@@ -8,7 +8,7 @@
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 44개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 45개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
@@ -159,6 +159,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 42 | `DELETE /dogs/{dog_id}` | 반려견을 휴지통에 넣기 | — | 204 | 409 `SHOT_IN_PROGRESS` |
 | 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | — | 200 | — |
 | 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제(되돌릴 수 없음) | — | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
+| 45 | `DELETE /auth/me` | 회원 탈퇴 | 계정 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
@@ -180,6 +181,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
   "email": "kim01@example.com",
   "role": "CLIENT",
   "effective_role": "CLIENT",
+  "notif_on": true,
   "institution": {
     "id": "…", "code": "INST-7F3K2Q", "name": "크림 재활센터",
     "contract_ends_at": "2027-10-30", "contract_status": "ACTIVE"
@@ -371,9 +373,19 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 응답 200 **StaffOut**. 새로고침 뒤 토큰이 아직 쓸 수 있는지 확인할 때도 쓴다. `GUEST`도 부를 수 있다.
 
-### `PATCH /auth/me` — 이름·이메일 수정
+### `PATCH /auth/me` — 이름·이메일·알림 설정 수정
 
-요청 `{"name"?, "email"?}`. 보낸 필드만 바꾸고 `null`은 받지 않는다(규칙은 12.7). 응답 200 **StaffOut**.
+요청 `{"name"?, "email"?, "notif_on"?}`. 보낸 필드만 바꾸고 `null`은 받지 않는다(규칙은 12.7). 응답 200 **StaffOut**.
+
+- `notif_on`은 알림을 받을지의 설정값(`true`/`false`)이고 계정마다 따로다. 서버는 저장만 하고 알림을 보내지 않는다. **StaffOut**의 `notif_on`으로 돌아온다(로그인 응답 포함).
+
+### `DELETE /auth/me` — 회원 탈퇴
+
+요청 `{"password": "…"}`(현재 비밀번호). 응답 204(본문 없음).
+
+- 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`, 기관의 마지막 활성 계정이면 409 `LAST_ACCOUNT`다. 둘 다 아무것도 바뀌지 않는다.
+- 탈퇴하면 계정이 중지된다. 그 뒤 로그인과 이미 받은 토큰은 **403 `ACCOUNT_DISABLED`**다(401이 아니다). 화면은 204를 받으면 토큰을 버리고 로그인 화면으로 보낸다.
+- 반려견·회차는 기관의 자료라 그대로 남는다. 계약이 끝난 기관의 담당자도 탈퇴할 수 있다.
 
 ### `PATCH /auth/password` — 비밀번호 변경
 
@@ -952,6 +964,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 아이디 칸 표시 |
 | `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | 반려견을 다시 조회 |
 | `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | |
+| `LAST_ACCOUNT` | 409 | 기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요. | 계정 화면에 안내 |
 | `VIDEO_TOO_LARGE` | 413 | 영상 파일이 너무 큽니다. 최대 {max\_mb} MB까지 올릴 수 있습니다. | |
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | `detail.fields`로 입력칸 표시 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | |

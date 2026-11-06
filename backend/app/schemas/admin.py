@@ -132,6 +132,7 @@ class StaffAdminOut(OutModel):
     email: str | None
     role: str
     is_active: bool
+    withdrawn_at: UtcDateTime | None = None
     device_code_id: uuid.UUID | None
     created_at: UtcDateTime
 

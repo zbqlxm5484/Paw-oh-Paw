@@ -1,6 +1,6 @@
 """명세 15.2 엔드포인트 표와 앱에 등록된 경로 대조(S15P31A404-198 API 테스트 보강).
 
-구현된 42개가 빠짐없이 등록돼 있는지 보고, 아직 없는 둘(17 관절 각도·26 metrics)을 적어 둔다. 하나가 생기면
+구현된 43개가 빠짐없이 등록돼 있는지 보고, 아직 없는 둘(17 관절 각도·26 metrics)을 적어 둔다. 하나가 생기면
 NOT_YET에서 IMPLEMENTED로 옮긴다. 라우터를 main.py에 등록하지 않아 API가 통째로 빠지는 실수를 잡는다.
 """
 
@@ -47,6 +47,7 @@ IMPLEMENTED: set[tuple[str, str]] = {
     ("PATCH", "/admin/staff/{staff_id}"),
     ("PATCH", "/auth/password"),
     ("PATCH", "/auth/me"),
+    ("DELETE", "/auth/me"),
     ("POST", "/auth/password-reset/request"),
     ("POST", "/auth/password-reset/confirm"),
     ("POST", "/admin/purge"),
@@ -73,9 +74,9 @@ def _registered(app: FastAPI) -> set[tuple[str, str]]:
 def test_every_implemented_endpoint_of_15_2_is_registered(api_app: FastAPI) -> None:
     registered = _registered(api_app)
     assert IMPLEMENTED - registered == set()
-    assert len(IMPLEMENTED) == 42  # 44개 중 17·26이 아직 없다
+    assert len(IMPLEMENTED) == 43  # 45개 중 17·26이 아직 없다
 
 
 def test_the_two_missing_endpoints_are_still_missing(api_app: FastAPI) -> None:
     assert NOT_YET & _registered(api_app) == set()
-    assert len(IMPLEMENTED | NOT_YET) == 44
+    assert len(IMPLEMENTED | NOT_YET) == 45

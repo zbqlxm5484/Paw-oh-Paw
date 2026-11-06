@@ -27,6 +27,7 @@ Oct 19, 2026 · @조영운
 | v1.32 | 2026-11-06 | 디바이스 코드 규칙 변경(조영운 결정, 11-06): 계정 수 상한을 없애고 기관마다 쓸 수 있는 코드를 하나로 한다. 12.2 `device_code.max_accounts`·`ck_device_code_max` 삭제와 `uq_device_code_active`(마이그레이션 0012), 12.5, 13.6, 14.1 `DEVICE_CODE_FULL` 삭제·`DEVICE_CODE_EXISTS` 추가, 15.2, 15.3 **DeviceCodeOut**, 15.4 확인 응답에서 `remaining_accounts` 삭제, 15.9 발급·수정, 17.2. v1.23의 상한 범위(1\~32767)는 이 판에서 없어졌다 |
 | v1.33 | 2026-11-06 | 반려견 휴지통(199 후속, 조영운 결정 11-06): 삭제는 지우지 않고 휴지통에 넣는다. 12.2 `dog.deleted_at`(마이그레이션 0013), 12.4 워커의 자동 비우기, 12.5 휴지통 규칙(30일 뒤 자동 영구 삭제), 15.2 42번의 뜻 변경과 43·44번, 15.3 **DogOut**에 `deleted_at`·`purge_at`, 15.5 `GET /dogs?trash=true`·`DELETE /dogs/{dog_id}`·`POST /dogs/{dog_id}/restore`·`DELETE /dogs/{dog_id}/permanent`, 15.9, 17.6. v1.30의 '삭제하면 바로 지운다'는 이 판에서 바뀌었다 |
 | v1.34 | 2026-11-06 | 계약 종료 뒤 자동 파기(199 후속, 조영운 결정 11-06, 10절 Q27의 답): 계약 종료일에서 90일이 지나면 워커가 그 기관의 측정 자료와 가입 계정을 지운다. 기관과 디바이스 코드는 남긴다. 10절 Q27, 12.4 워커, 12.5 보관 기간, 13.6 `contract_ends_at`에 90일보다 더 지난 날짜 금지, 15.9, 17.6 |
+| v1.35 | 2026-11-06 | 회원 탈퇴와 알림 설정(192 후속, 박규원 요청 11-06): 12.2 `staff.withdrawn_at`·`notif_on`(마이그레이션 0014), 13.7, 14.1 `LAST_ACCOUNT`, 15.2 45번 `DELETE /auth/me`, 15.3 **StaffOut**에 `notif_on`, 15.4 `PATCH /auth/me`에 `notif_on`·탈퇴, 15.9 계정 목록에 `withdrawn_at`, 17.2 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -751,6 +752,8 @@ CREATE TABLE staff (
   terms_version              VARCHAR(20)   NULL,  -- 가입 때 동의한 약관 버전(13.5). 기록 없이 만든 계정은 NULL
   terms_agreed_at            TIMESTAMPTZ   NULL,  -- 동의한 시각(가입 시각)
   marketing_agreed           BOOLEAN       NOT NULL DEFAULT FALSE,  -- 선택 항목(마케팅 정보 수신) 동의
+  withdrawn_at               TIMESTAMPTZ   NULL,  -- 스스로 탈퇴한 시각(15.4). 탈퇴하면 is_active도 FALSE
+  notif_on                   BOOLEAN       NOT NULL DEFAULT TRUE,  -- 알림을 받을지(13.7). 설정값만 저장한다
   created_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at                 TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
@@ -1123,6 +1126,8 @@ CREATE TABLE purge_log (
 | `current_password` | 길이를 검사하지 않는다(로그인과 같다). 틀리면 400 `PASSWORD_MISMATCH` |
 | `new_password` | 13.4 규칙(8자 이상, 72바이트 이하). 현재 비밀번호와 같으면 422(`fields: new_password`) |
 | `name`, `email`(`PATCH /auth/me`) | 13.5와 같다. 보낸 필드만 바꾼다 |
+| `notif_on`(`PATCH /auth/me`) | `true`/`false`. `null`이나 다른 값은 422. 설정값만 저장하고 서버가 알림을 보내지는 않는다 |
+| `password`(`DELETE /auth/me`) | 현재 비밀번호. 길이를 검사하지 않는다(로그인과 같다). 틀리면 400 `PASSWORD_MISMATCH` |
 
 ### 13.8 비밀번호 재설정
 
@@ -1171,6 +1176,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 가입 때 아이디 중복(다른 기관이어도) |
 | `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | `version` 불일치(12.5) |
 | `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | `ADMIN`이 자기 `is_active`를 false로 |
+| `LAST_ACCOUNT` | 409 | 기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요. | 기관에 다른 활성 계정이 없는데 탈퇴(15.4) |
 | `VIDEO_TOO_LARGE` | 413 | 영상 파일이 너무 큽니다. 최대 {max\_mb} MB까지 올릴 수 있습니다. | 13.1 |
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | 필드 형식·범위 오류. `detail.fields`에 필드별 사유 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | 예상하지 못한 오류 |
@@ -1253,7 +1259,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ## 15. API 상세
 
-엔드포인트는 44개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42\~44는 반려견 휴지통(v1.30·v1.33)). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
+엔드포인트는 45개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42\~44는 반려견 휴지통(v1.30·v1.33), 45는 회원 탈퇴(v1.35)). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
 
 ### 15.1 공통 약속
 
@@ -1309,12 +1315,13 @@ STOPPED: "중간에 멈췄습니다."
 | 36 | `GET /admin/institutions/{id}/staff` | 기관의 계정 목록 (`ADMIN`·`STAFF`) | BE-24 | 200 | 403 `FORBIDDEN` |
 | 37 | `PATCH /admin/staff/{id}` | 계정 중지·재개 (`ADMIN`) | BE-24 | 200 | 403 `FORBIDDEN`, 409 `SELF_DISABLE` |
 | 38 | `PATCH /auth/password` | 비밀번호 변경 | BE-26 | 200 | 400 `PASSWORD_MISMATCH` |
-| 39 | `PATCH /auth/me` | 이름·이메일 수정 | BE-26 | 200 | — |
+| 39 | `PATCH /auth/me` | 이름·이메일·알림 설정 수정 | BE-26 | 200 | — |
 | 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (인증 없음) | BE-27 | 204 | 503 `MAIL_UNAVAILABLE` |
 | 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (인증 없음) | BE-27 | 204 | 400 `RESET_TOKEN_INVALID` |
 | 42 | `DELETE /dogs/{dog_id}` | 반려견을 휴지통에 넣기 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS` |
 | 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | BE-19 | 200 | — |
 | 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
+| 45 | `DELETE /auth/me` | 회원 탈퇴(`GUEST`도 된다) | BE-26 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
 
 ### 15.3 공통 객체
 
@@ -1330,6 +1337,7 @@ STOPPED: "중간에 멈췄습니다."
   "email": "kim01@example.com",
   "role": "CLIENT",
   "effective_role": "CLIENT",
+  "notif_on": true,
   "institution": {
     "id": "…", "code": "INST-7F3K2Q", "name": "크림 재활센터",
     "contract_ends_at": "2027-10-30", "contract_status": "ACTIVE"
@@ -1502,7 +1510,22 @@ STOPPED: "중간에 멈췄습니다."
 
 **`GET /auth/me`** — 내 정보. 응답 200 **StaffOut**. DB를 직접 읽고 캐시를 갱신한다. `GUEST`도 된다(계약 검사를 뺀 `CurrentStaffAny`, 11.6).
 
-**`PATCH /auth/me`** — 이름·이메일 수정 (BE-26). 요청 `{"name"?, "email"?}`(보낸 필드만, 규칙은 13.7). 응답 200 **StaffOut**. 바꾼 뒤 자기 스냅샷을 캐시에서 지운다.
+**`PATCH /auth/me`** — 이름·이메일·알림 설정 수정 (BE-26). 요청 `{"name"?, "email"?, "notif_on"?}`(보낸 필드만, 규칙은 13.7). 응답 200 **StaffOut**. 바꾼 뒤 자기 스냅샷을 캐시에서 지운다. `notif_on`은 알림을 받을지의 설정값이고 계정마다 따로다. 서버는 값을 저장해 **StaffOut**으로 돌려줄 뿐 알림을 보내지 않는다(분석 완료·실패는 화면이 회차 상태를 보고 목록으로 보여 준다).
+
+**`DELETE /auth/me`** — 회원 탈퇴 (BE-26)
+
+```json
+// 요청
+{"password": "…"}
+
+// 응답 204 (본문 없음)
+```
+
+- 계정을 지우지 않고 중지한다: `is_active`를 FALSE로, `withdrawn_at`에 지금 시각을 적는다. 그 뒤 로그인과 이미 받은 토큰은 중지한 계정과 똑같이 403 `ACCOUNT_DISABLED`다(15.1). 아이디는 그대로 쓰이고 있는 것으로 남는다.
+- 순서: 기관 행 잠금 → 비밀번호 확인(틀리면 400 `PASSWORD_MISMATCH`) → 그 기관에 다른 활성 계정이 있는지 확인 → 중지 → 캐시에서 지움. 다른 활성 계정이 없으면 409 `LAST_ACCOUNT`이고 아무것도 바꾸지 않는다(기관이 통째로 잠기지 않게). 기관 행을 잠그는 것은 마지막 두 계정이 동시에 탈퇴해 둘 다 통과하는 일을 막기 위해서다.
+- 반려견·회차·보고서는 기관의 자료라 그대로 둔다. 계약이 끝난 기관의 담당자(`GUEST`)도 탈퇴할 수 있다.
+- 크림오프 관리자가 `PATCH /admin/staff/{id}`로 다시 켜면 `withdrawn_at`도 NULL로 돌아간다(15.9).
+- 탈퇴한 계정의 행은 계약 종료 90일 뒤의 자동 파기 때 다른 가입 계정과 함께 지워진다(12.5). 탈퇴한 날을 기준으로 따로 지우는 일은 하지 않는다.
 
 **`PATCH /auth/password`** — 비밀번호 변경 (BE-26)
 
@@ -1985,8 +2008,8 @@ stance_ratio: 5.0 # pct
 - **`POST /admin/institutions/{id}/device-codes`** — 요청 `{"note"?: "2호기"}`(본문 없이도 된다). 응답 201 **DeviceCodeOut**. 그 기관에 회수하지 않은 코드가 이미 있으면 409 `DEVICE_CODE_EXISTS`다(12.5). 새 코드를 주려면 먼저 회수한다. 동시에 두 번 불러 `uq_device_code_active`에 걸려도 같은 409다.
 - **`PATCH /admin/device-codes/{id}`** — 요청 `{"note"?}`(`null`은 메모 지우기). 응답 200 **DeviceCodeOut**. 예전 화면이 보내던 `max_accounts`는 무시한다.
 - **`POST /admin/device-codes/{id}/revoke`** — 본문 없음. `revoked_at`을 now()로. 이미 회수됐으면 그대로 200. 기존 계정은 그대로 쓴다(막으려면 계정 중지). 응답 200 **DeviceCodeOut**.
-- **`GET /admin/institutions/{id}/staff`** — 응답 200 `{"items": [{id, login_id, name, email, role, is_active, device_code_id, created_at}, …]}`.
-- **`PATCH /admin/staff/{id}`** — 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`. 바꾼 뒤 그 담당자를 캐시에서 지운다. 역할을 바꾸거나 비밀번호를 건드리는 필드는 없다.
+- **`GET /admin/institutions/{id}/staff`** — 응답 200 `{"items": [{id, login_id, name, email, role, is_active, withdrawn_at, device_code_id, created_at}, …]}`. `withdrawn_at`은 스스로 탈퇴한 시각이고 탈퇴하지 않았으면 `null`이다.
+- **`PATCH /admin/staff/{id}`** — 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`. 바꾼 뒤 그 담당자를 캐시에서 지운다. 탈퇴한 계정에 true를 보내면 `withdrawn_at`도 지운다. 역할을 바꾸거나 비밀번호를 건드리는 필드는 없다.
 - 없는 ID는 404 `NOT_FOUND`다. 관리자 API는 기관 필터가 없다(크림오프가 모든 기관을 본다).
 
 **`GET /health`** — 서버 상태 (BE-20)
@@ -2123,6 +2146,7 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-24: `ADMIN`이 자기 계정을 중지하면 409 `SELF_DISABLE`이다.
 - [ ] BE-25: 읽은 `version`으로 수정하면 200이고 `version`이 1 늘며, 옛 `version`으로 다시 수정하면 409 `DOG_MODIFIED`이고 값이 바뀌지 않는다.
 - [ ] BE-26: 현재 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`, 현재와 같은 새 비밀번호는 422, 바꾸면 새 비밀번호로 로그인되고 옛 비밀번호로는 안 된다. `PATCH /auth/me`로 이메일을 바꾸면 `/auth/me`에 바로 보인다.
+- [ ] BE-26: `PATCH /auth/me`로 `notif_on`을 false로 바꾸면 `GET /auth/me`와 로그인 응답에 false로 오고 다른 계정은 그대로다. `DELETE /auth/me`는 비밀번호가 맞으면 204이고 그 뒤 로그인과 받은 토큰이 403 `ACCOUNT_DISABLED`다. 비밀번호가 틀리면 400, 기관의 마지막 활성 계정이면 409 `LAST_ACCOUNT`이고 아무것도 바뀌지 않는다. 탈퇴해도 반려견은 그대로다.
 - [ ] BE-27: 재설정 요청은 있는 아이디·없는 아이디·이메일 없는 계정 모두 204이고, 있는 계정에만 메일이 한 번 간다(가짜 발송기). 메일의 토큰으로 confirm하면 204이고 새 비밀번호로 로그인되며, 같은 토큰을 다시 쓰면 400 `RESET_TOKEN_INVALID`다. 만료된 토큰·틀린 토큰도 400이다. `SMTP_HOST`가 비어 있으면 요청이 503 `MAIL_UNAVAILABLE`이다. 로그에 토큰·이메일이 없다.
 - [ ] BE-02: 체급은 등록 체중으로만 정한다. 9.99 kg은 SMALL, 10.00 kg과 24.99 kg은 MEDIUM, 25.00 kg은 LARGE다. 견종은 체급에 영향을 주지 않는다.
 - [ ] BE-02: 체급을 직접 고치면 이후 체중을 바꿔도 체급이 그대로고, `size_class`에 `null`을 보내면 저장된 체중으로 자동 분류로 돌아간다.

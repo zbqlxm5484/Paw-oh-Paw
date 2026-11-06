@@ -117,17 +117,24 @@ class PasswordChangeIn(BaseModel):
 
 
 class MeUpdate(BaseModel):
-    """PATCH /auth/me 요청(13.7): 이름·이메일, 보낸 필드만. null은 받지 않는다."""
+    """PATCH /auth/me 요청(13.7): 이름·이메일·알림 설정, 보낸 필드만. null은 받지 않는다."""
 
     name: PersonName | None = None
     email: Email | None = None
+    notif_on: bool | None = None
 
-    @field_validator("name", "email")
+    @field_validator("name", "email", "notif_on")
     @classmethod
-    def not_null(cls, value: str | None) -> str | None:
+    def not_null(cls, value: str | bool | None) -> str | bool | None:
         if value is None:
             raise ValueError("비울 수 없습니다")
         return value
+
+
+class WithdrawIn(BaseModel):
+    """DELETE /auth/me 요청(13.7, 15.4). 본인 확인용 현재 비밀번호. 길이는 검사하지 않는다(로그인과 같다)."""
+
+    password: str
 
 
 class PasswordResetRequestIn(BaseModel):
@@ -162,6 +169,7 @@ class StaffOut(OutModel):
     email: str | None
     role: str
     effective_role: str
+    notif_on: bool
     institution: InstitutionOut
 
 

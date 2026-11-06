@@ -235,13 +235,18 @@ def list_staff(db: Session, institution_id: uuid.UUID) -> list[StaffAdminOut]:
 
 
 def update_staff(db: Session, staff_id: uuid.UUID, data: StaffUpdate, *, actor_id: uuid.UUID) -> StaffAdminOut:
-    """중지·재개(15.9). 자기 자신을 중지하면 409 SELF_DISABLE. 바꾼 뒤 그 담당자를 캐시에서 지운다(11.6)."""
+    """중지·재개(15.9). 자기 자신을 중지하면 409 SELF_DISABLE. 바꾼 뒤 그 담당자를 캐시에서 지운다(11.6).
+
+    탈퇴한 계정을 다시 켜면 withdrawn_at도 지운다(탈퇴를 되돌린 것이다).
+    """
     row = db.get(Staff, staff_id)
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND)
     if row.id == actor_id and not data.is_active:
         raise AppError(ErrorCode.SELF_DISABLE)
     row.is_active = data.is_active
+    if data.is_active:
+        row.withdrawn_at = None
     db.flush()
     db.refresh(row)
     auth_cache.invalidate(row.id)

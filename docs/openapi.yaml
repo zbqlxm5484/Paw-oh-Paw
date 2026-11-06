@@ -73,7 +73,7 @@ paths:
     patch:
       tags: [인증]
       operationId: updateMe
-      summary: 이름·이메일 수정 (BE-26)
+      summary: 이름·이메일·알림 설정 수정 (BE-26)
       description: 보낸 필드만 바꾼다. null은 받지 않는다.
       requestBody:
         required: true
@@ -88,6 +88,35 @@ paths:
               schema: {$ref: '#/components/schemas/StaffOut'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [인증]
+      operationId: withdraw
+      summary: 회원 탈퇴 (BE-26). GUEST도 된다
+      description: 계정을 지우지 않고 중지한다. 그 뒤 로그인과 받은 토큰은 403 ACCOUNT_DISABLED다. 기관의 자료는 그대로 남는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WithdrawIn'}
+      responses:
+        '204':
+          description: 탈퇴함. 본문 없음
+        '400':
+          description: PASSWORD_MISMATCH
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: PASSWORD_MISMATCH, message: "현재 비밀번호가 맞지 않습니다.", detail: null}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '409':
+          description: LAST_ACCOUNT(기관의 마지막 활성 계정)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: LAST_ACCOUNT, message: "기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요.", detail: null}}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
 
@@ -1364,6 +1393,7 @@ components:
         - LOGIN_ID_TAKEN
         - DOG_MODIFIED
         - SELF_DISABLE
+        - LAST_ACCOUNT
         - VIDEO_TOO_LARGE
         - VALIDATION_ERROR
         - INTERNAL_ERROR
@@ -1417,7 +1447,7 @@ components:
         staff: {$ref: '#/components/schemas/StaffOut'}
     StaffOut:
       type: object
-      required: [id, login_id, name, email, role, effective_role, institution]
+      required: [id, login_id, name, email, role, effective_role, notif_on, institution]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         login_id: {type: string, example: kim01}
@@ -1425,6 +1455,7 @@ components:
         email: {type: [string, 'null'], example: kim01@example.com}
         role: {$ref: '#/components/schemas/Role'}
         effective_role: {$ref: '#/components/schemas/EffectiveRole'}
+        notif_on: {type: boolean, description: 알림을 받을지. 설정값만 저장한다, example: true}
         institution:
           type: object
           required: [id, code, name, contract_ends_at, contract_status]
@@ -1469,12 +1500,18 @@ components:
         privacy: {type: boolean, description: '[필수] 개인정보 수집 및 이용. true가 아니면 422', example: true}
         device_location: {type: boolean, description: '[필수] 측정 기기 연동 및 위치정보 이용. true가 아니면 422', example: true}
         marketing: {type: boolean, default: false, description: '[선택] 마케팅 정보 수신'}
+    WithdrawIn:
+      type: object
+      required: [password]
+      properties:
+        password: {type: string, description: '현재 비밀번호. 틀리면 400 PASSWORD_MISMATCH', example: password1234}
     MeUpdate:
       type: object
       description: 보낸 필드만 바꾼다. null은 받지 않는다.
       properties:
         name: {type: string, minLength: 1, maxLength: 50, example: 김담당}
         email: {type: string, minLength: 5, maxLength: 254, example: kim01@example.com}
+        notif_on: {type: boolean, description: 알림을 받을지, example: false}
     PasswordChangeIn:
       type: object
       required: [current_password, new_password]
