@@ -95,7 +95,10 @@ class DogUpdate(BaseModel):
 
 
 class DogOut(OutModel):
-    """반려견(15.3). 목록과 상세가 같은 모양이다. weight_kg는 JSON 숫자로 보낸다(15.1)."""
+    """반려견(15.3). 목록과 상세가 같은 모양이다. weight_kg는 JSON 숫자로 보낸다(15.1).
+
+    deleted_at·purge_at은 휴지통 목록에서만 값이 있다(휴지통에 넣은 시각, 영구 삭제 예정 시각).
+    """
 
     id: uuid.UUID
     name: str
@@ -113,6 +116,8 @@ class DogOut(OutModel):
     session_count: int = 0
     last_measured_on: date | None = None
     open_session_id: uuid.UUID | None = None
+    deleted_at: UtcDateTime | None = None
+    purge_at: UtcDateTime | None = None
     created_at: UtcDateTime
     updated_at: UtcDateTime
 

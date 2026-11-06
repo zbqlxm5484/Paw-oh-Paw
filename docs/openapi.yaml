@@ -235,13 +235,17 @@ paths:
       tags: [반려견]
       operationId: listDogs
       summary: 반려견 목록·검색 (BE-03, S1)
-      description: 정렬은 last_measured_on 내림차순(한 번도 안 잰 반려견은 뒤), 같으면 created_at 내림차순.
+      description: 정렬은 last_measured_on 내림차순(한 번도 안 잰 반려견은 뒤), 같으면 created_at 내림차순. trash=true면 휴지통 목록이고 최근에 넣은 것부터다.
       parameters:
         - name: q
           in: query
           description: 이름에 포함되면 찾는다(대소문자 무시).
           schema: {type: string, maxLength: 50}
           example: 보리
+        - name: trash
+          in: query
+          description: true면 휴지통에 있는 반려견만 준다. 기본은 휴지통에 없는 반려견만.
+          schema: {type: boolean, default: false}
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
       responses:
@@ -328,6 +332,71 @@ paths:
               example: {error: {code: DOG_MODIFIED, message: "다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.", detail: null}}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [반려견]
+      operationId: deleteDog
+      summary: 반려견을 휴지통에 넣기 (BE-19)
+      description: 지우지 않고 휴지통에 넣는다. 그때부터 이 반려견과 그 아래 회차·촬영·보고서는 404다. 30일 뒤 서버가 영구 삭제하고 그 전에는 복원할 수 있다.
+      responses:
+        '204':
+          description: 휴지통에 넣음. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    post:
+      tags: [반려견]
+      operationId: restoreDog
+      summary: 휴지통에서 복원 (BE-19)
+      description: 휴지통에 있는 반려견만 된다(아니면 404). 회차·영상·보고서가 그대로 돌아온다.
+      responses:
+        '200':
+          description: 복원한 반려견
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/permanent:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    delete:
+      tags: [반려견]
+      operationId: deleteDogPermanently
+      summary: 휴지통의 반려견 영구 삭제 (BE-19)
+      description: 반려견과 그 아래 회차·촬영·수치·보고서, 파일, 분석 서버의 사본을 모두 지운다. 되돌릴 수 없다. 휴지통에 있는 반려견만 된다(아니면 404).
+      responses:
+        '204':
+          description: 지움. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 휴지통에 그대로 남고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
 
   /dogs/{dog_id}/sessions:
     parameters:
@@ -401,6 +470,7 @@ paths:
       tags: [회차 측정]
       operationId: cancelSession
       summary: 측정 취소 (BE-10)
+      description: 회차와 그 안의 촬영을 모두 지운다. 서버가 분석 서버에 남은 사본을 먼저 지우고, 지우지 못하면 503이다.
       responses:
         '204': {description: 회차와 그 안의 촬영을 모두 지웠다}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -413,6 +483,12 @@ paths:
               schema: {$ref: '#/components/schemas/Error'}
               example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
         '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 회차는 그대로이고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
 
   /sessions/{session_id}/shots:
     parameters:
@@ -513,7 +589,7 @@ paths:
       tags: [회차 측정]
       operationId: deleteShot
       summary: 촬영 삭제 (BE-10)
-      description: 남은 촬영의 seq_no는 다시 매기지 않는다.
+      description: 남은 촬영의 seq_no는 다시 매기지 않는다. 서버가 분석 서버에 남은 사본을 먼저 지우고, 지우지 못하면 503이다.
       responses:
         '204': {description: 지웠다}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -526,6 +602,12 @@ paths:
               schema: {$ref: '#/components/schemas/Error'}
               example: {error: {code: SESSION_CLOSED, message: "측정이 끝난 회차입니다.", detail: null}}
         '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 촬영은 그대로이고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
 
   /shots/{shot_id}/retry:
     parameters:
@@ -534,6 +616,7 @@ paths:
       tags: [회차 측정]
       operationId: retryShot
       summary: 실패한 촬영 다시 분석 (BE-10)
+      description: 서버가 실패했던 분석의 사본을 분석 서버에서 먼저 지운다. 지우지 못하면 503, 분석 서버가 그 촬영을 아직 처리하고 있으면 409 SHOT_IN_PROGRESS다.
       responses:
         '200':
           description: 다시 대기열에 넣은 촬영(status는 UPLOADED)
@@ -544,12 +627,18 @@ paths:
         '403': {$ref: '#/components/responses/AccountDisabled'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409':
-          description: SHOT_NOT_FAILED 또는 SESSION_CLOSED
+          description: SHOT_NOT_FAILED, SESSION_CLOSED 또는 SHOT_IN_PROGRESS
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Error'}
               example: {error: {code: SHOT_NOT_FAILED, message: "실패한 촬영만 다시 분석할 수 있습니다.", detail: null}}
         '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 촬영은 FAILED 그대로이고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
 
   /shots/{shot_id}/video:
     parameters:
@@ -784,7 +873,7 @@ paths:
       tags: [운영]
       operationId: purge
       summary: 자료 파기 (BE-19, 관리자만)
-      description: dry_run 기본값은 true다. 실제로 지우려면 false를 보낸다. 여러 기관을 지우는 ALL은 API로 열지 않는다.
+      description: dry_run 기본값은 true다. 실제로 지우려면 false를 보낸다. 여러 기관을 지우는 ALL은 API로 열지 않는다. 실제로 지울 때는 분석 서버의 사본을 먼저 지우고, 지우지 못하면 팀 서비스 자료는 그대로 둔 채 503이다.
       requestBody:
         required: true
         content:
@@ -812,6 +901,12 @@ paths:
               example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
         '422': {$ref: '#/components/responses/ValidationError'}
         '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 다시 부르면 이어서 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
 
   /admin/institutions:
     get:
@@ -1293,6 +1388,7 @@ components:
         - VALIDATION_ERROR
         - INTERNAL_ERROR
         - MAIL_UNAVAILABLE
+        - ANALYSIS_UNAVAILABLE
     Error:
       type: object
       required: [error]
@@ -1505,7 +1601,7 @@ components:
       type: object
       required: [id, name, breed, weight_kg, size_class, size_class_manual, birth_year, sex, rehab_start_date,
                  focus_limb, baseline_session_id, memo, version, session_count, last_measured_on, open_session_id,
-                 created_at, updated_at]
+                 deleted_at, purge_at, created_at, updated_at]
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         name: {type: string, example: 보리}
@@ -1532,6 +1628,16 @@ components:
           type: [string, 'null']
           format: uuid
           description: MEASURING 회차의 ID
+          example: null
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+          description: 휴지통에 넣은 시각. 휴지통에 없으면 null
+          example: null
+        purge_at:
+          type: [string, 'null']
+          format: date-time
+          description: 영구 삭제 예정 시각(deleted_at + 30일). 휴지통에 없으면 null
           example: null
         created_at: {type: string, format: date-time, example: '2026-10-19T00:30:00Z'}
         updated_at: {type: string, format: date-time, example: '2026-10-19T00:30:00Z'}
@@ -2002,10 +2108,14 @@ components:
           type: [string, 'null']
           format: uuid
           description: scope가 DOG면 반려견 ID(필수). INSTITUTION이면 생략.
+        institution_id:
+          type: [string, 'null']
+          format: uuid
+          description: 지울 자료가 있는 기관. 생략하면 부른 관리자의 기관. 없는 기관이면 404.
         dry_run: {type: boolean, default: true, description: 기본 true. 실제로 지우려면 false.}
     PurgeOut:
       type: object
-      required: [scope, target_id, dry_run, rows, files, bytes, purge_log_id]
+      required: [scope, target_id, dry_run, rows, files, bytes, analysis_jobs, purge_log_id]
       properties:
         scope: {type: string, enum: [DOG, INSTITUTION], example: DOG}
         target_id: {type: [string, 'null'], format: uuid, example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90}
@@ -2013,6 +2123,7 @@ components:
         rows: {type: integer, example: 214}
         files: {type: integer, example: 49}
         bytes: {type: integer, example: 391000000}
+        analysis_jobs: {type: integer, description: 분석 서버에서 지운(또는 지울) 작업 수. 이미 없던 작업도 센다, example: 12}
         purge_log_id: {type: [string, 'null'], format: uuid, description: 실제로 지웠을 때만, example: null}
     HealthOut:
       type: object

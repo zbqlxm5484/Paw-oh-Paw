@@ -1,4 +1,4 @@
-"""반려견 업무 규칙(12.5, 13.2, 15.5). 모든 조회는 기관 ID로 거른다(11.6).
+"""반려견 업무 규칙(12.5, 13.2, 15.5). 모든 조회는 기관 ID로 거르고 휴지통의 반려견을 뺀다(11.6, 12.5).
 
 Spring의 @Service. 첫 인자는 DB 세션이고 flush()까지만 한다.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -20,6 +20,15 @@ from app.models import Dog, MeasureSession
 from app.models.enums import SessionStatus
 from app.schemas.dogs import DogCreate, DogOut, DogUpdate
 from app.services.size_class import classify_size
+
+# 휴지통에 넣고 이 날수가 지나면 워커가 영구 삭제한다(12.5)
+TRASH_RETENTION_DAYS = 30
+
+
+def in_institution(institution_id: uuid.UUID, *, trash: bool = False):
+    """담당자에게 보이는 반려견의 SQL 조건: 자기 기관이고 휴지통에 없다. trash면 휴지통에 있는 것만(12.5)."""
+    trashed = Dog.deleted_at.is_not(None) if trash else Dog.deleted_at.is_(None)
+    return (Dog.institution_id == institution_id) & trashed
 
 
 @dataclass(frozen=True)
@@ -47,6 +56,7 @@ def to_dog_out(dog: Dog, stats: DogStats) -> DogOut:
             "session_count": stats.session_count,
             "last_measured_on": stats.last_measured_on,
             "open_session_id": stats.open_session_id,
+            "purge_at": dog.deleted_at + timedelta(days=TRASH_RETENTION_DAYS) if dog.deleted_at else None,
         }
     )
 
@@ -76,9 +86,15 @@ def _open_session_subquery():
     )
 
 
-def _dogs_query(institution_id: uuid.UUID):
-    """반려견 + 회차 요약. 정렬은 15.5: 최근 측정일 내림차순(NULLS LAST, 안 잰 반려견은 뒤), 같으면 등록 시각."""
+def _dogs_query(institution_id: uuid.UUID, *, trash: bool = False):
+    """반려견 + 회차 요약. 정렬은 15.5: 최근 측정일 내림차순(NULLS LAST, 안 잰 반려견은 뒤), 같으면 등록 시각.
+
+    trash면 휴지통의 반려견만, 최근에 넣은 것부터다.
+    """
     stats = _stats_subquery()
+    order = (stats.c.last_measured_on.desc().nulls_last(), Dog.created_at.desc(), Dog.id.desc())
+    if trash:
+        order = (Dog.deleted_at.desc(), Dog.id.desc())
     return (
         select(
             Dog,
@@ -87,17 +103,17 @@ def _dogs_query(institution_id: uuid.UUID):
             _open_session_subquery().label("open_session_id"),
         )
         .outerjoin(stats, stats.c.dog_id == Dog.id)
-        .where(Dog.institution_id == institution_id)
-        .order_by(stats.c.last_measured_on.desc().nulls_last(), Dog.created_at.desc(), Dog.id.desc())
+        .where(in_institution(institution_id, trash=trash))
+        .order_by(*order)
     )
 
 
 def list_dogs(
-    db: Session, institution_id: uuid.UUID, *, q: str | None, page: int, size: int
+    db: Session, institution_id: uuid.UUID, *, q: str | None, page: int, size: int, trash: bool = False
 ) -> tuple[list[DogOut], int]:
-    """목록·검색(15.5). q는 이름에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다."""
-    query = _dogs_query(institution_id)
-    count_query = select(func.count()).select_from(Dog).where(Dog.institution_id == institution_id)
+    """목록·검색(15.5). q는 이름에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다. trash면 휴지통 목록."""
+    query = _dogs_query(institution_id, trash=trash)
+    count_query = select(func.count()).select_from(Dog).where(in_institution(institution_id, trash=trash))
     if q:
         query = query.where(Dog.name.icontains(q, autoescape=True))
         count_query = count_query.where(Dog.name.icontains(q, autoescape=True))
@@ -110,9 +126,24 @@ def list_dogs(
     return items, total
 
 
-def get_dog(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID) -> Dog:
-    """없거나 다른 기관의 반려견이면 똑같이 404 NOT_FOUND(15.1)."""
-    dog = db.scalars(select(Dog).where(Dog.id == dog_id, Dog.institution_id == institution_id)).one_or_none()
+def get_dog(
+    db: Session,
+    institution_id: uuid.UUID,
+    dog_id: uuid.UUID,
+    *,
+    include_trashed: bool = False,
+    for_update: bool = False,
+) -> Dog:
+    """없거나 다른 기관이거나 휴지통에 있는 반려견이면 똑같이 404 NOT_FOUND(15.1).
+
+    include_trashed는 자료 파기만 쓴다. 휴지통에 있든 없든 그 기관의 반려견이면 돌려준다.
+    for_update면 반려견 행을 잠그고 잠근 뒤의 값으로 돌려준다(12.4 잠금: 휴지통에 넣기, 자료 파기).
+    """
+    condition = Dog.institution_id == institution_id if include_trashed else in_institution(institution_id)
+    query = select(Dog).where(Dog.id == dog_id, condition)
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    dog = db.scalars(query).one_or_none()
     if dog is None:
         raise AppError(ErrorCode.NOT_FOUND)
     return dog

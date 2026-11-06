@@ -1,7 +1,7 @@
 """분석 클라이언트(명세 6절). 팀 서비스는 분석 API를 직접 부르지 않고 이 한 겹을 거친다.
 
-- `AnalysisClient`: 워커가 쓰는 네 동작. submit(영상, 촬영 정보) → 작업 ID, get_status → 상태, get_result → 결과 JSON,
-  get_keypoints → 관절점 파일 JSON.
+- `AnalysisClient`: 다섯 동작. submit(영상, 촬영 정보) → 작업 ID, get_status → 상태, get_result → 결과 JSON,
+  get_keypoints → 관절점 파일 JSON은 워커가, delete → 사본 지우기는 자료 파기(services/purge.py)가 쓴다.
 - `HttpAnalysisClient`: 조유진의 분석 API(analysis_api/, 결과 JSON v1 docs/analysisApi/resultFormat.md)를 HTTP로 부른다.
   개발 환경과 기업 GPU 서버는 주소(ANALYSIS_API_BASE_URL)만 다르다.
 - `MockAnalysisClient`: 분석 API 없이 견본 JSON(fixtures/)을 MOCK_ANALYSIS_DELAY_SEC 뒤 돌려준다.
@@ -49,6 +49,8 @@ JOB_STATES: tuple[JobState, ...] = ("queued", "running", "done", "failed")
 AUTH_FAILED_STATUSES = (401, 403)
 # 작업이 분석 API에 없다(재시작으로 잃었거나 보관 기간이 지남). 상태·결과 조회에서 받으면 워커는 바로 FAILED다(12.4)
 JOB_GONE_STATUSES = (404, 410)
+# 지우기에서 아직 분석 중이라고 답했다(JOB_IN_PROGRESS). 자료 파기는 SHOT_IN_PROGRESS로 돌려준다(15.9)
+JOB_IN_PROGRESS_STATUS = 409
 
 
 class AnalysisClientError(Exception):
@@ -74,6 +76,11 @@ class AnalysisClientError(Exception):
     def job_gone(self) -> bool:
         """상태·결과 조회에서 작업이 없다고 답했다. 기다려도 오지 않으므로 바로 끝낸다."""
         return self.status_code in JOB_GONE_STATUSES
+
+    @property
+    def job_in_progress(self) -> bool:
+        """지우기에서 아직 분석 중이라고 답했다. 조회의 409(아직 결과 없음)와 번호가 같아 delete 뒤에만 본다."""
+        return self.status_code == JOB_IN_PROGRESS_STATUS
 
 
 @dataclass(frozen=True)
@@ -108,6 +115,10 @@ class AnalysisClient(Protocol):
 
     def get_keypoints(self, job_id: str) -> dict[str, Any]:
         """완료된 작업의 관절점 파일 JSON(프레임별 22점·각도)."""
+        ...
+
+    def delete(self, job_id: str) -> None:
+        """작업의 사본(영상·결과·관절점)을 지운다. 이미 없으면 성공이다. 못 지우면 AnalysisClientError."""
         ...
 
 
@@ -208,6 +219,13 @@ class MockAnalysisClient:
         self._done_case(job_id)
         return load_fixture("keypoints")
 
+    def delete(self, job_id: str) -> None:
+        """지울 것이 없다(상태를 두지 않는다). 다만 Mock이 만든 ID가 아니면 AnalysisClientError다.
+
+        API 프로세스에 분석 API 설정이 빠져 mock으로 떠 있을 때 실제 작업의 사본을 지운 것으로 치지 않게 막는다(6절).
+        """
+        self.parse_job_id(job_id)
+
 
 # ---- HTTP ----
 
@@ -241,17 +259,21 @@ class HttpAnalysisClient:
             raise AnalysisClientError(f"분석 API 호출 실패: {method} {path}: {e.__class__.__name__}: {e}") from e
 
     @staticmethod
-    def _json(response: httpx.Response, *, expected: int) -> dict[str, Any]:
+    def _unexpected(response: httpx.Response, *, expected: int) -> AnalysisClientError:
         status = response.status_code
-        if status != expected:
-            # 4xx는 요청이 잘못된 것이라 다시 보내도 같다. 408(시간 초과)·429(너무 잦음)는 다시 보낼 수 있고,
-            # 401·403은 요청이 아니라 키 설정 문제라 거부로 보지 않는다(auth_failed)
-            rejected = 400 <= status < 500 and status not in (*AUTH_FAILED_STATUSES, 408, 429)
-            raise AnalysisClientError(
-                f"분석 API 응답 {status} (기대 {expected}): {_error_summary(response)}",
-                retryable=not rejected,
-                status_code=status,
-            )
+        # 4xx는 요청이 잘못된 것이라 다시 보내도 같다. 408(시간 초과)·429(너무 잦음)는 다시 보낼 수 있고,
+        # 401·403은 요청이 아니라 키 설정 문제라 거부로 보지 않는다(auth_failed)
+        rejected = 400 <= status < 500 and status not in (*AUTH_FAILED_STATUSES, 408, 429)
+        return AnalysisClientError(
+            f"분석 API 응답 {status} (기대 {expected}): {_error_summary(response)}",
+            retryable=not rejected,
+            status_code=status,
+        )
+
+    @staticmethod
+    def _json(response: httpx.Response, *, expected: int) -> dict[str, Any]:
+        if response.status_code != expected:
+            raise HttpAnalysisClient._unexpected(response, expected=expected)
         try:
             body = response.json()
         except ValueError as e:
@@ -288,6 +310,12 @@ class HttpAnalysisClient:
     def get_keypoints(self, job_id: str) -> dict[str, Any]:
         response = self._request("GET", f"/analyses/{job_id}/files/keypoints")
         return self._json(response, expected=200)
+
+    def delete(self, job_id: str) -> None:
+        """DELETE /analyses/{id}. 204면 지운 것이고 404·410은 이미 없는 것이라 둘 다 성공이다(조유진 185)."""
+        response = self._request("DELETE", f"/analyses/{job_id}")
+        if response.status_code != 204 and response.status_code not in JOB_GONE_STATUSES:
+            raise self._unexpected(response, expected=204)
 
 
 def _error_summary(response: httpx.Response) -> str:

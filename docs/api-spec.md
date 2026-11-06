@@ -8,7 +8,7 @@
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 41개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 44개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
@@ -124,12 +124,12 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 7 | `POST /dogs/{dog_id}/sessions` | 회차 시작 | S3 | 201 | 409 `SESSION_ALREADY_OPEN` |
 | 8 | `GET /dogs/{dog_id}/sessions` | 측정 이력 | S7 | 200 | — |
 | 9 | `GET /sessions/{session_id}` | 회차 상태·방향별 진행·촬영 목록 | S3 | 200 | — |
-| 10 | `DELETE /sessions/{session_id}` | 측정 취소 | S3 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS` |
+| 10 | `DELETE /sessions/{session_id}` | 측정 취소 | S3 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 11 | `POST /sessions/{session_id}/shots` | 영상 업로드 | S3 | 201 | 12.1의 업로드 오류 |
 | 12 | `POST /sessions/{session_id}/complete` | 측정 종료 | S3 | 200 | 409 `SESSION_CLOSED`, `SESSION_EMPTY` |
 | 13 | `GET /shots/{shot_id}` | 촬영 상세 | S4 | 200 | — |
-| 14 | `POST /shots/{shot_id}/retry` | 실패한 촬영 다시 분석 | S3·S4 | 200 | 409 `SHOT_NOT_FAILED`, `SESSION_CLOSED` |
-| 15 | `DELETE /shots/{shot_id}` | 촬영 삭제 | S3·S4 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS` |
+| 14 | `POST /shots/{shot_id}/retry` | 실패한 촬영 다시 분석 | S3·S4 | 200 | 409 `SHOT_NOT_FAILED`, `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
+| 15 | `DELETE /shots/{shot_id}` | 촬영 삭제 | S3·S4 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 16 | `GET /shots/{shot_id}/video` | 결과 영상 재생 (서명 주소) | S4 | 200·206 | 403 `FILE_LINK_EXPIRED` |
 | 17 | `GET /shots/{shot_id}/angles` | 프레임별 관절 각도 (권장) | S5 | 200 | — |
 | 18 | `GET /sessions/{session_id}/result` | 회차 수치·다리 비교 요약 | S5 | 200 | 409 `SESSION_NOT_DONE` |
@@ -138,7 +138,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 21 | `GET /reports/{report_id}/file` | PDF 미리보기·내려받기 (서명 주소) | S6 | 200 | 403 `FILE_LINK_EXPIRED` |
 | 22 | `GET /dogs/{dog_id}/compare` | 회차 비교 | S8 | 200 | 400 `COMPARE_INVALID` |
 | 23 | `GET /dogs/{dog_id}/trends` | 수치 추이 | S8 | 200 | — |
-| 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS` |
+| 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 25 | `GET /health` | 서버 상태 | — | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | — | 200 | — |
 | 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (토큰 없음) | 가입 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
@@ -156,6 +156,9 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 39 | `PATCH /auth/me` | 이름·이메일 수정 | 내 정보 | 200 | — |
 | 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (토큰 없음) | 재설정 | 204 | 503 `MAIL_UNAVAILABLE` |
 | 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (토큰 없음) | 재설정 | 204 | 400 `RESET_TOKEN_INVALID` |
+| 42 | `DELETE /dogs/{dog_id}` | 반려견을 휴지통에 넣기 | — | 204 | 409 `SHOT_IN_PROGRESS` |
+| 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | — | 200 | — |
+| 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제(되돌릴 수 없음) | — | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
@@ -229,6 +232,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
   "session_count": 3,
   "last_measured_on": "2026-10-20",
   "open_session_id": null,
+  "deleted_at": null,
+  "purge_at": null,
   "created_at": "2026-10-19T00:30:00Z",
   "updated_at": "2026-10-19T00:30:00Z"
 }
@@ -473,6 +478,18 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - `size_class`에 값을 보내면 직접 고친 것으로 저장되고, `null`을 보내면 자동 분류로 돌아간다.
 - `baseline_session_id`는 이 반려견의 완료(DONE) 회차여야 한다. 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 가장 이른 완료 회차가 기준이 된다.
 
+### 휴지통
+
+삭제 버튼은 반려견을 지우지 않고 휴지통에 넣는다. 휴지통의 반려견은 목록·상세·회차·결과 어디에서도 404다. 30일이 지나면 서버가 영구 삭제하고, 그 전에는 복원할 수 있다.
+
+계약이 끝난 기관은 종료일에서 90일이 지나면 서버가 측정 자료와 가입 계정을 지운다. 기관과 디바이스 코드는 남는다. 그 전에 계약을 연장하면 지워지지 않는다.
+
+- **휴지통 목록:** `GET /dogs?trash=true`. 응답 모양은 반려견 목록과 같다. 항목의 `deleted_at`은 휴지통에 넣은 시각, `purge_at`은 영구 삭제 예정 시각이다(휴지통에 없는 반려견은 둘 다 `null`).
+- **`DELETE /dogs/{dog_id}` — 휴지통에 넣기:** 응답 204. 분석 중인 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. 이미 휴지통에 있거나 없는 반려견은 404다.
+- **`POST /dogs/{dog_id}/restore` — 복원:** 본문 없음. 응답 200 **DogOut**. 회차·영상·보고서가 그대로 돌아온다. 휴지통에 없는 반려견은 404다. 영구 삭제가 먼저 시작됐으면 그것이 끝난 뒤 404로 답한다.
+- **`version`:** 휴지통에 넣을 때와 복원할 때 1씩 오른다. 복원한 뒤 `PATCH /dogs/{dog_id}`를 부를 때는 복원 응답의 `version`을 쓴다. 전에 들고 있던 값으로 보내면 409 `DOG_MODIFIED`다.
+- **`DELETE /dogs/{dog_id}/permanent` — 영구 삭제:** 응답 204. **되돌릴 수 없으니 화면에서 확인을 받은 뒤 부른다.** 휴지통에 있는 반려견만 된다(아니면 404). 분석 서버의 사본을 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 휴지통에 그대로 남는다. 잠시 뒤 다시 부르면 된다. 휴지통 전체 비우기는 목록의 반려견마다 부른다.
+
 ---
 
 ## 6. 회차 측정
@@ -517,6 +534,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 - 응답 204. 회차와 그 안의 촬영을 모두 지운다.
 - 회차가 MEASURING이 아니면 409 `SESSION_CLOSED`, 분석 중(SUBMITTED·ANALYZING)인 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
+- 서버는 분석 서버에 남은 이 회차의 사본을 먼저 지운다. 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 회차는 그대로다. 잠시 뒤 다시 누르면 된다. 드물게, 화면에는 실패로 보이는 촬영을 분석 서버가 아직 처리하고 있으면 409 `SHOT_IN_PROGRESS`가 온다. 이때도 잠시 뒤 다시 누른다.
 
 ### `POST /sessions/{session_id}/shots` — 영상 업로드
 
@@ -560,11 +578,13 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 - 요청 본문 없음. 응답 200 **ShotOut**(`status`는 UPLOADED).
 - 촬영이 FAILED가 아니면 409 `SHOT_NOT_FAILED`, 회차가 MEASURING이 아니면 409 `SESSION_CLOSED`다.
+- 서버는 실패했던 분석의 사본을 분석 서버에서 먼저 지운다. 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`, 분석 서버가 그 촬영을 아직 처리하고 있으면 409 `SHOT_IN_PROGRESS`이고 촬영은 FAILED 그대로다. 둘 다 잠시 뒤 다시 누르면 된다(시간 초과로 실패한 촬영에서 날 수 있다).
 
 ### `DELETE /shots/{shot_id}` — 촬영 삭제
 
 - 응답 204. 남은 촬영의 번호(`seq_no`)는 다시 매기지 않는다.
 - 회차가 MEASURING이 아니면 409 `SESSION_CLOSED`, 촬영이 분석 중(SUBMITTED·ANALYZING)이면 409 `SHOT_IN_PROGRESS`다.
+- 서버는 분석 서버에 남은 이 촬영의 사본을 먼저 지운다. 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 촬영은 그대로다. 잠시 뒤 다시 누르면 된다.
 
 ### `GET /shots/{shot_id}/video?exp=…&sig=…` — 결과 영상 재생
 
@@ -788,16 +808,18 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 
 ```json
 // 요청
-{"scope": "DOG", "target_id": "…", "dry_run": true}
+{"scope": "DOG", "target_id": "…", "institution_id": "…", "dry_run": true}
 
 // 응답 200
 {"scope": "DOG", "target_id": "…", "dry_run": true,
- "rows": 214, "files": 49, "bytes": 391000000, "purge_log_id": null}
+ "rows": 214, "files": 49, "bytes": 391000000, "analysis_jobs": 12, "purge_log_id": null}
 ```
 
-- `scope`: `DOG`(반려견 하나, `target_id` 필요) 또는 `INSTITUTION`(자기 기관 전체, `target_id` 생략).
+- `scope`: `DOG`(반려견 하나, `target_id` 필요) 또는 `INSTITUTION`(기관 전체, `target_id` 생략).
+- `institution_id`: 지울 자료가 있는 기관. 생략하면 부른 관리자의 기관이다. 없는 기관이거나 그 기관에 없는 반려견이면 404 `NOT_FOUND`다. 응답은 개수뿐이다.
 - `dry_run` 기본값은 true다. 지울 양만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 보낸다.
 - 관리자가 아니면 403 `FORBIDDEN`, 분석 중인 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
+- `analysis_jobs`는 분석 서버에서 지운(또는 지울) 작업 수다. 실제로 지울 때 분석 서버의 사본을 먼저 지우고, 지우지 못하면 팀 서비스 자료는 그대로 둔 채 503 `ANALYSIS_UNAVAILABLE`이다. 다시 부르면 이어서 끝난다.
 
 ### 크림오프 관리자 API
 
@@ -934,6 +956,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | `detail.fields`로 입력칸 표시 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | |
 | `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | |
+| `ANALYSIS_UNAVAILABLE` | 503 | 분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요. | 자료 파기, 반려견 영구 삭제, 측정 취소, 촬영 삭제, 다시 분석 |
 
 `{min_sec}`처럼 중괄호가 든 문구는 서버가 값을 채워서 보낸다.
 
@@ -1065,7 +1088,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | --- | --- |
 | 기관 `code` | 1~20자, 유일. 비우면 서버가 `INST-` + 6자로 만든다 |
 | 기관 `name` | 1~100자 |
-| `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
+| `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도). 오늘에서 90일보다 더 지난 날짜는 422다. 오늘 − 90일까지는 받고, 그 날짜를 넣은 기관은 다음 날부터 자동 파기 대상이다 |
 | `max_accounts` | 1 ~ 서버 설정값(기본 10) |
 | `note` | 최대 100자 |
 | `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |

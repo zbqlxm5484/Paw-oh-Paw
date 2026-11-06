@@ -20,6 +20,7 @@ from app.models import Dog, MeasureSession, Report
 from app.models.enums import ReportEdition, ReportStatus
 from app.schemas.common import reason_out
 from app.schemas.reports import ReportOut, SessionReportsOut
+from app.services.dogs import in_institution
 from app.services.sessions import get_session
 from app.storage.base import get_storage
 from app.storage.local import LocalStorage
@@ -82,7 +83,7 @@ def _report_in_institution(db: Session, institution_id: uuid.UUID, report_id: uu
         select(Report)
         .join(MeasureSession, Report.session_id == MeasureSession.id)
         .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(Report.id == report_id, Dog.institution_id == institution_id)
+        .where(Report.id == report_id, in_institution(institution_id))
     )
     if for_update:
         query = query.with_for_update(of=Report)

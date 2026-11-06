@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Response, UploadFile, status
 
-from app.api.deps import CurrentStaff, DbSession
+from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession
 from app.schemas.common import reason_out
 from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionOut, SessionResultOut
 from app.schemas.shots import ShotUploadOut
@@ -31,8 +31,8 @@ def get_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Se
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def cancel_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
-    session_service.cancel_session(db, staff.institution_id, session_id)
+def cancel_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession, analysis: AnalysisClientDep) -> Response:
+    session_service.cancel_session(db, staff.institution_id, session_id, analysis)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -84,6 +84,8 @@ class Settings(DbSettings):
     WORKER_MAX_IN_FLIGHT_PER_INSTITUTION: int = Field(4, ge=1)
     # 결과 영상 프로세스 풀의 크기(12.4). 0이면 결과 영상이 영영 PENDING이므로 같은 이유로 시작을 막는다
     WORKER_RENDER_CONCURRENCY: int = Field(1, ge=1)
+    # 휴지통 비우기·계약 종료 뒤 파기 한 차례가 주 반복을 붙잡는 시간의 상한(12.4). 넘으면 남은 것은 다음 차례에 한다
+    WORKER_SWEEP_MAX_SEC: float = Field(60, gt=0)
 
     RECOMMENDED_PASSES: int = 8
     SIZE_SMALL_MAX_KG: float = 10

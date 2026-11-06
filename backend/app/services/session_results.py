@@ -139,11 +139,17 @@ def _exclude_summary(shots: list[Shot]) -> list[ExcludeSummaryOut]:
     ]
 
 
-def session_result(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID) -> SessionResultOut:
-    """GET /sessions/{id}/result. 없거나 다른 기관이면 404, DONE이 아니면 409 SESSION_NOT_DONE."""
+def session_result(
+    db: Session, institution_id: uuid.UUID, session_id: uuid.UUID, *, include_trashed: bool = False
+) -> SessionResultOut:
+    """GET /sessions/{id}/result. 없거나 다른 기관이면 404, DONE이 아니면 409 SESSION_NOT_DONE.
+
+    include_trashed는 워커의 보고서 생성만 쓴다. 휴지통에 들어간 뒤에도 보고서를 끝까지 만들어 두어야 복원했을 때
+    결과가 있다(12.5).
+    """
     session = (
         db.scalars(
-            session_query(institution_id, session_id)
+            session_query(institution_id, session_id, include_trashed=include_trashed)
             .options(
                 joinedload(MeasureSession.staff),
                 selectinload(MeasureSession.shots).selectinload(Shot.passes),

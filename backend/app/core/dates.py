@@ -20,6 +20,10 @@ def local_zone() -> ZoneInfo:
     return _zone(get_settings().APP_TIMEZONE)
 
 
+# 계약이 끝나고 이 날수가 지나면 워커가 그 기관의 측정 자료와 가입 계정을 지운다(12.5)
+CONTRACT_RETENTION_DAYS = 90
+
+
 def today_local() -> date:
     """APP_TIMEZONE 기준 오늘 날짜."""
     return datetime.now(local_zone()).date()

@@ -20,6 +20,11 @@ Oct 19, 2026 · @조영운
 | v1.19 | 2026-11-04 | 198 이력·비교·추이 구현에 맞춰 15.8 보충: `base`가 BASELINE·PREVIOUS·UUID 형식이 아니거나 추이의 `metric_code`가 12.3 표에 없으면 422, 추이 `series`는 그 수치의 다리 전부(점 없는 다리는 빈 배열)이고 `lr_diff` 쌍은 관심 다리 쌍 먼저, 비교 API도 오차 범위 파일을 워커와 같은 함수로 읽는다 |
 | v1.20 | 2026-11-04 | 199 자료 파기 구현에 맞춰 15.9 보충: `INSTITUTION`에 `target_id`를 보내면 422, 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 적용, `rows`는 반려견·회차·촬영·통과·수치·보고서 행 수의 합, `purge_log.target_id`·`executed_by` 값, 전체 파기 스크립트는 `--execute` 없이는 세기만 하고 기관·계정·코드는 남긴다 |
 | v1.21 | 2026-11-04 | 200 견본 PDF·20초 측정(S15P31A404-200): 8절에 견본 보고서(D-08) 경우 목록·스크립트·기업 서버용 대조 기준값(`reference_from_result`, `metrics`에서 다시 계산) 문단, 17.4 BE-15의 20초 확인 방법을 회차 DONE 기준으로 |
+| v1.22 | 2026-11-05 | 분석 API 사본 파기(199 후속, 조유진 185 계약): 6절 `AnalysisClient`에 `delete`와 API 프로세스 설정, 7절 보관과 파기, 12.2 `purge_log.analysis_jobs_deleted`(마이그레이션 0004), 12.5, 14.1 `ANALYSIS_UNAVAILABLE`, 15.2·15.9 `analysis_jobs`와 503, 17.6 |
+| v1.30 | 2026-11-05 | 병원 자료 파기(199 후속): 15.9 `POST /admin/purge`에 대상 기관 `institution_id`(생략하면 부른 관리자의 기관, 없는 기관은 404), 10절 Q31과의 관계. 15.2(42번)·15.5 `DELETE /dogs/{dog_id}`(병원 담당자의 반려견 삭제) |
+| v1.33 | 2026-11-06 | 반려견 휴지통(199 후속, 조영운 결정 11-06): 삭제는 지우지 않고 휴지통에 넣는다. 12.2 `dog.deleted_at`(마이그레이션 0013), 12.4 워커의 자동 비우기, 12.5 휴지통 규칙(30일 뒤 자동 영구 삭제), 15.2 42번의 뜻 변경과 43·44번, 15.3 **DogOut**에 `deleted_at`·`purge_at`, 15.5 `GET /dogs?trash=true`·`DELETE /dogs/{dog_id}`·`POST /dogs/{dog_id}/restore`·`DELETE /dogs/{dog_id}/permanent`, 15.9, 17.6. v1.30의 '삭제하면 바로 지운다'는 이 판에서 바뀌었다 |
+| v1.34 | 2026-11-06 | 계약 종료 뒤 자동 파기(199 후속, 조영운 결정 11-06, 10절 Q27의 답): 계약 종료일에서 90일이 지나면 워커가 그 기관의 측정 자료와 가입 계정을 지운다. 기관과 디바이스 코드는 남긴다. 10절 Q27, 12.4 워커, 12.5 보관 기간, 13.6 `contract_ends_at`에 90일보다 더 지난 날짜 금지, 15.9, 17.6 |
+| v1.37 | 2026-11-06 | 199 리뷰 반영(박규원·조유진): 6절 `delete`를 부르는 곳, 7절 촬영 삭제·측정 취소·다시 분석도 분석 API 사본을 먼저 지움, 12.4 잠금(파기·휴지통은 반려견 행도 잠그고, 분석 API는 회차 행을 잠그기 전에 부름), 12.4 자동 파기의 시간 상한 `WORKER_SWEEP_MAX_SEC`과 계약 종료 뒤 파기의 첫 실행 시점, 12.5 휴지통의 보고서 생성과 `version`, 14.1 `ANALYSIS_UNAVAILABLE` 문구, 15.2·15.6 측정 취소·다시 분석·촬영 삭제에 503, 15.5, 15.9 지우는 순서, 16절, 17.3·17.6. 번호는 192 브랜치의 v1.35, 차트 자료의 v1.36 다음이다 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -256,10 +261,11 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 
 ### 구조
 
-- `AnalysisClient`는 네 동작만 정한다: `submit(영상, 촬영 정보) → job_id`, `get_status(job_id) → 상태·실패 사유`, `get_result(job_id) → 결과 JSON`, `get_keypoints(job_id) → 관절점 파일 JSON`(프레임별 22점·각도, 10-22 검토 답변 Q4).
+- `AnalysisClient`는 다섯 동작만 정한다: `submit(영상, 촬영 정보) → job_id`, `get_status(job_id) → 상태·실패 사유`, `get_result(job_id) → 결과 JSON`, `get_keypoints(job_id) → 관절점 파일 JSON`(프레임별 22점·각도, 10-22 검토 답변 Q4), `delete(job_id)`(사본 지우기. 자료 파기가 쓴다, 15.9).
+- `delete(job_id)`는 `DELETE /analyses/{id}`다. 204는 지움, 404·410은 이미 없음이라 둘 다 성공이고, 409 `JOB_IN_PROGRESS`는 아직 분석 중이다. 그 밖의 응답과 연결 실패·시간 초과는 실패다. 부르는 곳은 자료 파기(15.9), 촬영 삭제·측정 취소·다시 분석(15.6), 그리고 워커가 제출은 했는데 `job_id`를 적을 행이 사라진 작업을 버릴 때(12.4)다(v1.37). 앞의 둘은 `services/analysis_copies.py` 한 곳을 거쳐 오류를 같게 돌려준다.
 - `HttpAnalysisClient`: 개발 환경의 우리 분석 API와, 기업 GPU 서버에 올린 같은 API를 부른다. 같은 코드라 주소만 다르다. 현행 모델과 개선 모델의 전환은 분석 API 안에서 한다(PR-F07-04).
 - `MockAnalysisClient`: 견본 결과 JSON을 몇 초 뒤 돌려준다. 분석 API가 준비되기 전에 화면과 보고서를 먼저 만들 수 있고, 시연 날 분석 서버가 안 될 때의 대비도 된다.
-- 설정(.env): `ANALYSIS_API_MODE=http|mock`, `ANALYSIS_API_BASE_URL`, `ANALYSIS_API_KEY`(`X-API-Key` 헤더로 보냄, 10-26 확정). 모드를 mock ↔ http로 바꿀 때는 진행 중(SUBMITTED·ANALYZING) 촬영이 없을 때 한다. DB에 남은 작업 ID가 다른 쪽 API에는 없기 때문이다.
+- 설정(.env): `ANALYSIS_API_MODE=http|mock`, `ANALYSIS_API_BASE_URL`, `ANALYSIS_API_KEY`(`X-API-Key` 헤더로 보냄, 10-26 확정). 모드를 mock ↔ http로 바꿀 때는 진행 중(SUBMITTED·ANALYZING) 촬영이 없을 때 한다. DB에 남은 작업 ID가 다른 쪽 API에는 없기 때문이다. 자료 파기(15.9)는 API 프로세스에서 분석 API를 부르므로 API 프로세스에도 워커와 같은 값을 넣는다. mock의 `delete`는 Mock이 만든 작업 ID만 받아서, 이 설정이 빠졌을 때 실제 작업의 사본을 지운 것으로 치지 않고 파기를 멈춘다.
 
 "엔드포인트만 바꾸면 된다"는 이제 거의 그대로 맞다. 부르는 대상이 모두 우리가 만든 같은 API이기 때문이다. 남은 위험은 형식이 아니라 연결이다. 시연 때 팀 서버가 기업 GPU 서버의 API에 닿을 수 있는지(주소 공개, 방화벽, 인증)를 미리 확인해야 한다(10절 Q1).
 
@@ -338,6 +344,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 
 - 촬영·회차·반려견을 지우면 해당 파일도 함께 지운다.
 - 과제 종료 뒤 파기 스크립트로 DB 행과 파일을 모두 지우고, 지운 파일 수·용량·시각을 기록으로 남겨 파기 확인서(D-13)에 붙인다.
+- 분석 API도 작업마다 영상·결과·관절점 사본을 자기 저장소(`ANALYSIS_STORAGE_DIR`)에 둔다. `DOG`·`INSTITUTION` 파기는 지울 촬영의 작업마다 `DELETE /analyses/{id}`를 부르고(15.9), 과제 종료의 `ALL`은 분석 API의 전체 파기 명령(`python purge.py --all --execute`)을 따로 돌린다. 촬영 삭제·측정 취소·다시 분석도 행을 지우거나 `job_id`를 비우기 전에 그 작업의 사본을 지운다(v1.37, 15.6, 199 리뷰 조유진). 행이 사라지거나 `job_id`가 비면 그 사본을 다시 찾을 수 없기 때문이다. 못 지우면 멈춘다(파기와 같다). 분석 API가 촬영 ID로 지우는 기능(`DELETE /analyses?shot_id=…`)을 더하면(조유진, 스프린트 4 예정. 아직 없음) 파기가 촬영 단위로 한 번 더 불러 놓친 사본을 거둔다.
 - 발표 자료에는 얼굴을 가린 결과 영상만 쓰고, 질환견은 "질환견 A"처럼 적는다(REQ-CM-005).
 - AWS S3를 쓰면 버킷 버전 관리를 처음부터 켜지 않는다. 한 번 켜면 끌 수 없고 일시 중지만 된다. 켜져 있으면 지워도 "지운 표시"만 생기고 예전 파일이 남아 파기가 되지 않는다. 수명 주기 규칙으로 원본을 자동으로 지우지도 않는다. 재분석에 쓰므로 과제 종료 파기 때까지 둔다.
 
@@ -413,7 +420,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 | Q24 | 팀장·조영운 | 결과 영상 얼굴 가리기 모델에도 세부명세서 7.1의 학습 데이터 조건을 적용하는가? 처음 고른 YuNet은 모델 파일이 MIT지만 WIDER FACE(홈페이지 라이선스 cc by-nc-nd)로 학습한 가중치였다 | 팀 서비스는 기본적으로 납품 대상이 아니지만(회사에 자체 서비스가 있음) 회사가 프론트와 함께 가져갈 수 있다 | 결정(10-30 조영운): 만약을 대비해 애초에 7.1에 걸릴 것이 없는 모델로 바꾼다. MediaPipe BlazeFace(Apache-2.0, 구글 동의 데이터)로 교체했고 회사 프레임 20장에서 사람 얼굴 24/24를 확인했다. 11-03 멘토링에는 보고만 한다. 근거 `docs/report/faceDetectorLicense.md` |
 | Q25 | 팀 전체 | 10-15의 "회원가입 없이 미리 만든 계정만"을 디바이스 코드 가입으로 바꾸고, 로그인을 아이디+비밀번호로 줄이는가? (Q11의 답) | 가입 화면·로그인 화면·DB가 바뀐다 | 제안: 바꾼다. 밤·주말 가입을 관리자 없이 처리하고, 매일 치는 입력을 줄인다. 이 문서 v1.12는 그 전제로 썼다 |
 | Q26 | 박규원·장준환 | 가입 화면(코드 확인 → 인증됨 → 가입, 이메일 포함), 비밀번호 찾기·재설정 화면, 계약 만료 안내, 반려견 수정 409 처리, 크림오프 관리 화면을 화면 범위에 넣을 수 있는가? 시점은? | 백엔드만 있으면 가입이 안 된다 | 제안: 가입·재설정·만료 안내·409 처리는 필수, 관리 화면은 가능하면(없으면 관리자 API를 Swagger로 쓴다) |
-| Q27 | 팀 전체 | 계약이 끝난 기관의 자료는 얼마나 보관하고 누가 파기하는가? | REQ-CM-002(보호자 동의·파기)와 연결 | 제안: 자동 파기 없음. 재계약을 기다려 보관하고, 파기는 지금 있는 관리자 파기(BE-19)로 한다 |
+| Q27 | 팀 전체 | 계약이 끝난 기관의 자료는 얼마나 보관하고 누가 파기하는가? | REQ-CM-002(보호자 동의·파기)와 연결 | **정함(조영운, 11-06): 계약 종료일에서 90일이 지나면 워커가 그 기관의 측정 자료와 가입 계정을 지운다. 기관과 디바이스 코드는 자동으로 지우지 않는다(12.5).** 예전 제안: 자동 파기 없음. 재계약을 기다려 보관하고, 파기는 지금 있는 관리자 파기(BE-19)로 한다 |
 | Q28 | 팀 전체 | 인증 캐시 60초: 계정 중지·계약 만료가 최대 60초 뒤에 반영되는 것을 받아들이는가? | 즉시 차단이 필요한 서비스가 아니다 | 제안: 받아들인다(10-30 조영운 결정, 기록용) |
 | Q29 | 팀 전체 | 비밀번호 찾기·변경은 이번 범위에 넣는가? | 가입이 생기면 잊은 비밀번호가 생긴다 | 제안: 넣는다. 로그인 상태의 변경(BE-26)과 이메일 링크 재설정(BE-27). 관리자가 끼는 경로는 두지 않는다 |
 | Q30 | 팀 전체·허정원 | 가입 때 이메일을 받고 재설정 메일을 보내는가? 어떤 발신 계정·주소를 쓰는가? | 발송 인프라(SMTP 계정·발신 도메인, 허정원 몫), 납품 때 기업 메일 설정이 D-09에 추가(PR-C-07), 직원 이메일 수집·파기 범위 | 제안: 받는다(인증 메일은 없음). 발신 계정은 팀 메일 하나로 시작하고 납품 때 기업 계정으로 바꾼다(환경 변수만) |
@@ -763,6 +770,7 @@ CREATE TABLE dog (
   focus_limb           VARCHAR(20)   NULL,  -- 관심 다리: 왼앞·오른앞·왼뒤·오른뒤
   baseline_session_id  UUID          NULL,  -- 기준 회차
   memo                 TEXT          NULL,  -- 내부 메모. 보고서에 넣지 않는다
+  deleted_at           TIMESTAMPTZ   NULL,  -- 휴지통에 넣은 시각(12.5). NULL이면 휴지통에 없다
   version              INTEGER       NOT NULL DEFAULT 0,  -- 낙관적 잠금(12.5). 수정할 때마다 1 는다
   created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -906,6 +914,7 @@ CREATE TABLE purge_log (
   rows_deleted   INTEGER       NOT NULL,
   files_deleted  INTEGER       NOT NULL,
   bytes_deleted  BIGINT        NOT NULL,
+  analysis_jobs_deleted INTEGER NOT NULL DEFAULT 0,  -- 분석 API에 지우기를 부른 작업 수(15.9). ALL은 0
   executed_by    UUID          NULL,  -- 실행한 담당자 ID. 외래키 없음
   executed_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
   PRIMARY KEY (id),
@@ -958,10 +967,12 @@ CREATE TABLE purge_log (
 - 상태·결과 조회에서 분석 API가 작업이 없다고 답하면(404·410. 재시작으로 작업을 잃었거나 보관 기간이 지남) 기다려도 오지 않으므로 바로 FAILED(`ANALYSIS_FAILED`)다. 409(아직 결과 없음)·5xx·연결 실패는 다음 바퀴에 다시 묻고 시간 초과가 끝을 낸다. 결과를 DB에 넣다가 오류가 나면 방금 쓴 파일을 지우고 그 촬영만 건너뛴다(다음 바퀴에 다시). 한 촬영의 오류가 같은 바퀴의 다른 촬영·가져오기·제출을 막지 않는다. 결과 JSON의 값은 DB 범위(`pass_no` SMALLINT, 프레임 INTEGER)까지 미리 검사해 저장 중 형식 오류가 나지 않게 한다.
 - 워커는 파일(분석 결과 JSON, 결과 영상, 보고서 PDF)을 먼저 쓰고, 그 키를 조건을 건 UPDATE로 행에 붙인다. 바뀐 행이 0개면(그사이 담당자가 촬영·회차를 지웠거나 파기했으면) 방금 쓴 파일을 지운다. DB에 키가 없는 파일이 남으면 파기에서 빠지기 때문이다(REQ-CM-002).
 
-* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석, 자료 파기)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다(파기는 대상 회차 행 전부. 15.9). 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다.
+* **잠금**: 워커는 하나만 띄운다(docker-compose의 `worker` 1개). API에서 상태를 확인하고 바꾸는 동작(업로드, 측정 종료, 측정 취소, 촬영 삭제, 다시 분석, 자료 파기)은 그 회차 행을 `SELECT … FOR UPDATE`로 잠근 뒤 확인한다(파기는 대상 회차 행 전부. 15.9). 회차 시작은 반려견 행을 잠근 뒤 MEASURING 회차가 있는지 본다. 워커도 회차를 집계하거나 DONE으로 바꿀 때 같은 회차 행을 잠근다. 워커가 UPLOADED 촬영을 가져갈 때도 같다: 그 회차 행을 잠근 뒤 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한 다음에 분석 API를 부른다. 그래서 측정 취소·촬영 삭제는 UPLOADED를 막지 않아도 된다. 취소가 먼저 잠그면 워커는 이미 지워진 행을 보고 건너뛰고(바뀐 행 0개), 워커가 먼저 잠그면 취소는 SUBMITTED를 보고 409 `SHOT_IN_PROGRESS`를 낸다. **반려견 행**(v1.37): 자료 파기와 휴지통(넣기·복원·영구 삭제)은 반려견 행도 `FOR UPDATE`로 잠근다. 복원과 회차 시작이 같은 행을 잠그므로 파기가 먼저면 둘은 commit을 기다렸다가 404이고, 둘이 먼저면 파기는 그 결과를 본다. 잠그지 않으면 "복원했다"고 답한 반려견이 지워질 수 있다. 잠그는 순서는 늘 기관 → 반려견 → 회차다. **분석 API는 회차 행을 잠근 채 부르지 않는다**(v1.37): HTTP라 느릴 수 있고, 잠근 채 기다리면 업로드·측정 종료와 워커의 주 반복이 같은 행에서 멈춘다. 그래서 자료 파기·촬영 삭제·측정 취소·다시 분석은 ① 조건을 미리 한 번 보고(안 맞으면 분석 API를 부르지 않는다) 사본을 지운 다음 ② 잠그고 조건을 다시 본 뒤 그사이 생긴 작업만 마저 지운다. `DOG` 파기만 반려견 행 하나를 ①부터 쥔다(분석 사본만 지워진 채 복원되지 않게). `INSTITUTION` 파기는 ②에서 기관 행과 반려견 행을 잠근다(기관 행을 잠그면 `dog`의 FK 때문에 그사이 새 반려견이 생기지 못한다).
 * **API가 만든 파일**: 업로드처럼 요청 안에서 파일을 만들면 그 키를 `db.info["created_files"]`에 넣는다. commit이 실패하면 `get_db`가 그 파일을 지운다(11.7). 지울 때는 12.5 순서대로 파일을 먼저 지운다. 행 삭제가 실패해 파일 없는 행이 남는 것은 괜찮다(파기 때 함께 지워진다). 반대로 DB에 키가 없는 파일이 남으면 파기에서 빠진다.
 * **보고서 행 값**: `template_version`에는 보고서 모듈의 `report.TEMPLATE_VERSION` 상수를 넣는다.
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
+* **휴지통 자동 비우기**(v1.33): 워커는 켤 때 한 번, 그 뒤 한 시간마다 휴지통에 넣은 지 30일이 지난 반려견을 찾아 영구 삭제한다(12.5, `services/trash.py`의 `purge_expired`). 한 번에 20마리까지 보고 한 마리씩 지운다. 실패한 것은 로그만 남기고 다음 차례에 다시 한다. 분석 API가 응답하지 않으면 남은 것도 같은 이유로 실패하므로 그 차례는 거기서 멈춘다. 한 마리 지울 때마다 commit해 잠금을 바로 풀고, 후보를 읽은 뒤 복원했을 수 있어 반려견 행을 잠근 뒤 아직 휴지통에 있고 기한이 지났는지 다시 본다(v1.37). **시간 상한**(v1.37): 주 반복과 같은 스레드에서 돌기 때문에 한 차례(휴지통 비우기 + 계약 종료 뒤 파기)는 `WORKER_SWEEP_MAX_SEC`(기본 60초)까지만 쓴다. 넘으면 남은 것을 두고 5분 뒤에 이어서 한다. 상한 없이 오래 돌면 상태 조회가 밀려 정상 진행 중인 촬영이 `ANALYSIS_TIMEOUT`으로 끝날 수 있다. 상한에 닿을 때까지 지운 분석 API 사본은 다시 부르면 이미 없는 것이라 이어서 끝난다. 분석 API 요청 하나(`ANALYSIS_HTTP_TIMEOUT_SEC`)는 중간에 끊지 않으므로 실제로는 상한보다 그만큼 더 걸릴 수 있다.
+* **계약 종료 뒤 자동 파기**(v1.34): 휴지통 자동 비우기와 같은 차례(한 시간마다)에 계약이 끝난 지 90일이 지난 기관을 찾아 자료와 가입 계정을 지운다(12.5, `services/retention.py`의 `purge_expired_contracts`). 한 번에 5개 기관까지 보고 기관마다 따로 지운다. 실패한 기관은 다음 차례에 다시 하고, 분석 API가 응답하지 않으면 그 차례는 거기서 멈춘다. **켜자마자 돌지 않는다**(v1.37): 워커를 켠 뒤 한 시간이 지나야 처음 돈다. 배포 직후에 기관의 자료가 지워지지 않게 하려는 것이다(되돌릴 수 없다). 켤 때 대상 기관이 있으면 그 수와 기관 ID를 경고 로그로 남기므로, 지우면 안 되는 기관은 그 사이에 `contract_ends_at`을 고친다. 배포 전에 DB에서 미리 보는 방법은 `backend/README.md`의 "워커 띄우기"에 있다. 기관마다 지울 때 commit하고, 후보를 읽은 뒤 계약을 연장했을 수 있어 기관 행을 잠근 뒤 종료일을 다시 본다. 시간 상한은 휴지통 자동 비우기와 함께 쓴다(위 줄).
 * **자식 프로세스**: `video/`·`report/` 함수만 부르고 DB와 저장소를 모른다(11.3). 주 반복이 작업마다 `UPLOAD_TMP_DIR/worker/{작업 ID}/` 폴더를 만들고, 입력 경로와 출력 경로를 넘긴다. 입력은 `local_copy`로 준비하고, 작업별 `ExitStack`으로 작업이 끝날 때까지 열어 둔다. 자식 프로세스는 OpenCV 스레드를 1개(`cv2.setNumThreads(1)`)로, ffmpeg를 `-threads 2`로 묶는다.
 * **맡기기와 거두기**: 빈 자리는 그 풀에서 실행 중인 작업 수가 풀 크기보다 적을 때다. 미리 줄 세워 넣지 않는다. 결과 영상은 `status='DONE' AND video_status='PENDING'`인 촬영을 `analyzed_at, id` 순으로, 보고서는 PENDING 행을 `updated_at, id` 순으로 꺼낸다. 맡긴 ID는 메모리 집합에 두어 두 번 맡기지 않는다. 주 반복은 매 바퀴 `future.done()`으로 끝난 작업을 거둔다. `add_done_callback` 안에서는 DB를 건드리지 않는다. 성공이면 출력 파일을 `put_file`로 넣고 조건을 건 UPDATE로 붙인다. 성공·실패 모두 `ExitStack`을 닫고 작업 폴더를 지운다.
 * **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 자식이 돌려준 실린 숫자 목록을 먼저 DB의 `session_metric` 값·15.7 다리 비교 계산값과 맞추고(8절 7번), 어긋나면 PDF를 저장하지 않고 `REPORT_CHECK_FAILED`로 남긴다(DB 오류가 아닌 이유로 기준을 읽지 못하면 `REPORT_FAILED`). 맞으면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
@@ -973,7 +984,9 @@ CREATE TABLE purge_log (
 ### 12.5 데이터 규칙
 
 - **이름**: 회차 테이블은 `measure_session`, 모델 클래스는 `MeasureSession`이다. SQLAlchemy의 DB 세션(`Session`)과 이름이 겹치면 AI가 둘을 헷갈린 코드를 만들기 때문이다. API 주소와 JSON에서는 그대로 `sessions`, `session_id`를 쓴다.
-- **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`. 기관을 지우는 기능은 없으므로 `device_code`는 지우지 않고 회수(`revoked_at`)만 한다.
+- **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`. 자료 파기는 파일 앞에 분석 API 사본을 먼저 지운다(15.9). 기관을 지우는 기능은 없으므로 `device_code`는 지우지 않고 회수(`revoked_at`)만 한다.
+- **휴지통**(v1.33): 담당자가 반려견을 삭제하면 지우지 않고 `dog.deleted_at`에 시각을 적는다(soft delete). 파일·행·분석 API 사본은 그대로다. 휴지통의 반려견은 담당자의 모든 조회·수정에서 없는 것과 같이 404다(반려견 목록·상세·수정, 회차 시작, 회차·촬영·결과·보고서, 이력·비교·추이). 조건은 `services/dogs.in_institution` 한 곳에 두고 반려견을 거치는 조회는 모두 이것을 쓴다. 복원하면 `deleted_at`을 NULL로 돌리고 모든 것이 그대로 돌아온다. 완전히 지우는 길은 셋이다: 담당자의 영구 삭제(휴지통에 있는 것만), 워커의 자동 비우기(휴지통에 넣고 30일 뒤, 12.4), 관리자 파기(15.9). 셋 다 자료 파기의 `DOG`를 불러 위 삭제 순서·오류·`purge_log`가 같다. 분석 중인 촬영(SUBMITTED·ANALYZING)이 있는 반려견은 휴지통에 넣을 수 없다(409 `SHOT_IN_PROGRESS`). 워커는 휴지통을 보지 않고 일하므로, 휴지통에 들어간 뒤에도 아직 제출하지 않은 촬영의 분석·집계·보고서 생성은 이어진다(복원했을 때 결과가 있도록). 보고서 생성이 읽는 회차 결과도 휴지통을 거르지 않는다(v1.37. 그전에는 담당자용 조회와 같은 조건을 써서 `REPORT_FAILED`가 됐다). 넣기와 복원은 반려견 행을 고치므로 `version`이 1씩 오른다. 복원한 뒤 수정할 때는 복원 응답의 `version`을 쓴다(v1.37). 보관 기간 30일은 코드의 상수 `TRASH_RETENTION_DAYS`다(환경 변수 아님).
+- **보관 기간과 자동 파기**(v1.34): 지우는 때는 둘이다. ① 휴지통에 넣은 반려견은 30일 뒤(위 줄). ② 계약이 끝난 기관은 종료일(`institution.contract_ends_at`)에서 90일이 지난 다음 날부터, 즉 `contract_ends_at < 오늘 − 90일`이면 워커가 그 기관의 측정 자료(반려견과 그 아래 전부, 휴지통에 있는 것 포함, 파일과 분석 API 사본)와 가입 계정(`role`이 `CLIENT`인 `staff` 행. 중지한 계정 포함)을 지운다. **기관(`institution`)과 디바이스 코드(`device_code`)는 자동으로 지우지 않는다.** 크림오프 계정(`ADMIN`·`STAFF`)도 지우지 않는다. 종료일이 NULL(기한 없음)이면 대상이 아니다. 90일 안에 계약을 연장하면(종료일을 뒤로 고치면) 지워지지 않는다. 지운 뒤 계약을 다시 맺으면 남아 있는 디바이스 코드로 새로 가입한다. 자료 파기의 `INSTITUTION`과 같은 순서로 지우고, 회차가 담당자를 가리키므로(`fk_session_staff`) 계정은 회차를 지운 뒤에 지운다. `purge_log`에 1행(`scope`는 `INSTITUTION`, `executed_by`는 NULL, `rows_deleted`에 지운 계정 수 포함)을 남긴다. 분석 중인 촬영이 있거나 분석 API가 응답하지 않으면 그 기관은 아무것도 지우지 않고 다음 차례에 다시 한다. 지울 것이 남은 기관만 고르므로 다 지운 기관에는 기록을 다시 남기지 않는다. 보관 기간 90일은 코드의 상수 `CONTRACT_RETENTION_DAYS`다(환경 변수 아님). 워커와 API는 프로세스가 달라, 지운 계정의 인증 캐시는 API 쪽에서 TTL(60초)이 지나야 사라진다(그 계정은 이미 계약 만료라 자료 API는 403이다).
 - **측정 불가**: `value`는 NULL, `measurable`은 FALSE, 사유는 `unmeasurable_reason`에 넣는다. 0을 넣지 않는다. 0은 측정값으로 오해되기 때문이다(PR-F02-05).
 - **체급 분류**: 체급은 등록 체중만으로 나눈다(박규원의 체급 기준 자료, 10-22. v1.3까지는 견종 기준이었다). 세부명세서가 체급을 쓰는 곳은 소형견이 화면에 작게 찍히는 문제(RK-09), 체급별 권장 통과 수(D-14), 보고서 맞춤 설명(PR-F08-02)인데, 분석 쪽의 체급별 KPI 집계(KPI-08·25·26)와 개 보행 임상 연구(압력 매트)가 같은 체중 경계를 쓴다. 백엔드가 견종으로 나누면 분석 쪽 집계와 보고서의 체급이 어긋나므로 같은 규칙을 쓴다. 규칙은 다음과 같다.
   1. 등록 체중이 10 kg 미만이면 SMALL, 25 kg 미만이면 MEDIUM, 25 kg 이상이면 LARGE다. 경계값은 설정값(16절)이고, 경계에 있는 값은 위 구간에 든다(10.00 kg은 MEDIUM, 25.00 kg은 LARGE).
@@ -1092,7 +1105,7 @@ CREATE TABLE purge_log (
 | --- | --- |
 | 기관 `code` | 1\~20자, 유일. 비우면 서버가 `INST-` + 6자(코드 글자)로 만든다 |
 | 기관 `name` | 1\~100자 |
-| `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도) |
+| `contract_ends_at` | 날짜 또는 `null`. 과거 날짜도 받는다(즉시 만료시키는 용도). 다만 오늘에서 90일보다 더 지난 날짜는 422다(`field`는 `contract_ends_at`). 그런 날짜는 넣자마자 자동 파기 대상이 되어(12.5) 날짜를 잘못 적은 실수로 자료가 지워질 수 있기 때문이다. 오늘 − 90일까지는 받는다 |
 | `max_accounts` | 1 \~ `DEVICE_CODE_MAX_ACCOUNTS` |
 | `note` | 최대 100자 |
 | `is_active` | true/false. 자기 자신을 false로 하면 409 `SELF_DISABLE` |
@@ -1156,6 +1169,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | 필드 형식·범위 오류. `detail.fields`에 필드별 사유 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | 예상하지 못한 오류 |
 | `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | SMTP 미설정 또는 발송 실패(15.4) |
+| `ANALYSIS_UNAVAILABLE` | 503 | 분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요. | 분석 API 사본 지우기 실패: 자료 파기(15.9), 촬영 삭제·측정 취소·다시 분석(15.6) |
 
 ### 14.2 처리 실패 사유
 
@@ -1233,7 +1247,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ## 15. API 상세
 
-엔드포인트는 41개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
+엔드포인트는 44개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42\~44는 반려견 휴지통(v1.30·v1.33)). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
 
 ### 15.1 공통 약속
 
@@ -1260,12 +1274,12 @@ STOPPED: "중간에 멈췄습니다."
 | 7 | `POST /dogs/{dog_id}/sessions` | 회차 시작 (S3) | BE-04 | 201 | 409 `SESSION_ALREADY_OPEN` |
 | 8 | `GET /dogs/{dog_id}/sessions` | 측정 이력 (S7) | BE-17 | 200 | — |
 | 9 | `GET /sessions/{session_id}` | 회차 상태·방향별 진행·촬영 목록 (S3, 2\~3초마다) | BE-07·09 | 200 | — |
-| 10 | `DELETE /sessions/{session_id}` | 측정 취소 | BE-10 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS` |
+| 10 | `DELETE /sessions/{session_id}` | 측정 취소 | BE-10 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 11 | `POST /sessions/{session_id}/shots` | 영상 업로드 (S3) | BE-05·06 | 201 | 13.1의 오류 |
 | 12 | `POST /sessions/{session_id}/complete` | 측정 종료 → 집계 → 보고서 | BE-13 | 200 | 409 `SESSION_CLOSED`, `SESSION_EMPTY` |
 | 13 | `GET /shots/{shot_id}` | 촬영 상세 (S4) | BE-08·11 | 200 | — |
-| 14 | `POST /shots/{shot_id}/retry` | 실패한 촬영 다시 분석 | BE-10 | 200 | 409 `SHOT_NOT_FAILED`, `SESSION_CLOSED` |
-| 15 | `DELETE /shots/{shot_id}` | 촬영 삭제 | BE-10 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS` |
+| 14 | `POST /shots/{shot_id}/retry` | 실패한 촬영 다시 분석 | BE-10 | 200 | 409 `SHOT_NOT_FAILED`, `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
+| 15 | `DELETE /shots/{shot_id}` | 촬영 삭제 | BE-10 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 16 | `GET /shots/{shot_id}/video` | 결과 영상 재생 (서명 URL) | BE-12 | 200·206 | 403 `FILE_LINK_EXPIRED` |
 | 17 | `GET /shots/{shot_id}/angles` | 프레임별 관절 각도 (S5 그래프, 권장) | BE-14 | 200 | — |
 | 18 | `GET /sessions/{session_id}/result` | 회차 수치·다리 비교 요약 (S5) | BE-14·21 | 200 | 409 `SESSION_NOT_DONE` |
@@ -1274,7 +1288,7 @@ STOPPED: "중간에 멈췄습니다."
 | 21 | `GET /reports/{report_id}/file` | PDF 미리보기·내려받기 (서명 URL) | BE-16 | 200 | 403 `FILE_LINK_EXPIRED` |
 | 22 | `GET /dogs/{dog_id}/compare` | 회차 비교 (S8) | BE-18 | 200 | 400 `COMPARE_INVALID` |
 | 23 | `GET /dogs/{dog_id}/trends` | 수치 추이 (S8) | BE-18 | 200 | — |
-| 24 | `POST /admin/purge` | 자료 파기 (관리자) | BE-19 | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS` |
+| 24 | `POST /admin/purge` | 자료 파기 (관리자) | BE-19 | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 25 | `GET /health` | 서버 상태 | BE-20 | 200·503 | — |
 | 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | BE-20 | 200 | — |
 | 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (인증 없음) | BE-22 | 200 | 404 `DEVICE_CODE_INVALID`, 409 `DEVICE_CODE_FULL` |
@@ -1292,6 +1306,9 @@ STOPPED: "중간에 멈췄습니다."
 | 39 | `PATCH /auth/me` | 이름·이메일 수정 | BE-26 | 200 | — |
 | 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (인증 없음) | BE-27 | 204 | 503 `MAIL_UNAVAILABLE` |
 | 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (인증 없음) | BE-27 | 204 | 400 `RESET_TOKEN_INVALID` |
+| 42 | `DELETE /dogs/{dog_id}` | 반려견을 휴지통에 넣기 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS` |
+| 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | BE-19 | 200 | — |
+| 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 
 ### 15.3 공통 객체
 
@@ -1354,6 +1371,8 @@ STOPPED: "중간에 멈췄습니다."
   "session_count": 3,
   "last_measured_on": "2026-10-20",
   "open_session_id": null,
+  "deleted_at": null,
+  "purge_at": null,
   "created_at": "2026-10-19T00:30:00Z",
   "updated_at": "2026-10-19T00:30:00Z"
 }
@@ -1549,6 +1568,7 @@ STOPPED: "중간에 멈췄습니다."
 
 - 응답 200: `{"items": [DogOut, …], "total": 45, "page": 1, "size": 20}`
 - `q`는 이름에 포함되면 찾는다. 대소문자를 무시하고(`ILIKE`), 검색어 안의 `%`·`_`는 이스케이프한다. SQLAlchemy로는 `Dog.name.icontains(q, autoescape=True)`다.
+- `trash=true`를 붙이면 휴지통 목록이다(12.5). 휴지통에 있는 반려견만, 최근에 넣은 것부터 준다. 항목의 `deleted_at`은 휴지통에 넣은 시각, `purge_at`은 영구 삭제 예정 시각(`deleted_at` + 30일)이다. 기본(`trash` 없음)은 휴지통에 없는 반려견만 주고 두 값은 `null`이다. `q`·`page`·`size`는 똑같이 쓴다.
 - 정렬: `last_measured_on` 내림차순(한 번도 안 잰 반려견은 뒤. PostgreSQL은 내림차순에서 NULL을 맨 앞에 두므로 NULLS LAST를 붙인다), 같으면 `created_at` 내림차순.
 
 **`POST /dogs`** — 반려견 등록 (BE-02)
@@ -1585,6 +1605,27 @@ STOPPED: "중간에 멈췄습니다."
 - `weight_kg`를 바꾸면 `size_class_manual`이 FALSE일 때만 새 체중으로 체급을 다시 정한다. `breed`를 바꿔도 체급은 그대로다(12.5).
 - `size_class`에 값을 보내면 `size_class_manual`이 TRUE가 되고, `null`을 보내면 FALSE로 돌아가 자동 분류로 다시 정한다.
 - `baseline_session_id`가 이 반려견의 DONE 회차가 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 12.5 규칙을 따른다.
+
+**`DELETE /dogs/{dog_id}`** — 반려견을 휴지통에 넣기 (BE-19)
+
+- 응답 204, 본문 없음. 아무것도 지우지 않고 `deleted_at`에 지금 시각을 적는다(12.5). 그때부터 이 반려견과 그 아래 회차·촬영·보고서는 모든 조회에서 404다. `purge_log`는 남기지 않는다(지운 것이 없다).
+- 자기 기관의 반려견만 넣을 수 있다. 다른 기관이거나 없거나 이미 휴지통에 있는 반려견은 404 `NOT_FOUND`(15.1)다. 역할 제한은 없고 다른 `/dogs` API와 같다.
+- SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`이고 넣지 않는다. 분석이 끝난 뒤 다시 누른다.
+- 30일이 지나면 워커가 영구 삭제한다(12.4). 그 전에는 복원할 수 있다.
+- 반려견 행을 잠근 뒤 넣는다(12.4 잠금). `version`이 1 오른다.
+
+**`POST /dogs/{dog_id}/restore`** — 휴지통에서 복원 (BE-19)
+
+- 본문 없음. 응답 200 **DogOut**(`deleted_at`·`purge_at`은 `null`). 회차·영상·보고서가 그대로 돌아온다.
+- 휴지통에 있는 자기 기관의 반려견만 된다. 휴지통에 없거나 다른 기관이거나 없는 반려견은 404다.
+- 반려견 행을 잠근 뒤 꺼낸다(12.4 잠금). 영구 삭제·자동 비우기가 먼저 그 반려견을 잡았으면 끝나기를 기다렸다가 404다. `version`이 1 오르므로 복원한 뒤 수정할 때는 이 응답의 값을 쓴다.
+
+**`DELETE /dogs/{dog_id}/permanent`** — 휴지통의 반려견 영구 삭제 (BE-19)
+
+- 응답 204, 본문 없음. 반려견과 그 아래 회차·촬영·통과·수치·보고서 행, 파일, 분석 API 사본을 지운다. 되돌릴 수 없다.
+- 휴지통에 있는 자기 기관의 반려견만 된다. 휴지통을 거치지 않은 반려견은 404다(먼저 `DELETE /dogs/{dog_id}`). 휴지통 전체를 비우려면 화면이 목록의 반려견마다 부른다.
+- `POST /admin/purge`의 `DOG`를 `dry_run` false로 부른 것과 같은 서비스를 쓴다(15.9). 순서(15.9의 두 단계)와 오류가 같다: 분석 API 사본을 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 아무것도 지우지 않은 채 휴지통에 남는다. 다시 부르면 이어서 끝난다. SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다.
+- `purge_log`에 1행을 남긴다(`scope`는 `DOG`, `executed_by`는 부른 담당자). 워커의 자동 비우기가 지운 것은 `executed_by`가 NULL이다. 세기만 하는 `dry_run`은 없다. 지우기 전에 확인을 받는 것은 화면의 일이다.
 
 ### 15.6 회차 측정
 
@@ -1625,6 +1666,7 @@ S3 화면이 측정하는 내내 2\~3초마다 부르는 API다. 한 번에 화�
 
 - 응답 204. S3의 "측정 취소" 버튼이다. 회차와 그 안의 촬영·통과·파일을 12.5 순서로 모두 지운다.
 - 회차가 MEASURING이 아니면 409 `SESSION_CLOSED`, SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. 분석 중인 촬영을 지우면 워커가 없는 행에 결과를 쓰려고 하기 때문이다.
+- 지우기 전에 이 회차 촬영들의 분석 API 사본을 먼저 지운다(v1.37, 7절). 촬영 행을 지우면 그 사본을 다시 찾을 수 없기 때문이다. 분석 API가 응답하지 않거나 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 회차는 그대로다. 다시 누르면 이어서 끝난다. 분석 API가 아직 그 작업을 돌리고 있다고 답하면 409 `SHOT_IN_PROGRESS`다(팀 서비스가 시간 초과로 FAILED로 둔 촬영이 여기에 걸릴 수 있다). 제출한 적이 없는 촬영만 있으면 분석 API를 부르지 않는다. 위 409로 거절될 요청도 분석 API를 부르지 않는다(12.4 잠금).
 
 **`POST /sessions/{session_id}/shots`** — 영상 업로드 (BE-05·06)
 
@@ -1660,11 +1702,13 @@ S3 화면이 측정하는 내내 2\~3초마다 부르는 API다. 한 번에 화�
 - 요청 본문 없음. 응답 200 **ShotOut**(`status`는 UPLOADED).
 - `fail_reason`·`job_id`를 비우고 `attempt_count`를 0, `video_status`를 PENDING으로 돌린다. 남아 있는 통과 행이 있으면 지운다.
 - 촬영이 FAILED가 아니면 409 `SHOT_NOT_FAILED`, 회차가 MEASURING이 아니면 409 `SESSION_CLOSED`다.
+- `job_id`를 비우기 전에 실패했던 작업의 분석 API 사본을 지운다(v1.37, 7절). 못 지우면 503 `ANALYSIS_UNAVAILABLE`, 분석 API가 아직 그 작업을 돌리고 있으면 409 `SHOT_IN_PROGRESS`이고 촬영은 FAILED 그대로다. `ANALYSIS_TIMEOUT`으로 끝난 촬영이 409에 걸릴 수 있다. 분석 API가 그 작업을 끝낸 뒤 다시 누른다. 제출한 적이 없는 촬영(`ANALYSIS_SUBMIT_FAILED`)은 분석 API를 부르지 않는다.
 
 **`DELETE /shots/{shot_id}`** — 촬영 삭제 (BE-10)
 
-- 응답 204. 파일 → 통과 → 촬영 순서로 지운다. 남은 촬영의 `seq_no`는 다시 매기지 않는다.
+- 응답 204. 분석 API 사본 → 파일 → 통과 → 촬영 순서로 지운다(분석 API 사본은 v1.37). 남은 촬영의 `seq_no`는 다시 매기지 않는다.
 - 회차가 MEASURING이 아니면 409 `SESSION_CLOSED`, 촬영이 SUBMITTED·ANALYZING이면 409 `SHOT_IN_PROGRESS`다.
+- 분석 API 사본을 지우지 못하면 503 `ANALYSIS_UNAVAILABLE`이고 파일·행은 그대로다. 다시 누르면 끝난다. 분석 API가 아직 그 작업을 돌리고 있다고 답하면 409 `SHOT_IN_PROGRESS`다.
 
 **`GET /shots/{shot_id}/video?exp=…&sig=…`** — 결과 영상 재생 (BE-12)
 
@@ -1905,21 +1949,26 @@ stance_ratio: 5.0 # pct
 
 ```json
 // 요청
-{"scope": "DOG", "target_id": "…", "dry_run": true}
+{"scope": "DOG", "target_id": "…", "institution_id": "…", "dry_run": true}
 
 // 응답 200
 {"scope": "DOG", "target_id": "…", "dry_run": true,
- "rows": 214, "files": 49, "bytes": 391000000, "purge_log_id": null}
+ "rows": 214, "files": 49, "bytes": 391000000, "analysis_jobs": 12, "purge_log_id": null}
 ```
 
-- `scope`는 `DOG`(`target_id` = 반려견 ID) 또는 `INSTITUTION`(자기 기관 전체, `target_id` 생략)이다. 여러 기관을 한꺼번에 지우는 `ALL`은 API로 열지 않고 서버에서 `python -m scripts.purge --all`로만 한다.
+- `scope`는 `DOG`(`target_id` = 반려견 ID) 또는 `INSTITUTION`(기관 전체, `target_id` 생략)이다. 기관은 `institution_id`이고 생략하면 부른 관리자의 기관이다. 여러 기관을 한꺼번에 지우는 `ALL`은 API로 열지 않고 서버에서 `python -m scripts.purge --all`로만 한다.
 - `dry_run`의 기본값은 true다. 지울 행·파일·용량만 세고 아무것도 지우지 않는다. 실제로 지우려면 false를 분명히 보낸다.
 - 실제로 지우면 `purge_log`에 1행을 남기고 그 ID를 `purge_log_id`로 돌려준다. 파기 확인서(D-13)의 근거다.
 - `INSTITUTION`은 반려견과 그 아래 자료를 모두 지우고, 기관과 담당자 계정은 남긴다.
 - 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다. 실제로 지울 때는 대상 회차 행을 모두 `SELECT … FOR UPDATE`로 잠근 뒤 이 검사를 하고 파일·행을 지운다(12.4 잠금. 워커가 그사이 UPLOADED 촬영을 가져가 분석 API로 보내는 틈을 막는다). 워커가 먼저 잠갔으면 파기는 기다렸다가 SUBMITTED를 보고 409를 내고, 파기가 먼저면 워커는 지워진 행을 보고 건너뛴다. `dry_run`은 세기만 하므로 잠그지 않는다.
-- `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 자기 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
+- `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 그 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
+- `institution_id`는 관리자(`ADMIN`, 크림오프 계정)가 병원의 자료를 지울 때 쓴다. 없는 기관이면 404 `NOT_FOUND`, UUID가 아니면 422 `VALIDATION_ERROR`(`field`는 `institution_id`)다. `DOG`는 그 기관에서만 찾으므로 다른 기관의 반려견 ID를 넣으면 404다. 응답은 개수뿐이고 반려견 이름 같은 고객 자료를 돌려주지 않는다. 고객 자료 열람(10절 Q31)은 여전히 열지 않아서, 관리자는 반려견 목록을 볼 수 없고 `DOG`의 반려견 ID는 병원에서 받아야 한다. `purge_log.executed_by`에는 부른 관리자가 남는다.
 - `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
-- `python -m scripts.purge --all`은 지울 양만 세고, `--execute`를 붙여야 지운다(확인 문구를 묻고 `--yes`면 묻지 않는다). 기관·담당자 계정·디바이스 코드는 `INSTITUTION`과 같이 남긴다(계정 정리는 10절 Q27과 함께 정한다).
+- 휴지통에 있는 반려견도 파기 대상이다(12.5). `DOG`는 휴지통에 있든 없든 그 기관의 반려견이면 지우고, `INSTITUTION`·`ALL`은 휴지통의 반려견까지 센다.
+- 이 API의 `INSTITUTION`은 계정을 지우지 않는다. 가입 계정까지 지우는 것은 계약 종료 90일 뒤의 자동 파기뿐이다(12.5).
+- `analysis_jobs`는 분석 API에서 지운(또는 지울) 작업 수이고 `purge_log.analysis_jobs_deleted`에도 남긴다. 지울 촬영 중 `job_id`가 있는 것만 세고, 이미 없던 작업(404·410)도 센다. `dry_run`은 세기만 하고 분석 API를 부르지 않는다.
+- 실제로 지우는 순서는 두 단계다(v1.37, 12.4 잠금). ① 잠그기 전: 진행 중 촬영 미리 보기 → 분석 API 사본. ② 잠금(기관 → 반려견 → 회차) → 진행 중 촬영 다시 확인 → ① 뒤에 생긴 작업의 사본 → 파일 → 행. 분석 API를 회차 행을 잠근 채 부르지 않기 위해서다. `DOG`는 반려견 행을 ①부터 쥔다. 분석 API가 응답하지 않거나 지우지 못하면(연결 실패, 시간 초과, 5xx, 인증 실패, 설정이 빠져 mock으로 뜬 API 프로세스에 실제 작업 ID) 거기서 멈추고 503 `ANALYSIS_UNAVAILABLE`이다. 팀 서비스의 파일·행은 그대로이고 `purge_log`도 남지 않는다. 행에 `job_id`가 남아 있어 다시 부르면 이미 지운 작업은 404로 넘어가 이어서 끝난다. 분석 API가 409 `JOB_IN_PROGRESS`로 답하면 409 `SHOT_IN_PROGRESS`다. 팀 서비스가 시간 초과로 이미 FAILED로 둔 촬영을 분석 API가 아직 돌리고 있는 경우라, 화면에는 분석 중인 촬영이 보이지 않을 수 있다. 서버 로그에는 `JOB_IN_PROGRESS`로 따로 남는다(v1.37, 199 리뷰 조유진). 분석 API가 그 작업을 끝내면 풀린다.
+- `python -m scripts.purge --all`은 지울 양만 세고, `--execute`를 붙여야 지운다(확인 문구를 묻고 `--yes`면 묻지 않는다). 기관·담당자 계정·디바이스 코드는 `INSTITUTION`과 같이 남긴다(계정 정리는 10절 Q27과 함께 정한다). `ALL`은 작업마다 분석 API를 부르지 않아 `analysis_jobs`가 0이고, 분석 API 저장소는 분석 API를 끈 뒤 그쪽 전체 파기 명령(`python purge.py --all --execute`)으로 따로 지운다.
 
 **크림오프 관리자 API** (BE-24, 11.6 역할 검사: 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`. 기관·코드·계정 메타데이터까지만 다루고 고객 자료는 열지 않는다. 10절 Q31)
 
@@ -1988,6 +2037,7 @@ stance_ratio: 5.0 # pct
 | `WORKER_MAX_IN_FLIGHT` | `16` | 동시에 분석 API에 맡겨 둘 촬영 수. 분석 서버가 버티지 못하면 줄인다. 1 이상(0이면 워커가 아무것도 가져가지 않으므로 시작 때 막는다) | 3절 |
 | `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION` | `4` | 한 기관이 동시에 분석 API에 맡길 수 있는 촬영 수. 1 이상. 기관이 하나뿐인 환경(시연)에서는 전체 상한과 같게 두어도 된다 | 3절, 12.4 |
 | `WORKER_RENDER_CONCURRENCY` | `1` | 결과 영상을 동시에 만드는 프로세스 수. 보고서는 따로 1개다. 서버 코어가 넉넉하면 올린다 | 3절, 12.4 |
+| `WORKER_SWEEP_MAX_SEC` | `60` | 휴지통 자동 비우기와 계약 종료 뒤 자동 파기 한 차례가 워커의 주 반복을 붙잡는 시간의 상한(초). 0보다 커야 한다. 넘으면 남은 것은 5분 뒤에 이어서 한다 | 12.4 |
 | `RECOMMENDED_PASSES` | `8` | 방향별 권장 유효 통과 수. D-14 결과가 나오면 바꾼다 | 15.6 |
 | `SIZE_SMALL_MAX_KG` | `10` | 등록 체중이 이 값 미만이면 SMALL | 12.5 |
 | `SIZE_MEDIUM_MAX_KG` | `25` | 이 값 미만이면 MEDIUM, 이 값 이상이면 LARGE | 12.5 |
@@ -2093,6 +2143,7 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-09: `progress`가 DONE 촬영의 유효 통과 수와 같고, 한쪽만 있으면 `ONE_SIDE_ONLY`, 양쪽이 권장 수 이상이면 `RECOMMENDED_MET`이 나온다.
 - [ ] BE-10: FAILED가 아닌 촬영을 다시 분석하면 409 `SHOT_NOT_FAILED`, 분석 중인 촬영이나 그런 촬영이 있는 회차를 지우면 409 `SHOT_IN_PROGRESS`다.
 - [ ] BE-10: 촬영·회차를 지우면 그 파일이 저장소에서 사라진다. 결과 영상을 만드는 도중에 지워도 파일이 남지 않는다(12.4).
+- [ ] BE-10: 촬영 삭제·측정 취소·다시 분석은 분석 API 사본을 먼저 지운다. 분석 API가 실패하면 503 `ANALYSIS_UNAVAILABLE`이고 촬영·회차·파일이 그대로다. 409로 거절될 요청(닫힌 회차, 분석 중인 촬영)과 제출한 적 없는 촬영은 분석 API를 부르지 않는다.
 - [ ] BE-11: 촬영 상세의 통과별 `start_frame`·`end_frame`·`exclude_reason`이 분석 결과 JSON과 같다.
 - [ ] BE-12: 어떤 응답에도 원본 영상 주소·키가 없고, 서명 URL은 5분이 지나거나 `sig`를 한 글자만 바꿔도(local 기준) 403 `FILE_LINK_EXPIRED`다.
 - [ ] BE-12: 결과 영상이 Chrome에서 재생되고 앞뒤로 넘겨진다(Range 206).
@@ -2123,6 +2174,10 @@ ANALYSIS_API_MODE=mock
 
 - [ ] BE-19: `dry_run`이 true면 아무것도 지워지지 않는다. 실제 파기 뒤에는 대상의 DB 행과 파일이 0개이고 `purge_log`에 1행이 남는다.
 - [ ] BE-19: STAFF 계정으로 부르면 403 `FORBIDDEN`이다.
+- [ ] BE-19: 반려견을 삭제하면 휴지통에 들어가 목록·상세·회차·결과에서 404이고, DB 행·파일·`purge_log`는 그대로다. 휴지통 목록(`trash=true`)에 `deleted_at`·`purge_at`과 함께 보인다. 복원하면 모두 그대로 돌아온다. 영구 삭제는 휴지통에 있는 것만 되고(아니면 404) 행·파일·분석 사본이 0개가 되며 `purge_log`가 남는다. 분석 중인 촬영이 있으면 휴지통에 넣을 수 없다(409). 휴지통에 넣은 지 30일이 지난 것만 자동 비우기가 지우고, 분석 API가 실패하면 남긴다.
+- [ ] BE-19: 계약이 끝난 지 91일 된 기관은 자동 파기 뒤 반려견(휴지통 포함)·파일·분석 사본과 `CLIENT` 계정이 0개이고, 기관·디바이스 코드·크림오프 계정은 그대로이며 `purge_log`가 1행 남는다. 90일째인 기관, 종료일이 없는 기관은 그대로다. 분석 API가 실패하면 계정까지 아무것도 지워지지 않는다. 관리자 API의 기관 파기는 계정을 남긴다. `contract_ends_at`에 오늘 − 91일을 넣으면 422이고 오늘 − 90일은 받는다.
+- [ ] BE-19: 실제 파기는 지울 촬영의 작업마다 분석 API 지우기를 파일·행보다 먼저 부른다. 분석 API가 실패하면 503 `ANALYSIS_UNAVAILABLE`이고 팀 서비스의 행·파일이 그대로이며 `purge_log`가 남지 않는다. 다시 부르면 끝난다.
+- [ ] BE-19: 파기는 분석 API를 회차 행을 잠그기 전에 부르고, 잠근 뒤 그사이 생긴 작업을 마저 지운다. 기다리는 사이 촬영이 분석에 들어가면 409이고 행·파일이 그대로다. 휴지통에 넣기·복원은 반려견 행을 잠근다. 자동 비우기는 후보를 읽은 뒤 복원한 반려견을, 계약 종료 뒤 파기는 그사이 계약을 연장한 기관을 건너뛴다. 시간 상한(`WORKER_SWEEP_MAX_SEC`)에 닿으면 남기고 다음에 이어서 끝난다. 계약 종료 뒤 파기는 워커를 켠 뒤 한 시간 안에는 돌지 않고, 켤 때 대상 기관을 로그로 알린다. 휴지통에 있는 반려견의 보고서도 끝까지 만든다.
 - [ ] BE-20: DB를 멈추면 `/api/v1/health`가 503과 `"db": "error"`를 낸다.
 - [ ] 워커: 결과 영상 20건이 밀려 있어도 새 촬영의 판정은 2초 조회 주기대로 나온다(무거운 일이 주 반복을 막지 않는다, 12.4).
 - [ ] 워커: 한 기관이 촬영 30건을 한꺼번에 올려도 그 기관의 SUBMITTED·ANALYZING 수는 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`을 넘지 않고, 다른 기관의 새 촬영은 전체 자리(`WORKER_MAX_IN_FLIGHT`)가 남아 있으면 바로 SUBMITTED가 된다.

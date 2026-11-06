@@ -68,6 +68,8 @@ class Dog(Base):
     )
     # 내부 메모. 보고서에 넣지 않는다
     memo: Mapped[str | None] = mapped_column(Text)
+    # 휴지통에 넣은 시각(12.5). NULL이면 휴지통에 없다. 30일이 지나면 워커가 영구 삭제한다
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 낙관적 잠금(12.5). 수정할 때마다 1 는다. JPA @Version과 같다
     version: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
