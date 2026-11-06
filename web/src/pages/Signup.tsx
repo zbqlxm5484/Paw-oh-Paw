@@ -10,13 +10,15 @@ import { ApiError } from '../api/client'
 import { api, MOCK } from '../store/backend'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 import { link } from '../config'
+import { LEGAL_PATH, TERM_LINKS } from '../legal/content'
 
 const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:16px;color:#1B2433;outline:none'
 const TERMS = ['[필수] 서비스 이용약관', '[필수] 개인정보 수집 및 이용', '[필수] 측정 기기 연동 및 위치정보 이용', '[선택] 마케팅 정보 수신']
 
 interface Verified {
   institution: { id: string; name: string }
-  remaining_accounts: number
+  /** 백엔드 192(기관당 코드 하나, 계정 수 제한 없음) 뒤에는 응답에 없다 */
+  remaining_accounts?: number
 }
 
 export default function Signup() {
@@ -97,7 +99,7 @@ export default function Signup() {
                 reset()
               }}>{demo_code}</b></> : null}</span>
           )}
-          <div id="soInst" style={css(`display:${verified ? 'flex' : 'none'};height:56px;border-radius:12px;background:#F2EEE8;align-items:center;gap:12px;padding:0 18px`)}><svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#2E8B57')}><use href="#w-check"></use></svg><span style={css('font-size:13px;color:#5B6472')}>기관</span><b id="soInstName" style={css('font-size:16px')}>{inst ? inst.institution.name : ''}</b><span id="soLeft" style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{inst ? `남은 계정 ${inst.remaining_accounts}개` : ''}</span></div>
+          <div id="soInst" style={css(`display:${verified ? 'flex' : 'none'};height:56px;border-radius:12px;background:#F2EEE8;align-items:center;gap:12px;padding:0 18px`)}><svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#2E8B57')}><use href="#w-check"></use></svg><span style={css('font-size:13px;color:#5B6472')}>기관</span><b id="soInstName" style={css('font-size:16px')}>{inst ? inst.institution.name : ''}</b><span id="soLeft" style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{inst && typeof inst.remaining_accounts === 'number' ? `남은 계정 ${inst.remaining_accounts}개` : ''}</span></div>
 
           <fieldset id="soRest" disabled={!verified} style={css(`border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:18px;opacity:${verified ? '1' : '.45'}`)}>
             <b style={css('font-size:16px;margin-top:10px')}>2. 내 계정</b>
@@ -115,7 +117,7 @@ export default function Signup() {
                     if ((e.target as HTMLElement).classList.contains('view')) return
                     setTerms(terms.map((t, k) => (k === i ? !t : t)))
                   }}
-                  style={css('min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer')}><input type="hidden" name={`t${i}`} value={terms[i] ? '1' : ''} /><svg width="20" height="20" viewBox="0 0 24 24" style={css(`color:${check(terms[i])};flex:none`)}><use href="#w-check"></use></svg><span style={css('flex:1;font-size:15px;color:#3A4250')}>{label}</span><span className="view" data-toast="약관 전문은 준비 중이에요" style={css('font-size:13px;color:#A0A7B2;text-decoration:underline')}>보기</span></div>
+                  style={css('min-height:46px;display:flex;align-items:center;gap:14px;padding:0 4px 0 18px;cursor:pointer')}><input type="hidden" name={`t${i}`} value={terms[i] ? '1' : ''} /><svg width="20" height="20" viewBox="0 0 24 24" style={css(`color:${check(terms[i])};flex:none`)}><use href="#w-check"></use></svg><span style={css('flex:1;font-size:15px;color:#3A4250')}>{label}</span><a className="lk view" href={link(LEGAL_PATH[TERM_LINKS[i]])} target="_blank" rel="noreferrer" style={css('font-size:13px;color:#A0A7B2;text-decoration:underline')}>보기</a></div>
               ))}
             </div>
           </fieldset>

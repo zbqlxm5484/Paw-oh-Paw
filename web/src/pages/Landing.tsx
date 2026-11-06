@@ -126,7 +126,7 @@ export default function Landing() {
       <footer style={css('border-top:1px solid #E8E4DC;background:#F3F1EC;padding:72px 24px 88px;display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center')}>
         <div style={css('display:flex;align-items:center;gap:10px')}><img src={`${img}logo.png`} alt="" style={css('width:36px;height:36px;object-fit:contain')} /><span style={css('font-size:26px;font-weight:800;letter-spacing:-0.6px;color:#1B2433')}>Paw oh Paw</span></div>
         <div style={css('display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px;font-size:15px;font-weight:700;color:#5B6472')}>
-          <span className="hv-dark" style={css('cursor:pointer')} data-toast="준비 중이에요">개인정보 처리방침</span><span style={css('width:1.5px;height:14px;background:#A0A7B2')}></span><span className="hv-dark" style={css('cursor:pointer')} data-toast="준비 중이에요">이용약관</span><span style={css('width:1.5px;height:14px;background:#A0A7B2')}></span><span className="hv-dark" style={css('cursor:pointer')} data-toast="준비 중이에요">사업자 정보 확인</span>
+          <a className="lk hv-dark" href={link('/privacy')}>개인정보 처리방침</a><span style={css('width:1.5px;height:14px;background:#A0A7B2')}></span><a className="lk hv-dark" href={link('/terms')}>이용약관</a><span style={css('width:1.5px;height:14px;background:#A0A7B2')}></span><a className="lk hv-dark" href={link('/business')}>사업자 정보 확인</a>
         </div>
         <span style={css('font-size:13px;color:#A0A7B2')}>© 2026 Paw oh Paw. All rights reserved.</span>
       </footer>
