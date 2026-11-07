@@ -78,7 +78,9 @@ if (!MOCK) {
   })
 
   onB('/account/profile', async (_p, fd) => {
-    if (!current()) return need_login()
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' } // 시연 기관은 actions_impl 이 처리
     try {
       await syncFromBackend(await api.updateMe({ name: f(fd, 'name').trim(), email: f(fd, 'email').trim() }))
       return redirect('/account', '저장했어요')
@@ -101,7 +103,9 @@ if (!MOCK) {
   })
 
   onB('/account/password', async (_p, fd) => {
-    if (!current()) return need_login()
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/account', '새 비밀번호는 8자 이상, 현재와 다르게 입력해 주세요')
     try {
       await api.changePassword(f(fd, 'current_pw'), f(fd, 'pw'))

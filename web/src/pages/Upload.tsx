@@ -2,7 +2,7 @@
 import { useFirstFrames, useShotVideos } from '../app/thumbs'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { cancelPhoneSession, dropEmptySession, openSession, PhoneCaptureModal, shotAction, usePhoneShots } from './parts/PhoneCapture'
-import { MOCK } from '../store/backend'
+import { MOCK, isRemote } from '../store/backend'
 import { useNavigate } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
@@ -165,6 +165,8 @@ export default function Upload() {
   }
 
   const startPhone = async () => {
+    // 시연 기관은 서버에 회차가 없어 QR 로 폰과 이을 수 없다(서버에 보내면 401)
+    if (!acct || !isRemote(acct.id)) return window.ppToast('체험 모드에서는 폰으로 촬영하기를 쓸 수 없어요. 로그인하면 쓸 수 있어요')
     try {
       const weight = (document.querySelector('input[name=weight]') as HTMLInputElement | null)?.value ?? ''
       const o = phoneSid ? { id: phoneSid, created: phoneCreated } : await openSession(sel.id, weight)
@@ -200,7 +202,7 @@ export default function Upload() {
                     style={css(`display:${!filt || `${d.name} ${d.no}`.indexOf(filt) >= 0 ? 'flex' : 'none'};align-items:center;gap:12px;padding:9px 14px;border-top:${i ? '1px solid #F2EFEA' : 'none'};cursor:pointer`)}>
                     <div className="av" style={css(`width:34px;height:34px;flex:none;border-radius:50%;background:${d.av};color:${d.avc};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;box-shadow:${d.ring}`)}>{d.init}</div>
                     <span className="nm" style={css(`font-size:15px;color:${d.nc};font-weight:${d.nw}`)}>{d.name}</span>
-                    <span style={css('font-size:13px;color:#7A808A')}>{d.no} · {d.breed}{d.kg ? ` · ${d.kg}kg` : ''}</span>
+                    <span style={css('font-size:13px;color:#7A808A')}>{[d.no, d.breed].filter(Boolean).join(' · ')}{d.kg ? ` · ${d.kg}kg` : ''}</span>
                   </div>
                 ))}
               </div>
