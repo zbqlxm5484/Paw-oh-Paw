@@ -20,6 +20,8 @@ export interface Known {
   n: number
   w: string
   by: string
+  /** 측정 이력에서의 순번(0 = 가장 최근). 이 브라우저에서 연 회차는 없음 */
+  ord?: number
 }
 
 function load(): Known[] {
@@ -88,9 +90,12 @@ export function toResult(o: SessionResultOut, dog: string): Result {
   return r
 }
 
-/** 최근 회차가 앞에 오게(측정일 → 끝난 시각) */
+/** 최근 회차가 앞에 오게(측정일 → 서버 이력 순서 → 끝난 시각). 같은 날 회차를 끝난 시각으로 세면 회차 번호가 앱(이력 순서)과 달라진다.
+ *  이 브라우저에서 연 회차(ord 없음)는 이력보다 새 것으로 둔다 */
 function byNewest(a: Result, b: Result): number {
-  return a.day === b.day ? (b.time || '').localeCompare(a.time || '') : (b.day || '').localeCompare(a.day || '')
+  if (a.day !== b.day) return (b.day || '').localeCompare(a.day || '')
+  if (a.ord != null || b.ord != null) return (a.ord ?? -1) - (b.ord ?? -1)
+  return (b.time || '').localeCompare(a.time || '')
 }
 
 /** 반려견별 측정 이력(15.8, 백엔드 !91)으로 끝난 회차를 모두 알아 둔다. 이 브라우저에서 연 회차만 알던 것을 보완한다.
@@ -102,7 +107,7 @@ async function historyOf(acct: Account): Promise<Known[]> {
       for (let page = 1; page < 20; page++) {
         const r = await api.dogSessions(d.id, page, 100)
         for (const s of r.items) {
-          if (FINAL.has(s.status)) out.push({ id: s.id, inst: acct.id, dog: d.id, started: 0, n: 0, w: s.weight_kg != null ? String(s.weight_kg) : d.kg, by: '' })
+          if (FINAL.has(s.status)) out.push({ id: s.id, inst: acct.id, dog: d.id, started: 0, n: 0, w: s.weight_kg != null ? String(s.weight_kg) : d.kg, by: '', ord: out.length })
         }
         if (page * r.size >= r.total || !r.items.length) break
       }
@@ -135,6 +140,7 @@ export async function syncSessions(acct: Account, withHistory = false): Promise<
         continue
       }
       const r = toResult(await api.sessionResult(k.id), k.dog)
+      if (k.ord != null) r.ord = k.ord
       acct.results = [r, ...acct.results.filter((x) => x.id !== r.id)]
       const job = acct.jobs.find((j) => j.id === k.id)
       if (job) job.result_id = r.id

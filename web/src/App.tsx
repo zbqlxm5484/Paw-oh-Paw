@@ -14,6 +14,7 @@ import Signup from './pages/Signup'
 import Forgot from './pages/Forgot'
 import Reset from './pages/Reset'
 import Expired from './pages/Expired'
+import NotFound from './pages/NotFound'
 import Admin from './pages/Admin'
 import Home from './pages/Home'
 import DogPage from './pages/Dog'
@@ -72,6 +73,7 @@ function Pages() {
       <Route path="/compare/:dog_id" element={<Compare />} />
       <Route path="/my" element={<My />} />
       <Route path="/account" element={<AccountPage />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

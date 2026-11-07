@@ -3,6 +3,7 @@ import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { PostForm, useTitle } from '../app/page'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
+import { link } from '../config'
 
 const INP = 'height:58px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:17px;color:#1B2433;outline:none'
 
@@ -10,6 +11,21 @@ export default function Reset() {
   useTitle('비밀번호 재설정 · Paw oh Paw')
   const { me, toast, query } = usePublicPage()
   const token = query.get('token') || ''
+
+  // 메일 링크가 아니라 주소를 직접 열면 토큰이 없다. 폼을 보여 줘도 서버가 거절(422)하므로 바로 안내한다
+  if (!token) {
+    return (
+      <Base me={me} toast={toast} topbar={<AuthBar />}>
+        <main style={css('max-width:560px;margin:6vh auto 96px;padding:0 24px')}>
+          <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:24px;padding:48px 44px;display:flex;flex-direction:column;gap:18px')}>
+            <h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.6px')}>재설정 링크가 필요해요</h1>
+            <p style={css('margin:0;font-size:16px;color:#5B6472;line-height:1.6')}>비밀번호는 메일로 받은 재설정 링크에서만 바꿀 수 있어요. 링크는 30분 동안만 쓸 수 있으니 지났으면 다시 받아 주세요.</p>
+            <a className="lk hv-orange" href={link('/forgot')} style={css('align-self:flex-start;height:52px;padding:0 22px;border-radius:14px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:16px;font-weight:700')}>재설정 링크 받기</a>
+          </div>
+        </main>
+      </Base>
+    )
+  }
 
   return (
     <Base me={me} toast={toast} topbar={<AuthBar />}>

@@ -3,23 +3,29 @@ import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { usePage, useTitle } from '../app/page'
 import { dogOf } from '../store/db'
-import { avatar, sess_no, st_chip } from '../views/views'
+import { avatar, sess_no, st_chip, wkg } from '../views/views'
 import { link } from '../config'
+import { useState } from 'react'
+
+/** 한 번에 그리는 줄 수. 회차가 수백 건 쌓이면 한 번에 다 그리지 않는다 */
+const PAGE = 50
 
 export default function Results() {
   const { acct, me, toast, query } = usePage({ login: true })
   useTitle('분석 결과 · Paw oh Paw')
   if (!acct) return null
   const dog = query.get('dog') ?? 'all'
+  const [shown, setShown] = useState(PAGE)
   const filt = dogOf(acct, dog) ? dog : 'all'
   const chips = [{ id: 'all', init: '전체', name: '전체', breed: '', ...avatar(filt === 'all') }]
   chips.push(...acct.dogs.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name, breed: d.breed || '견종 미입력', ...avatar(filt === d.id) })))
-  const rows = acct.results
-    .filter((r) => dogOf(acct, r.dog) && (filt === 'all' || r.dog === filt))
+  const all = acct.results.filter((r) => dogOf(acct, r.dog) && (filt === 'all' || r.dog === filt))
+  const rows = all
+    .slice(0, shown)
     .map((r, i) => ({
       id: r.id, name: dogOf(acct, r.dog)!.name, when: `${r.date} · ${sess_no(acct, r)}회차`,
       ...st_chip(r.st), pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`,
-      sym: r.st === 'fail' ? '—' : `${r.sym}%`, w: `${r.w}kg`, bt: i ? '1px solid #F2EFEA' : 'none',
+      sym: r.st === 'fail' ? '—' : `${r.sym}%`, w: wkg(r.w), bt: i ? '1px solid #F2EFEA' : 'none',
     }))
 
   return (
@@ -42,6 +48,7 @@ export default function Results() {
                 <b>{r.name}</b><span style={css('color:#5B6472')}>{r.when}</span><span><span style={css(`height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:${r.bg};color:${r.c};display:inline-flex;align-items:center`)}>{r.st}</span></span><span>{r.pass}</span><span>{r.sym}</span><span>{r.w}</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
               </a>
             ))}
+            {all.length > shown ? <div style={css('padding:14px;display:flex;justify-content:center;border-top:1px solid #F2EFEA')}><button type="button" className="bt" onClick={() => setShown(shown + PAGE)} style={css('height:42px;padding:0 20px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;font-size:14.5px;font-weight:700;cursor:pointer')}>{`더 보기 (${all.length - shown}건 남음)`}</button></div> : null}
             {!rows.length ? <div style={css('padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px')}><b style={css('font-size:17px')}>아직 분석 결과가 없어요</b><a className="lk" href={link('/upload')} style={css('height:46px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>보행 영상 분석하기</a></div> : null}
           </div>
         </div>

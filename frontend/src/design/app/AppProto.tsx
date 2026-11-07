@@ -12,7 +12,7 @@ import { BREEDS } from '../../api/labels'
 import { DCLogic } from '../DCLogic'
 import { ST, STEPS, type DDog, type DGait, type DRes } from '../adapter'
 import type { ProtoProps } from '../DesignRoot'
-import { EMPTY_PET, LIMB, LINES, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_ } from '../shared'
+import { EMPTY_PET, LIMB, LINES, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_, wkg } from '../shared'
 import { AppView } from './AppView'
 import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
 import { HELP_CARDS, HELP_CONTACT } from '../help'
@@ -249,15 +249,17 @@ export class AppProto extends DCLogic<Props, any> {
     const shown = dogs.filter((d) => !qq || d.name.includes(qq))
     const homeDogs = shown.map((d) => { const all = results.filter((r) => r.dog === d.id); return { init: d.name[0], name: d.name, desc: desc(d), live: !!d.open, meta: all.length ? `마지막 측정 ${all[0].date} · ${all.length}회차` : '아직 측정 기록이 없어요', open: () => this.openDog(d.id) } })
 
-    const D = dogById(this.props.params.dogId || '') || dogs[0]
+    // 주소의 반려견 id 가 없으면(지웠거나 다른 기관) 다른 반려견을 대신 보여 주지 않는다(none 상태로 안내)
+    const D = this.props.params.dogId ? dogById(this.props.params.dogId) : dogs[0]
     let dd: any = { name: '', init: '', desc: '', tags: [], rows: [], hist: [], has: false, none: true, count: '', edit: () => {}, compare: () => {}, start: () => {} }
+    if (!D && this.props.params.dogId && dogs.length) dd = { ...dd, name: '반려견을 찾을 수 없어요', init: '?', desc: '지웠거나 이 기관의 반려견이 아니에요' }
     if (D) {
       const all = results.filter((r) => r.dog === D.id), bId = baseOf(D), bR = results.find((r) => r.id === bId)
       dd = { name: D.name, init: D.name[0], desc: desc(D),
         tags: [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ' · 자동 분류'), SEX[D.sex || 'm']],
         rows: [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력', sub: '' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택', sub: '' },
           { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '보고서에는 넣지 않아요' }],
-        hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차 · ${r.date}`, sub: r.st === 'fail' ? `체중 ${r.w}kg · 쓸 수 있는 통과 없음` : `체중 ${r.w}kg · 유효 통과 ${r.ps[1]} · 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
+        hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차 · ${r.date}`, sub: r.st === 'fail' ? `${wkg(r.w)} · 쓸 수 있는 통과 없음` : `${wkg(r.w)} · 유효 통과 ${r.ps[1]} · 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
           setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id, version: D.raw.version }); this.toast(`${r.date} 회차를 기준으로 정했어요`) } catch (err) { this.toast(err instanceof ApiError && err.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : errMsg(err, '기준 회차를 바꾸지 못했어요')) } },
           st: stt[0], bg: stt[1], c: stt[2], bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) } }),
         has: all.length > 0, none: !all.length, count: all.length + '회차',

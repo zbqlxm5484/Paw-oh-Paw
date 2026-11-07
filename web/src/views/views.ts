@@ -67,6 +67,9 @@ export function valid(acct: Account, dog_id: string): Result[] {
   return acct.results.filter((r) => r.dog === dog_id && r.st !== 'fail')
 }
 
+/** 회차 체중 문구. 그날 체중을 안 적은 회차(weight_kg null → '-')는 '-kg' 대신 측정 불가 표기 */
+export const wkg = (w: string): string => (w && w !== '-' ? `${w}kg` : '—')
+
 export function sess_no(acct: Account, r: Result): number {
   const all_ = acct.results.filter((x) => x.dog === r.dog)
   return all_.length - all_.findIndex((x) => x.id === r.id)
@@ -215,7 +218,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
   const d = dogOf(acct, r.dog)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rd: Record<string, any> = {
-    name: d ? d.name : '-', desc: d ? desc(d) : '', when: `${r.date} · ${sess_no(acct, r)}회차 · 체중 ${r.w}kg`,
+    name: d ? d.name : '-', desc: d ? desc(d) : '', when: `${r.date} · ${sess_no(acct, r)}회차 · 체중 ${wkg(r.w)}`,
     ...st_chip(r.st), fail: r.st === 'fail', ok: r.st !== 'fail', part: r.st === 'part', id: r.id, dog: r.dog,
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -280,7 +283,7 @@ export function dog_detail(acct: Account, d: Dog) {
   const b_id = base_of(acct, d)
   const b_r = b_id ? resultOf(acct, b_id) : undefined
   const hist = all_.map((r, i) => ({
-    id: r.id, no: `${sess_no(acct, r)}회차`, date: r.date, w: `${r.w}kg`, by: r.by || '—',
+    id: r.id, no: `${sess_no(acct, r)}회차`, date: r.date, w: wkg(r.w), by: r.by || '—',
     pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`, model: r.model,
     rep: r.rep ? '있음' : '—', base: r.id === b_id, canBase: r.st !== 'fail' && r.id !== b_id,
     ...st_chip(r.st), bt: i ? '1px solid #F2EFEA' : 'none',

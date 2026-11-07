@@ -35,7 +35,8 @@ export default function Compare() {
   useEffect(() => {
     if (!remoteDog || !d) return
     let alive = true
-    api.compare(d.id, cmpKey === 'base' ? 'BASELINE' : 'PREVIOUS')
+    // target 을 비우면 서버가 '가장 최근 완료 회차'를 쓰는데, 통과 0건(실패) 회차면 전 항목이 비교 불가가 된다 → 유효한 최근 회차를 지정
+    api.compare(d.id, cmpKey === 'base' ? 'BASELINE' : 'PREVIOUS', acct ? valid(acct, d.id)[0]?.id : undefined)
       .then((o) => alive && setSrv({ key: cmpKey, o }))
       .catch(() => alive && setSrv(null)) // 비교 API 가 없거나 비교할 수 없으면 이 브라우저 계산 그대로
     return () => {
