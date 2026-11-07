@@ -30,6 +30,8 @@ export const NO_VALID_MSG = '쓸 수 있는 통과가 없었어요. 반려견이
 export const SERVER_FAIL_MSG = '분석에 실패했어요. 잠시 후 다시 시도해 주세요.'
 export const r1 = (v: number) => Math.round(v * 10) / 10
 export const num = (v: number | null | undefined) => (v == null ? '—' : v)
+/** 회차 체중 문구. 그날 체중을 안 적은 회차(weight_kg null → '-')는 '-kg' 대신 측정 불가 표기 */
+export const wkg = (w: string) => (w && w !== '-' ? `체중 ${w}kg` : '체중 —')
 export const desc = (d: DDog) => [d.breed || '견종 미입력', d.birth ? d.birth + '년생' : null, d.kg ? d.kg + 'kg' : null].filter(Boolean).join(' · ')
 export const chk = (on: boolean) => (on ? '#D2601A' : '#C9C4BC')
 export const pickSt = (on: boolean) => ({ bd: on ? '#D2601A' : '#ECE8E2', bg: on ? '#FCEEE3' : '#fff', c: on ? '#A8481A' : '#3A4250' })
@@ -70,7 +72,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   let rp: any = { title: '', when: '', summary: '', items: [], rows: [], cond: '' }
   if (!R) return { rd, rp }
   const d = ctx.dogById(R.dog) || ({ name: '-', breed: '', birth: '', kg: '' } as DDog), stt = ST[R.st]
-  rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · 체중 ${R.w}kg`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
+  rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · ${wkg(R.w)}`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
     failMsg: R.status === 'FAILED' ? R.result?.fail_reason?.message || SERVER_FAIL_MSG : NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
   if (R.st === 'fail') return { rd, rp }
   const vv = valid(ctx, R.dog), idx = vv.findIndex((x) => x.id === R.id), P = vv[idx + 1]

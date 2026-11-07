@@ -62,7 +62,9 @@ export function useDesignData(focusSessionId?: string): DesignData {
       const h: SessionHistoryItem = { id: f.id, measured_on: f.measured_on, weight_kg: f.weight_kg, status: f.status, is_baseline: false, valid_passes: { LEFT: 0, RIGHT: 0 }, model_version: f.model_version, reports: null }
       list.push(toResult(h, f.dog_id, f))
     }
-    return list.sort((a, b) => b.measured_on.localeCompare(a.measured_on) || b.id.localeCompare(a.id))
+    // 같은 측정일이면 서버 이력 순서(만든 시각이 늦은 순, api-spec 15.8)를 그대로 둔다. id 로 정렬하면 회차 번호가 웹과 달라진다
+    const ord = new Map(hist.items.map((s, i) => [s.id, i] as const))
+    return list.sort((a, b) => b.measured_on.localeCompare(a.measured_on) || (ord.get(a.id) ?? -1) - (ord.get(b.id) ?? -1))
   }, [hist.items, resultsQ, focusQ.data, missing])
 
   // 측정 중인 회차(반려견의 open_session_id). 하나만 "분석 중" 으로 보여 준다
@@ -86,8 +88,9 @@ export function useDesignData(focusSessionId?: string): DesignData {
 }
 
 /** 경과 비교 화면 값. 비교 대상 반려견·기준·추이 지표가 바뀌면 다시 읽는다 */
-export function useCompareData(dogId: string | undefined, mode: 'base' | 'prev', tk: string, focus: import('../api/types').Limb | null) {
-  const cmpQ = useCompare(dogId, { base: mode === 'base' ? 'BASELINE' : 'PREVIOUS', gait_type: 'TROT' })
+export function useCompareData(dogId: string | undefined, mode: 'base' | 'prev', tk: string, focus: import('../api/types').Limb | null, target?: string) {
+  // target: 유효 통과가 있는 가장 최근 회차. 비우면 서버가 '가장 최근 완료 회차'를 쓰는데 통과 0건인 회차면 전 항목이 비교 불가가 된다
+  const cmpQ = useCompare(dogId, { target, base: mode === 'base' ? 'BASELINE' : 'PREVIOUS', gait_type: 'TROT' })
   const trQ = useTrends(dogId, { metric_code: TREND_CODE[tk] ?? 'rom_stifle', gait_type: 'TROT' })
   return useMemo(
     () => ({

@@ -10,6 +10,8 @@ import dogLarge from './dog/dog_large.svg?raw'
 
 type Level = [number, string, string, string]
 const LEVEL: Level[] = [[5, '비슷해요', '#DCEFE2', '#2E8B57'], [10, '조금 차이 나요', '#F7D6AE', '#9A6A12'], [999, '차이가 커요', '#F2A898', '#C2412D']]
+/** 수치가 없는 부위: '비슷해요' 로 보이지 않게 */
+const NA_LEVEL: Level = [0, '측정 불가', '#E9E4DC', '#8E949C']
 const level = (si: number) => LEVEL.find((x) => si < x[0])!
 const LEGS: [string, string, string][] = [['front_left', 'LF', '왼앞'], ['front_right', 'RF', '오른앞'], ['hind_left', 'LH', '왼뒤'], ['hind_right', 'RH', '오른뒤']]
 const PARTS: ['front' | 'hind', string, [string, string, string][]][] = [
@@ -45,7 +47,7 @@ function metsOf(result: SessionResultOut | null | undefined) {
 }
 
 function partOf(label: string, mets: Met[]): Part {
-  if (!mets.length) return { si: 0, lv: LEVEL[0], say: `${label}는 비교할 수치가 없어요`, worst: null, weak: 'l' }
+  if (!mets.length) return { si: 0, lv: NA_LEVEL, say: `${label}는 비교할 수치가 없어요`, worst: null, weak: 'l' }
   const sis = mets.map((m) => (m.l + m.r ? (Math.abs(m.l - m.r) / ((m.l + m.r) / 2)) * 100 : 0))
   const k = sis.indexOf(Math.max(...sis))
   const worst = mets[k], si = sis[k], weak: 'l' | 'r' = worst.l < worst.r ? 'l' : 'r'
@@ -93,7 +95,7 @@ export function AppReport(p: AppReportProps) {
     for (const side of ['l', 'r'] as const) {
       const code = (side === 'l' ? 'L' : 'R') + (part === 'front' ? 'F' : 'H')
       const on = P.si >= 5 && side === P.weak
-      fills[code] = on ? P.lv[2] : P.si < 5 ? '#DCEFE2' : '#E9E4DC'
+      fills[code] = on ? P.lv[2] : P.lv === NA_LEVEL ? '#E9E4DC' : P.si < 5 ? '#DCEFE2' : '#E9E4DC'
       const other = side === 'l' ? 'r' : 'l'
       cards[code] = {
         label: LEGS.find(([, c]) => c === code)![2], weak: on, c: on ? P.lv[3] : '#5B6472', dot: fills[code],
@@ -133,7 +135,7 @@ export function AppReport(p: AppReportProps) {
         <div style={{ ...box({ border: '1.5px solid #E9D3C2', background: '#FFF9F4' }), display: 'grid', gridTemplateColumns: '64px 1fr', rowGap: '6px', columnGap: '10px', fontSize: '13px', lineHeight: 1.5 }}>
           <b style={{ color: '#A8481A' }}>주요 결과</b><span>{hind.si >= front.si ? hind.say : front.say}</span>
           <b style={{ color: '#A8481A' }}>측정 품질</b><span>{quality}</span>
-          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{prev ? `지난 측정(${prev[0]})보다 좌우 대칭 지수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}%p` : '첫 측정이라 비교할 회차가 없어요'}</span>
+          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `지난 측정(${prev[0]})보다 좌우 대칭 지수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}%p` : '첫 측정이라 비교할 회차가 없어요'}</span>
         </div>
       ) : null}
 

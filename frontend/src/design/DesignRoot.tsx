@@ -132,7 +132,8 @@ export function DesignRoot() {
     prevSt.current = st
   }, [sessQ.data?.status, qc])
   const cmpDog = route.screen === 'compare' ? data.dogs.find((d) => d.id === route.params.dogId) : undefined
-  const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null)
+  const cmpTarget = cmpDog ? data.results.find((r) => r.dog === cmpDog.id && r.st !== 'fail')?.id : undefined
+  const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null, cmpTarget)
   const reportsQ = useReportData(route.screen === 'report' ? route.params.sessionId : undefined)
   // 보고서 수의사용 탭: 이 회차를 직전 회차와 비교(서버 판정)하고 무릎 가동 범위 추이를 읽는다(웹 수의사용 보고서와 같은 구성)
   // 회차 결과 화면도 보고서와 같은 본문을 쓴다
@@ -248,8 +249,9 @@ if (landingPreload) {
 const SAFE_BOTTOM = 'var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))'
 
 /** 체험 모드 버튼. 로그인 전에는 "서버 없이 둘러보기", 체험 중에는 "체험 모드 끝내기"(src/app/demoMode.ts) */
-/** 체험 모드 버튼은 첫 화면·로그인·홈·마이페이지에서만 띄운다(결과·보고서·촬영 화면의 내용을 가리지 않게) */
-const PILL_SCREENS = new Set(['landing', 'login', 'home', 'my'])
+/** 체험 모드 버튼은 첫 화면·로그인·홈에서만 띄운다(결과·보고서·촬영 화면의 내용을 가리지 않게).
+ *  마이페이지는 아래쪽 로그아웃·알림 행과 겹치고 위쪽은 기관 제목과 겹쳐서 뺐다(끝내기는 홈에서) */
+const PILL_SCREENS = new Set(['landing', 'login', 'home'])
 
 function DemoPill({ screen }: { screen: string }) {
   const { loggedIn, login } = useAuth()

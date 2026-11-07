@@ -3,7 +3,7 @@
  * 디자인 로직(WebProto·AppProto)은 DOGS·RES 목업 모양을 기준으로 짜여 있어, 그 모양을 그대로 만들어 준다.
  * 화면 문구·배치는 디자인 원본이고, 여기서는 값만 채운다.
  */
-import { METRIC_LABEL, fmtMonthDay } from '../api/labels'
+import { METRIC_LABEL, fmtMonthDay, metricLabel } from '../api/labels'
 import type {
   CompareOut, DogOut, GaitType, Limb, LimbCompareOut, ReportOut, SessionDetailOut, SessionHistoryItem, SessionResultOut, SessionStatus, Sex, SizeClass, StaffOut, TrendsOut, Unit,
 } from '../api/types'
@@ -221,7 +221,7 @@ export function compareRows(cmp: CompareOut | undefined, focus: Limb | null): DC
     .map((it, idx) => ({ it, idx }))
     .sort((a, b) => rank(a.it) - rank(b.it) || a.idx - b.idx)
     .map(({ it }, i) => {
-      const n = METRIC_LABEL[it.metric_code] ?? it.metric_code
+      const n = metricLabel(it.metric_code)
       const u = UNIT_SIGN[it.unit]
       const bt = i ? '1px solid #F2EFEA' : 'none'
       const isFocus = !!focus && it.limb === focus
