@@ -25,6 +25,4 @@ export const HELP_CARDS: HelpCard[] = [
 
 export const HELP_CONTACT = [
   { label: '이메일', value: SUPPORT.email, href: `mailto:${SUPPORT.email}` },
-  { label: '전화', value: SUPPORT.phone, href: `tel:${SUPPORT.phone.replace(/-/g, '')}` },
-  { label: '운영 시간', value: SUPPORT.hours, href: '' },
 ]

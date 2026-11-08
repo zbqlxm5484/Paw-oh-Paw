@@ -203,7 +203,7 @@ export default function Home() {
         <div style={css('display:flex;gap:18px;align-items:flex-start')}>
           <div style={css('flex:1;min-width:0;border-radius:18px;background:#fff;border:1px solid #ECE8E2;overflow-x:auto')}>
             {table}
-            {!rows.length ? <div style={css('padding:48px 20px;text-align:center;font-size:15px;color:#5B6472')}>{view === 'today' ? '오늘 온 반려견이 없어요. 진료 기록이나 바이탈을 남기면 여기에 떠요.' : '조건에 맞는 ' + (view === 'analyses' ? '분석이' : view === 'dogs' ? '반려견이' : '담당자가') + ' 없어요.'}</div> : null}
+            {!rows.length ? <div style={css('padding:48px 20px;text-align:center;font-size:15px;color:#5B6472')}>{view === 'today' ? '오늘 진행한 분석 및 진료가 없습니다.' : '조건에 맞는 ' + (view === 'analyses' ? '분석이' : view === 'dogs' ? '반려견이' : '담당자가') + ' 없습니다.'}</div> : null}
           </div>
 
         </div>

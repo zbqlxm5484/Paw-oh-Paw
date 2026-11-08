@@ -154,9 +154,9 @@ post('/signup', (_p, fd) => {
   const [c, acct, err] = _verify(code) // 화면에서 확인했어도 다시 검사한다
   if (err || !c || !acct) return redirect('/signup', err)
   const email = f(fd, 'email').trim().toLowerCase(), name = f(fd, 'name').trim()
-  if (!LOGIN_RE.test(login_id)) return redirect('/signup', '아이디는 영문 소문자·숫자·.·_·- 로 4~50자예요')
-  if (!check_pw(pw)) return redirect('/signup', '비밀번호는 8자 이상이에요')
-  if (pw !== pw2) return redirect('/signup', '비밀번호가 서로 달라요')
+  if (!LOGIN_RE.test(login_id)) return redirect('/signup', '아이디는 영문 소문자·숫자·.·_·- 로 4~50자입니다')
+  if (!check_pw(pw)) return redirect('/signup', '비밀번호는 8자 이상입니다')
+  if (pw !== pw2) return redirect('/signup', '비밀번호가 서로 다릅니다')
   if (!nameEmailOk(name, email)) return redirect('/signup', '이름과 이메일을 확인해 주세요')
   if (byLogin(login_id)) return redirect('/signup', '이미 사용 중인 아이디입니다.')
   const t = new Date()
@@ -165,7 +165,7 @@ post('/signup', (_p, fd) => {
     device_code: c.id, joined: `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일`, reset_token: '', reset_until: 0,
   }
   db.staff[s.id] = s
-  return login_as('/home', s, `${acct.name} 담당자로 가입했어요`)
+  return login_as('/home', s, `${acct.name} 담당자로 가입했습니다`)
 })
 
 // ── 비밀번호 찾기·재설정 (메일 서버가 없어 링크를 화면에 보여 준다) ──
@@ -191,7 +191,7 @@ post('/reset-password', async (_p, fd) => {
   s.password = pw
   s.reset_token = ''
   s.reset_until = 0
-  return redirect('/login', '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요')
+  return redirect('/login', '비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요')
 })
 
 // ── 내 정보: 이름·이메일 수정, 비밀번호 변경 ──
@@ -202,7 +202,7 @@ post('/account/profile', (_p, fd) => {
   if (!nameEmailOk(name, email)) return redirect('/account', '이름과 이메일을 확인해 주세요')
   s.name = name
   s.email = email
-  return redirect('/account', '저장했어요')
+  return redirect('/account', '저장했습니다')
 })
 
 post('/account/withdraw', (_p, fd) => {
@@ -212,7 +212,7 @@ post('/account/withdraw', (_p, fd) => {
   if (!Object.values(db.staff).some((x) => x.inst === s.inst && x.active && x.id !== s.id)) return redirect('/account', '기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요.')
   s.active = false
   setLogin(null)
-  return redirect('/login', '탈퇴했어요. 그동안 이용해 주셔서 감사합니다')
+  return redirect('/login', '탈퇴했습니다. 그동안 이용해 주셔서 감사합니다')
 })
 
 post('/account/password', (_p, fd) => {
@@ -222,7 +222,7 @@ post('/account/password', (_p, fd) => {
   if (s.password !== current_pw) return redirect('/account', '현재 비밀번호가 맞지 않습니다.')
   if (!check_pw(pw) || pw !== pw2 || pw === current_pw) return redirect('/account', '새 비밀번호는 8자 이상, 현재와 다르게 입력해 주세요')
   s.password = pw
-  return redirect('/account', '비밀번호를 바꿨어요')
+  return redirect('/account', '비밀번호를 바꿨습니다')
 })
 
 // ── 크림오프 관리 (ADMIN 은 전부, STAFF 는 보기만) ──
@@ -233,28 +233,28 @@ function admin_write(): Staff | undefined {
 
 post('/admin/institutions', (_p, fd) => {
   const name = f(fd, 'name'), ends = f(fd, 'ends')
-  if (!admin_write()) return redirect('/admin', '조회 전용 계정이에요')
+  if (!admin_write()) return redirect('/admin', '조회 전용 계정입니다')
   if (!(1 <= plen(name.trim()) && plen(name.trim()) <= 100)) return redirect('/admin', '기관명을 입력해 주세요')
   const a: Account = {
     id: new_id('i'), login_id: '', password: '', name: name.trim(), loc: '-', dev: '-', joined: '2026년 10월 2일',
     dogs: [], results: [], jobs: [], notif_on: true, code: 'INST-' + token_hex(3).toUpperCase(), contract_ends: ends || null,
   }
   db.accounts[a.id] = a
-  return redirect('/admin', `${name.trim()} 기관을 만들었어요`)
+  return redirect('/admin', `${name.trim()} 기관을 만들었습니다`)
 })
 
 post('/admin/institutions/:inst', (p, fd) => {
   const ends = f(fd, 'ends')
   const a = getAccount(p.inst)
-  if (!admin_write() || !a) return redirect('/admin', '조회 전용 계정이에요')
+  if (!admin_write() || !a) return redirect('/admin', '조회 전용 계정입니다')
   a.contract_ends = ends || null
-  return redirect('/admin', `${a.name} 계약 종료일을 ${!ends ? '없음' : ends}(으)로 바꿨어요`)
+  return redirect('/admin', `${a.name} 계약 종료일을 ${!ends ? '없음' : ends}(으)로 바꿨습니다`)
 })
 
 post('/admin/institutions/:inst/codes', (p, fd) => {
   const note = f(fd, 'note')
   const a = getAccount(p.inst)
-  if (!admin_write() || !a) return redirect('/admin', '조회 전용 계정이에요')
+  if (!admin_write() || !a) return redirect('/admin', '조회 전용 계정입니다')
   // 기관마다 쓸 수 있는 코드는 하나(192). 회수한 뒤 발급한다
   if (Object.values(db.codes).some((x) => x.inst === p.inst && !x.revoked)) return redirect('/admin', '이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요.')
   const code = randChoice(CODE_CHARS, 20)
@@ -269,22 +269,22 @@ post('/admin/institutions/:inst/codes', (p, fd) => {
 post('/admin/codes/:cid', (p, fd) => {
   const revoke = f(fd, 'revoke')
   const c = db.codes[p.cid]
-  if (!admin_write() || !c) return redirect('/admin', '조회 전용 계정이에요')
+  if (!admin_write() || !c) return redirect('/admin', '조회 전용 계정입니다')
   if (revoke) {
     c.revoked = true
-    return redirect('/admin', '코드를 회수했어요. 기존 계정은 그대로 쓸 수 있어요')
+    return redirect('/admin', '코드를 회수했습니다. 기존 계정은 그대로 쓸 수 있습니다')
   }
   c.note = [...f(fd, 'note')].slice(0, 100).join('')
-  return redirect('/admin', '메모를 바꿨어요')
+  return redirect('/admin', '메모를 바꿨습니다')
 })
 
 post('/admin/staff/:sid', (p) => {
   const me = admin_write()
   const t = db.staff[p.sid]
-  if (!me || !t) return redirect('/admin', '조회 전용 계정이에요')
+  if (!me || !t) return redirect('/admin', '조회 전용 계정입니다')
   if (t.id === me.id) return redirect('/admin', '자기 계정은 중지할 수 없습니다.')
   t.active = !t.active
-  return redirect('/admin', `${t.name} 계정을 ${t.active ? '다시 열었어요' : '중지했어요'}`)
+  return redirect('/admin', `${t.name} 계정을 ${t.active ? '다시 열었습니다' : '중지했습니다'}`)
 })
 
 post('/logout', () => {
@@ -316,7 +316,7 @@ post('/dogs/:dog_id/notes', (p, fd) => {
     const [kg, temp, hr, sbp, dbp] = vals
     d.vitals.unshift({ day: today, kg, temp, hr, sbp, dbp, author })
     d.kg = vals[0]
-    if (!soap.length) return redirect(back, '바이탈을 기록했어요')
+    if (!soap.length) return redirect(back, '바이탈을 기록했습니다')
   }
   if (soap.length && !note_id) {
     // SOAP 칸으로 쓴 진료 기록: 채운 칸마다 한 줄, 같은 시각으로 묶인다
@@ -325,7 +325,7 @@ post('/dogs/:dog_id/notes', (p, fd) => {
     soap.forEach(([k, v], i) => {
       d.notes.unshift(mkNote(at, author, k, v, !!important && i === 0, r && r.dog === d.id ? r.id : ''))
     })
-    return redirect(back, '기록을 남겼어요')
+    return redirect(back, '기록을 남겼습니다')
   }
   if (!text) return redirect(back, '내용을 적어 주세요')
   let cat = F(fd, 'cat', 'O')
@@ -338,11 +338,11 @@ post('/dogs/:dog_id/notes', (p, fd) => {
       n.author = author
       n.text = text
     }
-    return redirect(back, '고쳤어요. 이전 내용은 이력에 남아요')
+    return redirect(back, '고쳤습니다. 이전 내용은 이력에 남습니다')
   }
   const r = resultOf(acct, rid)
   d.notes.unshift(mkNote(_now(), author, cat, text, !!important, r && r.dog === d.id ? r.id : ''))
-  return redirect(back, cat in config.MEMO_CAT ? '메모를 남겼어요' : '기록을 남겼어요')
+  return redirect(back, cat in config.MEMO_CAT ? '메모를 남겼습니다' : '기록을 남겼습니다')
 })
 
 const mkNote = (at: string, author: string, cat: string, text: string, important: boolean, rid: string): Note => ({
@@ -368,7 +368,7 @@ post('/dogs/:dog_id/vitals', (p, fd) => {
   d.vitals.unshift(v)
   d.vitals.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
   if (v.kg) d.kg = v.kg
-  return redirect(back, '바이탈을 기록했어요')
+  return redirect(back, '바이탈을 기록했습니다')
 })
 
 post('/dogs/:dog_id/history', (p, fd) => {
@@ -391,7 +391,7 @@ post('/dogs/:dog_id/history', (p, fd) => {
     d.stage_day = day
   }
   if (kind === '재활' && !d.rehab) d.rehab = day
-  return redirect(back, '진단 이력에 남겼어요')
+  return redirect(back, '진단 이력에 남겼습니다')
 })
 
 // ── 반려견 등록·수정·삭제·기준 회차 ──
@@ -419,7 +419,7 @@ post('/dogs', (_p, fd) => {
       return redirect(next_url, '다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.')
     Object.assign(d, data)
     d.version += 1
-    return redirect(next_url, '저장했어요')
+    return redirect(next_url, '저장했습니다')
   }
   const nd: Dog = {
     id: new_id('p'), ...data, base: null, no: '', owner: '', phone: '', stage: 'rehab', stage_day: '',
@@ -428,8 +428,8 @@ post('/dogs', (_p, fd) => {
   d = nd
   acct.dogs.push(d)
   const sep = next_url.includes('?') ? '&' : '?'
-  if (next_url.startsWith('/upload') || next_url.startsWith('/my')) return redirect(`${next_url}${sep}dog=${d.id}`, `${d.name} 등록을 마쳤어요`)
-  return redirect(`/dogs/${d.id}`, `${d.name} 등록을 마쳤어요`)
+  if (next_url.startsWith('/upload') || next_url.startsWith('/my')) return redirect(`${next_url}${sep}dog=${d.id}`, `${d.name} 등록을 마쳤습니다`)
+  return redirect(`/dogs/${d.id}`, `${d.name} 등록을 마쳤습니다`)
 })
 
 post('/dogs/:dog_id/delete', (p) => {
@@ -440,7 +440,7 @@ post('/dogs/:dog_id/delete', (p) => {
   acct.dogs = acct.dogs.filter((x) => x.id !== p.dog_id)
   acct.results = acct.results.filter((r) => r.dog !== p.dog_id)
   acct.jobs = acct.jobs.filter((j) => j.dog !== p.dog_id)
-  return redirect('/my', `${d.name} 정보를 삭제했어요`)
+  return redirect('/my', `${d.name} 정보를 삭제했습니다`)
 })
 
 post('/dogs/:dog_id/base', (p, fd) => {
@@ -449,7 +449,7 @@ post('/dogs/:dog_id/base', (p, fd) => {
   const d = dogOf(acct, p.dog_id), r = resultOf(acct, f(fd, 'rid'))
   if (d && r && r.st !== 'fail') {
     d.base = r.id
-    return redirect(`/dogs/${p.dog_id}`, `${r.date} 회차를 기준으로 정했어요`)
+    return redirect(`/dogs/${p.dog_id}`, `${r.date} 회차를 기준으로 정했습니다`)
   }
   return redirect(`/dogs/${p.dog_id}`)
 })
@@ -473,7 +473,7 @@ post('/analyze', (_p, fd) => {
     if (!file.name) continue
     const ext = suffix(file.name)
     if (!VIDEO_EXT.includes(ext) && !(file.type || '').startsWith('video/'))
-      return redirect(`/upload?dog=${dog}`, '영상 파일(MP4 · MOV)만 올릴 수 있어요')
+      return redirect(`/upload?dog=${dog}`, '영상 파일(MP4 · MOV)만 올릴 수 있습니다')
     saved.push(URL.createObjectURL(file)) // 시제품은 uploads/ 에 저장한 주소
   }
   const n = saved.length || Math.max(0, Math.min(I(fd, 'demo_count', 0), config.MAX_SHOTS))

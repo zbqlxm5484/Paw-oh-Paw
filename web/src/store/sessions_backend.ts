@@ -9,7 +9,7 @@ import type { Account, Metrics, Result } from './types'
 const KEY = 'pp.web.sessions'
 const POLL_MS = 4000
 const FINAL = new Set(['DONE', 'FAILED'])
-export const SERVER_FAIL_MSG = '분석에 실패했어요. 잠시 후 다시 시도해 주세요.'
+export const SERVER_FAIL_MSG = '분석에 실패했습니다. 잠시 후 다시 시도해 주세요.'
 
 /** 이 브라우저에서 연 회차 */
 export interface Known {

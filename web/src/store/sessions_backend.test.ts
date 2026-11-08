@@ -53,7 +53,7 @@ describe('백엔드 회차 결과 → 화면 결과 (sessions_backend.toResult)'
     const r = toResult(out({ status: 'FAILED', fail_reason: { code: 'AGGREGATION_FAILED', message: '수치를 계산하지 못했어요' }, gaits: [] }), 'd1')
     expect(r.st).toBe('fail')
     expect(r.fail_msg).toBe('수치를 계산하지 못했어요')
-    expect(toResult(out({ status: 'FAILED', gaits: [] }), 'd1').fail_msg).toBe('분석에 실패했어요. 잠시 후 다시 시도해 주세요.')
+    expect(toResult(out({ status: 'FAILED', gaits: [] }), 'd1').fail_msg).toBe('분석에 실패했습니다. 잠시 후 다시 시도해 주세요.')
   })
 
   it('유효 통과 0건(DONE)은 화면 기본 촬영 안내를 쓴다(따로 문구를 싣지 않음)', () => {

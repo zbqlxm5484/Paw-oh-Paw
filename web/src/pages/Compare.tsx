@@ -45,7 +45,7 @@ export default function Compare() {
   }, [remoteDog, d, cmpKey])
   let go: Go | null = null
   if (acct && !d) go = redirect('/home')
-  else if (acct && d && valid(acct, d.id).length < 2) go = redirect(`/dogs/${dog_id}`, '유효한 회차가 2개 이상 있어야 비교할 수 있어요')
+  else if (acct && d && valid(acct, d.id).length < 2) go = redirect(`/dogs/${dog_id}`, '유효한 회차가 2개 이상 있어야 비교할 수 있습니다')
   useRedirect(go)
   if (!acct || !d || go) return null
 
@@ -71,14 +71,14 @@ export default function Compare() {
         <a className="lk" href={link(`/dogs/${d.id}`)} style={css('align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{d.name} 차트</a>
         <div style={css('display:flex;flex-direction:column;gap:6px')}><h1 style={css('margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px')}>{cp.name} 경과 비교</h1></div>
         {!cp.has ? (
-          <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:40px 32px;font-size:15px;color:#5B6472')}>비교하려면 유효한 회차가 2개 이상 필요해요.</div>
+          <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:40px 32px;font-size:15px;color:#5B6472')}>비교하려면 유효한 회차가 2개 이상 필요합니다.</div>
         ) : (
           <>
             <div style={css('display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
               <div style={css('display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:380px;max-width:100%')}>
                 {segs.map((g) => <a key={g.key} className="lk" href={link(`?cmp=${g.key}&tk=${tk}`)} onClick={rel(`?cmp=${g.key}&tk=${tk}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
               </div>
-              <div style={css('flex:1 1 360px;min-width:0;background:#fff;border:1px solid #ECE8E2;border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
+              <div style={css('flex:0 0 auto;max-width:100%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
                 <div><span style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>{cp.baseLabel}</span><b style={css('display:block;font-size:16px;font-variant-numeric:tabular-nums')}>{cp.baseDate}</b></div>
                 <svg width="22" height="22" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><path d="M3 12h17M14 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"></path></svg>
                 <div><span style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>최근 회차</span><b style={css('display:block;font-size:16px;font-variant-numeric:tabular-nums')}>{cp.tDate}</b></div>
@@ -111,7 +111,6 @@ export default function Compare() {
                 <span style={css('font-size:13px;color:#5B6472')}>{cp.focusNote}</span>
               </div>
             </div>
-            <span style={css('font-size:13px;color:#8E949C')}>{srv ? '증가·감소는 수치마다 정한 측정 오차 범위를 넘을 때만 표시해요(두 회차 모두 걸음 8회 이상일 때). ' : '증가·감소는 측정 오차 범위(±1)를 넘을 때만 표시해요. '}변화의 의미는 수의사가 판단해요.</span>
           </>
         )}
       </main>

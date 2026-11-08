@@ -61,7 +61,7 @@ export default function Upload() {
   useEffect(() => {
     if (phoneN >= MAX_SHOTS && showQr) {
       setShowQr(false)
-      window.ppToast(`폰에서 영상 ${MAX_SHOTS}개가 모두 올라왔어요`)
+      window.ppToast(`폰에서 영상 ${MAX_SHOTS}개가 모두 올라왔습니다`)
     }
   }, [phoneN, showQr])
 
@@ -94,7 +94,7 @@ export default function Upload() {
   // 3. 영상 첨부
   const add = (list: FileList | File[]) => {
     if (n >= max) {
-      window.ppToast('영상 ' + max + '개를 모두 첨부했어요')
+      window.ppToast('영상 ' + max + '개를 모두 첨부했습니다')
       return
     }
     let added = 0
@@ -112,8 +112,8 @@ export default function Upload() {
       }
     })
     if (added) setDemo(0)
-    if (bad && !added) return window.ppToast('영상 파일(MP4 · MOV)만 올릴 수 있어요')
-    if (added) window.ppToast(added === 1 ? next.length + '번째 영상을 첨부했어요' : '영상 ' + added + '개를 첨부했어요')
+    if (bad && !added) return window.ppToast('영상 파일(MP4 · MOV)만 올릴 수 있습니다')
+    if (added) window.ppToast(added === 1 ? next.length + '번째 영상을 첨부했습니다' : '영상 ' + added + '개를 첨부했습니다')
     setFiles(next)
   }
   const dragProps = (k: 'drop' | 'slot') => ({
@@ -145,7 +145,7 @@ export default function Upload() {
     if (id === sel.id) return
     if (phoneSid) {
       const to = dogOf(acct, id)?.name ?? '다른 반려견'
-      if (phoneN && !window.confirm(`폰으로 올린 영상 ${phoneN}개는 ${sel.name}의 회차에 그대로 남아요. ${to}(으)로 바꿀까요?`)) return
+      if (phoneN && !window.confirm(`폰으로 올린 영상 ${phoneN}개는 ${sel.name}의 회차에 그대로 남습니다. ${to}(으)로 바꾸시겠습니까?`)) return
       if (!phoneN && phoneCreated) dropEmptySession(phoneSid)
       setPhoneSid('')
       setPhoneCreated(false)
@@ -156,7 +156,7 @@ export default function Upload() {
 
   // 이 회차 취소: 회차와 올라온 영상이 모두 지워진다(되돌릴 수 없음). 영상이 있으면 개수를 알려 확인을 받는다
   const cancelPhone = async () => {
-    if (phoneN && !window.confirm(`이 회차에 올라온 영상 ${phoneN}개${phoneCreated ? '' : '(앞서 올린 영상 포함)'}가 모두 지워져요. 회차를 취소할까요?`)) return
+    if (phoneN && !window.confirm(`이 회차에 올라온 영상 ${phoneN}개${phoneCreated ? '' : '(앞서 올린 영상 포함)'}가 모두 지워집니다. 회차를 취소하시겠습니까?`)) return
     if (await cancelPhoneSession(phoneSid)) {
       setPhoneSid('')
       setPhoneCreated(false)
@@ -166,7 +166,7 @@ export default function Upload() {
 
   const startPhone = async () => {
     // 시연 기관은 서버에 회차가 없어 QR 로 폰과 이을 수 없다(서버에 보내면 401)
-    if (!acct || !isRemote(acct.id)) return window.ppToast('체험 모드에서는 폰으로 촬영하기를 쓸 수 없어요. 로그인하면 쓸 수 있어요')
+    if (!acct || !isRemote(acct.id)) return window.ppToast('체험 모드에서는 폰으로 촬영하기를 쓸 수 없습니다. 로그인하면 쓸 수 있습니다')
     try {
       const weight = (document.querySelector('input[name=weight]') as HTMLInputElement | null)?.value ?? ''
       const o = phoneSid ? { id: phoneSid, created: phoneCreated } : await openSession(sel.id, weight)
@@ -174,7 +174,7 @@ export default function Upload() {
       setPhoneCreated(o.created)
       setShowQr(true)
     } catch (e) {
-      window.ppToast(e instanceof Error ? e.message : '회차를 열지 못했어요')
+      window.ppToast(e instanceof Error ? e.message : '회차를 열지 못했습니다')
     }
   }
 
@@ -208,7 +208,7 @@ export default function Upload() {
               </div>
               <span data-pet="new" style={css('align-self:flex-start;font-size:14.5px;font-weight:700;color:#D2601A;cursor:pointer')}>+ 새 반려견 등록</span>
             </div>
-            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '폰 촬영 회차를 연 뒤에는 체중을 바꿀 수 없어요' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:16px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '폰 촬영 회차를 연 뒤에는 체중을 바꿀 수 없습니다' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:16px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
             <div style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:16px;font-weight:700')}>오늘 바이탈 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span>
               <div style={css('display:grid;grid-template-columns:repeat(4,minmax(0,140px));gap:10px')}>
                 {VITALS.map(([nm, label, ph]) => (
@@ -223,7 +223,7 @@ export default function Upload() {
                 <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
                   <button type="button" className="bt hv-border" onClick={startPhone} style={css('height:42px;padding:0 16px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700')}>📱 폰으로 촬영하기</button>
                   {phoneSid ? <button type="button" className="hv-dark" onClick={cancelPhone} style={css('height:42px;padding:0 10px;background:none;border:0;font-size:13.5px;font-weight:600;color:#8E949C;text-decoration:underline;cursor:pointer')}>이 회차 취소</button> : null}
-                  <span style={css('font-size:13px;color:#5B6472')}>{phoneSid ? (phoneN ? `폰에서 영상 ${phoneN}개가 올라왔어요` : 'QR 을 찍어 폰에서 촬영해 주세요') : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있어요'}</span>
+                  <span style={css('font-size:13px;color:#5B6472')}>{phoneSid ? (phoneN ? `폰에서 영상 ${phoneN}개가 올라왔습니다` : 'QR 을 찍어 폰에서 촬영해 주세요') : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있습니다'}</span>
                 </div>
               ) : null}
               <div id="dropZone" className="drop" onClick={() => picker.current?.click()} {...dragProps('drop')}
@@ -260,14 +260,14 @@ export default function Upload() {
                           {ps && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
                           {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:11px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
-                          {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지울까요? 지운 영상은 되돌릴 수 없어요.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
+                          {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지우시겠습니까? 지운 영상은 되돌릴 수 없습니다.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
                           <span style={css('position:absolute;left:7px;top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
                         </div>
                       )
                     })}
                   </div>
-                  <span id="shotHint" style={css('font-size:13px;color:#5B6472;line-height:1.5')}>{n >= max ? '16개를 모두 첨부했어요. 분석을 시작해 주세요.' : n + 1 + '번째 영상을 이어서 올려 주세요. 16개를 모두 채우면 결과가 더 정확해요.'}</span>
+                  <span id="shotHint" style={css('font-size:13px;color:#5B6472;line-height:1.5')}>{n >= max ? '16개를 모두 첨부했습니다. 분석을 시작해 주세요.' : n + 1 + '번째 영상을 이어서 올려 주세요. 16개를 모두 채우면 결과가 더 정확합니다.'}</span>
                 </div>
               </div>
             </div>

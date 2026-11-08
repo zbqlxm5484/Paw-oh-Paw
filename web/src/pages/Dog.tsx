@@ -31,7 +31,7 @@ export default function DogPage() {
   useTitle(cur ? `${cur.name} · Paw oh Paw` : 'Paw oh Paw')
   useEffect(() => {
     if (missing) {
-      setToast('반려견을 찾을 수 없어요')
+      setToast('반려견을 찾을 수 없습니다')
       navigate('/home', { replace: true })
     }
   }, [missing, navigate])
@@ -81,7 +81,7 @@ export default function DogPage() {
               <span style={css('display:flex;gap:4px;flex-wrap:wrap;align-items:center')}>{x.tags.map((t, i) => <span key={i} style={css(`padding:1px 7px;border-radius:6px;background:${t.bg};color:${t.c};font-size:11.5px;font-weight:700`)}>{t.t}</span>)}{x.n_soap ? <span style={css('font-size:11.5px;color:#8E949C')}>기록 {x.n_soap}</span> : null}<span style={css('margin-left:auto;font-size:12px;color:#8E949C')}>{x.who.split(' ')[0]}</span></span>
             </a>
           ))}
-          {!vis.length ? <span style={css('font-size:13.5px;color:#A0A7B2;padding:8px 4px')}>아직 방문 기록이 없어요.</span> : null}
+          {!vis.length ? <span style={css('font-size:13.5px;color:#A0A7B2;padding:8px 4px')}>아직 방문 기록이 없습니다.</span> : null}
         </aside>
 
         {/* 가운데: 고른 방문의 기록 */}
@@ -145,7 +145,7 @@ export default function DogPage() {
                 ))}
               </div>
             ))}
-            {v !== today_iso && !(sel && sel.soap.length) ? <span style={css('font-size:13.5px;color:#A0A7B2')}>이 방문에 남긴 진료 기록이 없어요.</span> : null}
+            {v !== today_iso && !(sel && sel.soap.length) ? <span style={css('font-size:13.5px;color:#A0A7B2')}>이 방문에 남긴 진료 기록이 없습니다.</span> : null}
           </div>
 
           {sel && sel.res.length ? (
@@ -195,7 +195,7 @@ export default function DogPage() {
               <span style={css('display:flex;justify-content:space-between;font-size:12px;color:#8E949C')}><span>보행 측정 {e.n}회</span><span>{e.by}</span></span>
             </div>
           ))}
-          {!dx.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>진단 기록이 없어요.</span> : null}
+          {!dx.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>진단 기록이 없습니다.</span> : null}
         </aside>
       </div>
     )
@@ -216,7 +216,7 @@ export default function DogPage() {
                 </div>
               ))}
             </div>
-          ) : <span style={css('font-size:14px;color:#A0A7B2')}>올린 영상·사진이 없어요.</span>}
+          ) : <span style={css('font-size:14px;color:#A0A7B2')}>올린 영상·사진이 없습니다.</span>}
         </div>
         {sm.has ? (
           <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px')}>
@@ -240,7 +240,7 @@ export default function DogPage() {
               {sm.vit.map((x, i) => <path key={`v${i}`} d={`M${x.x - 4},${H_B + 34} L${x.x + 4},${H_B + 34} L${x.x},${H_B + 27} Z`} fill="#9AA3AF"></path>)}
               {sm.ticks.map((t, i) => <text key={`t${i}`} x={t.x} y={sm.H - 4} textAnchor="middle" fontSize="11" fill="#8E949C">{t.t}</text>)}
             </svg>
-          ) : <span style={css('font-size:14px;color:#A0A7B2')}>아직 기록이 없어요.</span>}
+          ) : <span style={css('font-size:14px;color:#A0A7B2')}>아직 기록이 없습니다.</span>}
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:16px')}>
           <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px 20px')}>
@@ -259,7 +259,7 @@ export default function DogPage() {
                 <span style={css('text-align:right')}>{h.canBase ? <PostForm action={`/dogs/${cur.id}/base`} style={css('display:inline;margin:0')}><input type="hidden" name="rid" value={h.id} /><button className="bt" type="submit" style={css('background:none;font-size:13px;font-weight:700;color:#B4501A;padding:6px 0')}>기준 회차로 지정</button></PostForm> : null}</span>
               </div>
             ))}
-            {!dd.hist.length ? <div style={css('padding:28px 24px;font-size:15px;color:#5B6472')}>아직 측정 기록이 없어요.</div> : null}
+            {!dd.hist.length ? <div style={css('padding:28px 24px;font-size:15px;color:#5B6472')}>아직 측정 기록이 없습니다.</div> : null}
           </div>
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px')}>
@@ -269,7 +269,7 @@ export default function DogPage() {
           {vt.rows.map((x, i) => (
             <div key={i} style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums')}><span style={css('color:#7A808A')}>{x.day}</span>{(['kg', 'temp', 'hr', 'bp'] as VK[]).map((key) => <span key={key}><VV value={x[key]} f={x.f[key]} size={14.5} /></span>)}<span style={css('font-size:13px;color:#8E949C')}>{x.author}</span></div>
           ))}
-          {!vt.rows.length ? <span style={css('font-size:14px;color:#A0A7B2')}>기록이 없어요.</span> : null}
+          {!vt.rows.length ? <span style={css('font-size:14px;color:#A0A7B2')}>기록이 없습니다.</span> : null}
         </div>
       </>
     )
@@ -296,7 +296,7 @@ export default function DogPage() {
               {e.events.map((x, j) => <span key={j} style={css('font-size:14px;color:#3A4250;padding-left:12px;border-left:2px solid #ECE8E2')}><span style={css('color:#8E949C;font-variant-numeric:tabular-nums')}>{x.day}</span> <b>{x.kind}</b> {x.title}</span>)}
             </div>
           ))}
-          {!dx.length ? <span style={css('font-size:14px;color:#A0A7B2')}>기록이 없어요.</span> : null}
+          {!dx.length ? <span style={css('font-size:14px;color:#A0A7B2')}>기록이 없습니다.</span> : null}
         </div>
       </>
     )

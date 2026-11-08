@@ -112,7 +112,7 @@ export function rows(r: Result): Row[] {
       row.sec = sec
       last = sec
     }
-    if (left == null || right == null) Object.assign(row, { na: true, reason: '이 방향 영상에서 해당 관절을 잴 수 없었어요' })
+    if (left == null || right == null) Object.assign(row, { na: true, reason: '이 방향 영상에서 해당 관절을 잴 수 없었습니다' })
     else Object.assign(row, { l: pyround(left), r: pyround(right), u: unit })
     out.push(row)
   }

@@ -54,7 +54,7 @@ describe('디바이스 코드: 기관마다 쓸 수 있는 코드 하나 (/admin
   })
   it('회수한 뒤에는 발급된다', async () => {
     setLogin('s_admin')
-    for (const id of ['c_demo', 'c_full']) expect((await dispatch(`/admin/codes/${id}`, fd({ revoke: '1' }))).toast).toContain('회수했어요')
+    for (const id of ['c_demo', 'c_full']) expect((await dispatch(`/admin/codes/${id}`, fd({ revoke: '1' }))).toast).toContain('회수했습니다')
     const g = await dispatch('/admin/institutions/demo/codes', fd({ note: '3호기' }))
     expect(g.toast).toContain('발급했어요')
     const active = Object.values(db.codes).filter((c) => c.inst === 'demo' && !c.revoked)

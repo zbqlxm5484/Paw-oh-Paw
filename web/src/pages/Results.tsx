@@ -49,7 +49,7 @@ export default function Results() {
               </a>
             ))}
             {all.length > shown ? <div style={css('padding:14px;display:flex;justify-content:center;border-top:1px solid #F2EFEA')}><button type="button" className="bt" onClick={() => setShown(shown + PAGE)} style={css('height:42px;padding:0 20px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;font-size:14.5px;font-weight:700;cursor:pointer')}>{`더 보기 (${all.length - shown}건 남음)`}</button></div> : null}
-            {!rows.length ? <div style={css('padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px')}><b style={css('font-size:17px')}>아직 분석 결과가 없어요</b><a className="lk" href={link('/upload')} style={css('height:46px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>보행 영상 분석하기</a></div> : null}
+            {!rows.length ? <div style={css('padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px')}><b style={css('font-size:17px')}>아직 분석 결과가 없습니다</b><a className="lk" href={link('/upload')} style={css('height:46px;padding:0 18px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700')}>보행 영상 분석하기</a></div> : null}
           </div>
         </div>
       </main>

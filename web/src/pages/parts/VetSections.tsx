@@ -34,7 +34,7 @@ function LrSection({ r }: { r: Result }) {
             <div key={x.code} style={css(`display:grid;grid-template-columns:170px 1fr 64px;gap:14px;align-items:center;padding:10px 6px;border-bottom:1px solid #F2EFEA;background:${x.top ? '#FAF8F5' : 'transparent'}`)}>
               <div style={css('display:flex;flex-direction:column;gap:2px')}>
                 <b style={css('font-size:15px')}>{x.n}</b>
-                {x.top ? <span style={css('font-size:11.5px;font-weight:700;color:#1B2433')}>비율로 차이가 가장 큼</span> : null}
+                {x.top ? <span style={css('font-size:11.5px;font-weight:700;color:#1B2433')}>좌우 차이 가장 큼</span> : null}
               </div>
               <div style={css('display:flex;flex-direction:column;gap:6px')}>
                 {([[x.wl, x.l, BLUE], [x.wr, x.r, ORANGE]] as const).map(([w, v, c], i) => (
@@ -102,9 +102,9 @@ function CmpSection({ v, gait }: { v: CmpView | null | undefined; gait: string }
   return (
     <section className="rep-sec rep-pb" style={css('display:flex;flex-direction:column;gap:8px')}>
       <h2 style={css(H2)}>지난 측정과 비교{v ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{v.baseDate} 대비 · {gait}</span> : null}</h2>
-      {v === undefined ? <span style={css(SUB)}>불러오는 중…</span> : v === null ? <span style={css(SUB)}>비교할 직전 회차가 없어요.</span> : (
+      {v === undefined ? <span style={css(SUB)}>불러오는 중…</span> : v === null ? <span style={css(SUB)}>비교할 직전 회차가 없습니다.</span> : (
         <>
-          {v.modelChanged ? <span style={css(SUB)}>두 회차의 분석 모델이 달라 변화는 판단하지 않고 값만 적었어요.</span> : null}
+          {v.modelChanged ? <span style={css(SUB)}>두 회차의 분석 모델이 달라 변화는 판단하지 않고 값만 적었습니다.</span> : null}
           <span style={css('font-size:12px;color:#8E949C')}>○ 지난 · ● 이번 · 회색 띠 = 오차 범위</span>
           <CmpGroup title="크게 달라진 값" rows={v.changed} v={v} />
           <CmpGroup title="범위 안" rows={v.within} v={v} />
@@ -122,7 +122,7 @@ export function KneeTrend({ acct, r, gait }: { acct: Account; r: Result; gait: s
   return (
     <section className="rep-sec" style={css('display:flex;flex-direction:column;gap:8px;min-width:0')}>
       <h2 style={css(H2)}>무릎 가동 범위 변화 <span style={css('font-size:13px;font-weight:600;color:#5B6472')}>{gait}</span></h2>
-      {!t ? <span style={css(SUB)}>회차가 2개 이상이면 보여 드려요.</span> : (() => {
+      {!t ? <span style={css(SUB)}>회차가 2개 이상이면 보여 드립니다.</span> : (() => {
         const X = (i: number) => x0 + (t.x.length === 1 ? 0 : (i * (x1 - x0)) / (t.x.length - 1))
         const Y = (v: number) => y1 - ((v - t.lo) / (t.hi - t.lo)) * (y1 - y0)
         const line = (vs: (number | null)[]) => vs.map((v, i) => (v == null ? null : `${X(i)},${Y(v)}`)).filter(Boolean).join(' ')

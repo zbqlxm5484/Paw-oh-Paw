@@ -83,7 +83,7 @@ export function DogPanel({ panel, next_url }: { panel: any; next_url: string }) 
         <b style={css('font-size:14px')}>메모 <span style={css('color:#8E949C;font-weight:600')}>{memos.length}</span></b>
         <MemoForm dog_id={panel.id} next_url={next_url} memo_cat={panel.memo_cat} />
         {memos.map((x, i) => <MemoCard key={x.id || `m${i}`} x={x} />)}
-        {!memos.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>메모가 없어요.</span> : null}
+        {!memos.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>메모가 없습니다.</span> : null}
       </div>
       {panel.rid ? (
         <div style={css('display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #F2EFEA')}>
@@ -94,7 +94,7 @@ export function DogPanel({ panel, next_url }: { panel: any; next_url: string }) 
               {g.parts.map((n, j) => <span key={j} style={css('display:grid;grid-template-columns:18px 1fr;gap:6px;font-size:13.5px;line-height:1.5')}><b style={css('color:#8E949C')}>{n.cat}</b><span style={css('white-space:pre-line')}>{n.text}</span></span>)}
             </div>
           ))}
-          {!run_soap.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>이 회차에 남긴 진료 기록이 없어요.</span> : null}
+          {!run_soap.length ? <span style={css('font-size:13.5px;color:#A0A7B2')}>이 회차에 남긴 진료 기록이 없습니다.</span> : null}
         </div>
       ) : null}
       <a className="lk" href={link(`/dogs/${panel.id}`)} style={css('height:42px;border-radius:10px;border:1px solid #E2DCD3;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700')}>반려견 차트 (분석 {panel.n_res})</a>

@@ -59,7 +59,6 @@ function Pages() {
       <Route path="/admin" element={<Admin />} />
       <Route path="/terms" element={<Legal kind="terms" />} />
       <Route path="/privacy" element={<Legal kind="privacy" />} />
-      <Route path="/business" element={<Legal kind="business" />} />
       <Route path="/support" element={<Legal kind="support" />} />
       <Route path="/jump/:idx" element={<Jump />} />
       <Route path="/home" element={<Home />} />
