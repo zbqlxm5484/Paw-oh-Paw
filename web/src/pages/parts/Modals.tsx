@@ -152,7 +152,7 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
         <input type="hidden" name="sex" value={s.sex} /><input type="hidden" name="size" value={s.size} /><input type="hidden" name="focus" value={s.focus} />
         <b id="petTitle" style={css('font-size:22px;letter-spacing:-0.5px')}>{s.dog ? '반려견 정보 수정' : '반려견 등록'}</b>
         <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>이름</span><input className="inp" name="name" placeholder="예) 보리" autoComplete="off" style={css(FI)} value={s.name} onChange={set('name')} /></label>
-        <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>견종</span><input className="inp" name="breed" placeholder="견종을 입력하면 목록이 떠요" autoComplete="off" style={css(FI)} value={s.breed} onChange={set('breed')} />
+        <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>견종</span><input className="inp" name="breed" placeholder="견종을 입력하면 목록이 뜹니다" autoComplete="off" style={css(FI)} value={s.breed} onChange={set('breed')} />
           <div id="breedSug" style={css(`border:1px solid #ECE8E2;border-radius:12px;box-shadow:0 10px 24px rgba(27,36,51,.1);overflow:hidden;display:${showSug ? 'flex' : 'none'};flex-direction:column`)}>
             {showSug && list.map((name, i) => (
               <div key={name} className="hv-menu" style={css('min-height:44px;padding:0 16px;display:flex;align-items:center;font-size:15px;cursor:pointer;border-top:' + (i ? '1px solid #F2EFEA' : 'none'))}
@@ -161,7 +161,7 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
                   setS((p) => ({ ...p, breed: name }))
                 }}>{name}</div>
             ))}
-            {showSug && !list.length ? <div style={css('min-height:44px;padding:0 16px;display:flex;align-items:center;font-size:14px;color:#5B6472')}>목록에 없어요 · 입력한 이름으로 등록돼요</div> : null}
+            {showSug && !list.length ? <div style={css('min-height:44px;padding:0 16px;display:flex;align-items:center;font-size:14px;color:#5B6472')}>목록에 없습니다 · 입력한 이름으로 등록됩니다</div> : null}
           </div>
         </label>
         <div style={css('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px')}>
@@ -172,17 +172,17 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
           <div style={css('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px')}>{Object.entries(SEX).map(([k, label]) => <div key={k} className="pick" data-field="sex" data-val={k} style={pickStyle('sex', k, '15px')} onClick={() => pick('sex', k, false)}>{label}</div>)}</div>
         </div>
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
-          <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>체급</span><span id="sizeNote" style={css('font-size:12.5px;color:#5B6472')}>{s.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류돼요'}</span></div>
+          <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>체급</span><span id="sizeNote" style={css('font-size:12.5px;color:#5B6472')}>{s.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다'}</span></div>
           <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px')}>{Object.entries(SIZE).map(([k, label]) => <div key={k} className="pick" data-field="size" data-val={k} data-toggle="1" style={pickStyle('size', k, '15px')} onClick={() => pick('size', k, true)}>{label}</div>)}</div>
         </div>
         <div style={css('height:1px;background:#ECE8E2')}></div>
         <b style={css('font-size:16px')}>재활 정보 <span style={css('font-size:14px;font-weight:500;color:#A0A7B2')}>선택</span></b>
         <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>재활 시작일</span><input className="inp" type="date" name="rehab" style={css(`${FI};font-family:inherit`)} value={s.rehab} onChange={set('rehab')} /></label>
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
-          <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>관심 다리</span><span style={css('font-size:12.5px;color:#5B6472')}>다시 누르면 선택이 풀려요</span></div>
+          <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>관심 다리</span><span style={css('font-size:12.5px;color:#5B6472')}>다시 누르면 선택이 풀립니다</span></div>
           <div style={css('display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px')}>{Object.entries(LIMB).map(([k, label]) => <div key={k} className="pick" data-field="focus" data-val={k} data-toggle="1" style={pickStyle('focus', k, '14.5px')} onClick={() => pick('focus', k, true)}>{label}</div>)}</div>
         </div>
-        <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>내부 메모</span><textarea className="inp" name="memo" placeholder="예) 수술 후 6주차, 오른뒤 체중 부하 관찰" style={css('min-height:88px;border-radius:12px;border:1px solid #ECE8E2;padding:12px 16px;font-size:15px;line-height:1.5;color:#1B2433;outline:none;resize:vertical;font-family:inherit')} value={s.memo} onChange={set('memo')}></textarea><span style={css('font-size:13px;color:#5B6472')}>담당자 화면에만 보이고 보고서에는 넣지 않아요.</span></label>
+        <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>내부 메모</span><textarea className="inp" name="memo" placeholder="예) 수술 후 6주차, 오른뒤 체중 부하 관찰" style={css('min-height:88px;border-radius:12px;border:1px solid #ECE8E2;padding:12px 16px;font-size:15px;line-height:1.5;color:#1B2433;outline:none;resize:vertical;font-family:inherit')} value={s.memo} onChange={set('memo')}></textarea></label>
         <button className="bt" type="submit" id="petCta" style={css(`height:54px;border-radius:14px;background:${ready ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none`)}>{s.dog ? '저장하기' : '등록하기'}</button>
       </PostForm>
     </OpenModal>
@@ -191,7 +191,7 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
 
 // ── 영상 촬영 방법 ──
 const GUIDE: [string, string][] = [
-  ['휴대폰은 가로로', '세로 영상은 분석할 수 없어요. 화면을 가로로 돌려 찍어 주세요.'],
+  ['휴대폰은 가로로', '세로 영상은 분석할 수 없습니다. 화면을 가로로 돌려 찍어 주세요.'],
   ['옆에서, 걷는 방향과 직각으로', '반려견의 옆모습 전체가 보이도록 2~3m 떨어져서 찍어 주세요.'],
   ['몸 전체가 화면 안에', '머리부터 꼬리, 네 발까지 화면 밖으로 나가지 않게 해 주세요.'],
   ['한 번에 4초, 16개까지', '평평한 바닥에서 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷는 모습을 4초씩 차례대로 찍어 주세요.'],
@@ -214,7 +214,7 @@ export function GuideModal() {
 export function LogoutModal() {
   return (
     <OpenModal id="logoutModal">
-      <b style={css('font-size:22px;letter-spacing:-0.5px')}>로그아웃할까요?</b>
+      <b style={css('font-size:22px;letter-spacing:-0.5px')}>로그아웃하시겠습니까?</b>
       <PostForm action="/logout" style={css('display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0')}>
         <div data-close="" style={css('height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer')}>취소</div>
         <button className="bt" type="submit" style={css('height:52px;border-radius:14px;background:#1B2433;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700')}>로그아웃</button>
@@ -230,8 +230,8 @@ export function LogoutModal() {
 export function DeleteModal({ name = '', action = '' }: { name?: string; action?: string }) {
   return (
     <OpenModal id="delModal">
-      <b style={css('font-size:22px;letter-spacing:-0.5px')}><span id="delName">{name}</span> 정보를 삭제할까요?</b>
-      <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>측정 이력과 보고서도 함께 삭제되고 되돌릴 수 없어요.</span>
+      <b style={css('font-size:22px;letter-spacing:-0.5px')}><span id="delName">{name}</span> 정보를 삭제하시겠습니까?</b>
+      <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>측정 이력과 보고서도 함께 삭제되고 되돌릴 수 없습니다.</span>
       <PostForm action={action} id="delForm" style={css('display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0')}>
         <div data-close="" style={css('height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer')}>취소</div>
         <button className="bt" type="submit" style={css('height:52px;border-radius:14px;background:#C2412D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700')}>삭제</button>

@@ -64,7 +64,7 @@ export default function Signup() {
     }
     setVerified(true)
     setInst(r)
-    setMsg({ text: '코드가 확인됐어요. 기관은 코드로 정해져서 따로 입력하지 않아요.', color: '#2E8B57' })
+    setMsg({ text: '코드가 확인됐습니다. 기관은 코드로 정해져서 따로 입력하지 않습니다.', color: '#2E8B57' })
   }
   const allOn = terms.every(Boolean)
   const check = (on: boolean) => (on ? '#D2601A' : '#C9C4BC')
@@ -79,11 +79,11 @@ export default function Signup() {
               return false
             }
             if (!ok()) {
-              window.ppToast('입력하지 않은 항목이 있어요')
+              window.ppToast('입력하지 않은 항목이 있습니다')
               return false
             }
           }}>
-          <div style={css('display:flex;flex-direction:column;gap:8px')}><h1 style={css('margin:0;font-size:26px;font-weight:800;letter-spacing:-0.6px')}>회원가입</h1><p style={css('margin:0;font-size:15px;color:#5B6472')}>크림오프가 기관에 보내 드린 디바이스 코드로 가입해요. 같은 기관 담당자는 반려견·회차 자료를 함께 봐요.</p></div>
+          <div style={css('display:flex;flex-direction:column;gap:8px')}><h1 style={css('margin:0;font-size:26px;font-weight:800;letter-spacing:-0.6px')}>회원가입</h1><p style={css('margin:0;font-size:15px;color:#5B6472')}>같은 기관 담당자는 진료 및 분석 정보를 함께 확인할 수 있습니다.</p></div>
 
           <b style={css('font-size:16px;margin-top:4px')}>1. 디바이스 코드 확인</b>
           <div style={css('display:flex;gap:10px')}>
@@ -93,7 +93,7 @@ export default function Signup() {
           {msg ? (
             <span id="soCodeMsg" style={css(`font-size:13px;color:${msg.color};margin-top:-10px`)}>{msg.text}</span>
           ) : (
-            <span id="soCodeMsg" style={css('font-size:13px;color:#5B6472;margin-top:-10px')}>크림오프 계약 안내 메일에 적힌 20자 코드예요.{MOCK ? <> 시연용 코드: <b style={css('cursor:pointer;color:#D2601A')} id="soDemo"
+            <span id="soCodeMsg" style={css('font-size:13px;color:#5B6472;margin-top:-10px')}>{MOCK ? <> 시연용 코드: <b style={css('cursor:pointer;color:#D2601A')} id="soDemo"
               onClick={() => {
                 if (codeRef.current) codeRef.current.value = demo_code
                 reset()
@@ -103,11 +103,11 @@ export default function Signup() {
 
           <fieldset id="soRest" disabled={!verified} style={css(`border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:18px;opacity:${verified ? '1' : '.45'}`)}>
             <b style={css('font-size:16px;margin-top:10px')}>2. 내 계정</b>
-            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>이름</span><input className="inp so" name="name" autoComplete="name" placeholder="예) 정하늘" onInput={paint} style={css(INP)} /><span style={css('font-size:13px;color:#5B6472')}>차팅·측정 기록에 작성자로 남아요.</span></label>
-            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>이메일</span><input className="inp so" type="email" name="email" autoComplete="email" placeholder="비밀번호를 잊었을 때 재설정 링크를 받아요" onInput={paint} style={css(INP)} /></label>
-            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>아이디</span><input className="inp so" name="login_id" autoComplete="username" placeholder="영문 소문자·숫자·. _ - 4자 이상" onInput={paint} style={css(INP)} /><span id="idHint" style={css(`font-size:13px;color:#C2412D;display:${v('login_id') && !idOk() ? 'block' : 'none'}`)}>영문 소문자·숫자·. _ - 로 4~50자예요</span></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>이름</span><input className="inp so" name="name" autoComplete="name" placeholder="예) 정하늘" onInput={paint} style={css(INP)} /><span style={css('font-size:13px;color:#5B6472')}>차팅·측정 기록에 작성자로 남습니다.</span></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>이메일</span><input className="inp so" type="email" name="email" autoComplete="email" placeholder="비밀번호를 잊었을 때 재설정 링크를 받습니다" onInput={paint} style={css(INP)} /></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>아이디</span><input className="inp so" name="login_id" autoComplete="username" placeholder="영문 소문자·숫자·. _ - 4자 이상" onInput={paint} style={css(INP)} /><span id="idHint" style={css(`font-size:13px;color:#C2412D;display:${v('login_id') && !idOk() ? 'block' : 'none'}`)}>영문 소문자·숫자·. _ - 로 4~50자입니다</span></label>
             <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>비밀번호</span><input className="inp so" type="password" name="pw" autoComplete="new-password" placeholder="8자 이상" onInput={paint} style={css(INP)} /></label>
-            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>비밀번호 확인</span><input className="inp so" type="password" name="pw2" autoComplete="new-password" placeholder="한 번 더 입력" onInput={paint} style={css(INP)} /><span id="pwHint" style={css(`font-size:13px;color:#C2412D;display:${v('pw2') && v('pw') !== v('pw2') ? 'block' : 'none'}`)}>비밀번호가 달라요</span></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>비밀번호 확인</span><input className="inp so" type="password" name="pw2" autoComplete="new-password" placeholder="한 번 더 입력" onInput={paint} style={css(INP)} /><span id="pwHint" style={css(`font-size:13px;color:#C2412D;display:${v('pw2') && v('pw') !== v('pw2') ? 'block' : 'none'}`)}>비밀번호가 다릅니다</span></label>
             <div style={css('display:flex;flex-direction:column;gap:4px;margin-top:4px')}>
               <b style={css('font-size:16px;margin-bottom:8px')}>약관 동의</b>
               <div id="allTerms" onClick={() => setTerms(terms.map(() => !allOn))} style={css('height:56px;border-radius:12px;background:#F2EEE8;display:flex;align-items:center;gap:14px;padding:0 18px;cursor:pointer')}><svg width="20" height="20" viewBox="0 0 24 24" style={css(`color:${check(allOn)}`)}><use href="#w-check"></use></svg><span style={css('font-size:16px;font-weight:600')}>모두 동의합니다.</span></div>
@@ -122,7 +122,7 @@ export default function Signup() {
             </div>
           </fieldset>
           <button className="bt" type="submit" id="soBtn" style={css(`height:56px;border-radius:14px;background:${ok() ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;margin-top:6px`)}>회원가입</button>
-          <a className="lk" href={link('/login')} style={css('align-self:center;font-size:14px;color:#5B6472')}>이미 계정이 있어요 · <b style={css('color:#1B2433')}>로그인</b></a>
+          <a className="lk" href={link('/login')} style={css('align-self:center;font-size:14px;color:#5B6472')}>이미 계정이 있습니다 · <b style={css('color:#1B2433')}>로그인</b></a>
         </PostForm>
       </main>
     </Base>

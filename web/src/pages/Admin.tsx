@@ -67,7 +67,7 @@ function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
   const revoke = useRef(false)
   return (
     <div style={css(`display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${c.revoked ? '.5' : '1'}`)}>
-      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했어요' : '복사하지 못했어요. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
+      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했습니다' : '복사하지 못했습니다. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
       <span style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{c.revoked ? '회수됨' : `가입 계정 ${c.used}`}</span>
       {can_write && !c.revoked && (
         <PostForm action={`/admin/codes/${c.id}`} style={css('display:flex;gap:6px')}
@@ -81,12 +81,12 @@ function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
 }
 
 export default function Admin() {
-  useTitle('크림오프 관리 · Paw oh Paw')
+  useTitle('서비스 관리 · Paw oh Paw')
   const { toast, query, go } = usePublicPage()
   const demo = query.get('demo') || ''
   const s = admin_staff(demo)
   useEffect(() => {
-    if (!s) go(redirect('/login', '크림오프 계정으로 로그인해 주세요'))
+    if (!s) go(redirect('/login', '관리자 계정으로 로그인해 주세요'))
     else if (demo) {
       // 바로가기: 관리자 계정으로 들어간다(login_as)
       setLogin(s.id)
@@ -102,7 +102,7 @@ export default function Admin() {
     <Base me={me} toast={toast} topbar={<AuthBar />}>
       <main style={css('max-width:1100px;margin:0 auto;padding:36px 32px 96px;display:flex;flex-direction:column;gap:24px')}>
         <div style={css('display:flex;align-items:flex-end;gap:16px')}>
-          <div style={css('display:flex;flex-direction:column;gap:6px')}><span style={css('font-size:14px;color:#5B6472')}>크림오프 운영</span><h1 style={css('margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px')}>기관·디바이스 코드·계정</h1></div>
+          <div style={css('display:flex;flex-direction:column;gap:6px')}><span style={css('font-size:14px;color:#5B6472')}>서비스 운영</span><h1 style={css('margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px')}>기관·디바이스 코드·계정</h1></div>
           <span style={css('margin-left:auto;font-size:14px;color:#5B6472')}>{me.name} · {can_write ? '관리자' : '임시 스태프 (보기만)'}</span>
           <PostForm action="/logout"><button type="submit" style={css(BTN)}>로그아웃</button></PostForm>
         </div>
@@ -125,7 +125,7 @@ export default function Admin() {
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>디바이스 코드</b>
                 {i.codes.map((c) => <CodeLine key={c.id} c={c} can_write={can_write} />)}
                 {can_write && <PostForm action={`/admin/institutions/${i.id}/codes`} style={css('display:flex;gap:8px;margin-top:4px')}><input name="note" placeholder="메모 (예: 2호기)" style={css(`${INP};flex:1`)} /><button type="submit" style={css(BTN)}>코드 발급</button></PostForm>}
-                <span style={css('font-size:12px;color:#A0A7B2')}>기관마다 쓸 수 있는 코드는 하나예요. 새로 발급하려면 먼저 회수하세요. 가입 계정 수에 제한은 없어요.</span>
+                <span style={css('font-size:12px;color:#A0A7B2')}>기관마다 쓸 수 있는 코드는 하나입니다. 새로 발급하려면 먼저 회수하세요. 가입 계정 수에 제한은 없습니다.</span>
               </div>
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>담당자 계정</b>
                 {i.staff.map((st) => (
@@ -135,12 +135,12 @@ export default function Admin() {
                     {can_write && <PostForm action={`/admin/staff/${st.id}`}><button type="submit" style={css(BTN)}>{st.active ? '중지' : '재개'}</button></PostForm>}
                   </div>
                 ))}
-                {i.staff.length === 0 && <span style={css('font-size:14px;color:#A0A7B2')}>아직 가입한 담당자가 없어요</span>}
+                {i.staff.length === 0 && <span style={css('font-size:14px;color:#A0A7B2')}>아직 가입한 담당자가 없습니다</span>}
               </div>
             </div>
           </section>
         ))}
-        <p style={css('margin:0;font-size:13px;color:#A0A7B2')}>크림오프 계정은 기관의 반려견·측정 자료를 열람하지 않아요(기관별 분리). 관리자·스태프 계정은 운영 스크립트로만 만들어요.</p>
+        <p style={css('margin:0;font-size:13px;color:#A0A7B2')}>운영 계정은 기관의 반려견·측정 자료를 열람하지 않아요(기관별 분리). 관리자·스태프 계정은 운영 스크립트로만 만듭니다.</p>
       </main>
     </Base>
   )

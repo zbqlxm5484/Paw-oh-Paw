@@ -97,12 +97,11 @@ export default function Gait3d() {
   const { acct, me, toast } = usePage({ login: true })
   const r = acct ? resultOf(acct, rid) : undefined
   let go: Go | null = null
-  if (acct && (!r || r.st === 'fail')) go = redirect(r ? `/results/${rid}` : '/results', '3D 로 볼 수 없는 회차예요')
+  if (acct && (!r || r.st === 'fail')) go = redirect(r ? `/results/${rid}` : '/results', '3D 로 볼 수 없는 회차입니다')
   useRedirect(go)
   const [pv] = useState(() => (acct && r && !go ? prepare(acct, r) : null))
   useTitle(`${pv ? pv.rd.name : ''} 3D 보기 · Paw oh Paw`)
   const [loading, setLoading] = useState<string | null>('3D 모델을 불러오는 중…')
-  const [gaitSrc, setGaitSrc] = useState('-')
   const viewRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
   const realRef = useRef<HTMLButtonElement>(null)
@@ -117,7 +116,7 @@ export default function Gait3d() {
     if (!pv) return
     return mount(pv.ctx, {
       box: viewRef.current!, tip: tipRef.current!, real: realRef.current!, gen: genRef.current!, walk: walkRef.current!, stop: stopRef.current!, ghost: ghostRef.current!,
-      setLoading, setGaitSrc, api,
+      setLoading, api,
     })
   }, [pv])
 
@@ -143,7 +142,7 @@ export default function Gait3d() {
               <button className="bt" id="walk" ref={walkRef} type="button" onClick={() => api.current?.setWalking(true)} style={css('height:36px;padding:0 18px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>걷기</button>
               <button className="bt" id="stop" ref={stopRef} type="button" onClick={() => api.current?.setWalking(false)} style={css('height:36px;padding:0 18px;border-radius:9px;border:1px solid #D2601A;background:#D2601A;color:#fff;font-size:14px;font-weight:700')}>멈춤</button>
               <span style={css('width:1px;height:22px;background:#E2DCD3;margin:0 4px')}></span>
-              <button className="bt" id="ghost" ref={ghostRef} type="button" title={pv.ctx.ghost ? `${pv.ctx.ghost.label}을 반투명 파란색으로 겹쳐 걸어요` : '겹쳐 볼 기준 회차가 없어요(이 회차가 기준 회차)'} onClick={() => { const on = !ghostOn; setGhostOn(on); api.current?.setGhost(on) }} style={css('height:36px;padding:0 14px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>기준 회차 겹치기</button>
+              <button className="bt" id="ghost" ref={ghostRef} type="button" title={pv.ctx.ghost ? `${pv.ctx.ghost.label}을 반투명 파란색으로 겹쳐 걷습니다` : '겹쳐 볼 기준 회차가 없어요(이 회차가 기준 회차)'} onClick={() => { const on = !ghostOn; setGhostOn(on); api.current?.setGhost(on) }} style={css('height:36px;padding:0 14px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>기준 회차 겹치기</button>
             </div>
             {/* 보는 각도: 추천 각도에 표시, 누르면 그 방향으로 카메라를 옮긴다 */}
             <div style={css('position:absolute;right:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)')}>
@@ -165,9 +164,7 @@ export default function Gait3d() {
                 const p = bm.legs[part]
                 return <div key={part} style={css('display:flex;flex-direction:column;gap:3px')}><span style={css('display:flex;justify-content:space-between;font-size:13px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span><span style={css('font-size:14.5px;line-height:1.5')}>{p.say}</span></div>
               })}
-              <span id="gait-note" style={css('font-size:12px;color:#8E949C;line-height:1.5')}>측정 걸음은 이 회차에서 잰 수치로 움직여요. 다리마다 관절 가동 범위만큼 굽히고(작을수록 덜 움직임), 입각기 비율만큼 땅을 딛고, 보행 속도에 맞춰 빠르기를 바꿔요. 일반 걸음은 모델에 들어 있는 기본 걷기 동작이에요. 땅을 딛는 동안에는 발을 바닥에 붙이고 발밑에 발자국을 표시해요.</span>
-              {pv.ctx.ghost ? <span style={css('font-size:12px;color:#8E949C;line-height:1.5')}><b style={css('color:#3B6FE0')}>기준 회차 겹치기</b>: {pv.ctx.ghost.label}의 수치로 걷는 모습을 반투명 파란색으로 같은 박자에 겹쳐요. 두 회차의 다리 움직임 폭과 딛는 길이를 견줄 수 있어요.</span> : null}
-              <span style={css('font-size:12px;color:#8E949C;line-height:1.5')}>수치 출처: <span id="gait-src">{gaitSrc}</span></span>
+              {pv.ctx.ghost ? <span style={css('font-size:12px;color:#8E949C;line-height:1.5')}><b style={css('color:#3B6FE0')}>기준 회차 겹치기</b>: {pv.ctx.ghost.label}의 수치로 걷는 모습을 반투명 파란색으로 같은 박자에 겹칩니다. 두 회차의 다리 움직임 폭과 딛는 길이를 견줄 수 있습니다.</span> : null}
             </div>
           </aside>
         </div>
@@ -187,7 +184,6 @@ interface Els {
   stop: HTMLButtonElement
   ghost: HTMLButtonElement
   setLoading: (s: string | null) => void
-  setGaitSrc: (s: string) => void
   api: { current: { setView: (k: string) => void; setMode: (m: string) => void; setWalking: (on: boolean) => void; setGhost: (on: boolean) => void } | null }
 }
 type GaitClip = { legs: Record<string, { joint: Record<string, number[]> }> }
@@ -461,13 +457,12 @@ function mount(ctx: Ctx, el: Els): () => void {
         }
         scaleBones(main, ROMS)
         scaleBones(ghost, ctx.ghost ? ctx.ghost.roms : {})
-        el.setGaitSrc(ctx.gait_src)
       }
       setMode(gait ? 'real' : 'gen')
     }).catch(() => { if (!dead) setMode('gen') })
     setWalking(false)
     el.setLoading(null)
-  }, undefined, () => { if (!dead) el.setLoading('3D 모델을 불러오지 못했어요 (인터넷 연결 확인)') })
+  }, undefined, () => { if (!dead) el.setLoading('3D 모델을 불러오지 못했습니다 (인터넷 연결 확인)') })
 
   // 덜 쓰는 다리는 표시 색, 마우스를 올린 다리는 노란색
   function paint() {
@@ -492,7 +487,7 @@ function mount(ctx: Ctx, el: Els): () => void {
     const rows = L.mets.map((m) => '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#C9CFD8">' + m.n
       + '</span><span><b style="color:' + (m.lower && L.weak ? '#FFB199' : '#fff') + '">' + m.v + '</b> <span style="color:#8E949C">/ 반대 '
       + m.other + '</span></span></div>').join('')
-    return '<b style="font-size:14px">' + L.label + (L.weak ? ' · 덜 써요' : '') + '</b>' + rows
+    return '<b style="font-size:14px">' + L.label + (L.weak ? ' · 덜 씁니다' : '') + '</b>' + rows
   }
   function bodyTip() {
     return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 지수 <b>' + OVERALL.sym + '%</b></div><div style="color:#C9CFD8">'

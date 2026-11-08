@@ -65,7 +65,7 @@ export function finished_notices(acct: Account, skipJob = ''): string[] {
     if (job.result_id && !job.notified && job.id !== skipJob) {
       job.notified = true
       const d = dogOf(acct, job.dog)
-      out.push(`${d ? d.name : ''} 분석이 끝났어요`)
+      out.push(`${d ? d.name : ''} 분석이 끝났습니다`)
     }
   }
   return out

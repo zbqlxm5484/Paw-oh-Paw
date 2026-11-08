@@ -39,12 +39,11 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
   const m0 = g.mets[0]
   return (
     <div style={css(`display:flex;flex-direction:column;gap:6px;align-items:${align === 'r' ? 'flex-end' : 'flex-start'};text-align:${align === 'r' ? 'right' : 'left'}`)}>
-      <span style={css(`display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:${g.c};flex-direction:${align === 'r' ? 'row-reverse' : 'row'}`)}><span style={css(`width:12px;height:12px;border-radius:4px;background:${g.dot};border:1px solid #B8B0A4`)}></span>{g.label}{g.weak ? ' · 덜 써요' : ''}</span>
+      <span style={css(`display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:${g.c};flex-direction:${align === 'r' ? 'row-reverse' : 'row'}`)}><span style={css(`width:12px;height:12px;border-radius:4px;background:${g.dot};border:1px solid #B8B0A4`)}></span>{g.label}{g.weak ? ' · 덜 씁니다' : ''}</span>
       {kind === 'g' ? (
         <>
           <span style={css('font-size:13px;color:#5B6472')}>{m0.n}</span>
           <b style={css(`font-size:24px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${g.weak ? g.c : '#1B2433'}`)}>{m0.v}</b>
-          {READ[m0.n] ? <span style={css('font-size:11.5px;line-height:1.45;color:#8E949C;max-width:150px')}>{READ[m0.n]}. 반대쪽 다리와 비교해 보세요</span> : null}
         </>
       ) : (
         g.mets.map((m, i) => (
@@ -62,7 +61,7 @@ function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; pa
     <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:14.5px;line-height:1.5')}>
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
-      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 지수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}%p · 측정 오차 범위가 아직 정해지지 않아, 작은 차이는 측정 흔들림일 수 있어요` : '첫 측정이라 비교할 회차가 없어요'}</span>
+      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 지수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}%p` : '첫 측정이라 비교할 회차가 없어요'}</span>
     </div>
   )
 }
@@ -86,7 +85,7 @@ function OwnerGuideBox({ bm }: { bm: BM }) {
           {og.help.map((x) => <span key={x} style={css('font-size:14px;line-height:1.55;padding-left:12px;border-left:3px solid #CFE3D6')}>{x}</span>)}
         </div>
       </div>
-      <div style={css('padding:12px 18px;border-radius:12px;background:#FBEAE6;font-size:14px;line-height:1.6;color:#8A2E1E')}><b>이럴 땐 담당 수의사에게 바로 알려 주세요</b>{` · ${og.urgent.join(' · ')}`}</div>
+      <div style={css('padding:12px 18px;border-radius:12px;background:#FBEAE6;font-size:14px;line-height:1.6;color:#8A2E1E')}><b>이럴 땐 담당 수의사에게 바로 알려 주세요</b><div style={css('margin-top:6px;display:flex;flex-direction:column;gap:2px')}>{og.urgent.map((u, i) => <span key={i}>· {u}</span>)}</div></div>
       <span style={css('font-size:12px;color:#8E949C')}>일반적인 안내예요. 우리 아이에게 맞는 관리는 담당 수의사와 상의해 주세요.</span>
     </div>
   )
@@ -105,9 +104,11 @@ export default function Report() {
   const d = acct && r ? dogOf(acct, r.dog) : undefined
   const v = acct && r ? result_view(acct, r) : null
   useTitle(`${v ? v.rd.name : ''} 분석 결과 · Paw oh Paw`)
+  // PDF 저장 파일명: "261108 콩이 분석 결과 (보호자용)" — 회차 측정일 YYMMDD
+  const pdfName = r ? `${r.day.replace(/-/g, '').slice(2)} ${v ? v.rd.name : ''} 분석 결과 (${type === 'v' ? '수의사용' : '보호자용'})` : undefined
   let go: Go | null = null
   if (isOld) go = redirect(`/results/${rid}?type=${type}`)
-  else if (acct && !r) go = redirect('/home', '회차를 찾을 수 없어요')
+  else if (acct && !r) go = redirect('/home', '회차를 찾을 수 없습니다')
   useRedirect(go)
   if (!acct || !r || !v || go) return null
 
@@ -134,14 +135,14 @@ export default function Report() {
           <div className="no-print" style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
             <a className="lk" href={link(`/dogs/${rd.dog}`)} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{rd.name} 차트</a>
             {!rd.fail ? (
-              <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={link(`/compare/${rd.dog}`)} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={link(`/results/${rd.id}/3d`)} style={css(BTN)}>3D로 보기</a>{fromServer ? <ServerPdf sessionId={r.id} edition={kind === 'v' ? 'VET' : 'OWNER'} /> : <PrintPdf />}</div>
+              <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={link(`/compare/${rd.dog}`)} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={link(`/results/${rd.id}/3d`)} style={css(BTN)}>3D로 보기</a>{fromServer ? <ServerPdf sessionId={r.id} edition={kind === 'v' ? 'VET' : 'OWNER'} fileName={pdfName} /> : <PrintPdf fileName={pdfName} />}</div>
             ) : null}
           </div>
           {rd.fail || !bm ? (
             <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:12px')}>
               <div style={css('display:flex;align-items:center;gap:10px')}><b style={css('font-size:20px')}>{rd.name} · {rd.when}</b><span style={css(`padding:4px 10px;border-radius:8px;background:${rd.bg};color:${rd.c};font-size:13px;font-weight:700`)}>{rd.st}</span></div>
-              <b style={css('font-size:17px')}>분석하지 못했어요</b>
-              <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>{r.fail_msg || '쓸 수 있는 통과가 없었어요. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'}</span>
+              <b style={css('font-size:17px')}>분석하지 못했습니다</b>
+              <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>{r.fail_msg || '쓸 수 있는 통과가 없었습니다. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'}</span>
               {r.ex.length ? (
                 <div style={css('display:flex;flex-wrap:wrap;gap:6px')}>{r.ex.map(([n, c], i) => <span key={i} style={css('height:28px;padding:0 10px;border-radius:8px;background:#F2EEE8;color:#3A4250;font-size:13px;font-weight:600;display:flex;align-items:center;font-variant-numeric:tabular-nums')}>{n} {c}회</span>)}</div>
               ) : null}
@@ -175,7 +176,7 @@ export default function Report() {
                     </div>
                     <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
                     {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-                    <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}%p</b></> : '첫 측정이에요'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+                    <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}%p</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
                   </div>
                 </div>
 
@@ -205,7 +206,8 @@ export default function Report() {
                       <div key={part} style={css('padding:16px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
                         <span style={css('display:flex;justify-content:space-between;font-size:13.5px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span>
                         <span style={css(`font-size:${kind === 'g' ? '16px' : '14.5px'};line-height:1.55;font-weight:600`)}>{p.say}</span>
-                        {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff} · 대칭 지수 차이 {pystr(p.si)}%</span> : null}
+                        {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff} · 대칭 지수 차이 {pystr(p.si)}%</span>
+                          : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#8E949C')}>{READ[p.metric]}</span></> : null}</span>}
                       </div>
                     )
                   })}
@@ -218,7 +220,7 @@ export default function Report() {
                   <b>측정 품질</b>
                   <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
                   {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
-                  {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있어요</span> : null}
+                  {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있습니다</span> : null}
                   {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#8E949C')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
                 </div>
 

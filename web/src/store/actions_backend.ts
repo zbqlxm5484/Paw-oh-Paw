@@ -46,12 +46,12 @@ if (!MOCK) {
 
   onB('/signup', async (_p, fd) => {
     if (!(f(fd, 't0') && f(fd, 't1') && f(fd, 't2'))) return redirect('/signup', '필수 약관에 동의해 주세요')
-    if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/signup', '비밀번호가 서로 달라요')
+    if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/signup', '비밀번호가 서로 다릅니다')
     try {
       // 약관 동의(192): 필수 셋은 위에서 확인했고, 버전은 약관 본문의 갱신일
       const terms = { version: LEGAL.terms.updated, service: true, privacy: true, device_location: true, marketing: !!f(fd, 't3') }
       const t = await api.signup({ code: f(fd, 'code'), login_id: f(fd, 'login_id'), password: f(fd, 'pw'), name: f(fd, 'name').trim(), email: f(fd, 'email').trim(), terms })
-      return await enter(t, `${t.staff.institution.name} 담당자로 가입했어요`)
+      return await enter(t, `${t.staff.institution.name} 담당자로 가입했습니다`)
     } catch (e) {
       return redirect('/signup', msg(e))
     }
@@ -71,7 +71,7 @@ if (!MOCK) {
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect(`/reset-password?token=${encodeURIComponent(token)}`, '8자 이상, 두 칸이 같게 입력해 주세요')
     try {
       await api.resetConfirm(token, f(fd, 'pw'))
-      return redirect('/login', '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요')
+      return redirect('/login', '비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요')
     } catch (e) {
       return redirect('/forgot', msg(e))
     }
@@ -83,7 +83,7 @@ if (!MOCK) {
     if (!isRemote(acct.id)) return { to: '__local__' } // 시연 기관은 actions_impl 이 처리
     try {
       await syncFromBackend(await api.updateMe({ name: f(fd, 'name').trim(), email: f(fd, 'email').trim() }))
-      return redirect('/account', '저장했어요')
+      return redirect('/account', '저장했습니다')
     } catch (e) {
       return redirect('/account', msg(e))
     }
@@ -96,7 +96,7 @@ if (!MOCK) {
       await api.withdraw(f(fd, 'password'))
       tokenStore.clear()
       setLogin(null)
-      return redirect('/login', '탈퇴했어요. 그동안 이용해 주셔서 감사합니다')
+      return redirect('/login', '탈퇴했습니다. 그동안 이용해 주셔서 감사합니다')
     } catch (e) {
       return redirect('/account', msg(e))
     }
@@ -109,7 +109,7 @@ if (!MOCK) {
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/account', '새 비밀번호는 8자 이상, 현재와 다르게 입력해 주세요')
     try {
       await api.changePassword(f(fd, 'current_pw'), f(fd, 'pw'))
-      return redirect('/account', '비밀번호를 바꿨어요')
+      return redirect('/account', '비밀번호를 바꿨습니다')
     } catch (e) {
       return redirect('/account', msg(e))
     }
@@ -134,13 +134,13 @@ if (!MOCK) {
       if (dogOf(acct, dog_id)) {
         await api.updateDog(dog_id, { ...body, version: Number(f(fd, 'version') || dogOf(acct, dog_id)!.version) })
         await syncFromBackend()
-        return redirect(next_url, '저장했어요')
+        return redirect(next_url, '저장했습니다')
       }
       const o = await api.createDog(body)
       await syncFromBackend()
       const sep = next_url.includes('?') ? '&' : '?'
-      if (next_url.startsWith('/upload') || next_url.startsWith('/my')) return redirect(`${next_url}${sep}dog=${o.id}`, `${o.name} 등록을 마쳤어요`)
-      return redirect(`/dogs/${o.id}`, `${o.name} 등록을 마쳤어요`)
+      if (next_url.startsWith('/upload') || next_url.startsWith('/my')) return redirect(`${next_url}${sep}dog=${o.id}`, `${o.name} 등록을 마쳤습니다`)
+      return redirect(`/dogs/${o.id}`, `${o.name} 등록을 마쳤습니다`)
     } catch (e) {
       if (e instanceof ApiError && e.code === 'DOG_MODIFIED') return redirect(next_url, '다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.')
       return redirect(next_url, msg(e))
@@ -158,11 +158,11 @@ if (!MOCK) {
     try {
       await api.updateDog(d.id, { baseline_session_id: r.id, version: d.version })
       await syncFromBackend()
-      return redirect(back, `${r.date} 회차를 기준으로 정했어요`)
+      return redirect(back, `${r.date} 회차를 기준으로 정했습니다`)
     } catch (e) {
       if (e instanceof ApiError && e.code === 'DOG_MODIFIED') {
         await syncFromBackend().catch(() => undefined)
-        return redirect(back, '다른 담당자가 먼저 수정해서 새로 불러왔어요. 다시 눌러 주세요')
+        return redirect(back, '다른 담당자가 먼저 수정해서 새로 불러왔습니다. 다시 눌러 주세요')
       }
       return redirect(back, msg(e))
     }
@@ -180,7 +180,7 @@ if (!MOCK) {
     const phoneSid = f(fd, 'sid')
     const phoneSess = phoneSid ? await api.session(phoneSid).catch(() => null) : null
     // QR 회차가 다른 반려견 것이면 그 회차로 올리지 않는다
-    if (phoneSess && phoneSess.dog_id !== dog) return redirect(`/upload?dog=${dog}`, 'QR 로 연 회차가 다른 반려견의 회차예요. 화면을 새로 불러온 뒤 다시 시도해 주세요')
+    if (phoneSess && phoneSess.dog_id !== dog) return redirect(`/upload?dog=${dog}`, 'QR 로 연 회차가 다른 반려견의 회차입니다. 화면을 새로 불러온 뒤 다시 시도해 주세요')
     const phoneShots = phoneSess?.shots.length ?? 0
     if (!files.length && !phoneShots) return redirect(`/upload?dog=${dog}`, '보행 영상을 1개 이상 올려 주세요')
     // 회차 열기. 이미 측정 중인 회차가 있으면(앞서 업로드가 끊긴 경우 등) 그 회차에 이어서 올린다
@@ -211,11 +211,11 @@ if (!MOCK) {
       if (!(e instanceof ApiError && e.code === 'SESSION_CLOSED')) return redirect(`/upload?dog=${dog}`, msg(e))
     }
     remember(acct, { id: sid, inst: acct.id, dog, started: Date.now(), n: n + phoneShots, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
-    return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸어요')
+    return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸습니다')
   })
 
   // ── 크림오프 관리(백엔드 /admin) ──
-  const adminOnly = (): Go | null => (currentStaff()?.role === 'ADMIN' ? null : redirect('/admin', '조회 전용 계정이에요'))
+  const adminOnly = (): Go | null => (currentStaff()?.role === 'ADMIN' ? null : redirect('/admin', '조회 전용 계정입니다'))
   const after = async (toast: string): Promise<Go> => {
     await syncAdmin()
     return redirect('/admin', toast)
@@ -225,7 +225,7 @@ if (!MOCK) {
     if (no) return no
     try {
       await api.createInstitution({ name: f(fd, 'name').trim(), contract_ends_at: f(fd, 'ends') || null })
-      return await after('기관을 만들었어요')
+      return await after('기관을 만들었습니다')
     } catch (e) {
       return redirect('/admin', msg(e))
     }
@@ -235,7 +235,7 @@ if (!MOCK) {
     if (no) return no
     try {
       await api.updateInstitution(p.inst, { contract_ends_at: f(fd, 'ends') || null })
-      return await after('계약 종료일을 바꿨어요')
+      return await after('계약 종료일을 바꿨습니다')
     } catch (e) {
       return redirect('/admin', msg(e))
     }
@@ -245,7 +245,7 @@ if (!MOCK) {
     if (no) return no
     try {
       await api.createDeviceCode(p.inst, { note: f(fd, 'note') || undefined }) // 쓸 수 있는 코드가 있으면 409 DEVICE_CODE_EXISTS(회수한 뒤 발급)
-      return await after('디바이스 코드를 발급했어요')
+      return await after('디바이스 코드를 발급했습니다')
     } catch (e) {
       return redirect('/admin', msg(e))
     }
@@ -256,7 +256,7 @@ if (!MOCK) {
     try {
       if (f(fd, 'revoke')) await api.revokeDeviceCode(p.cid)
       else await api.updateDeviceCode(p.cid, { note: f(fd, 'note') || null })
-      return await after(f(fd, 'revoke') ? '코드를 회수했어요. 새 코드는 발급 버튼으로' : '메모를 바꿨어요')
+      return await after(f(fd, 'revoke') ? '코드를 회수했습니다. 새 코드는 발급 버튼으로' : '메모를 바꿨습니다')
     } catch (e) {
       return redirect('/admin', msg(e))
     }
@@ -267,7 +267,7 @@ if (!MOCK) {
     const s = db.staff[p.sid]
     try {
       await api.updateStaff(p.sid, { is_active: !(s && s.active) })
-      return await after(s && s.active ? '계정을 중지했어요' : '계정을 다시 쓸 수 있게 했어요')
+      return await after(s && s.active ? '계정을 중지했습니다' : '계정을 다시 쓸 수 있게 했습니다')
     } catch (e) {
       return redirect('/admin', msg(e))
     }

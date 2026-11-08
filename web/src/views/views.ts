@@ -115,7 +115,7 @@ export function mrows(r: Result, gait: string): Row[] {
     { n: '걸음 길이', l: v(r.sL * 1.5), r: v(r.sR * 1.5), u: '%', leg: '뒷다리' },
     { n: '입각기 비율', l: 61, r: 61 - jround((r.sL - r.sR) / 2), u: '%', leg: '뒷다리' },
     { sec: '앞다리', n: '팔꿈치 가동 범위', l: v(r.j[2][1]), r: v(r.j[2][2]), u: '°', leg: '앞다리' },
-    { n: '발 높이', na: true, reason: '반대쪽 다리가 가려졌어요', leg: '앞다리' },
+    { n: '발 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
   ]
 }
 
@@ -237,7 +237,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
     sym: r.sym, symD: delta(r.sym, prev ? prev.sym : null, '%p'),
     rom: r.rom, romD: delta(r.rom, prev ? prev.rom : null, '°'),
     sL, sR, stD: sL === sR ? '좌우 같음' : `${sL > sR ? '오른쪽' : '왼쪽'}이 ${Math.abs(sL - sR)}%p 짧음`,
-    topTitle: `${top.leg} ${top.n}에서 좌우 차이가 가장 커요`,
+    topTitle: `${top.leg} ${top.n}에서 좌우 차이가 가장 큽니다`,
     topSub: `왼 ${top.l}${top.u} · 오 ${top.r}${top.u} · 차이 ${top.df}${top.u} · 대칭 지수 차이 ${fmt(top.si, 1)}%`,
     rank: [
       ...meas.slice(1, 4).map((x) => ({ n: `${x.leg} · ${x.n}`, v: `차이 ${x.df}${x.u}`, c: '#fff' })),
@@ -291,7 +291,7 @@ export function dog_detail(acct: Account, d: Dog) {
   return {
     name: d.name, desc: `${desc(d)} · ${SEX[d.sex || 'm'] ?? 'None'}`,
     cells: [
-      { k: '체급', v: SIZE[d.size || auto_size(d.breed, d.kg)], sub: d.size_manual ? '직접 지정' : '자동 분류' },
+      { k: '체급', v: SIZE[d.size || auto_size(d.breed, d.kg)], sub: d.size_manual ? '직접 지정' : '' },
       { k: '재활 시작일', v: d.rehab ? fmt_date(d.rehab) : '미입력', sub: '' },
       { k: '관심 다리', v: d.focus ? LIMB[d.focus] : '미선택', sub: '' },
       { k: '기준 회차', v: b_r ? `${b_r.date} · ${sess_no(acct, b_r)}회차` : '없음', sub: d.base ? '직접 지정' : b_r ? '가장 이른 회차' : '' },
@@ -306,9 +306,9 @@ const _RAW_SVG: Record<string, string> = { small: dogSmall, medium: dogMedium, l
 const _LEGS: [string, string, string][] = [['front_left', 'LF', '왼앞'], ['front_right', 'RF', '오른앞'], ['hind_left', 'LH', '왼뒤'], ['hind_right', 'RH', '오른뒤']]
 export type Level = [number, string, string, string]
 const _LEVEL: Level[] = [ // (대칭 지수 차이 % 미만, 이름, 다리 색, 글자 색)
-  [5, '비슷해요', '#DCEFE2', '#2E8B57'],
+  [5, '비슷합니다', '#DCEFE2', '#2E8B57'],
   [10, '조금 차이 나요', '#F7D6AE', '#9A6A12'],
-  [999, '차이가 커요', '#F2A898', '#C2412D'],
+  [999, '차이가 큽니다', '#F2A898', '#C2412D'],
 ]
 
 export function _svg(size: string): string {
@@ -340,6 +340,9 @@ export interface LegPart {
   say: string
   metric: string
   diff: string
+  /** 가장 큰 차이가 난 수치의 왼쪽·오른쪽 값(단위 포함) */
+  left: string
+  right: string
 }
 export type BodyMap = ReturnType<typeof body_map>
 
@@ -368,11 +371,11 @@ export function body_map(acct: Account, r: Result) {
     const side_kr: Record<string, string> = { l: '왼쪽', r: '오른쪽' }
     const leg_kr = part === 'front' ? '앞다리' : '뒷다리'
     let say: string
-    if (si < 5) say = `${leg_kr} 양쪽을 비슷하게 써요`
+    if (si < 5) say = `${leg_kr} 양쪽을 비슷하게 씁니다`
     else {
       const w = word[worst.n]
       const wc = cp(w)
-      say = `${side_kr[weak]} ${leg_kr}의 ${w}${pymod(wc[wc.length - 1].codePointAt(0)! - 0xac00, 28) ? '이' : '가'} 반대쪽보다 작아요`
+      say = `${side_kr[weak]} ${leg_kr}의 ${w}${pymod(wc[wc.length - 1].codePointAt(0)! - 0xac00, 28) ? '이' : '가'} 반대쪽보다 작습니다`
     }
     for (const side of ['l', 'r'] as const) {
       const code = (side === 'l' ? 'L' : 'R') + (part === 'front' ? 'F' : 'H')
@@ -388,6 +391,7 @@ export function body_map(acct: Account, r: Result) {
     ;(legs as Record<string, LegPart | LegSide>)[part] = {
       si: pyround(si, 1), level: lv[1], c: lv[3], say, metric: worst.n,
       diff: `${Math.abs(worst.l - worst.r)}${worst.u}`,
+      left: `${worst.l}${worst.u}`, right: `${worst.r}${worst.u}`,
     }
   }
   let svg = _svg(d ? d.size : 'M')
@@ -828,7 +832,7 @@ export function best_view(bm: { legs: Record<string, unknown> & { front: LegPart
   if (x.si < 5) {
     return {
       main: 'right', label: '옆', sub: 'back', sub_label: '뒤',
-      why: '좌우 차이가 거의 없어요. 옆에서 걷는 모양을, 뒤에서 두 뒷다리가 같이 움직이는지 보세요.',
+      why: '좌우 차이가 거의 없습니다. 옆에서 걷는 모양을, 뒤에서 두 뒷다리가 같이 움직이는지 보세요.',
     }
   }
   const fh = part === 'front' ? 'F' : 'H'
@@ -838,8 +842,8 @@ export function best_view(bm: { legs: Record<string, unknown> & { front: LegPart
   const [sub, sub_kr] = part === 'hind' ? ['back', '뒤'] : ['front', '앞']
   return {
     main: side, label: `${side_kr} 옆`, sub, sub_label: sub_kr,
-    why: `${side_kr} ${leg_kr}가 덜 움직여요. ${side_kr} 옆에서 보면 그 다리가 관절을 덜 굽히고 짧게 딛는 게 가려지지 않고 보여요. `
-      + `${sub_kr}에서 보면 두 ${leg_kr}의 발 드는 높이를 한 화면에서 견줄 수 있어요.`,
+    why: `${side_kr} ${leg_kr}가 덜 움직입니다. ${side_kr} 옆에서 보면 그 다리가 관절을 덜 굽히고 짧게 딛는 게 가려지지 않고 보입니다. `
+      + `${sub_kr}에서 보면 두 ${leg_kr}의 발 드는 높이를 한 화면에서 견줄 수 있습니다.`,
   }
 }
 
@@ -1068,11 +1072,11 @@ export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
     has: true as const, name: d.name, baseLabel: mode === 'base' ? '기준 회차' : '직전 회차',
     baseDate: `${b.date} · ${sess_no(acct, b)}회차`, tDate: `${t.date} · ${sess_no(acct, t)}회차`,
     modelChanged: b.model !== t.model,
-    modelMsg: `두 회차의 분석 모델이 달라요(${b.model} → ${t.model}). 분석 방식이 바뀌어 수치를 그대로 비교하기 어려워요.`,
+    modelMsg: `두 회차의 분석 모델이 달라요(${b.model} → ${t.model}). 분석 방식이 바뀌어 수치를 그대로 비교하기 어렵습니다.`,
     rows, tl: a_vals.map((v, i) => `${X(i)},${Y(v)}`).join(' '),
     tr: b_vals.map((v, i) => `${X(i)},${Y(v)}`).join(' '),
     dl: [...a_vals.map((v, i) => ({ x: X(i), y: Y(v), c: '#3B6FE0' })), ...b_vals.map((v, i) => ({ x: X(i), y: Y(v), c: '#E5604D' }))],
     xl: vs.map((r) => short(r.date)), two: right_fn !== null,
-    focusNote: d.focus ? `관심 다리(${LIMB[d.focus]})를 맨 앞에 보여 드려요.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드려요.',
+    focusNote: d.focus ? `관심 다리(${LIMB[d.focus]})를 맨 앞에 보여 드립니다.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드립니다.',
   }
 }

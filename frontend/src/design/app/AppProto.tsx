@@ -256,9 +256,9 @@ export class AppProto extends DCLogic<Props, any> {
     if (D) {
       const all = results.filter((r) => r.dog === D.id), bId = baseOf(D), bR = results.find((r) => r.id === bId)
       dd = { name: D.name, init: D.name[0], desc: desc(D),
-        tags: [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ' · 자동 분류'), SEX[D.sex || 'm']],
+        tags: [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ''), SEX[D.sex || 'm']],
         rows: [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력', sub: '' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택', sub: '' },
-          { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '보고서에는 넣지 않아요' }],
+          { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '' }],
         hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차 · ${r.date}`, sub: r.st === 'fail' ? `${wkg(r.w)} · 쓸 수 있는 통과 없음` : `${wkg(r.w)} · 유효 통과 ${r.ps[1]} · 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
           setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id, version: D.raw.version }); this.toast(`${r.date} 회차를 기준으로 정했어요`) } catch (err) { this.toast(err instanceof ApiError && err.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : errMsg(err, '기준 회차를 바꾸지 못했어요')) } },
           st: stt[0], bg: stt[1], c: stt[2], bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) } }),
@@ -364,7 +364,7 @@ export class AppProto extends DCLogic<Props, any> {
         catch (e) { this.toast(errMsg(e, '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')) }
         finally { this.setState({ loginBusy: false }) }
       },
-      loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '가입할 때 만든 아이디',
+      loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '아이디',
       orgFields: [
         { label: '디바이스 번호', ph: '예) PP-2410-0381', type: 'text', val: s.so.dev, on: setSo('dev'), hint: devHint, hc: devHc }],
       orgAcctFields: [
@@ -527,7 +527,6 @@ export class AppProto extends DCLogic<Props, any> {
         { label: '비밀번호 변경', right: '', on: () => this.setState({ sheet: 'pw', pf: { cur: '', nw: '', nw2: '' } }) },
         { label: '이용약관', right: '', on: () => this.nav('legal', '/legal/terms') },
         { label: '개인정보 처리방침', right: '', on: () => this.nav('legal', '/legal/privacy') },
-        { label: '사업자 정보', right: '', on: () => this.nav('legal', '/legal/business') },
         { label: '서비스 소개', right: '', on: () => this.nav('story') },
       ],
       helpCards: HELP_CARDS, helpContact: HELP_CONTACT.map((c) => ({ ...c, open: () => { if (c.href) window.location.href = c.href } })),
