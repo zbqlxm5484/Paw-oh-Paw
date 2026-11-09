@@ -562,7 +562,9 @@ export class AppProto extends DCLogic<Props, any> {
         if (!s.pet.name || !s.pet.breed || !s.pet.kg) return this.toast('이름·견종·체중을 입력해 주세요')
         if (s.busy) return
         const kg = Number(s.pet.kg)
-        if (!Number.isFinite(kg) || kg <= 0) return this.toast('체중은 숫자로 입력해 주세요')
+        if (!/^\d+(\.\d+)?$/.test(s.pet.kg.trim()) || !(kg >= 0.5 && kg <= 100)) return this.toast('체중은 0.5~100kg 사이 숫자로 입력해 주세요')
+        const by = s.pet.birth.trim(), yNow = new Date().getFullYear() // 11-09 QA: 미래 출생 연도가 등록됐다(웹 petInputError 와 같은 규칙)
+        if (by && !(/^\d{4}$/.test(by) && +by >= 1990 && +by <= yNow)) return this.toast(`출생 연도는 1990~${yNow} 사이 네 자리로 입력해 주세요`)
         this.setState({ busy: true })
         try {
           if (s.petMode === 'edit') { const cur = this.props.data.dogs.find((x) => x.id === s.petId); await this.props.actions.updateDog(s.petId, { ...petBody(s.pet), version: cur ? cur.raw.version : 0 }); this.back(); this.toast('저장했습니다') }
