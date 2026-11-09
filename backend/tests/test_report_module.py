@@ -377,6 +377,9 @@ def test_html_has_title_tables_chart_glossary_and_footer() -> None:
     assert "용어 설명" in html and f"템플릿 {TEMPLATE_VERSION}" in html
     assert "<footer>이 보고서는 보행 평가 보조 자료이며 진단을 대신하지 않습니다.</footer>" in html  # 고정 문구 그대로
     assert "tr { break-inside: avoid; }" in html  # 표 한 줄이 쪽 경계에서 갈라지지 않게
+    # 쪽 번호(여백 상자)는 body의 글꼴을 물려받지 않는다. @page에도 같은 글꼴 목록이 있어야 한다
+    fonts = 'font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif;'
+    assert html.count(fonts) == 2 and html.index(fonts) < html.index("@bottom-left")
     assert "<script" not in html
 
 
