@@ -166,10 +166,12 @@ export function uprightInRotatedBox(el: HTMLVideoElement): void {
 }
 
 // ── 첨부한 영상의 첫 프레임 미리보기 ──
-const THUMB_KEY = 'pp.shot.thumbs'
+// v2: 검은 프레임이 섞여 저장된 예전 기억은 버린다
+const THUMB_KEY = 'pp.shot.thumbs.v2'
 
 function loadThumbs(): Record<string, string> {
   try {
+    localStorage.removeItem('pp.shot.thumbs')
     return JSON.parse(localStorage.getItem(THUMB_KEY) || '{}') as Record<string, string>
   } catch {
     return {}
@@ -180,9 +182,11 @@ function loadThumbs(): Record<string, string> {
 export const shotThumbs: Record<string, string> = loadThumbs()
 
 // ── 서버 결과 영상의 첫 프레임(한 번만 뽑아 기억) ──
-const SERVER_KEY = 'pp.shot.serverThumbs'
+// v2: 예전엔 영상 맨 앞의 검은 프레임까지 그림으로 저장해 버렸다. 그 기억은 버리고 새로 뽑는다
+const SERVER_KEY = 'pp.shot.serverThumbs.v2'
 function loadServerThumbs(): Record<string, string> {
   try {
+    localStorage.removeItem('pp.shot.serverThumbs')
     return JSON.parse(localStorage.getItem(SERVER_KEY) || '{}') as Record<string, string>
   } catch {
     return {}
@@ -191,7 +195,17 @@ function loadServerThumbs(): Record<string, string> {
 /** 촬영 id → 서버 결과 영상에서 뽑은 첫 프레임 그림(data URL). 목록을 다시 열어도 영상을 다시 안 불러온다 */
 export const serverThumbs: Record<string, string> = loadServerThumbs()
 
-/** 이미 받은 <video> 에서 작은 jpeg 를 뽑아 촬영 id 에 붙여 둔다. 못 뽑으면(다른 출처·0 크기) undefined */
+/** 캔버스가 거의 검은색인지(평균 밝기). 로딩 전·영상 맨 앞의 검은 프레임을 그림으로 남기지 않으려고 본다 */
+function isDark(c: HTMLCanvasElement): boolean {
+  const ctx = c.getContext('2d')!
+  const { data } = ctx.getImageData(0, 0, c.width, c.height)
+  let sum = 0
+  let n = 0
+  for (let i = 0; i < data.length; i += 4 * 37) { sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]; n++ }
+  return n === 0 || sum / n < 20
+}
+
+/** 이미 받은 <video> 에서 작은 jpeg 를 뽑아 촬영 id 에 붙여 둔다. 못 뽑으면(다른 출처·0 크기·검은 프레임) undefined */
 export function captureFrame(v: HTMLVideoElement, shotId: string): string | undefined {
   try {
     if (!v.videoWidth || !v.videoHeight) return undefined
@@ -201,6 +215,7 @@ export function captureFrame(v: HTMLVideoElement, shotId: string): string | unde
     c.width = w
     c.height = h
     c.getContext('2d')!.drawImage(v, 0, 0, w, h)
+    if (isDark(c)) return undefined
     const d = c.toDataURL('image/jpeg', 0.7)
     serverThumbs[shotId] = d
     const keys = Object.keys(serverThumbs)
@@ -208,7 +223,7 @@ export function captureFrame(v: HTMLVideoElement, shotId: string): string | unde
     try { localStorage.setItem(SERVER_KEY, JSON.stringify(serverThumbs)) } catch { /* 저장 못 하면 이번 화면에서만 */ }
     return d
   } catch {
-    return undefined // 교차 출처 등으로 canvas 가 막히면 영상 자체를 보인다
+    return undefined // 교차 출처 등으로 canvas 가 막히면 자리표시 그대로
   }
 }
 
@@ -235,6 +250,7 @@ export async function rememberFirstFrame(shotId: string, file: File): Promise<vo
     c.width = w
     c.height = h
     c.getContext('2d')!.drawImage(v, 0, 0, w, h)
+    if (isDark(c)) return // 검은 프레임은 남기지 않는다(서버 영상에서 다시 뽑는다)
     shotThumbs[shotId] = c.toDataURL('image/jpeg', 0.7)
     const keys = Object.keys(shotThumbs)
     for (const k of keys.slice(0, Math.max(0, keys.length - 160))) delete shotThumbs[k] // 오래된 것부터 지워 저장소를 작게

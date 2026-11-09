@@ -148,7 +148,7 @@ describe('보행 유형 미판별(OTHER)·유효 통과 0건 회차', () => {
     const R = toResult({ ...HIST, status: 'FAILED' }, 'd1', null)
     expect(R.st).toBe('fail')
     const { rd } = resultVals(ctxOf(R), R, 'trot')
-    expect(rd.failMsg).toBe('분석에 실패했어요. 잠시 후 다시 시도해 주세요.')
+    expect(rd.failMsg).toBe('분석에 실패했습니다. 잠시 후 다시 시도해 주세요.')
     expect(rd.failMsg).not.toContain('다시 찍어')
   })
 })

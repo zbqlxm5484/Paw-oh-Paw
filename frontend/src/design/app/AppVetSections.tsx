@@ -84,9 +84,9 @@ function CmpList({ cmp }: { cmp: CompareOut | undefined }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <h3 style={H2}>지난 측정과 비교{cmp ? <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B6472', marginLeft: 6 }}>{cmp.base.measured_on} 대비</span> : null}</h3>
-      {!cmp ? <span style={{ fontSize: '12.5px', color: '#5B6472' }}>비교할 직전 회차가 없어요.</span> : (
+      {!cmp ? <span style={{ fontSize: '12.5px', color: '#5B6472' }}>비교할 직전 회차가 없습니다.</span> : (
         <>
-          {cmp.model_changed ? <span style={{ fontSize: '12px', color: '#5B6472' }}>분석 모델이 달라 변화는 판단하지 않고 값만 적었어요.</span> : null}
+          {cmp.model_changed ? <span style={{ fontSize: '12px', color: '#5B6472' }}>분석 모델이 달라 변화는 판단하지 않고 값만 적었습니다.</span> : null}
           {sorted.map((it, i) => {
             const [t, bg, fg] = badge(it)
             return (

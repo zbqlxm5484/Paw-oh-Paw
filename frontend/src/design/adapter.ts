@@ -281,8 +281,8 @@ export function trendLines(t: TrendsOut | undefined, tk: string): DTrend {
 
 /** 보고서 상태 한 줄(디자인 repStatus) */
 export function reportStatusLine(r: ReportOut | undefined, model: string): string {
-  if (!r) return '보고서가 아직 없어요'
+  if (!r) return '보고서가 아직 없습니다'
   if (r.status === 'DONE') return `생성 완료 · ${r.generation_ms != null ? (r.generation_ms / 1000).toFixed(1) : '-'}초 · 분석 모델 ${r.model_version ?? model} · 템플릿 ${r.template_version ?? '-'}`
-  if (r.status === 'FAILED') return `만들지 못했어요 · ${r.fail_reason?.message ?? ''}`
-  return r.status === 'GENERATING' ? '보고서를 만드는 중이에요' : '보고서 생성을 기다리는 중이에요'
+  if (r.status === 'FAILED') return `만들지 못했습니다 · ${r.fail_reason?.message ?? ''}`
+  return r.status === 'GENERATING' ? '보고서를 만드는 중입니다' : '보고서 생성을 기다리는 중입니다'
 }

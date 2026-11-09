@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { dogKeys } from '../api/dogs'
 
 import { fileUrl } from '../api/labels'
+import { savePdf, type SaveHow } from '../app/pdfSave'
 import { useSession } from '../api/sessions'
 import type { DeviceCodeVerifyOut, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
 import * as authApi from '../api/auth'
@@ -59,7 +60,8 @@ export interface ProtoProps {
   /** 숨은 파일 입력을 연다. capture=true 면 폰 카메라 */
   /** capture=true 면 카메라로 한 개, false 면 갤러리에서 여러 개 */
   pickFile: (capture: boolean) => Promise<File[]>
-  openFile: (url: string) => boolean
+  /** 보고서 PDF 저장: 앱은 공유 시트(shared), 브라우저는 새 탭(opened). 체험 모드는 거부 */
+  openFile: (url: string, fileName: string) => Promise<SaveHow>
 }
 
 /** 주소 → 앱 v5 화면 이름 */
@@ -71,7 +73,7 @@ export function parseRoute(pathname: string): RouteInfo {
   if (p === '/intro') return { screen: 'story', params: {} }
   if (p === '/login') return { screen: 'login', params: {} }
   if (p === '/signup') return { screen: 'signupOrg', params: {} }
-  if (p === '/results') return { screen: 'results', params: {} }
+  if (p === '/results' || p === '/reports') return { screen: 'results', params: {} } // 화면 이름은 그대로, 탭은 보고서
   if (p === '/my') return { screen: 'my', params: {} }
   if (p === '/account') return { screen: 'account', params: {} }
   if (p === '/notifications') return { screen: 'notif', params: {} }
@@ -83,6 +85,7 @@ export function parseRoute(pathname: string): RouteInfo {
     const sessionId = seg[1]
     if (seg[2] === 'result') return { screen: 'detail', params: { sessionId } }
     if (seg[2] === 'report') return { screen: 'report', params: { sessionId } }
+    if (seg[2] === '3d') return { screen: 'gait3d', params: { sessionId } }
     if (seg[2] === 'analyzing') return { screen: 'analyzing', params: { sessionId } }
     if (seg[2] === 'record') return { screen: 'capGuide', params: { sessionId } }
     return { screen: 'capReview', params: { sessionId } }
@@ -116,7 +119,7 @@ export function DesignRoot() {
     }
   }, [checking, loggedIn, route.screen, loc.pathname, loc.search, navigate, query])
 
-  const data = useDesignData(route.screen === 'detail' || route.screen === 'report' ? route.params.sessionId : undefined)
+  const data = useDesignData(route.screen === 'detail' || route.screen === 'report' || route.screen === 'gait3d' ? route.params.sessionId : undefined)
   const actions = useDesignActions()
   const [ui, setUiState] = useState<UiSel>({ cmp: 'base', tk: 'rom' })
   const setUi = useCallback((p: Partial<UiSel>) => setUiState((u) => ({ ...u, ...p })), [])
@@ -181,12 +184,11 @@ export function DesignRoot() {
     if (window.history.length > 1) navigate(-1)
     else navigate(loggedIn ? '/' : '/welcome')
   }, [navigate, loggedIn])
-  /** 서명 주소(PDF 등)를 연다. 앱에서는 폰 브라우저로 넘어가 내려받는다. 체험 모드의 가짜 서버는 앱 밖에서 열 수 없어 false */
-  const openFile = useCallback((url: string): boolean => {
+  /** 보고서 PDF 저장(src/app/pdfSave.ts). 체험 모드의 가짜 서버 파일은 앱 밖으로 못 꺼낸다 */
+  const openFile = useCallback(async (url: string, fileName: string): Promise<SaveHow> => {
     const u = fileUrl(url)
-    if (!u || isDemo()) return false
-    window.open(u, '_blank', 'noopener')
-    return true
+    if (!u || isDemo()) throw new Error('DEMO')
+    return savePdf(u, fileName)
   }, [])
 
   const props: ProtoProps = {

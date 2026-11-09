@@ -12,8 +12,13 @@ import { BREEDS } from '../../api/labels'
 import { DCLogic } from '../DCLogic'
 import { ST, STEPS, type DDog, type DGait, type DRes } from '../adapter'
 import type { ProtoProps } from '../DesignRoot'
-import { EMPTY_PET, LIMB, LINES, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_, wkg } from '../shared'
+import { EMPTY_PET, LIMB, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_, wkg } from '../shared'
 import { AppView } from './AppView'
+import { IntroBody } from './AppIntro'
+import { Gait3dBody } from './AppGait3d'
+import { DogBody, HomeBody, ReportsBody, type HomeRow, type WebDog, type WebHome, type WebReports } from './AppWebScreens'
+import { isDemo } from '../../app/demoMode'
+import { badgesOf, emrOf } from '../../app/emr'
 import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
 import { HELP_CARDS, HELP_CONTACT } from '../help'
 
@@ -25,7 +30,7 @@ const readKeys = (): string[] => { try { const a = JSON.parse(lsGet(NOTIF_READ_K
 import './app-view.css'
 
 /** 409 DOG_MODIFIED: 다른 담당자가 먼저 고쳤다. 목록은 다시 불러온 상태다(useDesignActions.updateDog) */
-const DOG_MODIFIED_MSG = '다른 담당자가 먼저 수정했어요. 최신 내용을 다시 불러왔으니 확인한 뒤 다시 저장해 주세요'
+const DOG_MODIFIED_MSG = '다른 담당자가 먼저 수정했습니다. 최신 내용을 다시 불러왔으니 확인한 뒤 다시 저장해 주세요'
 
 type Props = ProtoProps & { rootStyle?: React.CSSProperties }
 
@@ -36,7 +41,7 @@ export class AppProto extends DCLogic<Props, any> {
     li: { id: '', pw: '' }, so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null as null | { code: string; org?: string; left?: number; err?: string }, signupBusy: false, to: [false, false, false, false],
     af: { name: '', email: '' }, pf: { cur: '', nw: '', nw2: '' }, saving: false,
     pet: EMPTY_PET, petMode: 'new', petId: null, delId: null, q: '',
-    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', notifOn: lsGet(NOTIF_ON_KEY) !== '0', wf: { pw: '' }, withdrawing: false, notifRead: readKeys(), rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
+    capDog: '', sessW: '', busy: false, repType: 'g', gait: 'trot', page: 0, filt: 'all', hv: 'today', by: '', pd: 'all', pdFrom: '', pdTo: '', rq: '', resShown: 50, pdfBusy: false, notifOn: lsGet(NOTIF_ON_KEY) !== '0', wf: { pw: '' }, withdrawing: false, notifRead: readKeys(), rotDone: false, rotAnim: false, repH: 0, camLive: false, recSec: -1, camLoading: false, pend: 0, loginBusy: false,
   }
   vids = new Set<HTMLVideoElement>()
   recTick: any; raf: any; t1: any; t2: any; tt: any; r1: any; r2: any; storyEl?: HTMLElement; lastMo = 0; moStart = 0
@@ -85,7 +90,11 @@ export class AppProto extends DCLogic<Props, any> {
     if (!el || this.vids.has(el)) return
     this.vids.add(el)
     // 영상 첨부 화면: 디자인의 견본 영상 대신 방금 올린 영상을 보여 준다
-    if (this.props.screen === 'capReview' && this.lastFileUrl) el.src = this.lastFileUrl
+    // 영상 첨부 화면: 방금 올린 영상만 보인다. 첫 그림이 나오기 전엔 숨겨 검은 칸이 안 보이게(배경은 베이지)
+    if (this.props.screen === 'capReview' && this.lastFileUrl) {
+      el.addEventListener('loadeddata', () => { el.style.opacity = '1' }, { once: true })
+      el.src = this.lastFileUrl
+    }
     // 촬영 화면: 견본 영상 대신 앱 안 카메라 미리보기(처음이면 권한 창). 못 쓰면 견본 영상 그대로 두고 촬영 버튼은 기기 카메라
     if (this.props.screen === 'capGuide' && camera.canRecordInApp()) {
       // 카메라가 실제로 그림을 내기 전까지는 영상 칸을 숨기고 '카메라를 켜는 중' 을 보인다(회색 빈 화면 대신)
@@ -139,10 +148,10 @@ export class AppProto extends DCLogic<Props, any> {
     if (!code) return this.setState({ devChk: null })
     this.devTimer = setTimeout(async () => {
       try { const r = await this.props.auth.verifyDeviceCode(code); if (this.state.so.dev.trim() === code) this.setState({ devChk: { code, org: r.institution.name, left: r.remaining_accounts } }) }
-      catch (e) { if (this.state.so.dev.trim() === code) this.setState({ devChk: { code, err: errMsg(e, '기기 번호를 확인하지 못했어요') } }) }
+      catch (e) { if (this.state.so.dev.trim() === code) this.setState({ devChk: { code, err: errMsg(e, '기기 번호를 확인하지 못했습니다') } }) }
     }, 500)
   }
-  PATH: Record<string, string> = { splash: '/welcome', landing: '/welcome', story: '/intro', login: '/login', signupOrg: '/signup', home: '/', results: '/results', my: '/my', account: '/account', notif: '/notifications', settings: '/settings', help: '/help', capSelect: '/capture', petNew: '/dogs/new' }
+  PATH: Record<string, string> = { splash: '/welcome', landing: '/welcome', story: '/intro', login: '/login', signupOrg: '/signup', home: '/', results: '/reports', my: '/my', account: '/account', notif: '/notifications', settings: '/settings', help: '/help', capSelect: '/capture', petNew: '/dogs/new' }
   nav = (screen: string, path?: string, replace?: boolean) => { this.setState({ sheet: null, viaTab: false }); this.props.nav(path || this.PATH[screen] || '/', { replace }) }
   back = () => { this.setState({ sheet: null }); this.props.back() }
   tab = (screen: string) => {
@@ -188,9 +197,9 @@ export class AppProto extends DCLogic<Props, any> {
         void camera.rememberFirstFrame(out.id, file).then(() => this.forceUpdate())
         if (this.lastFileUrl) URL.revokeObjectURL(this.lastFileUrl)
         this.lastFileUrl = URL.createObjectURL(file)
-        this.toast(out.warnings?.length ? out.warnings[0].message : `${out.seq_no}번째 영상을 첨부했어요`)
+        this.toast(out.warnings?.length ? out.warnings[0].message : `${out.seq_no}번째 영상을 첨부했습니다`)
       } catch (e) {
-        this.toast(errMsg(e, '영상을 올리지 못했어요. 잠시 후 다시 시도해 주세요'))
+        this.toast(errMsg(e, '영상을 올리지 못했습니다. 잠시 후 다시 시도해 주세요'))
       } finally {
         this.setState((st: any) => ({ pend: Math.max(0, (st.pend || 0) - 1) }))
       }
@@ -199,7 +208,7 @@ export class AppProto extends DCLogic<Props, any> {
   /** 갤러리에서 고른 여러 개를 차례로 올린다. 남은 칸(limit)만큼만 */
   addFiles = async (files: File[], limit: number) => {
     const use = files.slice(0, Math.max(0, limit))
-    if (files.length > use.length) this.toast(`영상은 16개까지라 ${use.length}개만 첨부해요`)
+    if (files.length > use.length) this.toast(`영상은 16개까지라 ${use.length}개만 첨부합니다`)
     for (const f of use) await this.addFile(f)
   }
 
@@ -212,21 +221,21 @@ export class AppProto extends DCLogic<Props, any> {
       void camera.rememberFirstFrame(out.id, file).then(() => this.forceUpdate())
       if (this.lastFileUrl) URL.revokeObjectURL(this.lastFileUrl)
       this.lastFileUrl = URL.createObjectURL(file)
-      for (const v of this.vids) if (v.isConnected && this.props.screen === 'capReview') v.src = this.lastFileUrl
-      this.toast(out.warnings?.length ? out.warnings[0].message : `${out.seq_no}번째 영상을 첨부했어요`)
+      for (const v of this.vids) if (v.isConnected && this.props.screen === 'capReview') { v.addEventListener('loadeddata', () => { v.style.opacity = '1' }, { once: true }); v.src = this.lastFileUrl }
+      this.toast(out.warnings?.length ? out.warnings[0].message : `${out.seq_no}번째 영상을 첨부했습니다`)
       if (this.props.params.sessionId !== sid || this.props.screen !== 'capReview') this.nav('capReview', `/sessions/${sid}`, this.props.screen === 'capGuide')
     } catch (e) {
-      this.toast(errMsg(e, '영상을 올리지 못했어요. 잠시 후 다시 시도해 주세요'))
+      this.toast(errMsg(e, '영상을 올리지 못했습니다. 잠시 후 다시 시도해 주세요'))
     } finally {
       this.setState({ busy: false })
     }
   }
   goCapGuide = async () => {
-    if (this.shots() >= 16) return this.toast('영상 16개를 모두 첨부했어요')
+    if (this.shots() >= 16) return this.toast('영상 16개를 모두 첨부했습니다')
     if (this.state.busy) return
     this.setState({ busy: true })
     try { const sid = await this.ensureSession(); this.nav('capGuide', `/sessions/${sid}/record`) }
-    catch (e) { this.toast(errMsg(e, '회차를 시작하지 못했어요')) }
+    catch (e) { this.toast(errMsg(e, '회차를 시작하지 못했습니다')) }
     finally { this.setState({ busy: false }) }
   }
   goPetNew = () => { this.setState({ petMode: 'new', pet: EMPTY_PET, petId: null }); this.nav('petNew') }
@@ -247,12 +256,12 @@ export class AppProto extends DCLogic<Props, any> {
 
     const qq = (s.q || '').trim()
     const shown = dogs.filter((d) => !qq || d.name.includes(qq))
-    const homeDogs = shown.map((d) => { const all = results.filter((r) => r.dog === d.id); return { init: d.name[0], name: d.name, desc: desc(d), live: !!d.open, meta: all.length ? `마지막 측정 ${all[0].date} · ${all.length}회차` : '아직 측정 기록이 없어요', open: () => this.openDog(d.id) } })
+    const homeDogs = shown.map((d) => { const all = results.filter((r) => r.dog === d.id); return { init: d.name[0], name: d.name, desc: desc(d), live: !!d.open, meta: all.length ? `마지막 측정 ${all[0].date} · ${all.length}회차` : '아직 측정 기록이 없습니다', open: () => this.openDog(d.id) } })
 
     // 주소의 반려견 id 가 없으면(지웠거나 다른 기관) 다른 반려견을 대신 보여 주지 않는다(none 상태로 안내)
     const D = this.props.params.dogId ? dogById(this.props.params.dogId) : dogs[0]
     let dd: any = { name: '', init: '', desc: '', tags: [], rows: [], hist: [], has: false, none: true, count: '', edit: () => {}, compare: () => {}, start: () => {} }
-    if (!D && this.props.params.dogId && dogs.length) dd = { ...dd, name: '반려견을 찾을 수 없어요', init: '?', desc: '지웠거나 이 기관의 반려견이 아니에요' }
+    if (!D && this.props.params.dogId && dogs.length) dd = { ...dd, name: '반려견을 찾을 수 없습니다', init: '?', desc: '지웠거나 이 기관의 반려견이 아닙니다' }
     if (D) {
       const all = results.filter((r) => r.dog === D.id), bId = baseOf(D), bR = results.find((r) => r.id === bId)
       dd = { name: D.name, init: D.name[0], desc: desc(D),
@@ -260,11 +269,11 @@ export class AppProto extends DCLogic<Props, any> {
         rows: [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력', sub: '' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택', sub: '' },
           { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '' }],
         hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차 · ${r.date}`, sub: r.st === 'fail' ? `${wkg(r.w)} · 쓸 수 있는 통과 없음` : `${wkg(r.w)} · 유효 통과 ${r.ps[1]} · 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
-          setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id, version: D.raw.version }); this.toast(`${r.date} 회차를 기준으로 정했어요`) } catch (err) { this.toast(err instanceof ApiError && err.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : errMsg(err, '기준 회차를 바꾸지 못했어요')) } },
+          setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id, version: D.raw.version }); this.toast(`${r.date} 회차를 기준으로 정했습니다`) } catch (err) { this.toast(err instanceof ApiError && err.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : errMsg(err, '기준 회차를 바꾸지 못했습니다')) } },
           st: stt[0], bg: stt[1], c: stt[2], bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) } }),
         has: all.length > 0, none: !all.length, count: all.length + '회차',
         edit: () => this.nav('petNew', `/dogs/${D.id}/edit`),
-        compare: () => valid(D.id).length < 2 ? this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있어요') : (this.props.setUi({ cmp: 'base' }), this.nav('compare', `/dogs/${D.id}/compare`)),
+        compare: () => valid(D.id).length < 2 ? this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있습니다') : (this.props.setUi({ cmp: 'base' }), this.nav('compare', `/dogs/${D.id}/compare`)),
         start: () => this.goCapture(D.id) }
     }
 
@@ -281,9 +290,9 @@ export class AppProto extends DCLogic<Props, any> {
       const B = results.find((r) => r.id === c.base.session_id), T = results.find((r) => r.id === c.target.session_id)
       const when = (r: DRes | undefined, iso: string) => (r ? `${r.date} · ${sessNo(r)}회차` : short(iso))
       cp = { has: true, none: false, name: CD.name, baseLabel: mode === 'base' ? '기준 회차' : '직전 회차', baseDate: when(B, c.base.measured_on), tDate: when(T, c.target.measured_on),
-        modelChanged: c.model_changed, modelMsg: `두 회차의 분석 모델이 달라요(${c.base.model_version ?? '-'} → ${c.target.model_version ?? '-'}). 분석 방식이 바뀌어 수치를 그대로 비교하기 어려워요.`,
+        modelChanged: c.model_changed, modelMsg: `두 회차의 분석 모델이 다릅니다(${c.base.model_version ?? '-'} → ${c.target.model_version ?? '-'}). 분석 방식이 바뀌어 수치를 그대로 비교하기 어렵습니다.`,
         rows: cmpd.rows, ...cmpd.trend,
-        focusNote: CD.focus ? `관심 다리(${LIMB[CD.focus]})를 맨 앞에 보여 드려요.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드려요.' }
+        focusNote: CD.focus ? `관심 다리(${LIMB[CD.focus]})를 맨 앞에 보여 드립니다.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드립니다.' }
     }
 
     const reqOrg = [s.to[0], s.to[1], s.to[2]].every(Boolean)
@@ -292,9 +301,9 @@ export class AppProto extends DCLogic<Props, any> {
     const devOk = !!s.devChk && s.devChk.code === s.so.dev.trim() && !s.devChk.err
     const orgOk = reqOrg && devOk && !!s.so.name.trim() && emailOk && idOk && s.so.pw.length >= 8 && s.so.pw === s.so.pw2
     const setSo = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ so: { ...st.so, [k]: v } })); if (k === 'dev') this.checkDev(v) }
-    const devHint = !s.so.dev.trim() ? '측정 기기 뒷면 라벨에 적혀 있어요.'
+    const devHint = !s.so.dev.trim() ? '측정 기기 뒷면 라벨에 적혀 있습니다.'
       : !s.devChk || s.devChk.code !== s.so.dev.trim() ? '기기 번호를 확인하는 중…'
-      : s.devChk.err ? s.devChk.err : typeof s.devChk.left === 'number' ? `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개` : `${s.devChk.org} · 확인됐어요`
+      : s.devChk.err ? s.devChk.err : typeof s.devChk.left === 'number' ? `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개` : `${s.devChk.org} · 확인됐습니다`
     const devHc = s.devChk && s.devChk.code === s.so.dev.trim() && s.devChk.err ? '#C2412D' : s.devChk && s.devChk.code === s.so.dev.trim() ? '#2E7D4F' : '#5B6472'
     const notifOn = acct.notifOn ?? s.notifOn
     const setPet = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ pet: { ...st.pet, [k]: v } })) }
@@ -332,26 +341,172 @@ export class AppProto extends DCLogic<Props, any> {
     // 알림은 백엔드 API 가 없어 회차 상태로 만든다. 읽음은 기기에 key 로 남긴다(전체 확인 버튼·홈 종 점)
     const rawNotifs: { key: string; title: string; body: string; when: string; dot: string; open: () => void }[] = [
       ...(ana && anaDog ? [ana.status === 'MEASURING'
-        ? { key: `ana:${ana.sessionId}:m`, title: `${anaDog.name} 촬영을 끝내지 않았어요`, body: `영상 ${ana.n}개를 첨부해 두고 측정 종료를 누르지 않았어요. 이어서 찍거나 측정을 끝내 주세요.`, when: '촬영 중', dot: '#D2601A', open: () => this.nav('capReview', `/sessions/${ana.sessionId}`) }
-        : { key: `ana:${ana.sessionId}`, title: `${anaDog.name} 분석이 진행 중이에요`, body: `영상 ${ana.n}개의 관절점을 찾고 있어요. 끝나면 알려 드릴게요.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
+        ? { key: `ana:${ana.sessionId}:m`, title: `${anaDog.name} 촬영을 끝내지 않았습니다`, body: `영상 ${ana.n}개를 첨부해 두고 측정 종료를 누르지 않았습니다. 이어서 찍거나 측정을 끝내 주세요.`, when: '촬영 중', dot: '#D2601A', open: () => this.nav('capReview', `/sessions/${ana.sessionId}`) }
+        : { key: `ana:${ana.sessionId}`, title: `${anaDog.name} 분석이 진행 중입니다`, body: `영상 ${ana.n}개의 관절점을 찾고 있습니다. 끝나면 알려 드리겠습니다.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
       ...results.slice(0, 6).map((r) => { const d = dogById(r.dog); return r.st === 'fail'
-        ? { key: `res:${r.id}:fail`, title: `${d?.name ?? ''} 분석에 실패했어요`, body: r.result?.fail_reason?.message || '쓸 수 있는 통과가 없었어요. 다시 촬영해 주세요.', when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
-        : { key: `res:${r.id}:${r.rep ? 'rep' : 'done'}`, title: `${d?.name ?? ''} ${r.rep ? '보고서가 만들어졌어요' : '분석이 끝났어요'}`, body: r.rep ? '보호자용·수의사용 보고서를 확인해 보세요.' : '회차 결과를 확인해 보세요.', when: r.date, dot: r.rep ? '#D2601A' : '#C9C4BC', open: () => this.openRes(r.id) } }),
+        ? { key: `res:${r.id}:fail`, title: `${d?.name ?? ''} 분석에 실패했습니다`, body: r.result?.fail_reason?.message || '쓸 수 있는 통과가 없었습니다. 다시 촬영해 주세요.', when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
+        : { key: `res:${r.id}:${r.rep ? 'rep' : 'done'}`, title: `${d?.name ?? ''} ${r.rep ? '보고서가 만들어졌습니다' : '분석이 끝났습니다'}`, body: r.rep ? '보호자용·수의사용 보고서를 확인해 보세요.' : '회차 결과를 확인해 보세요.', when: r.date, dot: r.rep ? '#D2601A' : '#C9C4BC', open: () => this.openRes(r.id) } }),
     ]
-    if (!rawNotifs.length) rawNotifs.push({ key: 'welcome', title: '가입을 환영해요', body: '반려견을 등록하고 첫 보행 영상을 찍어 보세요.', when: '방금', dot: '#D2601A', open: this.goPetNew })
+    if (!rawNotifs.length) rawNotifs.push({ key: 'welcome', title: '가입을 환영합니다', body: '반려견을 등록하고 첫 보행 영상을 찍어 보세요.', when: '방금', dot: '#D2601A', open: this.goPetNew })
     const readSet = new Set<string>(s.notifRead)
     const markRead = (keys: string[]) => { const next = Array.from(new Set([...s.notifRead, ...keys])).slice(-200); lsSet(NOTIF_READ_KEY, JSON.stringify(next)); this.setState({ notifRead: next }) }
     const notifs = rawNotifs.map((n) => { const read = readSet.has(n.key); return { ...n, dot: read ? '#E2DCD3' : n.dot, tc: read ? '#5B6472' : '#1B2433', open: () => { markRead([n.key]); n.open() } } })
     const hasUnread = rawNotifs.some((n) => !readSet.has(n.key))
 
+    // ── 웹과 같은 홈·반려견 차트·분석 결과 (AppWebScreens). 문턱값은 웹 config 와 같다(변동 7일, 대칭 지수 3%p) ──
+    const now = new Date()
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const daysAgo = (iso: string) => Math.round((Date.parse(todayIso) - Date.parse(iso.slice(0, 10))) / 86400000)
+    const ageOf = (d: DDog) => (d.birth ? `${now.getFullYear() - Number(d.birth)}살` : '나이 미입력')
+    const prevValid = (r: DRes) => { const vv = valid(r.dog); const i = vv.findIndex((x) => x.id === r.id); return i >= 0 ? vv[i + 1] : undefined }
+    const symChip = (r: DRes) => {
+      if (r.st === 'fail' || r.sym == null) return { t: '—', bg: '#F2EFEA', c: '#8E949C' }
+      const sv = r.sym, [bg, c] = sv >= 90 ? ['#DCEFE2', '#2E7A4F'] : sv >= 80 ? ['#FBEBC8', '#8A6100'] : ['#FBE0D9', '#C2412D']
+      const p = prevValid(r), dv = p && p.sym != null ? sv - p.sym : 0
+      return { t: `${sv}%`, bg, c, d: dv ? (dv > 0 ? `▲${dv}` : `▼${-dv}`) : undefined, dc: dv > 0 ? '#2E8B57' : '#C2412D' }
+    }
+    const stChip = (r: DRes) => ({ t: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2] })
+    const byOf = (r: DRes) => r.result?.staff?.name || '—'
+    const trendOf = (dogId: string): WebDog['trend'] => {
+      const vs = valid(dogId).filter((x) => x.sym != null).slice().reverse().slice(-8)
+      if (!vs.length) return { has: false, pts: [], line: '', label: '', c: '', sym: null }
+      const syms = vs.map((x) => x.sym as number), lo = Math.min(...syms) - 3, hi = Math.max(...syms) + 3
+      const pts = vs.map((x, i) => ({ x: Math.round(24 + i * (276 / Math.max(1, vs.length - 1))), y: Math.round(84 - (((x.sym as number) - lo) / (hi - lo)) * 64), v: x.sym as number, t: short(x.date), cur: i === vs.length - 1 }))
+      const diff = syms.length > 1 ? syms[syms.length - 1] - syms[syms.length - 2] : 0
+      const [label, c] = syms.length === 1 ? ['첫 측정', '#7A808A'] : diff >= 3 ? ['좋아짐', '#2E8B57'] : diff <= -3 ? ['나빠짐', '#C2412D'] : ['비슷함', '#7A808A']
+      return { has: true, pts, line: pts.map((p) => `${p.x},${p.y}`).join(' '), label, c, sym: syms[syms.length - 1] }
+    }
+    const changesOf = (d: DDog) => {
+      const out: { t: string; bg: string; c: string }[] = []
+      for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7)) {
+        if (r.st === 'fail') out.push({ t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' })
+        else {
+          if (r.st === 'part') out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
+          const p = prevValid(r)
+          if (p && r.sym != null && p.sym != null && r.sym - p.sym >= 3) out.push({ t: `보행 좋아짐 +${r.sym - p.sym}%p`, bg: '#E8F3EC', c: '#2E8B57' })
+          else if (p && r.sym != null && p.sym != null && p.sym - r.sym >= 3) out.push({ t: `보행 나빠짐 −${p.sym - r.sym}%p`, bg: '#F8E7E3', c: '#C2412D' })
+        }
+      }
+      return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
+    }
+    const emrTxt = (d: DDog) => emrOf(d.name).history.map((h) => h.title).join(' ')
+    const badgeChips = (d: DDog) => badgesOf(emrOf(d.name)).map((b) => (b.kind === 'surg' ? { t: b.t, bg: '#FCEEE3', c: '#A8481A' } : { t: b.t, bg: '#EEF1F6', c: '#4A5A78' }))
+    const hvDogs = dogs.filter((d) => !qq || `${d.name} ${d.breed} ${d.memo} ${emrTxt(d)}`.includes(qq))
+    const keepIds = new Set(hvDogs.map((d) => d.id))
+    const todayRows: HomeRow[] = hvDogs.flatMap((d) => {
+      const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
+      if (!res.length && !live) return []
+      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.map((r) => (r.st === 'fail' ? { t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' } : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
+      const times = res.map((r) => r.time).filter(Boolean).sort()
+      return [{ key: d.id, when: times[0] || '', name: d.name, sub: d.breed || '견종 미입력', chips: [...chips, ...badgeChips(d)], right: res.map(byOf).find((b) => b !== '—') || '', live, open: () => this.openDog(d.id) }]
+    })
+    // 분석 기간: 전체·오늘·최근 7일·최근 30일·직접 선택(시작~끝, 한쪽만 적어도 된다)
+    const inPeriod = (iso: string) => {
+      const d = iso.slice(0, 10)
+      if (s.pd === 'today') return d === todayIso
+      if (s.pd === '7' || s.pd === '30') return daysAgo(d) >= 0 && daysAgo(d) < Number(s.pd)
+      if (s.pd === 'custom') return (!s.pdFrom || d >= s.pdFrom) && (!s.pdTo || d <= s.pdTo)
+      return true
+    }
+    const analysisRows: HomeRow[] = results.filter((r) => keepIds.has(r.dog) && (!s.by || byOf(r) === s.by) && inPeriod(r.measured_on)).map((r) => { const d = dogById(r.dog)!; return { key: r.id, when: `${short(r.date)} ${r.time}`.trim(), name: d.name, sub: `${d.breed || '견종 미입력'} · ${sessNo(r)}회차`, chips: [], sym: symChip(r), st: stChip(r), right: byOf(r), open: () => this.openRes(r.id) } })
+    // 정렬: 측정 중인 반려견이 맨 위, 나머지는 서버 순서(마지막 측정일 최신순, 측정 전은 아래, 같으면 최근 등록순)
+    const isLive = (d: DDog) => !!d.open || (!!ana && ana.dog === d.id)
+    const dogRows: HomeRow[] = [...hvDogs.filter(isLive), ...hvDogs.filter((d) => !isLive(d))].map((d) => {
+      const all = results.filter((r) => r.dog === d.id), last = all[0], tr = trendOf(d.id)
+      return { key: d.id, when: last ? `마지막 측정 ${short(last.date)}` : '측정 전', name: d.name, sub: `${SEX[d.sex || 'm']} · ${ageOf(d)} · ${d.breed || '견종 미입력'} · ${SIZE[d.size]}`,
+        // 셋째 줄: 수술·질병 이름, 그 뒤에 조치가 필요한 변화(재촬영 필요·보행 좋아짐/나빠짐)
+        chips: [...badgeChips(d), ...changesOf(d)], right: `분석 ${all.length}건`,
+        sym: tr.has ? { t: `${tr.sym}%`, bg: '#F2EFEA', c: '#1B2433', d: tr.label, dc: tr.c } : undefined, open: () => this.openDog(d.id) }
+    })
+    const staffRows: HomeRow[] = (() => {
+      const m = new Map<string, DRes[]>()
+      for (const r of results.filter((x) => keepIds.has(x.dog))) { const b = byOf(r); m.set(b, [...(m.get(b) || []), r]) }
+      return [...m.entries()].sort((a, b) => b[1].length - a[1].length).map(([name, rs]) => {
+        const fails = rs.filter((r) => r.st === 'fail').length, dogN = new Set(rs.map((r) => r.dog)).size
+        return { key: `staff:${name}`, when: `마지막 촬영 ${short(rs[0].date)}`, name: name === '—' ? '담당자 미기록' : name, sub: `반려견 ${dogN}마리`, chips: fails ? [{ t: `분석 실패 ${fails}건`, bg: '#FBE0D9', c: '#C2412D' }] : [], right: `분석 ${rs.length}건`, open: () => this.setState({ hv: 'analyses', by: name }) }
+      })
+    })()
+    const retakeN = dogs.filter((d) => changesOf(d).some((c) => c.t === '재촬영 필요')).length
+    const todayN = dogs.filter((d) => results.some((r) => r.dog === d.id && r.measured_on === todayIso) || (!!ana && ana.dog === d.id)).length
+    const setHv = (k: string) => this.setState({ hv: k, by: '' })
+    const webHome: WebHome = {
+      today: fmtD(todayIso), acctName: acct.name, acctInit: (acct.name || '?').slice(0, 1), hasUnread, goNotif: () => this.nav('notif'), goMy: () => this.tab('my'), goPetNew: this.goPetNew, goCapture: () => this.goCapture(),
+      cards: [{ label: '전체 반려견', n: dogs.length, unit: '마리', on: s.hv === 'dogs', pick: () => setHv('dogs') }, { label: '오늘 진행', n: todayN, unit: '마리', on: s.hv === 'today', pick: () => setHv('today') }, { label: '재촬영 필요', n: retakeN, unit: '마리', warn: true, pick: () => setHv('dogs') }],
+      views: [['analyses', '분석'], ['dogs', '반려견'], ['staff', '촬영 담당자']].map(([key, label]) => ({ key, label, on: s.hv === key, pick: () => setHv(key) })),
+      period: s.hv === 'analyses' ? {
+        opts: [['all', '전체'], ['today', '오늘'], ['7', '7일'], ['30', '30일'], ['custom', '직접 선택']].map(([k, label]) => ({ label, on: s.pd === k, pick: () => this.setState({ pd: k }) })),
+        custom: s.pd === 'custom', from: s.pdFrom, to: s.pdTo, max: todayIso,
+        onFrom: (e: any) => this.setState({ pdFrom: e.target.value }), onTo: (e: any) => this.setState({ pdTo: e.target.value }),
+      } : null,
+      by: s.hv === 'analyses' && s.by ? { t: s.by === '—' ? '담당자 미기록' : s.by, clear: () => this.setState({ hv: 'staff', by: '' }) } : null,
+      view: s.hv, q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) },
+      rows: s.hv === 'today' ? todayRows : s.hv === 'analyses' ? analysisRows : s.hv === 'staff' ? staffRows : dogRows,
+      empty: !dogs.length ? '첫 반려견을 등록해 주세요. 이름·견종·체중만 있으면 바로 보행 측정을 시작할 수 있습니다.' : s.hv === 'today' ? '오늘 진행한 분석 및 측정이 없습니다.' : qq ? `‘${qq}’ 에 맞는 ${s.hv === 'analyses' ? '분석이' : s.hv === 'staff' ? '담당자가' : '반려견이'} 없습니다.` : s.hv === 'analyses' ? (s.pd !== 'all' ? '이 기간에 한 분석이 없습니다.' : '아직 분석 결과가 없습니다.') : s.hv === 'staff' ? '아직 촬영한 분석이 없습니다.' : '등록된 반려견이 없습니다.',
+      ana: { on: !!ana && li, thumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, name: anaDog ? anaDog.name : '', label: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', hint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', pct: Math.round(anaP / 5 * 100), step: STEPS[anaFloor], n: anaFloor + 1, measuring: !!ana && ana.status === 'MEASURING',
+        open: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)) },
+    }
+    const webDog: WebDog = (() => {
+      const bId = D ? baseOf(D) : null, bR = results.find((r) => r.id === bId)
+      const all = D ? results.filter((r) => r.dog === D.id) : []
+      return {
+        none: !D, missing: !D && !!this.props.params.dogId && dogs.length > 0,
+        name: D ? D.name : '반려견을 찾을 수 없습니다', init: D ? D.name[0] : '?', desc: D ? desc(D) : '', live: !!D?.open,
+        tags: D ? [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ''), SEX[D.sex || 'm'], ageOf(D), ...(D.focus ? [`관심 다리 ${LIMB[D.focus]}`] : [])] : [],
+        cells: D ? [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택' }, { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '직접 지정' : bR ? '가장 이른 회차' : '' }, { k: '측정 횟수', v: `${all.length}회차`, sub: all[0] ? `마지막 ${short(all[0].date)}` : '' }] : [],
+        vit: (() => {
+          const e = D ? emrOf(D.name) : { vitals: [], history: [] }, v = e.vitals[0]
+          const kg = v?.kg || (D?.kg && D.kg !== '0' ? D.kg : '')
+          return {
+            cells: [{ k: '체중', v: kg ? `${kg}kg` : '—' }, { k: '체온', v: v?.temp ? `${v.temp}℃` : '—' }, { k: '심박', v: v?.hr ? `${v.hr}회/분` : '—' }, { k: '혈압', v: v?.sbp ? `${v.sbp}/${v.dbp}` : '—', sub: v?.sbp ? 'mmHg' : '' }],
+            when: v ? `${fmtD(v.day)} · ${v.author}` : '',
+            note: v ? '' : '체온·심박·혈압은 아직 기록이 없습니다',
+            hist: [...e.history].reverse().map((h, i) => ({ id: `${h.day}-${i}`, day: fmtD(h.day), kind: h.kind, title: h.title, site: ({ LF: '왼앞', RF: '오른앞', LH: '왼뒤', RH: '오른뒤', SP: '척추' } as Record<string, string>)[h.site] ?? '', by: h.by })),
+          }
+        })(),
+        memo: D?.memo || '없음', trend: D ? trendOf(D.id) : { has: false, pts: [], line: '', label: '', c: '', sym: null },
+        hist: all.map((r, i) => ({ id: r.id, no: `${sessNo(r)}회차`, date: r.date, w: r.w && r.w !== '-' ? `${r.w}kg` : '—', pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`, model: r.model, rep: r.rep ? '있음' : '—', base: r.id === bId, canBase: r.st !== 'fail' && r.id !== bId, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], open: () => this.openRes(r.id), setBase: dd.hist[i] ? dd.hist[i].setBase : () => {} })),
+        count: `${all.length}회차`, back: this.back, edit: dd.edit, compare: dd.compare, start: dd.start,
+      }
+    })()
+    // ── 보고서 탭: 보고서가 만들어진 회차만. 위에서 반려견 검색·고르기(반려견이 수백 마리여도 검색으로 좁힌다) ──
+    const repOf = (r: DRes) => r.raw?.reports ?? null
+    const hasRep = (r: DRes) => repOf(r)?.OWNER === 'DONE' || repOf(r)?.VET === 'DONE'
+    const repRes = results.filter((r) => dogById(r.dog) && hasRep(r))
+    const rq = (s.rq || '').trim()
+    const dogMatch = (d: DDog) => !rq || `${d.name} ${d.breed}`.includes(rq)
+    const repDogIds = new Set(repRes.map((r) => r.dog))
+    const repDogs = dogs.filter((d) => repDogIds.has(d.id) && (dogMatch(d) || d.id === s.filt))
+    const repRows = repRes.filter((r) => (s.filt === 'all' ? dogMatch(dogById(r.dog)!) : r.dog === s.filt))
+    const openRepOf = (id: string, t: 'g' | 'v') => { this.setState({ repType: t }); this.nav('report', `/sessions/${id}/report`) }
+    const webReports: WebReports = {
+      total: repRes.length,
+      q: s.rq, onQ: (e: any) => this.setState({ rq: e.target.value, resShown: 50 }),
+      chips: [{ id: 'all', init: '전체', name: '전체' }, ...repDogs.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name }))].map((c) => ({ ...c, on: s.filt === c.id, pick: () => this.setState({ filt: c.id, resShown: 50 }) })),
+      rows: repRows.slice(0, s.resShown).map((r) => {
+        const d = dogById(r.dog)!, rp = repOf(r)
+        return { id: r.id, thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, name: d.name, when: `${r.date} · ${sessNo(r)}회차`, sub: `${d.breed || '견종 미입력'}${r.sym != null && r.st !== 'fail' ? ` · 대칭 지수 ${r.sym}%` : ''}`,
+          owner: rp?.OWNER === 'DONE', vet: rp?.VET === 'DONE', openOwner: () => openRepOf(r.id, 'g'), openVet: () => openRepOf(r.id, 'v') }
+      }),
+      more: repRows.length > s.resShown ? `더 보기 (${repRows.length - s.resShown}건 남음)` : '', loadMore: () => this.setState({ resShown: s.resShown + 50 }),
+      empty: !repRes.length ? '아직 만들어진 보고서가 없습니다. 분석이 끝나면 보고서가 자동으로 만들어집니다.' : rq ? `‘${rq}’ 에 맞는 반려견의 보고서가 없습니다.` : '이 반려견의 보고서가 없습니다.',
+    }
+
     return {
+      introBody: <IntroBody i={{ showBack: !li || !s.viaTab, back: this.back, titlePad: !li || !s.viaTab ? 0 : 12, bottom: showTabs ? 96 : 0,
+        cta: li ? { label: '보행 분석 시작하기', go: () => this.goCapture() } : { label: '기관 계정 만들기', go: () => this.nav('signupOrg') }, login: li ? undefined : () => this.nav('login') }} />,
+      gait3dBody: sc === 'gait3d' ? (() => {
+        const RD3 = R ? dogById(R.dog) : undefined
+        return <Gait3dBody result={R?.result} name={RD3?.name ?? ''} when={R ? `${R.date} · ${sessNo(R)}회차` : ''} size={RD3?.size ?? 'M'} sym={R?.sym ?? null} back={this.back} />
+      })() : null,
+      go3d: () => { if (R) this.nav('gait3d', `/sessions/${R.id}/3d`) }, go3dOn: !!R && R.st !== 'fail' && !!R.result,
+      homeBody: <HomeBody h={webHome} />, dogBody: <DogBody d={webDog} />, resultsBody: <ReportsBody r={webReports} />,
       rootStyle: this.props.rootStyle || {},
       isSplash: sc === 'splash', isLanding: sc === 'landing', isLogin: sc === 'login', isSignupOrg: sc === 'signupOrg',
       isHome: sc === 'home', isDog: sc === 'dog', isPetNew: sc === 'petNew', isNotif: sc === 'notif', isStory: sc === 'story', isCapSelect: sc === 'capSelect', isCapGuide: sc === 'capGuide',
-      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', isSettings: sc === 'settings', isHelp: sc === 'help', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
+      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isGait3d: sc === 'gait3d', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', isSettings: sc === 'settings', isHelp: sc === 'help', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
       vid: this.vid, storyRef: this.storyRef, repBox: this.repBox, back: this.back,
       jointOp: s.joint ? 1 : 0, jointTr: s.joint ? 'opacity 0.5s ease-out' : 'none', replaySplash: () => this.startSplash(),
-      lines: LINES.map((t, i) => ({ t, op: i === s.line ? 1 : 0, ty: i === s.line ? 0 : (i < s.line ? -14 : 14) })),
+      lines: [], // 랜딩 영상 위 문구(반려견의 걸음을·더욱 정확하게·Paw oh Paw)는 띄우지 않는다
       goStory: () => this.nav('story'), openStart: () => this.nav('signupOrg'), goLogin: () => this.nav('login'),
       fLoginId: s.li.id, fLoginPw: s.li.pw, onLoginId: setLi('id'), onLoginPw: setLi('pw'),
       loginBg: s.li.id.length >= 1 && s.li.pw.length >= 1 ? '#D2601A' : '#C3C8CF',
@@ -364,30 +519,30 @@ export class AppProto extends DCLogic<Props, any> {
         catch (e) { this.toast(errMsg(e, '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')) }
         finally { this.setState({ loginBusy: false }) }
       },
-      loginSub: '동물병원·재활센터 계정으로 로그인해요.', loginIdLabel: '아이디', loginIdPh: '아이디',
+      loginSub: '동물병원·재활센터 계정으로 로그인합니다.', loginIdLabel: '아이디', loginIdPh: '아이디',
       orgFields: [
         { label: '디바이스 번호', ph: '예) PP-2410-0381', type: 'text', val: s.so.dev, on: setSo('dev'), hint: devHint, hc: devHc }],
       orgAcctFields: [
         { label: '담당자 이름', ph: '예) 김수의', type: 'text', val: s.so.name, on: setSo('name') },
-        { label: '이메일', ph: '비밀번호를 잊었을 때 써요', type: 'email', val: s.so.email, on: setSo('email'), hint: s.so.email && !emailOk ? '이메일 형식이 아니에요' : false, hc: '#C2412D' },
+        { label: '이메일', ph: '비밀번호를 잊었을 때 씁니다', type: 'email', val: s.so.email, on: setSo('email'), hint: s.so.email && !emailOk ? '이메일 형식이 아닙니다' : false, hc: '#C2412D' },
         { label: '아이디', ph: '영문 소문자·숫자 4자 이상', type: 'text', val: s.so.id, on: setSo('id'), hint: s.so.id && !idOk ? '영문 소문자·숫자·._- 로 4~50자' : false, hc: '#C2412D' },
-        { label: '비밀번호', ph: '8자 이상', type: 'password', val: s.so.pw, on: setSo('pw'), hint: s.so.pw && s.so.pw.length < 8 ? '8자 이상이어야 해요' : false, hc: '#C2412D' },
-        { label: '비밀번호 확인', ph: '한 번 더 입력', type: 'password', val: s.so.pw2, on: setSo('pw2'), hint: s.so.pw2 && s.so.pw !== s.so.pw2 ? '비밀번호가 달라요' : false, hc: '#C2412D' }],
+        { label: '비밀번호', ph: '8자 이상', type: 'password', val: s.so.pw, on: setSo('pw'), hint: s.so.pw && s.so.pw.length < 8 ? '8자 이상이어야 합니다' : false, hc: '#C2412D' },
+        { label: '비밀번호 확인', ph: '한 번 더 입력', type: 'password', val: s.so.pw2, on: setSo('pw2'), hint: s.so.pw2 && s.so.pw !== s.so.pw2 ? '비밀번호가 다릅니다' : false, hc: '#C2412D' }],
       allOrgC: chk(s.to.every(Boolean)), allOrgToggle: () => this.setState((st: any) => ({ to: st.to.map(() => !st.to.every(Boolean)) })),
       termsOrg: termRows('to', [['[필수] 서비스 이용약관', true], ['[필수] 개인정보 수집 및 이용', true], ['[필수] 측정 기기 연동 및 위치정보 이용', true], ['[선택] 마케팅 정보 수신', true]]),
       signOrgBg: orgOk ? '#D2601A' : '#C3C8CF',
       doSignupOrg: async () => {
-        if (!orgOk) return this.toast(!reqOrg ? '필수 약관에 동의해 주세요' : !devOk ? (s.devChk && s.devChk.err ? s.devChk.err : '기기 번호를 확인해 주세요') : (s.so.pw2 && s.so.pw !== s.so.pw2) ? '비밀번호가 서로 달라요' : '입력하지 않았거나 형식이 맞지 않는 항목이 있어요')
+        if (!orgOk) return this.toast(!reqOrg ? '필수 약관에 동의해 주세요' : !devOk ? (s.devChk && s.devChk.err ? s.devChk.err : '기기 번호를 확인해 주세요') : (s.so.pw2 && s.so.pw !== s.so.pw2) ? '비밀번호가 서로 다릅니다' : '입력하지 않았거나 형식이 맞지 않는 항목이 있습니다')
         if (s.signupBusy) return
         this.setState({ signupBusy: true })
         try {
           // 약관 동의(192): 필수 셋은 orgOk 에서 확인했고, 버전은 약관 본문의 갱신일
           const terms = { version: LEGAL.terms.updated, service: true, privacy: true, device_location: true, marketing: !!s.to[3] }
           await this.props.auth.signup({ code: s.so.dev.trim(), login_id: s.so.id.trim(), password: s.so.pw, name: s.so.name.trim(), email: s.so.email.trim(), terms })
-          this.toast(`${s.devChk?.org ?? '기관'} 담당자로 가입했어요`)
+          this.toast(`${s.devChk?.org ?? '기관'} 담당자로 가입했습니다`)
           this.setState({ so: { dev: '', name: '', email: '', id: '', pw: '', pw2: '' }, devChk: null, to: [false, false, false, false], viaTab: true })
           this.props.nav('/', { replace: true })
-        } catch (e) { this.toast(errMsg(e, '가입하지 못했어요. 잠시 후 다시 시도해 주세요.')) }
+        } catch (e) { this.toast(errMsg(e, '가입하지 못했습니다. 잠시 후 다시 시도해 주세요.')) }
         finally { this.setState({ signupBusy: false }) }
       },
 
@@ -396,19 +551,19 @@ export class AppProto extends DCLogic<Props, any> {
       hasDogs: dogs.length > 0, noDogs: !dogs.length, dogCount: dogs.length + '마리',
       q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) }, homeDogs, noMatch: !!qq && !shown.length,
       goPetNew: this.goPetNew, goCapture: () => this.goCapture(), dd,
-      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)), anaMeasuring: !!ana && ana.status === 'MEASURING', anaLabel: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', anaHint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았어요. 눌러서 이어가기` : '', anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
+      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)), anaMeasuring: !!ana && ana.status === 'MEASURING', anaLabel: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', anaHint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
       prints: (() => { const ph = Math.floor(Date.now() / 420) % 11; return Array.from({ length: 8 }, (_, i) => { const on = ph <= 8 ? i < ph : ph === 9; const jx = [0, 6, -8, 4, -4, 10, -2, 5][i], jr = -23 + [7, -4, 10, -8, 4, -10, 8, -5][i]; return { x: (i % 2 ? 236 : 118) + jx * 2 + Math.round(Math.sin(i * 0.9) * 22), y: 656 - i * 68 + (i % 2 ? 10 : 0), r: jr, op: on ? 1 : 0, s: on ? 1 : 0.7 } }) })(),
 
       petTitle: s.petMode === 'edit' ? '반려견 정보 수정' : '반려견 등록', petCta: s.petMode === 'edit' ? '저장하기' : '등록하기',
       petFields: [
         { label: '이름', ph: '예) 보리', val: s.pet.name, on: setPet('name') },
-        { label: '견종', ph: '견종을 입력하면 목록이 떠요', val: s.pet.breed, on: setPet('breed'), showSug: !!bq && !bExact, noSug: !!bq && !bExact && !bList.length,
+        { label: '견종', ph: '견종을 입력하면 목록이 뜹니다', val: s.pet.breed, on: setPet('breed'), showSug: !!bq && !bExact, noSug: !!bq && !bExact && !bList.length,
           sugs: bList.map((name, i) => ({ name, bt: i ? '1px solid #F2EFEA' : 'none', pick: () => this.setState((st: any) => ({ pet: { ...st.pet, breed: name } })) })) },
         { label: '체중 (kg)', ph: '예) 28.4', val: s.pet.kg, on: setPet('kg') },
         { label: '출생연도 (선택)', ph: '예) 2019', val: s.pet.birth, on: setPet('birth') }],
       sexes: Object.entries(SEX).map(([k, label]) => ({ label, ...pickSt(s.pet.sex === k), pick: () => this.setState((st: any) => ({ pet: { ...st.pet, sex: k } })) })),
       sizes: Object.entries(SIZE).map(([k, label]) => ({ label, ...pickSt((s.pet.size || autoSz) === k), pick: () => this.setState((st: any) => ({ pet: { ...st.pet, size: st.pet.size === k ? null : k } })) })),
-      sizeNote: s.pet.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류돼요',
+      sizeNote: s.pet.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다',
       limbs: Object.entries(LIMB).map(([k, label]) => ({ label, ...pickSt(s.pet.focus === k), pick: () => this.setState((st: any) => ({ pet: { ...st.pet, focus: st.pet.focus === k ? null : k } })) })),
       petRehab: s.pet.rehab, onRehab: setPet('rehab'), petMemo: s.pet.memo, onMemo: setPet('memo'),
       petBg: s.pet.name && s.pet.breed && s.pet.kg ? '#D2601A' : '#C3C8CF',
@@ -419,13 +574,13 @@ export class AppProto extends DCLogic<Props, any> {
         if (!Number.isFinite(kg) || kg <= 0) return this.toast('체중은 숫자로 입력해 주세요')
         this.setState({ busy: true })
         try {
-          if (s.petMode === 'edit') { const cur = this.props.data.dogs.find((x) => x.id === s.petId); await this.props.actions.updateDog(s.petId, { ...petBody(s.pet), version: cur ? cur.raw.version : 0 }); this.back(); this.toast('저장했어요') }
-          else { const d = await this.props.actions.createDog(petBody(s.pet)); this.nav('dog', `/dogs/${d.id}`, true); this.toast(`${s.pet.name} 등록을 마쳤어요`) }
-        } catch (e) { this.toast(e instanceof ApiError && e.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : e instanceof ApiError && e.fields.length ? `${e.message} (${e.fields.map((f) => f.field).join(', ')})` : errMsg(e, '저장하지 못했어요')) }
+          if (s.petMode === 'edit') { const cur = this.props.data.dogs.find((x) => x.id === s.petId); await this.props.actions.updateDog(s.petId, { ...petBody(s.pet), version: cur ? cur.raw.version : 0 }); this.back(); this.toast('저장했습니다') }
+          else { const d = await this.props.actions.createDog(petBody(s.pet)); this.nav('dog', `/dogs/${d.id}`, true); this.toast(`${s.pet.name} 등록을 마쳤습니다`) }
+        } catch (e) { this.toast(e instanceof ApiError && e.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : e instanceof ApiError && e.fields.length ? `${e.message} (${e.fields.map((f) => f.field).join(', ')})` : errMsg(e, '저장하지 못했습니다')) }
         finally { this.setState({ busy: false }) }
       },
 
-      notifs, hasUnread, readAll: () => { markRead(rawNotifs.map((n) => n.key)); this.toast('알림을 모두 확인했어요') },
+      notifs, hasUnread, readAll: () => { markRead(rawNotifs.map((n) => n.key)); this.toast('알림을 모두 확인했습니다') },
 
       storyBack: !li || !s.viaTab, storyTitlePad: !li || !s.viaTab ? 0 : 12, storyBottom: showTabs ? 96 : 0,
       onStory: (e: any) => { const p = Math.round(e.target.scrollLeft / e.target.clientWidth); if (p !== this.state.page) { if (p === 2) this.moStart = Date.now(); this.setState({ page: p }) } },
@@ -448,19 +603,19 @@ export class AppProto extends DCLogic<Props, any> {
 
       capDogs: dogs.map((d) => { const on = d.id === s.capDog; return { init: d.name[0], name: d.name, desc: desc(d), bd: on ? '#D2601A' : '#ECE8E2', dot: on ? '#D2601A' : 'transparent', pick: () => this.setState({ capDog: d.id }) } }),
       sessW: s.sessW, onSessW: (e: any) => { const v = e.target.value; this.setState({ sessW: v }) }, sessWPh: capD.kg ? `등록 체중 ${capD.kg}` : '예) 28.1',
-      fromGallery: async () => { if (shots >= 16) return this.toast('영상 16개를 모두 첨부했어요'); const fs = await this.props.pickFile(false); await this.addFiles(fs, 16 - shots) },
+      fromGallery: async () => { if (shots >= 16) return this.toast('영상 16개를 모두 첨부했습니다'); const fs = await this.props.pickFile(false); await this.addFiles(fs, 16 - shots) },
       goCapGuide: this.goCapGuide,
       capDogName: capD.name || '',
       slots: Array.from({ length: 16 }, (_, i) => { const done = i < shots, next = i === shots; const sh = [...(this.props.session?.shots ?? [])].sort((a: any, b: any) => a.seq_no - b.seq_no)[i]; return { n: i + 1, done, next, shot: done ? sh : undefined, bg: done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC', bs: next ? 'dashed' : 'solid', bd: done ? '#141B22' : next ? '#D2601A' : '#ECE8E2', nc: done ? 'rgba(255,255,255,.75)' : next ? '#B4501A' : '#A0A7B2', cur: next ? 'pointer' : 'default', tap: next ? this.goCapGuide : () => {} } }),
       shotN: shots, shotPct: Math.round(shots / 16 * 100), moreOp: shots >= 16 ? 0.4 : 1,
-      shotHint: s.busy ? '영상을 올리는 중이에요…' : shots >= 16 ? '16개를 모두 첨부했어요. 분석을 시작해 주세요.' : `${shots + 1}번째 영상을 이어서 찍어 주세요. 16개를 모두 채우면 결과가 더 정확해요.`,
+      shotHint: s.busy ? '영상을 올리는 중이에요…' : shots >= 16 ? '16개를 모두 첨부했습니다. 분석을 시작해 주세요.' : `${shots + 1}번째 영상을 이어서 찍어 주세요. 16개를 모두 채우면 결과가 더 정확합니다.`,
       rotHint: !s.rotDone, rotDone: !!s.rotDone, rotDeg: s.rotAnim ? 90 : 0,
       // 촬영 화면 영상 칸: 앱 안 카메라를 쓰면 견본 영상 없이 카메라만
-      capVidSrc: camera.canRecordInApp() ? undefined : '/assets/landing.mp4', capVidPoster: camera.canRecordInApp() ? undefined : '/assets/landing-poster.webp',
+      capPrevOn: sc === 'capReview' && !!this.lastFileUrl, capVidSrc: camera.canRecordInApp() ? undefined : '/assets/landing.mp4', capVidPoster: camera.canRecordInApp() ? undefined : '/assets/landing-poster.webp',
       camLoading: !!s.camLoading, camOp: s.camLoading ? 0 : 1,
       recTime: `영상 ${Math.min(16, shots + (s.pend || 0) + 1)}/16 · ${s.recSec >= 0 ? `00:${String(Math.min(99, s.recSec)).padStart(2, '0')} 녹화 중` : '00:00 / 00:04'}`, recPillBg: s.busy || s.recSec >= 0 ? '#C2412D' : 'rgba(14,18,23,.55)', recDot: s.busy || s.recSec >= 0 ? '#fff' : '#E5604D',
       recBtnS: s.busy || s.recSec >= 0 ? 30 : 62, recBtnR: s.busy || s.recSec >= 0 ? 8 : 31,
-      capHint: s.busy ? '영상을 올리는 중이에요' : s.recSec < 0 && s.pend > 0 ? `앞 영상 ${s.pend}개를 올리는 중이에요. 바로 다음 영상을 찍어도 돼요` : s.recSec >= 0 ? '반려견이 화면을 다 지나가면 버튼을 다시 눌러 멈춰 주세요' : s.camLive ? '점선 안에 반려견 옆모습이 들어오게 맞추고 촬영 버튼을 눌러 주세요' : '촬영 버튼을 누르면 카메라가 열려요. 점선 안에 반려견 옆모습이 들어오게 맞춰 주세요',
+      capHint: s.busy ? '영상을 올리는 중입니다' : s.recSec < 0 && s.pend > 0 ? `앞 영상 ${s.pend}개를 올리는 중입니다. 바로 다음 영상을 찍어도 됩니다` : s.recSec >= 0 ? '반려견이 화면을 다 지나가면 버튼을 다시 눌러 멈춰 주세요' : s.camLive ? '점선 안에 반려견 옆모습이 들어오게 맞추고 촬영 버튼을 눌러 주세요' : '촬영 버튼을 누르면 카메라가 열립니다. 점선 안에 반려견 옆모습이 들어오게 맞춰 주세요',
       // 촬영 버튼: 기기 카메라(파일 입력 capture)
       toggleRec: async () => {
         if (s.busy) return
@@ -471,10 +626,10 @@ export class AppProto extends DCLogic<Props, any> {
           this.queueUpload(f)
           // 16번째까지 찍었으면 촬영 화면을 닫는다(카메라도 꺼진다). 남은 영상은 첨부 목록 화면에서 계속 올라간다
           const sid = this.sessionId()
-          if (total >= 16 && sid) { this.toast('영상 16개를 모두 찍었어요'); this.nav('capReview', `/sessions/${sid}`, true); setTimeout(() => camera.stopPreview(), 0) }
+          if (total >= 16 && sid) { this.toast('영상 16개를 모두 찍었습니다'); this.nav('capReview', `/sessions/${sid}`, true); setTimeout(() => camera.stopPreview(), 0) }
           return
         }
-        if (shots + (s.pend || 0) >= 16) return this.toast('영상 16개를 모두 찍었어요. X 를 눌러 첨부 목록으로 가 주세요')
+        if (shots + (s.pend || 0) >= 16) return this.toast('영상 16개를 모두 찍었습니다. X 를 눌러 첨부 목록으로 가 주세요')
         // 앱 안 카메라가 켜져 있으면 바로 녹화, 아니면 기기 카메라 앱
         if (s.camLive && camera.startRecording()) {
           const t0 = Date.now(); this.setState({ recSec: 0 })
@@ -489,7 +644,7 @@ export class AppProto extends DCLogic<Props, any> {
         if (s.busy) return
         this.setState({ busy: true })
         try { await this.props.actions.completeSession(sid); this.nav('analyzing', `/sessions/${sid}/analyzing`, true) }
-        catch (e) { this.toast(errMsg(e, '분석을 시작하지 못했어요')) }
+        catch (e) { this.toast(errMsg(e, '분석을 시작하지 못했습니다')) }
         finally { this.setState({ busy: false }) }
       },
 
@@ -499,7 +654,7 @@ export class AppProto extends DCLogic<Props, any> {
       rd, retake: () => { if (R) this.goCapture(R.dog) },
       gaitSegs: seg([['walk', '평보'], ['trot', '속보']], G, (k) => this.setState({ gait: k })), gaitName: rd.gaitName,
       openRep: () => { if (!R) return; this.setState({ repType: 'g' }); this.nav('report', `/sessions/${R.id}/report`) },
-      openCompare: () => { if (!R) return; if (valid(R.dog).length < 2) return this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있어요'); this.props.setUi({ cmp: 'base' }); this.nav('compare', `/dogs/${R.dog}/compare`) },
+      openCompare: () => { if (!R) return; if (valid(R.dog).length < 2) return this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있습니다'); this.props.setUi({ cmp: 'base' }); this.nav('compare', `/dogs/${R.dog}/compare`) },
       partMsg: R?.result?.notices?.[0]?.message || '일부 통과에서 다리가 가려지거나 뛰어서 해당 통과를 제외하고 계산했습니다.',
       rp, isRepG: s.repType === 'g',
       // 보고서 본문: 웹 보고서와 같은 구성(보호자용·수의사용)
@@ -514,8 +669,18 @@ export class AppProto extends DCLogic<Props, any> {
       })() : null, isRepV: s.repType === 'v', repKind: s.repType === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용',
       repStatus: R ? this.props.reportStatus(rep, R.model) : '',
       repSegs: seg([['g', '보호자용'], ['v', '수의사용']], s.repType, (k) => this.setState({ repType: k })),
-      regenRep: async () => { if (!R || !rep) return this.toast('아직 보고서가 없어요'); try { await this.props.actions.regenerateReport(R.id, rep.id); this.toast('보고서를 다시 만들고 있어요') } catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없어요')) } },
-      saveRep: () => { if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했어요. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중이에요. 잠시 뒤 다시 눌러 주세요'); this.toast(this.props.openFile(rep.download_url) ? 'PDF를 내려받는 중이에요' : '체험 모드에서는 PDF를 받을 수 없어요. 로그인하면 받을 수 있어요') },
+      regenRep: async () => { if (!R || !rep) return this.toast('아직 보고서가 없습니다'); try { await this.props.actions.regenerateReport(R.id, rep.id); this.toast('보고서를 다시 만들고 있습니다') } catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없습니다')) } },
+      saveRep: async () => {
+        if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했습니다. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
+        if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 로그인하면 받을 수 있습니다')
+        if (s.pdfBusy) return
+        this.setState({ pdfBusy: true }); this.toast('PDF를 준비하는 중입니다')
+        // 파일명은 웹과 같게: "261108 보리 분석 결과 (보호자용)"
+        const name = `${(R?.measured_on ?? '').replace(/-/g, '').slice(2)} ${R ? (dogById(R.dog)?.name ?? '') : ''} 분석 결과 (${s.repType === 'v' ? '수의사용' : '보호자용'})`
+        try { const how = await this.props.openFile(rep.download_url, name); this.toast(how === 'shared' ? 'PDF를 저장할 곳을 골라 주세요' : 'PDF를 내려받는 중입니다') }
+        catch { this.toast('PDF를 받지 못했습니다. 잠시 후 다시 시도해 주세요') }
+        finally { this.setState({ pdfBusy: false }) }
+      },
 
       cp, cmpSegs: seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], this.props.ui.cmp, (k) => this.props.setUi({ cmp: k as 'base' | 'prev' })),
       trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 지수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),
@@ -537,7 +702,7 @@ export class AppProto extends DCLogic<Props, any> {
       tgBg: notifOn ? '#D2601A' : '#DDD7CE', tgX: notifOn ? 22 : 2, toggleNotif: () => {
         const next = !notifOn
         lsSet(NOTIF_ON_KEY, next ? '1' : '0'); this.setState({ notifOn: next })
-        if (acct.notifOn !== undefined) this.props.auth.updateMe({ notif_on: next }).catch((e) => this.toast(errMsg(e, '알림 설정을 저장하지 못했어요')))
+        if (acct.notifOn !== undefined) this.props.auth.updateMe({ notif_on: next }).catch((e) => this.toast(errMsg(e, '알림 설정을 저장하지 못했습니다')))
       },
       // 회원 탈퇴(192): 비밀번호 확인 시트 → DELETE /auth/me → 로그아웃. 기관의 마지막 계정(409 LAST_ACCOUNT)·비밀번호 오류는 서버 문구 그대로
       askWithdraw: () => this.setState({ sheet: 'withdraw', wf: { pw: '' } }),
@@ -546,8 +711,8 @@ export class AppProto extends DCLogic<Props, any> {
         if (!s.wf.pw) return this.toast('현재 비밀번호를 입력해 주세요')
         if (s.withdrawing) return
         this.setState({ withdrawing: true })
-        try { await this.props.auth.withdraw(s.wf.pw); this.setState({ sheet: null, wf: { pw: '' }, li: { id: '', pw: '' } }); this.toast('탈퇴했어요. 그동안 이용해 주셔서 감사합니다'); this.props.nav('/welcome', { replace: true }) }
-        catch (e) { this.toast(errMsg(e, '탈퇴하지 못했어요')) }
+        try { await this.props.auth.withdraw(s.wf.pw); this.setState({ sheet: null, wf: { pw: '' }, li: { id: '', pw: '' } }); this.toast('탈퇴했습니다. 그동안 이용해 주셔서 감사합니다'); this.props.nav('/welcome', { replace: true }) }
+        catch (e) { this.toast(errMsg(e, '탈퇴하지 못했습니다')) }
         finally { this.setState({ withdrawing: false }) }
       },
       askLogout: () => this.setState({ sheet: 'logout' }),
@@ -557,7 +722,7 @@ export class AppProto extends DCLogic<Props, any> {
       openPw: () => this.setState({ sheet: 'pw', pf: { cur: '', nw: '', nw2: '' } }),
       fAcctName: s.af.name, fAcctEmail: s.af.email, onAcctName: setF('af', 'name'), onAcctEmail: setF('af', 'email'),
       fPwCur: s.pf.cur, fPwNew: s.pf.nw, fPwNew2: s.pf.nw2, onPwCur: setF('pf', 'cur'), onPwNew: setF('pf', 'nw'), onPwNew2: setF('pf', 'nw2'),
-      pwHint: s.pf.nw && s.pf.nw.length < 8 ? '8자 이상으로 입력해 주세요' : s.pf.nw2 && s.pf.nw !== s.pf.nw2 ? '새 비밀번호가 서로 달라요' : '',
+      pwHint: s.pf.nw && s.pf.nw.length < 8 ? '8자 이상으로 입력해 주세요' : s.pf.nw2 && s.pf.nw !== s.pf.nw2 ? '새 비밀번호가 서로 다릅니다' : '',
       saveOp: s.saving ? 0.55 : 1,
       saveAcct: async () => {
         const name = s.af.name.trim(), email = s.af.email.trim()
@@ -568,20 +733,20 @@ export class AppProto extends DCLogic<Props, any> {
         if (email && email !== acct.email) body.email = email
         if (!body.name && !body.email) return this.setState({ sheet: null })
         this.setState({ saving: true })
-        try { await this.props.auth.updateMe(body); this.setState({ sheet: null }); this.toast('기본 정보를 저장했어요') }
-        catch (e) { this.toast(e instanceof ApiError && e.code === 'CONTRACT_EXPIRED' ? '계약이 끝나 정보를 바꿀 수 없어요' : errMsg(e, '저장하지 못했어요')) }
+        try { await this.props.auth.updateMe(body); this.setState({ sheet: null }); this.toast('기본 정보를 저장했습니다') }
+        catch (e) { this.toast(e instanceof ApiError && e.code === 'CONTRACT_EXPIRED' ? '계약이 끝나 정보를 바꿀 수 없습니다' : errMsg(e, '저장하지 못했습니다')) }
         finally { this.setState({ saving: false }) }
       },
       savePw: async () => {
         const { cur, nw, nw2 } = s.pf
         if (!cur || !nw || !nw2) return this.toast('비밀번호를 모두 입력해 주세요')
-        if (nw.length < 8) return this.toast('새 비밀번호는 8자 이상이어야 해요')
-        if (nw !== nw2) return this.toast('새 비밀번호가 서로 달라요')
+        if (nw.length < 8) return this.toast('새 비밀번호는 8자 이상이어야 합니다')
+        if (nw !== nw2) return this.toast('새 비밀번호가 서로 다릅니다')
         if (nw === cur) return this.toast('지금 비밀번호와 다른 비밀번호를 입력해 주세요')
         if (s.saving) return
         this.setState({ saving: true })
-        try { await this.props.auth.changePassword(cur, nw); this.setState({ sheet: null, pf: { cur: '', nw: '', nw2: '' } }); this.toast('비밀번호를 바꿨어요') }
-        catch (e) { this.toast(e instanceof ApiError && e.code === 'PASSWORD_MISMATCH' ? '지금 비밀번호가 맞지 않아요' : errMsg(e, '비밀번호를 바꾸지 못했어요')) }
+        try { await this.props.auth.changePassword(cur, nw); this.setState({ sheet: null, pf: { cur: '', nw: '', nw2: '' } }); this.toast('비밀번호를 바꿨습니다') }
+        catch (e) { this.toast(e instanceof ApiError && e.code === 'PASSWORD_MISMATCH' ? '지금 비밀번호가 맞지 않습니다' : errMsg(e, '비밀번호를 바꾸지 못했습니다')) }
         finally { this.setState({ saving: false }) }
       },
 
@@ -590,7 +755,7 @@ export class AppProto extends DCLogic<Props, any> {
       closeSheet: () => this.setState({ sheet: null }),
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',
-      confirmDel: () => { this.setState({ sheet: null }); this.toast('반려견 삭제는 준비 중이에요') },
+      confirmDel: () => { this.setState({ sheet: null }); this.toast('반려견 삭제는 준비 중입니다') },
       confirmLogout: () => { this.props.auth.logout(); this.setState({ sheet: null, li: { id: '', pw: '' } }); this.props.nav('/welcome', { replace: true }) },
       toastOn: !!s.toast, toastMsg: s.toast,
       statusC: landscape ? 'transparent' : dark ? '#fff' : '#1B2433', indC: dark ? '#fff' : '#1B2433', indOp: landscape ? 0 : dark ? 0.8 : 0.25,
