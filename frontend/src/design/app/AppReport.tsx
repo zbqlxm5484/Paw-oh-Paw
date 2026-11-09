@@ -109,7 +109,7 @@ export function legCards(result: SessionResultOut | null | undefined) {
 }
 
 export function AppReport(p: AppReportProps) {
-  const { parts, front, hind, fills, cards } = legCards(p.result)
+  const { front, hind, fills, cards } = legCards(p.result)
   const sym = p.sym ?? 0
   const symLv = level(100 - sym)
   const prev = p.symHist.length > 1 ? p.symHist[p.symHist.length - 2] : null
