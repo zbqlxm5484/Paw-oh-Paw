@@ -5,8 +5,9 @@ import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { GetForm, usePage, useTitle } from '../app/page'
 import { dogOf, isoToday } from '../store/db'
-import { fmt_date, home_view } from '../views/views'
+import { activity_days, fmt_date, home_view } from '../views/views'
 import { PetModal } from './parts/Modals'
+import { DayPicker, dayLabel } from './parts/DayPicker'
 import { VV } from './parts/Vital'
 import { link } from '../config'
 
@@ -43,22 +44,25 @@ export default function Home() {
   const page_no = intParam(query.get('page'), 1)
   const v0 = query.get('view') ?? 'today'
   const view = by ? 'analyses' : HOME_VIEWS.some(([k]) => k === v0) ? v0 : 'today'
-  const hv = home_view(acct, view, q, '', by, !!changed, stage, page_no)
-  const keep: Record<string, string | number> = { view, q, by, changed, stage }
+  // 오늘 탭의 날짜(달력). 형식이 틀리거나 오늘 이후면 오늘
+  const d0 = query.get('d') || ''
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(d0) && d0 <= isoToday() ? d0 : isoToday()
+  const hv = home_view(acct, view, q, '', by, changed === 'retake' ? 'retake' : !!changed, stage, page_no, day)
+  const keep: Record<string, string | number> = { view, q, by, changed, stage, d: day === isoToday() ? '' : day }
   const qs = (kw: Record<string, string | number>): string => {
     const p = new URLSearchParams()
     for (const [k, v] of Object.entries({ ...keep, ...kw })) if (v) p.append(k, String(v))
     return '/home?' + p.toString()
   }
   const today = fmt_date(isoToday())
-  const today_iso = isoToday()
+  const today_iso = day
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: any[] = hv.rows
 
   const cards: [string, number, string, boolean, boolean][] = [
     ['전체 반려견', hv.dogs, qs({ view: 'dogs', changed: '', by: '', page: '' }), view === 'dogs' && !changed, false],
-    ['일주일 간 변동 발생', hv.changed, qs({ view: 'dogs', changed: '1', by: '', page: '' }), view === 'dogs' && !!changed, false],
-    ['재촬영 필요', hv.retake, qs({ view: 'dogs', changed: '1', by: '', page: '' }), false, true],
+    ['일주일 간 변동 발생', hv.changed, qs({ view: 'dogs', changed: '1', by: '', page: '' }), view === 'dogs' && changed === '1', false],
+    ['재촬영 필요', hv.retake, qs({ view: 'dogs', changed: 'retake', by: '', page: '' }), view === 'dogs' && changed === 'retake', true],
   ]
   const bt = (i: number) => (i ? '1px solid #F2EFEA' : 'none')
 
@@ -68,7 +72,7 @@ export default function Home() {
     table = (
       <div style={css('min-width:900px')}>
         <div style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
-          <span>시각</span><span>반려견</span><span>병명</span><span>오늘 한 것</span><span>담당</span><span>진료 기록</span>
+          <span>시각</span><span>반려견</span><span>병명</span><span>{day === isoToday() ? '오늘 한 것' : '그날 한 것'}</span><span>담당</span><span>진료 기록</span>
         </div>
         {rows.map((r, i) => (
           <div key={r.id} className="hv-row" data-href={`/dogs/${r.id}`} style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>
@@ -184,8 +188,11 @@ export default function Home() {
               return <a key={key} className="lk" href={link(qs({ view: key, by: '', page: '' }))} style={css(`height:38px;padding:0 16px;border-radius:9px;display:flex;align-items:center;font-size:15px;font-weight:${on ? 700 : 500};background:${on ? '#fff' : 'transparent'};color:${on ? '#1B2433' : '#5B6472'};box-shadow:${on ? '0 1px 3px rgba(27,36,51,.12)' : 'none'}`)}>{label}</a>
             })}
           </div>
+          {view === 'today' && !by ? <DayPicker day={day} today={isoToday()} marks={activity_days(acct)} go={(d) => navigate(qs({ d: d === isoToday() ? '' : d, page: '' }))} /> : null}
+          {view === 'today' && day !== isoToday() ? <input type="hidden" name="d" value={day} /> : null}
           {q ? <><input type="hidden" name="q" value={q} /><span style={css('height:38px;padding:0 12px;border-radius:9px;background:#FCEEE3;color:#A8481A;display:flex;align-items:center;font-size:14px;font-weight:700')}>‘{q}’ 검색 결과</span></> : null}
-          <label style={css('height:44px;display:flex;align-items:center;gap:6px;font-size:14.5px;cursor:pointer')}><input type="checkbox" name="changed" value="1" defaultChecked={!!changed} onChange={(e) => e.currentTarget.form?.requestSubmit()} /> 일주일 간 변동 발생</label>
+          <label style={css('height:44px;display:flex;align-items:center;gap:6px;font-size:14.5px;cursor:pointer')}><input type="checkbox" name="changed" value="1" defaultChecked={changed === '1'} onChange={(e) => e.currentTarget.form?.requestSubmit()} /> 일주일 간 변동 발생</label>
+          {changed === 'retake' ? <span style={css('height:38px;padding:0 12px;border-radius:9px;background:#FBE0D9;color:#C2412D;display:flex;align-items:center;font-size:14px;font-weight:700')}>재촬영 필요만</span> : null}
           <select name="stage" defaultValue={stage} onChange={(e) => e.currentTarget.form?.requestSubmit()} style={css(`height:44px;border-radius:12px;border:1px solid ${stage ? '#D2601A' : '#E2DCD3'};background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit`)}>
             {[['', '단계 전체'], ['pre', '수술 전'], ['rehab', '재활 중'], ['done', '종결']].map(([v, label]) => <option key={v} value={v}>{label}</option>)}
           </select>
@@ -203,7 +210,7 @@ export default function Home() {
         <div style={css('display:flex;gap:18px;align-items:flex-start')}>
           <div style={css('flex:1;min-width:0;border-radius:18px;background:#fff;border:1px solid #ECE8E2;overflow-x:auto')}>
             {table}
-            {!rows.length ? <div style={css('padding:48px 20px;text-align:center;font-size:15px;color:#5B6472')}>{view === 'today' ? '오늘 진행한 분석 및 진료가 없습니다.' : '조건에 맞는 ' + (view === 'analyses' ? '분석이' : view === 'dogs' ? '반려견이' : '담당자가') + ' 없습니다.'}</div> : null}
+            {!rows.length ? <div style={css('padding:48px 20px;text-align:center;font-size:15px;color:#5B6472')}>{view === 'today' ? (day === isoToday() ? '오늘 진행한 분석 및 진료가 없습니다.' : `${dayLabel(day)}에 진행한 분석 및 진료가 없습니다.`) : '조건에 맞는 ' + (view === 'analyses' ? '분석이' : view === 'dogs' ? '반려견이' : '담당자가') + ' 없습니다.'}</div> : null}
           </div>
 
         </div>
