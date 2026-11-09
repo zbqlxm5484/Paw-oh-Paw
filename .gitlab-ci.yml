@@ -79,8 +79,10 @@ smoke:
   variables:
     COMPOSE_PROJECT: $SMOKE_PROJECT
     COMPOSE_EXTRA: "-f infra/ci/compose.ci.yaml"
-    PUBLIC_URL: http://127.0.0.1:18080
   script:
+    # 러너가 job 을 동시에 여러 개 돌려도 smoke 끼리 호스트 포트가 겹치지 않게, 슬롯 번호(CI_CONCURRENT_ID)만큼 더한 포트를 쓴다
+    - export SMOKE_PORT=$((18080 + CI_CONCURRENT_ID))
+    - export PUBLIC_URL=http://127.0.0.1:$SMOKE_PORT
     - cp .env.example .env
     # JWT_SECRET·FILE_URL_SECRET은 32자 이상이고 서로 달라야 한다(backend/app/core/config.py). 실행할 때마다 새로 만들어 저장소에 값을 두지 않는다
     - echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
