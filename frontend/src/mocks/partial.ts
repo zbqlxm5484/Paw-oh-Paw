@@ -13,7 +13,7 @@ const BASE = `${(import.meta.env.VITE_API_BASE as string | undefined) ?? ''}/api
 
 const notYet = (what: string) =>
   HttpResponse.json(
-    { error: { code: 'NOT_IMPLEMENTED', message: `${what} 기능은 아직 서버에 없어요.`, detail: null } },
+    { error: { code: 'NOT_IMPLEMENTED', message: `${what} 기능은 아직 서버에 없습니다.`, detail: null } },
     { status: 501 },
   )
 

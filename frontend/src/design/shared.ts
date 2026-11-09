@@ -5,7 +5,6 @@ import { ApiError } from '../api/client'
 import { BREEDS } from '../api/labels'
 import { ST, type DDog, type DGait, type DRes, type DRow, type DRowsKey, type DSize } from './adapter'
 
-export const LINES = ['반려견의 걸음을', '더욱 정확하게', 'Paw oh Paw']
 const SMALLB = ['말티즈', '푸들', '토이 푸들', '포메라니안', '시츄', '치와와', '비숑 프리제', '요크셔테리어', '닥스훈트', '미니어처 슈나우저', '퍼그', '이탈리안 그레이하운드', '잭 러셀 테리어']
 const LARGEB = ['골든 리트리버', '래브라도 리트리버', '사모예드', '시베리안 허스키', '저먼 셰퍼드', '말라뮤트', '알래스칸 말라뮤트', '풍산개']
 /** 디자인의 체급 미리보기(견종 → 체중). 저장은 서버가 체중으로 정한다 */
@@ -21,13 +20,13 @@ const gs = (p: number, c: number, w: number) => Math.exp(-(((p - c) / w) ** 2))
 /** 뒷무릎 각도 곡선(디자인 320×150 뷰박스). depth 가 클수록 깊게 굽힌다 */
 export const knee = (depth: number) => { const s: string[] = []; for (let i = 0; i <= 40; i++) { const p = i / 40; const a = 150 - 16 * gs(p, 0.12, 0.07) - depth * gs(p, 0.7, 0.11); s.push(`${(24 + p * 286).toFixed(1)},${(130 - ((a - 90) / 60) * 110).toFixed(1)}`) } return s.join(' ') }
 export const errMsg = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback)
-export const PREP = '이 기능은 준비 중이에요'
+export const PREP = '이 기능은 준비 중입니다'
 /** 다리 비교 요약 제목에 붙는 보행 묶음 이름. OTHER 묶음은 '기타 보행'이 아니라 아직 유형을 가르지 않은 통과들이다 */
 export const GAIT_GROUP_NAME: Record<DRowsKey, string> = { walk: '평보', trot: '속보', other: '보행 유형 미판별' }
 /** 분석은 끝났지만 쓸 수 있는 통과가 0건인 회차(DONE·used 0)의 촬영 안내 */
-export const NO_VALID_MSG = '쓸 수 있는 통과가 없었어요. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'
+export const NO_VALID_MSG = '쓸 수 있는 통과가 없었습니다. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'
 /** 서버 쪽 실패(FAILED, 예: 집계 오류). 반려견 탓이 아니므로 촬영 안내를 하지 않는다 */
-export const SERVER_FAIL_MSG = '분석에 실패했어요. 잠시 후 다시 시도해 주세요.'
+export const SERVER_FAIL_MSG = '분석에 실패했습니다. 잠시 후 다시 시도해 주세요.'
 export const r1 = (v: number) => Math.round(v * 10) / 10
 export const num = (v: number | null | undefined) => (v == null ? '—' : v)
 /** 회차 체중 문구. 그날 체중을 안 적은 회차(weight_kg null → '-')는 '-kg' 대신 측정 불가 표기 */
@@ -90,7 +89,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
     gaitName: GAIT_GROUP_NAME[gaitKey],
     sym: num(R.sym), symD: sd[0], symDC: sd[1], rom: num(R.rom), romD: rdl[0], romDC: rdl[1], sL: num(sL), sR: num(sR),
     stD: sL == null || sR == null ? '측정 불가' : sL === sR ? '좌우 같음' : `${sL > sR ? '오른쪽' : '왼쪽'}이 ${Math.abs(sL - sR)}%p 짧음`, stC: '#5B6472',
-    topTitle: top ? `${top.leg} ${top.n}에서 좌우 차이가 가장 커요` : R.loaded ? '좌우를 비교할 수 있는 항목이 없어요' : '결과를 불러오는 중이에요',
+    topTitle: top ? `${top.leg} ${top.n}에서 좌우 차이가 가장 큽니다` : R.loaded ? '좌우를 비교할 수 있는 항목이 없습니다' : '결과를 불러오는 중입니다',
     topSub: top ? `왼 ${top.l}${top.u} · 오 ${top.r}${top.u} · 차이 ${top.df}${top.u} · 대칭 지수 차이 ${top.si.toFixed(1)}%` : '',
     rank: [...meas.slice(1, 4).map((x) => ({ n: `${x.leg} · ${x.n}`, v: `차이 ${x.df}${x.u}`, c: '#fff' })), ...rows.filter((x) => x.na).map((x) => ({ n: `${x.leg} · ${x.n}`, v: '비교 불가', c: 'rgba(255,255,255,.5)' }))],
     rows: rows.map((x) => ({ sec: x.sec || false, ok: !x.na, na: !!x.na, n: x.n, reason: x.reason || '', lv: x.na ? '' : x.l + x.u, rv: x.na ? '' : x.r + x.u, dv: x.na ? '' : r1(Math.abs(x.l - x.r)) + x.u })),
@@ -99,7 +98,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   })
   rp = {
     title: `${d.name}의 걸음 보고서`, when: `${R.date} 측정 · ${sessNo(ctx, R)}회차 · ${desc(d)}`,
-    summary: topT ? `${topT.leg} ${topT.n}에서 왼쪽과 오른쪽 차이가 가장 컸어요(${topT.df}${topT.u}). 수의사 선생님과 함께 확인해 보세요.` : '좌우를 비교할 수 있는 항목이 없어요. 수의사 선생님과 함께 확인해 보세요.',
+    summary: topT ? `${topT.leg} ${topT.n}에서 왼쪽과 오른쪽 차이가 가장 컸습니다(${topT.df}${topT.u}). 수의사 선생님과 함께 확인해 보세요.` : '좌우를 비교할 수 있는 항목이 없습니다. 수의사 선생님과 함께 확인해 보세요.',
     items: [
       { k: '좌우 대칭 지수', v: num(R.sym) + '%', d: P ? `직전 ${num(P.sym)}%` : '첫 측정' },
       { k: '뒷무릎 움직임 범위', v: stifle && !stifle.na ? `왼 ${stifle.l}° · 오 ${stifle.r}°` : '측정 불가', d: stifle && !stifle.na ? `차이 ${r1(Math.abs(stifle.l - stifle.r))}°` : '' },

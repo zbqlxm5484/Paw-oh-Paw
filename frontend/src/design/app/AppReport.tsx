@@ -9,8 +9,8 @@ import dogMedium from './dog/dog_medium.svg?raw'
 import dogLarge from './dog/dog_large.svg?raw'
 
 type Level = [number, string, string, string]
-const LEVEL: Level[] = [[5, '비슷해요', '#DCEFE2', '#2E8B57'], [10, '조금 차이 나요', '#F7D6AE', '#9A6A12'], [999, '차이가 커요', '#F2A898', '#C2412D']]
-/** 수치가 없는 부위: '비슷해요' 로 보이지 않게 */
+const LEVEL: Level[] = [[5, '비슷합니다', '#DCEFE2', '#2E8B57'], [10, '조금 차이 나요', '#F7D6AE', '#9A6A12'], [999, '차이가 큽니다', '#F2A898', '#C2412D']]
+/** 수치가 없는 부위: '비슷합니다' 로 보이지 않게 */
 const NA_LEVEL: Level = [0, '측정 불가', '#E9E4DC', '#8E949C']
 const level = (si: number) => LEVEL.find((x) => si < x[0])!
 const LEGS: [string, string, string][] = [['front_left', 'LF', '왼앞'], ['front_right', 'RF', '오른앞'], ['hind_left', 'LH', '왼뒤'], ['hind_right', 'RH', '오른뒤']]
@@ -47,12 +47,12 @@ function metsOf(result: SessionResultOut | null | undefined) {
 }
 
 function partOf(label: string, mets: Met[]): Part {
-  if (!mets.length) return { si: 0, lv: NA_LEVEL, say: `${label}는 비교할 수치가 없어요`, worst: null, weak: 'l' }
+  if (!mets.length) return { si: 0, lv: NA_LEVEL, say: `${label}는 비교할 수치가 없습니다`, worst: null, weak: 'l' }
   const sis = mets.map((m) => (m.l + m.r ? (Math.abs(m.l - m.r) / ((m.l + m.r) / 2)) * 100 : 0))
   const k = sis.indexOf(Math.max(...sis))
   const worst = mets[k], si = sis[k], weak: 'l' | 'r' = worst.l < worst.r ? 'l' : 'r'
   const w = WORD[worst.n] ?? worst.n
-  const say = si < 5 ? `${label} 양쪽을 비슷하게 써요` : `${weak === 'l' ? '왼쪽' : '오른쪽'} ${label}의 ${w}${josa(w)} 반대쪽보다 작아요`
+  const say = si < 5 ? `${label} 양쪽을 비슷하게 씁니다` : `${weak === 'l' ? '왼쪽' : '오른쪽'} ${label}의 ${w}${josa(w)} 반대쪽보다 작습니다`
   return { si: r1(si), lv: level(si), say, worst, weak }
 }
 
@@ -115,7 +115,7 @@ export function AppReport(p: AppReportProps) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: align === 'r' ? 'flex-end' : 'flex-start', textAlign: align === 'r' ? 'right' : 'left' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 800, color: g.c, flexDirection: align === 'r' ? 'row-reverse' : 'row' }}>
-          <span style={{ width: 9, height: 9, borderRadius: 3, background: g.dot, border: '1px solid #B8B0A4' }} />{g.label}{g.weak ? ' · 덜 써요' : ''}
+          <span style={{ width: 9, height: 9, borderRadius: 3, background: g.dot, border: '1px solid #B8B0A4' }} />{g.label}{g.weak ? ' · 덜 씁니다' : ''}
         </span>
         {p.kind === 'g' ? (m0 ? (
           <>
@@ -150,7 +150,7 @@ export function AppReport(p: AppReportProps) {
             <span style={{ position: 'absolute', top: -4, left: `calc(${Math.max(0, Math.min(100, sym))}% - 2px)`, width: 4, height: 18, borderRadius: 2, background: '#1B2433' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#8E949C' }}><span>0</span><span>80</span><span>90</span><span>100</span></div>
-          <span style={{ fontSize: '12px', color: '#3A4250' }}>{p.vsBase ? <>기준 회차({p.vsBase.date})보다 <b style={{ color: p.vsBase.d > 0 ? '#2E8B57' : p.vsBase.d < 0 ? '#C2412D' : '#3A4250' }}>{p.vsBase.d > 0 ? '+' : ''}{r1(p.vsBase.d)}%p</b></> : '기준 회차와 비교할 값이 없어요'}</span>
+          <span style={{ fontSize: '12px', color: '#3A4250' }}>{p.vsBase ? <>기준 회차({p.vsBase.date})보다 <b style={{ color: p.vsBase.d > 0 ? '#2E8B57' : p.vsBase.d < 0 ? '#C2412D' : '#3A4250' }}>{p.vsBase.d > 0 ? '+' : ''}{r1(p.vsBase.d)}%p</b></> : '기준 회차와 비교할 값이 없습니다'}</span>
         </div>
       </div>
 
