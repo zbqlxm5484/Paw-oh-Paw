@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# GPU 서버 분석 API 배포 (Jira 239). 사용: bash infra/ci/deploy_gpu.sh <태그>
+# GPU 서버 분석 API 배포 (Jira 239). 사용: bash infra/ci/deploy_gpu.sh <태그|develop>
+# 인자가 develop 이면 릴리스 폴더명을 develop-<HEAD 커밋 SHA 8자>로 만든다(develop 머지 자동 배포용).
+# 같은 커밋을 다시 돌리면 기존 폴더를 그대로 쓴다.
 #
 # GPU 서버의 gitlab-runner(shell executor, 태그 gpu-deploy)가 CI 의 deploy_gpu 잡에서 실행한다.
 # 러너가 받아 둔 소스(CI_PROJECT_DIR)를 ~/service/releases/<태그>/ 에 복사하고,
@@ -10,12 +12,19 @@
 # 모델 가중치(~/models/company-orig/)와 환경변수 파일(~/service/env)은 배포가 건드리지 않는다.
 set -euo pipefail
 
-TAG="${1:?사용: deploy_gpu.sh <태그>}"
-[[ "$TAG" =~ ^v[0-9A-Za-z._-]+$ ]] || { echo "ERROR: 허용하지 않는 태그 형식: $TAG" >&2; exit 2; }
+TAG="${1:?사용: deploy_gpu.sh <태그|develop>}"
 
 SERVICE_DIR="${SERVICE_DIR:-$HOME/service}"
 VENV_DIR="${VENV_DIR:-$HOME/venv/creamoff}"
 SRC_DIR="${CI_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+
+# develop 은 받아 둔 소스의 HEAD 커밋으로 폴더명을 정한다. 그 외는 v* 태그만 허용한다
+if [[ "$TAG" == "develop" ]]; then
+  SHA="$(git -C "$SRC_DIR" rev-parse HEAD | cut -c1-8)"
+  [[ "$SHA" =~ ^[0-9a-f]{8}$ ]] || { echo "ERROR: 커밋 SHA를 읽지 못했다: $SHA" >&2; exit 2; }
+  TAG="develop-$SHA"
+fi
+[[ "$TAG" =~ ^(v[0-9A-Za-z._-]+|develop-[0-9a-f]{8})$ ]] || { echo "ERROR: 허용하지 않는 배포 이름: $TAG" >&2; exit 2; }
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8010/health}"
 HEALTH_TRIES="${HEALTH_TRIES:-30}"
 TMUX_SESSION="analysis"
@@ -67,7 +76,7 @@ rollback() {
 }
 
 PREV="$(readlink "$CURRENT" 2>/dev/null || true)"
-log "태그=$TAG 현재=${PREV:-없음}"
+log "배포 이름=$TAG 현재=${PREV:-없음}"
 
 [[ -x "$SERVICE_DIR/start.sh" ]] || { echo "ERROR: $SERVICE_DIR/start.sh 가 없다(가이드 8절)" >&2; exit 1; }
 [[ -f "$SERVICE_DIR/env" ]] || { echo "ERROR: $SERVICE_DIR/env 가 없다(가이드 7절)" >&2; exit 1; }
