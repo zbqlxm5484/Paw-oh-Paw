@@ -33,9 +33,9 @@ function Reveal({ children, delay = 0, style }: { children: ReactNode; delay?: n
 }
 
 /** 폰 틀에 넣은 앱 화면 캡처(위쪽만 보이게 자른다) */
-function Phone({ src, h = 440, tilt = 0 }: { src: string; h?: number; tilt?: number }) {
+function Phone({ src, h = 440 }: { src: string; h?: number }) {
   return (
-    <div style={{ width: '47%', maxWidth: 220, aspectRatio: `220 / ${h}`, borderRadius: 26, padding: 6, background: '#1B2433', boxShadow: '0 18px 40px rgba(27,36,51,.18)', transform: tilt ? `rotate(${tilt}deg)` : undefined, flex: 'none' }}>
+    <div style={{ width: '47%', maxWidth: 220, aspectRatio: `220 / ${h}`, borderRadius: 26, padding: 6, background: '#1B2433', boxShadow: '0 18px 40px rgba(27,36,51,.18)', flex: 'none' }}>
       <div style={{ width: '100%', height: '100%', borderRadius: 20, overflow: 'hidden', background: '#FAF9F6' }}>
         <img src={IMG + src} alt="" loading="lazy" style={{ width: '100%', display: 'block' }} />
       </div>
@@ -97,8 +97,8 @@ export function IntroBody({ i }: { i: IntroProps }) {
             ))}
           </div>
           <Reveal style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
-            <Phone src="capture.webp" h={400} tilt={-3} />
-            <Phone src="result.webp" h={400} tilt={3} />
+            <Phone src="capture.webp" h={400} />
+            <Phone src="result.webp" h={400} />
           </Reveal>
         </div>
 
@@ -119,8 +119,8 @@ export function IntroBody({ i }: { i: IntroProps }) {
         <div style={sec}>
           <Head k="진료 차트" t="진료 차트처럼 익숙하게" p="오늘 진행한 반려견, 재촬영이 필요한 반려견을 홈에서 바로 봅니다. 반려견 차트에는 바이탈과 진단·수술 이력, 측정 이력이 한곳에 있습니다." />
           <Reveal style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
-            <Phone src="home.webp" h={420} tilt={-3} />
-            <Phone src="dog.webp" h={420} tilt={3} />
+            <Phone src="home.webp" h={420} />
+            <Phone src="dog.webp" h={420} />
           </Reveal>
         </div>
 
@@ -128,8 +128,8 @@ export function IntroBody({ i }: { i: IntroProps }) {
         <div style={{ ...sec, background: '#F3EDE4' }}>
           <Head k="보고서" t={<>보호자용과 수의사용을<br />따로 만듭니다</>} p="보호자용은 주요 결과 한 줄과 그림으로, 수의사용은 관절별 수치로 정리합니다. 보고서 탭에서 반려견별로 모아 보고 PDF로 바로 저장합니다." />
           <Reveal style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
-            <Phone src="report.webp" h={440} tilt={-3} />
-            <Phone src="reports.webp" h={440} tilt={3} />
+            <Phone src="report.webp" h={440} />
+            <Phone src="reports.webp" h={440} />
           </Reveal>
         </div>
 
