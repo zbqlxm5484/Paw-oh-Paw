@@ -237,6 +237,23 @@ def test_gait_notes_and_no_pass_sentence_follow_the_template() -> None:
     ]
 
 
+def _unclassified_result() -> dict:
+    """실제 분석 결과의 모양: 통과의 gait가 null이라 수치가 모두 OTHER 묶음에 든다(15.7)."""
+    result = sample_result()
+    result["gaits"][0]["gait_type"] = "OTHER"
+    return result
+
+
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_passes_without_a_gait_type_are_named_unclassified_not_other(edition: str) -> None:
+    rendered = render(sample_input(edition, result=_unclassified_result()))
+    assert rendered.sentences.gait_notes["OTHER"][0] == "보행 유형 미판별: 수치 8개 중 7개를 측정했습니다."
+    assert rendered.sentences.summary[0].startswith("보행 유형 미판별에서 왼쪽과 오른쪽의 차이를")
+    assert "<h2>보행 유형 미판별 수치</h2>" in rendered.html
+    assert "기타" not in rendered.html  # 평보·속보가 아닌 걸음이라는 뜻으로 읽히지 않게
+    assert check_texts(rendered.texts, edition=edition) == []  # 금지 표현·용어 검사(8절 7번)에 걸리지 않는다
+
+
 def test_compare_skip_note_lists_each_reason_once() -> None:
     result = sample_result()
     result["gaits"][0]["limb_compare"] = [
