@@ -1,5 +1,5 @@
 // 앱 서비스 소개(소개 탭·/intro). 웹 서비스 소개(web/src/pages/About.tsx)와 같은 이야기를 폰에서 세로 스크롤로 읽게 한 것.
-// 첫 화면 영상 → 어떻게 재나 → 소형~대형견 → 진료 차트 → 보고서 → 3D(웹) → 데이터 원칙 → 시작 버튼.
+// 첫 화면 영상(글자 없음) → 어떻게 재나 → 소형~대형견 → 진료 차트 → 보고서 → 3D(웹) → 데이터 원칙 → 시작 버튼.
 // 그림은 앱 체험 모드 화면을 캡처한 것(public/assets/intro). 움직임은 스크롤하면 살짝 떠오르는 정도만 둔다.
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 
@@ -75,14 +75,9 @@ export function IntroBody({ i }: { i: IntroProps }) {
         <b style={{ fontSize: 18, paddingLeft: i.titlePad }}>서비스 소개</b>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="pp-s">
-        {/* 1. 첫 화면 */}
+        {/* 1. 첫 화면: 걷는 영상만(글자 없음) */}
         <div style={{ position: 'relative', height: 420, margin: '0 16px', borderRadius: 24, overflow: 'hidden', background: '#E9E4DC' }}>
           <video src="/assets/landing.mp4" poster="/assets/landing-poster.webp" autoPlay muted loop playsInline preload="auto" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(27,36,51,0) 35%,rgba(27,36,51,.62) 100%)' }} />
-          <div style={{ position: 'absolute', left: 22, right: 22, bottom: 24, color: '#fff', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <b style={{ fontSize: 28, lineHeight: 1.3, letterSpacing: '-0.7px' }}>걷는 영상 하나로<br />강아지의 보행을<br />숫자로 봅니다</b>
-            <span style={{ fontSize: 14, opacity: 0.88 }}>동물병원·재활센터를 위한 보행 분석</span>
-          </div>
         </div>
 
         {/* 2. 어떻게 재나 */}
