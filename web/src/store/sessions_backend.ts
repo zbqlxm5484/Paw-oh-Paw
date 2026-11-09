@@ -133,8 +133,13 @@ export async function syncSessions(acct: Account, withHistory = false): Promise<
     try {
       const s = await api.session(k.id)
       if (!FINAL.has(s.status)) {
-        if (!acct.jobs.some((j) => j.id === k.id)) {
-          acct.jobs.push({ id: k.id, dog: k.dog, n: k.n || s.shots.length, w: k.w, started: k.started, videos: [], result_id: null, notified: false, by: k.by, remote: true })
+        const srv = { status: s.status, total: s.shots.length, done: s.shots.filter((x) => x.status === 'DONE' || x.status === 'FAILED').length }
+        const job = acct.jobs.find((j) => j.id === k.id)
+        if (!job) {
+          acct.jobs.push({ id: k.id, dog: k.dog, n: k.n || s.shots.length, w: k.w, started: k.started, videos: [], result_id: null, notified: false, by: k.by, remote: true, srv })
+          dirty = true
+        } else if (!job.srv || job.srv.status !== srv.status || job.srv.done !== srv.done || job.srv.total !== srv.total) {
+          job.srv = srv // 진행 막대·문구가 서버 상태를 따라가게
           dirty = true
         }
         continue

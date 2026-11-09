@@ -11,9 +11,12 @@ export default function My() {
   useTitle('마이페이지 · Paw oh Paw')
   const { acct, me, toast } = usePage({ login: true })
   // 삭제할 반려견: 시제품은 #delName 글자와 #delForm action 을 바꾼 뒤 연다
-  const [del, setDel] = useState({ name: '', action: '' })
+  const [del, setDel] = useState({ name: '', action: '', desc: '' })
+  // 11-09 QA: 이름이 같은 반려견이 여럿이라 검색으로 좁힌다(이름·견종·동물번호·생년)
+  const [mq, setMq] = useState('')
   if (!acct) return null
-  const dogs = acct.dogs.map((d, i) => ({
+  const kw = mq.trim()
+  const dogs = acct.dogs.filter((d) => !kw || `${d.name} ${d.breed} ${d.no} ${d.birth}`.includes(kw)).map((d, i) => ({
     id: d.id,
     init: Array.from(d.name)[0] || '',
     name: d.name,
@@ -23,7 +26,7 @@ export default function My() {
 
   return (
     <Base acct={acct} me={me} nav="my" toast={toast}
-      modals={<><PetModal next_url="/my" /><LogoutModal /><DeleteModal name={del.name} action={del.action} /></>}>
+      modals={<><PetModal next_url="/my" /><LogoutModal /><DeleteModal name={del.name} action={del.action} desc={del.desc} /></>}>
       <main style={css('max-width:none;margin:0;padding:32px 80px 96px;display:flex;flex-direction:column;gap:20px')}>
         <div style={css('display:flex;flex-wrap:wrap;gap:16px;align-items:stretch')}>
           <a className="lk" href={link('/account')} style={css('flex:1 1 360px;min-width:0;background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px;display:flex;align-items:center;gap:16px')}>
@@ -37,7 +40,11 @@ export default function My() {
           </div>
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:24px 26px')}>
-          <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:10px')}><b style={css('font-size:20px;letter-spacing:-0.4px')}>등록 반려견 <span style={css('color:#A0A7B2;font-weight:600;font-size:16px')}>{dogs.length}마리</span></b><span data-pet="new" style={css('height:38px;padding:0 14px;border-radius:10px;background:#FCEEE3;color:#B4501A;display:flex;align-items:center;font-size:14px;font-weight:700;cursor:pointer')}>+ 반려견 추가</span></div>
+          <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:10px')}><b style={css('font-size:20px;letter-spacing:-0.4px')}>등록 반려견 <span style={css('color:#A0A7B2;font-weight:600;font-size:16px')}>{acct.dogs.length}마리</span></b><span data-pet="new" style={css('height:38px;padding:0 14px;border-radius:10px;background:#FCEEE3;color:#B4501A;display:flex;align-items:center;font-size:14px;font-weight:700;cursor:pointer')}>+ 반려견 추가</span></div>
+          <label style={css('height:42px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;gap:8px;padding:0 14px;margin-bottom:6px;color:#8E949C')}>
+            <svg width="17" height="17" viewBox="0 0 24 24" style={{ flex: 'none' }}><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8"></circle><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"></path></svg>
+            <input value={mq} onChange={(e) => setMq(e.target.value)} placeholder="이름 · 견종 · 동물번호 · 생년으로 찾기" style={css('flex:1;min-width:0;border:none;outline:none;font-size:15px;background:transparent;color:#1B2433;font-family:inherit')} />
+          </label>
           {/* 한 번에 다섯 마리(줄 높이 76px × 5)까지 보이고 나머지는 스크롤 */}
           <div className="dog-scroll" style={css('max-height:380px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px')}>
           {dogs.map((d) => (
@@ -47,14 +54,14 @@ export default function My() {
               <span data-pet={d.id} style={css('height:36px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;display:flex;align-items:center;font-size:14px;font-weight:600;cursor:pointer')}>수정</span>
               <span className="del-btn" data-id={d.id} data-name={d.name}
                 onClick={() => {
-                  setDel({ name: d.name, action: `/dogs/${d.id}/delete` })
+                  setDel({ name: d.name, action: `/dogs/${d.id}/delete`, desc: d.desc })
                   window.ppOpen('delModal')
                 }}
-                style={css('height:36px;padding:0 12px;border-radius:9px;display:flex;align-items:center;font-size:14px;font-weight:600;color:#C2412D;cursor:pointer')}>삭제</span>
+                style={css('height:36px;padding:0 12px;margin-left:14px;border-radius:9px;display:flex;align-items:center;font-size:13.5px;font-weight:600;color:#C2412D;cursor:pointer;border-left:1px solid #F2EFEA')}>삭제</span>
             </div>
           ))}
           </div>
-          {dogs.length === 0 && <div style={css('font-size:15px;color:#5B6472;padding:20px 0')}>등록된 반려견이 없습니다.</div>}
+          {dogs.length === 0 && <div style={css('font-size:15px;color:#5B6472;padding:20px 0')}>{kw ? `‘${kw}’ 에 맞는 반려견이 없습니다.` : '등록된 반려견이 없습니다.'}</div>}
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:8px 22px;display:flex;flex-direction:column')}>
           <b style={css('font-size:17px;padding:14px 0 6px')}>서비스</b>

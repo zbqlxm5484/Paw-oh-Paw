@@ -2,6 +2,7 @@
 // 앱의 홈·반려견 차트·분석 결과 화면. 웹(web/src/pages/Home.tsx·Dog.tsx·Results.tsx)과 같은 정보·구성을 폰 폭에 맞춘 것.
 // 값은 AppProto.renderVals 가 만들고(webHome·webDog·webResults), 여기는 그리기만 한다.
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
+import { useVitView } from '../../app/emr'
 
 const INK = '#1B2433', INK2 = '#3A4250', SUB = '#5B6472', DIM = '#8E949C', LINE = '#ECE8E2', LINE2 = '#F2EFEA', ORANGE = '#D2601A'
 const card: CSSProperties = { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16 }
@@ -76,7 +77,7 @@ export function HomeBody({ h }: { h: WebHome }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14.5, fontWeight: 700 }}>{h.ana.name}{h.ana.label}</div>
               {h.ana.measuring ? <div style={{ fontSize: 12.5, color: SUB, marginTop: 3 }}>{h.ana.hint}</div> : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}><div style={{ flex: 1, height: 5, borderRadius: 3, background: '#FCEEE3' }}><div style={{ width: `${h.ana.pct}%`, height: '100%', borderRadius: 3, background: ORANGE, transition: 'width .2s' }} /></div><span style={{ fontSize: 12, color: SUB, whiteSpace: 'nowrap', ...tnum }}>{h.ana.step} {h.ana.n}/5</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}><div style={{ flex: 1, height: 5, borderRadius: 3, background: '#FCEEE3' }}><div style={{ width: `${h.ana.pct}%`, height: '100%', borderRadius: 3, background: ORANGE, transition: 'width .2s' }} /></div><span style={{ fontSize: 12, color: SUB, whiteSpace: 'nowrap', ...tnum }}>{h.ana.step} · {h.ana.pct}%</span></div>
               )}
             </div>
           </div>
@@ -146,8 +147,8 @@ export interface WebDog {
   tags: string[]
   cells: { k: string; v: string; sub?: string }[]
   memo: string
-  /** 최근 바이탈(체중·체온·심박·혈압)과 진단·수술 이력. 전체 진료 기록은 웹에서 본다 */
-  vit: { cells: { k: string; v: string; sub?: string }[]; when: string; note: string; hist: { id: string; day: string; kind: string; title: string; site: string; by: string }[] }
+  /** 바이탈·진단/수술 카드에 쓸 반려견(값은 DogBody 가 API 로 읽는다). 전체 진료 기록은 웹에서 본다 */
+  emr: { dogId: string | null; kg: string }
   trend: { has: boolean; pts: { x: number; y: number; v: number; t: string; cur?: boolean }[]; line: string; label: string; c: string; sym: number | null }
   hist: { id: string; no: string; date: string; w: string; pass: string; model: string; rep: string; base: boolean; canBase: boolean; st: string; bg: string; c: string; open: () => void; setBase: (e: any) => void }[]
   count: string
@@ -158,6 +159,7 @@ export interface WebDog {
 }
 
 export function DogBody({ d }: { d: WebDog }) {
+  const vit = useVitView(d.emr.dogId ?? undefined, d.emr.kg)
   return (
     <div style={{ position: 'absolute', inset: 0, paddingTop: 36, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 'none', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 0 8px' }}>
@@ -183,15 +185,15 @@ export function DogBody({ d }: { d: WebDog }) {
               <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontSize: 12, fontWeight: 600, color: SUB }}>메모</span><span style={{ fontSize: 13.5, lineHeight: 1.5, color: INK2, whiteSpace: 'pre-line' }}>{d.memo}</span></div>
             </div>
             <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}><b style={{ fontSize: 15 }}>바이탈</b>{d.vit.when ? <span style={{ fontSize: 12, color: DIM, ...tnum }}>{d.vit.when}</span> : null}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}><b style={{ fontSize: 15 }}>바이탈</b>{vit.when ? <span style={{ fontSize: 12, color: DIM, ...tnum }}>{vit.when}</span> : null}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 6 }}>
-                {d.vit.cells.map((c) => <div key={c.k} style={{ background: '#F7F4EF', borderRadius: 10, padding: '8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 }}><span style={{ fontSize: 11.5, fontWeight: 600, color: SUB }}>{c.k}</span><b style={{ fontSize: 14, whiteSpace: 'nowrap', ...tnum }}>{c.v}</b>{c.sub ? <span style={{ fontSize: 10.5, color: '#A0A7B2' }}>{c.sub}</span> : null}</div>)}
+                {vit.cells.map((c) => <div key={c.k} style={{ background: '#F7F4EF', borderRadius: 10, padding: '8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 }}><span style={{ fontSize: 11.5, fontWeight: 600, color: SUB }}>{c.k}</span><b style={{ fontSize: 14, whiteSpace: 'nowrap', ...tnum }}>{c.v}</b>{c.sub ? <span style={{ fontSize: 10.5, color: '#A0A7B2' }}>{c.sub}</span> : null}</div>)}
               </div>
-              {d.vit.note ? <span style={{ fontSize: 12.5, color: '#A0A7B2' }}>{d.vit.note}</span> : null}
+              {vit.note ? <span style={{ fontSize: 12.5, color: '#A0A7B2' }}>{vit.note}</span> : null}
             </div>
             <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <b style={{ fontSize: 15 }}>진단 · 수술</b>
-              {d.vit.hist.length ? d.vit.hist.map((x, i) => (
+              {vit.hist.length ? vit.hist.map((x, i) => (
                 <div key={x.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingTop: i ? 8 : 0, borderTop: i ? `1px solid ${LINE2}` : 'none' }}>
                   <span style={chip(x.kind === '수술' ? '#FCEEE3' : x.kind === '진단' ? '#EEF1F6' : '#F2EEE8', x.kind === '수술' ? '#A8481A' : x.kind === '진단' ? '#4A5A78' : INK2, { flex: 'none' })}>{x.kind}</span>
                   <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><b style={{ fontSize: 14, lineHeight: 1.4 }}>{x.title}</b><span style={{ fontSize: 12, color: SUB, ...tnum }}>{x.day}{x.site ? ` · ${x.site}` : ''}{x.by ? ` · ${x.by}` : ''}</span></div>

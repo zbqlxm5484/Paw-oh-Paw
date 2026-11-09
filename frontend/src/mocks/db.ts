@@ -2,6 +2,7 @@
  * MSW 가짜 서버의 메모리 DB. 디자인 v5 의 목업(DOGS·RES)을 API 모양(api-spec)으로 옮긴 것이다.
  * 새로고침하면 초기값으로 돌아간다. 백엔드가 붙으면 쓰지 않는다.
  */
+import { emrSummary } from './emr'
 import type { CameraSide, DogOut, PassOut, Reason, SessionDetailOut, SessionHistoryItem, SessionOut, ShotOut, SizeClass, StaffOut } from '../api/types'
 
 export const MOCK_STAFF: StaffOut = {
@@ -129,7 +130,7 @@ export function toDogOut(row: DogRow): DogOut {
   const done = mine.filter((s) => s.status !== 'MEASURING')
   const last = [...done].sort((a, b) => b.measured_on.localeCompare(a.measured_on))[0]
   const open = mine.find((s) => s.status === 'MEASURING')
-  return { ...row, session_count: mine.length, last_measured_on: last?.measured_on ?? null, open_session_id: open?.id ?? null }
+  return { ...row, session_count: mine.length, last_measured_on: last?.measured_on ?? null, open_session_id: open?.id ?? null, ...emrSummary(row.id, row.name) }
 }
 
 /** 방향별 유효 통과 수 */

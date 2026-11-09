@@ -26,6 +26,7 @@ import {
   isoToday,
   jobOf,
   jobProgress,
+  jobStep,
   new_id,
   norm_code,
   resultOf,
@@ -499,7 +500,7 @@ export function api_job(job_id: string):
   const p = jobProgress(job)
   if (job.result_id) job.notified = true
   return {
-    pct: pyround((p / 5) * 100), step: config.STEPS[Math.min(4, Math.trunc(p))], done: !!job.result_id,
+    pct: pyround((p / 5) * 100), step: jobStep(job, config.STEPS), done: !!job.result_id,
     url: job.result_id ? `/results/${job.result_id}` : null,
   }
 }

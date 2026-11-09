@@ -8,7 +8,7 @@ import { PostForm, staticUrl, usePage, useTitle } from '../app/page'
 import { setToast } from '../app/session'
 import { MEMO_CAT, SITE, SOAP, STAGE_NAMES, link } from '../config'
 import { activeJobs, dogOf, isoToday } from '../store/db'
-import { care_team, chart_summary, dog_detail, dx_history, image_list, kg_trend, memos as memos_of, patient_row, visits, vital_rows } from '../views/views'
+import { care_team, chart_summary, dog_detail, dx_history, image_list, kg_trend, memos as memos_of, patient_row, valid, visits, vital_rows } from '../views/views'
 import { MemoCard, MemoForm, type MemoX } from './parts/DogPanel'
 import { PetModal } from './parts/Modals'
 import { VFlagBadge, VV } from './parts/Vital'
@@ -307,7 +307,7 @@ export default function DogPage() {
       <main style={css('padding:20px 32px 64px;max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:14px')}>
         <div style={css('display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap')}>
           <a className="lk" href={link('/home')} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>목록</a>
-          <div style={css('display:flex;gap:8px;flex-wrap:wrap')}><span data-pet={cur.id} style={css('height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600;cursor:pointer')}>정보 수정</span><a className="lk" href={link(`/compare/${cur.id}`)} style={css('height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600')}>경과 비교</a><a className="lk" href={link(`/upload?dog=${cur.id}`)} style={css('height:40px;padding:0 16px;border-radius:10px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a></div>
+          <div style={css('display:flex;gap:8px;flex-wrap:wrap')}><span data-pet={cur.id} style={css('height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600;cursor:pointer')}>정보 수정</span>{valid(acct!, cur.id).length >= 2 ? <a className="lk" href={link(`/compare/${cur.id}`)} style={css('height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600')}>경과 비교</a> : <span title="유효한 회차가 2개 이상 있어야 비교할 수 있습니다" style={css('height:40px;padding:0 14px;border-radius:10px;border:1px solid #EEEAE4;background:#F7F4EF;color:#A0A7B2;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:not-allowed')}>경과 비교<span style={css('font-size:12px;font-weight:500')}>· 유효 회차 2개부터</span></span>}<a className="lk" href={link(`/upload?dog=${cur.id}`)} style={css('height:40px;padding:0 16px;border-radius:10px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a></div>
         </div>
 
         {/* 차트 위 고정 줄(EMR 처럼): 환자 정보 · 바이탈 · 메모 · 담당. 어느 탭에서든 보이고, 메모는 여기서 바로 쓴다 */}

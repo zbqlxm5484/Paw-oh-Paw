@@ -5,6 +5,7 @@
 import { HttpResponse, delay, http } from 'msw'
 
 import type { DogCreate, DogUpdate, LoginIn, SessionCreate } from '../api/types'
+import { emrHistory, emrVitals } from './emr'
 import { MOCK_STAFF, classifySize, dogs, findDog, historyOf, newId, reason, sessions, simulateAggregation, simulateAnalysis, toDogOut, toSessionDetail, toSessionOut, type MockShot } from './db'
 
 // 앱(Capacitor)은 VITE_API_BASE 로 절대 주소를 부르므로 가짜 서버도 같은 주소를 받는다(체험 모드). 웹은 빈 값이라 '/api/v1'
@@ -156,6 +157,20 @@ export const handlers = [
     }
     dogs.push(row)
     return HttpResponse.json(toDogOut(row), { status: 201 })
+  }),
+
+  // 진료 정보(바이탈·진단/수술 이력)
+  http.get(`${BASE}/dogs/:dogId/vitals`, ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    const row = findDog(params.dogId)
+    if (!row) return notFound()
+    return HttpResponse.json({ items: emrVitals(row.id, row.name) })
+  }),
+  http.get(`${BASE}/dogs/:dogId/history`, ({ request, params }) => {
+    if (!authed(request)) return unauthorized()
+    const row = findDog(params.dogId)
+    if (!row) return notFound()
+    return HttpResponse.json({ items: emrHistory(row.id, row.name) })
   }),
 
   http.get(`${BASE}/dogs/:dogId`, ({ request, params }) => {
