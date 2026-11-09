@@ -18,7 +18,7 @@ import { IntroBody } from './AppIntro'
 import { Gait3dBody } from './AppGait3d'
 import { DogBody, HomeBody, ReportsBody, type HomeRow, type WebDog, type WebHome, type WebReports } from './AppWebScreens'
 import { isDemo } from '../../app/demoMode'
-import { badgesOf, emrOf } from '../../app/emr'
+import { badgesOfDog, emrSearchText } from '../../app/emr'
 import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
 import { HELP_CARDS, HELP_CONTACT } from '../help'
 
@@ -331,7 +331,7 @@ export class AppProto extends DCLogic<Props, any> {
     const sess = this.props.session
     const anaSess = sc === 'analyzing' ? sess : null
     const anaPctNow = anaSess ? Math.round((this.props.sessionAna?.p ?? 0) / 5 * 100) : Math.round(anaP / 5 * 100)
-    const anaStepNow = anaSess ? STEPS[Math.min(4, Math.floor(this.props.sessionAna?.p ?? 0))] : STEPS[anaFloor]
+    const anaStepNow = anaSess ? (this.props.sessionAna?.label ?? STEPS[Math.min(4, Math.floor(this.props.sessionAna?.p ?? 0))]) : (ana?.label ?? STEPS[anaFloor])
     const rep = this.props.reports?.reports.find((r) => r.edition === (s.repType === 'v' ? 'VET' : 'OWNER'))
     const bq = s.pet.breed.trim().replace(/\s/g, '')
     const bList = bq ? BREEDS.filter((b) => b.replace(/\s/g, '').includes(bq)).slice(0, 6) : []
@@ -389,8 +389,8 @@ export class AppProto extends DCLogic<Props, any> {
       }
       return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
     }
-    const emrTxt = (d: DDog) => emrOf(d.name).history.map((h) => h.title).join(' ')
-    const badgeChips = (d: DDog) => badgesOf(emrOf(d.name)).map((b) => (b.kind === 'surg' ? { t: b.t, bg: '#FCEEE3', c: '#A8481A' } : { t: b.t, bg: '#EEF1F6', c: '#4A5A78' }))
+    const emrTxt = (d: DDog) => emrSearchText(d.raw)
+    const badgeChips = (d: DDog) => badgesOfDog(d.raw).map((b) => (b.kind === 'surg' ? { t: b.t, bg: '#FCEEE3', c: '#A8481A' } : { t: b.t, bg: '#EEF1F6', c: '#4A5A78' }))
     const hvDogs = dogs.filter((d) => !qq || `${d.name} ${d.breed} ${d.memo} ${emrTxt(d)}`.includes(qq))
     const keepIds = new Set(hvDogs.map((d) => d.id))
     const todayRows: HomeRow[] = hvDogs.flatMap((d) => {
@@ -442,7 +442,7 @@ export class AppProto extends DCLogic<Props, any> {
       view: s.hv, q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) },
       rows: s.hv === 'today' ? todayRows : s.hv === 'analyses' ? analysisRows : s.hv === 'staff' ? staffRows : dogRows,
       empty: !dogs.length ? '첫 반려견을 등록해 주세요. 이름·견종·체중만 있으면 바로 보행 측정을 시작할 수 있습니다.' : s.hv === 'today' ? '오늘 진행한 분석 및 측정이 없습니다.' : qq ? `‘${qq}’ 에 맞는 ${s.hv === 'analyses' ? '분석이' : s.hv === 'staff' ? '담당자가' : '반려견이'} 없습니다.` : s.hv === 'analyses' ? (s.pd !== 'all' ? '이 기간에 한 분석이 없습니다.' : '아직 분석 결과가 없습니다.') : s.hv === 'staff' ? '아직 촬영한 분석이 없습니다.' : '등록된 반려견이 없습니다.',
-      ana: { on: !!ana && li, thumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, name: anaDog ? anaDog.name : '', label: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', hint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', pct: Math.round(anaP / 5 * 100), step: STEPS[anaFloor], n: anaFloor + 1, measuring: !!ana && ana.status === 'MEASURING',
+      ana: { on: !!ana && li, thumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, name: anaDog ? anaDog.name : '', label: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', hint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', pct: Math.round(anaP / 5 * 100), step: ana?.label ?? STEPS[anaFloor], n: anaFloor + 1, measuring: !!ana && ana.status === 'MEASURING',
         open: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)) },
     }
     const webDog: WebDog = (() => {
@@ -453,16 +453,7 @@ export class AppProto extends DCLogic<Props, any> {
         name: D ? D.name : '반려견을 찾을 수 없습니다', init: D ? D.name[0] : '?', desc: D ? desc(D) : '', live: !!D?.open,
         tags: D ? [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ''), SEX[D.sex || 'm'], ageOf(D), ...(D.focus ? [`관심 다리 ${LIMB[D.focus]}`] : [])] : [],
         cells: D ? [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택' }, { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '직접 지정' : bR ? '가장 이른 회차' : '' }, { k: '측정 횟수', v: `${all.length}회차`, sub: all[0] ? `마지막 ${short(all[0].date)}` : '' }] : [],
-        vit: (() => {
-          const e = D ? emrOf(D.name) : { vitals: [], history: [] }, v = e.vitals[0]
-          const kg = v?.kg || (D?.kg && D.kg !== '0' ? D.kg : '')
-          return {
-            cells: [{ k: '체중', v: kg ? `${kg}kg` : '—' }, { k: '체온', v: v?.temp ? `${v.temp}℃` : '—' }, { k: '심박', v: v?.hr ? `${v.hr}회/분` : '—' }, { k: '혈압', v: v?.sbp ? `${v.sbp}/${v.dbp}` : '—', sub: v?.sbp ? 'mmHg' : '' }],
-            when: v ? `${fmtD(v.day)} · ${v.author}` : '',
-            note: v ? '' : '체온·심박·혈압은 아직 기록이 없습니다',
-            hist: [...e.history].reverse().map((h, i) => ({ id: `${h.day}-${i}`, day: fmtD(h.day), kind: h.kind, title: h.title, site: ({ LF: '왼앞', RF: '오른앞', LH: '왼뒤', RH: '오른뒤', SP: '척추' } as Record<string, string>)[h.site] ?? '', by: h.by })),
-          }
-        })(),
+        emr: { dogId: D?.id ?? null, kg: D?.kg ?? '' },
         memo: D?.memo || '없음', trend: D ? trendOf(D.id) : { has: false, pts: [], line: '', label: '', c: '', sym: null },
         hist: all.map((r, i) => ({ id: r.id, no: `${sessNo(r)}회차`, date: r.date, w: r.w && r.w !== '-' ? `${r.w}kg` : '—', pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`, model: r.model, rep: r.rep ? '있음' : '—', base: r.id === bId, canBase: r.st !== 'fail' && r.id !== bId, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], open: () => this.openRes(r.id), setBase: dd.hist[i] ? dd.hist[i].setBase : () => {} })),
         count: `${all.length}회차`, back: this.back, edit: dd.edit, compare: dd.compare, start: dd.start,

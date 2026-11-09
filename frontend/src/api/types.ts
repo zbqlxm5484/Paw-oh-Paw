@@ -113,6 +113,47 @@ export interface DogOut {
   version: number
   created_at: string
   updated_at: string
+  /** 가장 최근 날짜의 바이탈 한 줄(그날 안 잰 값은 null). 체중은 weight_kg 를 쓴다 */
+  latest_vital?: VitalOut | null
+  /** 가장 최근 수술·진단(목록 요약) */
+  last_surgery?: HistorySummary | null
+  last_diagnosis?: HistorySummary | null
+}
+
+/** 진료 정보(11-09 백엔드 조영운): 바이탈·진단/수술 이력 */
+export interface StaffRef {
+  id: string
+  name: string
+}
+export interface VitalOut {
+  id: string
+  measured_on: string
+  weight_kg: number | null
+  temp_c: number | null
+  heart_rate: number | null
+  sbp: number | null
+  dbp: number | null
+  staff: StaffRef | null
+  session_id: string | null
+  created_at: string
+  updated_at: string
+}
+export type HistoryKind = 'DIAGNOSIS' | 'SURGERY' | 'REHAB'
+export type HistorySite = 'LF' | 'RF' | 'LH' | 'RH' | 'SP'
+export interface DogHistoryOut {
+  id: string
+  occurred_on: string
+  kind: HistoryKind
+  title: string
+  site: HistorySite | null
+  clinician: string | null
+  staff: StaffRef | null
+  created_at: string
+}
+export interface HistorySummary {
+  occurred_on: string
+  title: string
+  site: HistorySite | null
 }
 
 export interface DogCreate {

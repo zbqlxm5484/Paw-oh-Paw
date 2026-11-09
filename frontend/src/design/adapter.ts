@@ -168,17 +168,22 @@ export interface DAna {
   p: number
   n: number
   status: SessionStatus
+  /** 지금 서버가 하는 일(영상 분석 n/전체 → 회차 결과 계산). 진행 막대 옆 문구 */
+  label: string
 }
+/** 분석 진행: 서버의 촬영·회차 상태 그대로(시간으로 지어내지 않는다).
+ *  영상마다 GPU 관절점 분석이 끝나야(DONE·FAILED) 회차 결과를 계산(AGGREGATING)하므로, 막대는 영상 분석에 대부분을 쓴다 */
 export function toAna(s: SessionDetailOut | undefined, dogId: string, sessionId: string): DAna {
-  if (!s) return { dog: dogId, sessionId, p: 0, n: 0, status: 'MEASURING' }
+  if (!s) return { dog: dogId, sessionId, p: 0, n: 0, status: 'MEASURING', label: STEPS[0] }
   const total = s.shots.length
   const done = s.shots.filter((x) => x.status === 'DONE' || x.status === 'FAILED').length
-  let p: number
-  if (s.status === 'AGGREGATING') p = 3.5
-  else if (s.status === 'DONE') p = 4.5
-  else if (!total) p = 0
-  else p = 1 + Math.min(1.99, (done / total) * 2)
-  return { dog: dogId, sessionId, p, n: total, status: s.status }
+  let p: number, label: string
+  if (s.status === 'DONE') { p = 4.8; label = '결과 정리 중' }
+  else if (!total) { p = 0; label = STEPS[0] }
+  else if (done < total) { p = 0.5 + (done / total) * 3.4; label = `영상 분석 중 ${done}/${total}` }
+  else if (s.status === 'AGGREGATING') { p = 4.2; label = '회차 결과 계산 중' }
+  else { p = 3.9; label = `영상 분석 완료 ${done}/${total}` }
+  return { dog: dogId, sessionId, p, n: total, status: s.status, label }
 }
 
 /** 계정 정보: 디자인 DEMO 모양 */
