@@ -1,6 +1,7 @@
 """변화 판정(명세 5절 비교 규칙, 15.8 판정 표, 17.5 BE-18, S15P31A404-197).
 
-보고서의 직전 회차 비교(numbers.build_tables)와 회차 비교 API(services/compare.py, 198)가 같이 쓴다. 순서대로 처음
+보고서의 직전 회차 비교(numbers.build_tables)와 회차 비교 API(services/compare.py, 198)가 같이 쓴다.
+차이 계산(difference)은 보고서 수치 대조의 기준값(verify.previous_reference)도 쓴다(272). 순서대로 처음
 맞는 줄을 따른다.
 
 1. 한쪽 값이 없거나 측정 불가 → NOT_COMPARABLE. note는 행이 없는 쪽이 있으면 NO_DATA, 아니면 base 쪽, 그다음 target 쪽의
@@ -47,6 +48,15 @@ class Judgement(NamedTuple):
     diff: float | None  # target − base. 비교할 수 없으면 None
 
 
+def _difference(base: float, target: float) -> Decimal:
+    return (Decimal(str(target)) - Decimal(str(base))).quantize(DIFF_PLACES, rounding=ROUND_HALF_UP)
+
+
+def difference(base: float, target: float) -> float:
+    """target − base(원 단위, 소수 4자리 반올림). 판정과 수치 대조 기준값이 같은 식을 쓰게 한곳에 둔다."""
+    return float(_difference(base, target))
+
+
 def usable_tolerance(tolerance: float | None, *passes: float | None) -> float | None:
     """견줄 수 있는 오차 범위. 견주는 값들의 n_passes가 하나라도 모자라거나 모르면 None이다."""
     if any(count is None or count < TOLERANCE_MIN_PASSES for count in passes):
@@ -70,7 +80,7 @@ def judge(
         else:
             note = base_reason if base is None else target_reason
         return Judgement(NOT_COMPARABLE, note, None)
-    diff = (Decimal(str(target)) - Decimal(str(base))).quantize(DIFF_PLACES, rounding=ROUND_HALF_UP)
+    diff = _difference(base, target)
     if model_changed:
         return Judgement(UNKNOWN, NOTE_MODEL_CHANGED, float(diff))
     if tolerance is None:

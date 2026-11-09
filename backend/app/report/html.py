@@ -9,7 +9,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.report import TEMPLATE_VERSION
-from app.report.numbers import LIMB_LABELS, LIMB_ORDER, GaitTable
+from app.report.numbers import LIMB_LABELS, LIMB_ORDER, NOT_COMPARABLE_LABEL, GaitTable
 from app.report.sentences import Sentences
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -42,6 +42,7 @@ def render_html(
             tables=tables,
             table_limbs=table_limbs,
             limb_labels=LIMB_LABELS,
+            not_comparable=NOT_COMPARABLE_LABEL,
             charts=charts,
             session=session,
             template_version=TEMPLATE_VERSION,
