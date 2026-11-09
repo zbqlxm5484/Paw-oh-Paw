@@ -28,6 +28,9 @@ from app.core.errors import ErrorCode, error_response, register_exception_handle
 API_PREFIX = "/api/v1"
 REQUEST_ID_HEADER = "X-Request-ID"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(request_id)s %(message)s"
+# INFO를 찍지 않을 바깥 라이브러리(11.8). httpx는 워커가 분석 API를 부를 때마다 한 줄씩 찍는다. weasyprint와 fontTools는
+# 보고서 한 건마다 수십 줄을 찍고, 그중 글리프 목록은 보고서에 쓰인 글자(반려견 이름 등)를 드러낸다
+QUIET_LOGGERS = ("httpx", "weasyprint", "fontTools")
 
 # 지금 처리 중인 요청의 ID. 라우트·서비스가 남기는 모든 로그 줄에 붙는다(11.8). 요청 밖에서는 "-".
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
@@ -55,7 +58,8 @@ def configure_logging(level: str) -> None:
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt="%Y-%m-%dT%H:%M:%S"))
     root.addHandler(handler)
-    logging.getLogger("httpx").setLevel(logging.WARNING)  # 워커가 분석 API를 부를 때마다 한 줄씩 찍지 않는다(11.8)
+    for name in QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
     _logging_ready = True
 
 
