@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dates import today_local
 from app.models import MeasureSession, Report
-from app.services.reports import to_report_out
+from app.services.reports import content_disposition, to_report_out
 from app.storage.base import get_storage
 from app.storage.keys import report_key
 from tests.conftest import bearer
@@ -165,6 +165,26 @@ def test_signed_url_opens_the_pdf_inline_and_download_as_attachment(
     assert download.status_code == 200
     assert disposition.startswith("attachment; filename=\"report.pdf\"; filename*=UTF-8''")
     assert unquote(disposition.split("''", 1)[1]) == f"{dog.name}_{session.measured_on}_보호자용.pdf"
+
+
+def test_a_dog_name_with_separators_stays_one_percent_encoded_file_name(
+    client: TestClient, db: Session, dog, staff, auth_headers
+) -> None:
+    """이름에 '/'·따옴표·줄바꿈이 있어도 머리 값이 한 줄이고, 풀면 원래 이름이 그대로 나온다(15.7, RFC 8187)."""
+    dog.name = '초코/밀크 "1호"; a\\b'
+    db.flush()
+    session = _session(db, dog, staff)
+    _report(db, dog, session, "OWNER", status="DONE")
+    [row] = _list(client, auth_headers, session).json()["reports"]
+
+    disposition = client.get(row["download_url"]).headers["content-disposition"]
+    encoded = disposition.split("''", 1)[1]
+    assert disposition.startswith("attachment; filename=\"report.pdf\"; filename*=UTF-8''")
+    assert not set(encoded) & set('/\\"; ')  # 이름 속 구분 글자는 모두 %XX로 바뀐다
+    assert unquote(encoded) == f"{dog.name}_{session.measured_on}_보호자용.pdf"
+
+    header = content_disposition("줄\r\n바꿈.pdf", download=False)
+    assert "\r" not in header and "\n" not in header and header.endswith("%EC%A4%84%0D%0A%EB%B0%94%EA%BF%88.pdf")
 
 
 def test_bad_or_missing_signature_is_file_link_expired(
