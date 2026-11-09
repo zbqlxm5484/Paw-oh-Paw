@@ -32,12 +32,18 @@ function Reveal({ children, delay = 0, style }: { children: ReactNode; delay?: n
   return <div ref={ref} style={{ opacity: 0, transform: 'translateY(24px)', transition: `opacity .6s ease ${delay}ms, transform .6s ease ${delay}ms`, ...style }}>{children}</div>
 }
 
-/** 폰 틀에 넣은 앱 화면 캡처(위쪽만 보이게 자른다) */
+/** 갤럭시 S(울트라) 모양 폰 틀에 넣은 앱 화면 캡처(위쪽만 보이게 자른다): 각진 모서리·얇고 고른 베젤·티타늄 테두리·가운데 펀치홀·오른쪽 측면 버튼 */
 function Phone({ src, h = 440 }: { src: string; h?: number }) {
+  const key = (top: string, len: string): CSSProperties => ({ position: 'absolute', right: -3, top, width: 3, height: len, borderRadius: '0 2px 2px 0', background: '#8A8F96' })
   return (
-    <div style={{ width: '47%', maxWidth: 220, aspectRatio: `220 / ${h}`, borderRadius: 26, padding: 6, background: '#1B2433', boxShadow: '0 18px 40px rgba(27,36,51,.18)', flex: 'none' }}>
-      <div style={{ width: '100%', height: '100%', borderRadius: 20, overflow: 'hidden', background: '#FAF9F6' }}>
-        <img src={IMG + src} alt="" loading="lazy" style={{ width: '100%', display: 'block' }} />
+    <div style={{ position: 'relative', width: '47%', maxWidth: 220, aspectRatio: `220 / ${h}`, flex: 'none' }}>
+      <span style={key('18%', '16%')} />
+      <span style={key('38%', '8%')} />
+      <div style={{ position: 'absolute', inset: 0, borderRadius: 12, padding: 4, background: 'linear-gradient(135deg,#9AA0A6 0%,#4A4F55 18%,#2B2E33 50%,#4A4F55 82%,#9AA0A6 100%)', boxShadow: '0 18px 40px rgba(27,36,51,.18)' }}>
+        <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 9, overflow: 'hidden', background: '#FAF9F6', boxShadow: '0 0 0 2px #0B0D10' }}>
+          <img src={IMG + src} alt="" loading="lazy" style={{ width: '100%', display: 'block', marginTop: 14 }} />
+          <span style={{ position: 'absolute', top: 5, left: '50%', width: 7, height: 7, marginLeft: -3.5, borderRadius: '50%', background: '#0B0D10' }} />
+        </div>
       </div>
     </div>
   )
