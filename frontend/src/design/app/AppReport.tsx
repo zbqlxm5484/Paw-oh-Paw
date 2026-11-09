@@ -86,11 +86,13 @@ export interface AppReportProps {
   vet: ReactNode
 }
 
-export function AppReport(p: AppReportProps) {
-  const { parts } = metsOf(p.result)
+export type LegCard = { label: string; weak: boolean; c: string; dot: string; mets: { n: string; v: string; other: string; lower: boolean }[] }
+/** 다리 네 개의 색·문구·수치(몸 그림과 3D 보기가 같이 쓴다). 웹 views.ts body_map 과 같은 규칙 */
+export function legCards(result: SessionResultOut | null | undefined) {
+  const { parts } = metsOf(result)
   const front = partOf('앞다리', parts.front.mets), hind = partOf('뒷다리', parts.hind.mets)
   const fills: Record<string, string> = {}
-  const cards: Record<string, { label: string; weak: boolean; c: string; dot: string; mets: { n: string; v: string; other: string; lower: boolean }[] }> = {}
+  const cards: Record<string, LegCard> = {}
   for (const [part, P] of [['front', front], ['hind', hind]] as const) {
     for (const side of ['l', 'r'] as const) {
       const code = (side === 'l' ? 'L' : 'R') + (part === 'front' ? 'F' : 'H')
@@ -103,6 +105,11 @@ export function AppReport(p: AppReportProps) {
       }
     }
   }
+  return { parts, front, hind, fills, cards }
+}
+
+export function AppReport(p: AppReportProps) {
+  const { parts, front, hind, fills, cards } = legCards(p.result)
   const sym = p.sym ?? 0
   const symLv = level(100 - sym)
   const prev = p.symHist.length > 1 ? p.symHist[p.symHist.length - 2] : null

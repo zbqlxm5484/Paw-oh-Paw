@@ -15,6 +15,7 @@ import type { ProtoProps } from '../DesignRoot'
 import { EMPTY_PET, LIMB, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_, wkg } from '../shared'
 import { AppView } from './AppView'
 import { IntroBody } from './AppIntro'
+import { Gait3dBody } from './AppGait3d'
 import { DogBody, HomeBody, ReportsBody, type HomeRow, type WebDog, type WebHome, type WebReports } from './AppWebScreens'
 import { isDemo } from '../../app/demoMode'
 import { badgesOf, emrOf } from '../../app/emr'
@@ -493,11 +494,16 @@ export class AppProto extends DCLogic<Props, any> {
     return {
       introBody: <IntroBody i={{ showBack: !li || !s.viaTab, back: this.back, titlePad: !li || !s.viaTab ? 0 : 12, bottom: showTabs ? 96 : 0,
         cta: li ? { label: '보행 분석 시작하기', go: () => this.goCapture() } : { label: '기관 계정 만들기', go: () => this.nav('signupOrg') }, login: li ? undefined : () => this.nav('login') }} />,
+      gait3dBody: sc === 'gait3d' ? (() => {
+        const RD3 = R ? dogById(R.dog) : undefined
+        return <Gait3dBody result={R?.result} name={RD3?.name ?? ''} when={R ? `${R.date} · ${sessNo(R)}회차` : ''} size={RD3?.size ?? 'M'} sym={R?.sym ?? null} back={this.back} />
+      })() : null,
+      go3d: () => { if (R) this.nav('gait3d', `/sessions/${R.id}/3d`) }, go3dOn: !!R && R.st !== 'fail' && !!R.result,
       homeBody: <HomeBody h={webHome} />, dogBody: <DogBody d={webDog} />, resultsBody: <ReportsBody r={webReports} />,
       rootStyle: this.props.rootStyle || {},
       isSplash: sc === 'splash', isLanding: sc === 'landing', isLogin: sc === 'login', isSignupOrg: sc === 'signupOrg',
       isHome: sc === 'home', isDog: sc === 'dog', isPetNew: sc === 'petNew', isNotif: sc === 'notif', isStory: sc === 'story', isCapSelect: sc === 'capSelect', isCapGuide: sc === 'capGuide',
-      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', isSettings: sc === 'settings', isHelp: sc === 'help', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
+      isCapReview: sc === 'capReview', isAnalyzing: sc === 'analyzing', isResults: sc === 'results', isDetail: sc === 'detail', isGait3d: sc === 'gait3d', isReport: sc === 'report', isCompare: sc === 'compare', isMy: sc === 'my', isAccount: sc === 'account', isLegal: sc === 'legal', isSettings: sc === 'settings', isHelp: sc === 'help', legal: LEGAL[(this.props.params.legal as LegalKind) in LEGAL ? (this.props.params.legal as LegalKind) : 'support'],
       vid: this.vid, storyRef: this.storyRef, repBox: this.repBox, back: this.back,
       jointOp: s.joint ? 1 : 0, jointTr: s.joint ? 'opacity 0.5s ease-out' : 'none', replaySplash: () => this.startSplash(),
       lines: [], // 랜딩 영상 위 문구(반려견의 걸음을·더욱 정확하게·Paw oh Paw)는 띄우지 않는다

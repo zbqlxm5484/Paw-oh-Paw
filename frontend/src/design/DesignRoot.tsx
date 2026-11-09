@@ -85,6 +85,7 @@ export function parseRoute(pathname: string): RouteInfo {
     const sessionId = seg[1]
     if (seg[2] === 'result') return { screen: 'detail', params: { sessionId } }
     if (seg[2] === 'report') return { screen: 'report', params: { sessionId } }
+    if (seg[2] === '3d') return { screen: 'gait3d', params: { sessionId } }
     if (seg[2] === 'analyzing') return { screen: 'analyzing', params: { sessionId } }
     if (seg[2] === 'record') return { screen: 'capGuide', params: { sessionId } }
     return { screen: 'capReview', params: { sessionId } }
@@ -118,7 +119,7 @@ export function DesignRoot() {
     }
   }, [checking, loggedIn, route.screen, loc.pathname, loc.search, navigate, query])
 
-  const data = useDesignData(route.screen === 'detail' || route.screen === 'report' ? route.params.sessionId : undefined)
+  const data = useDesignData(route.screen === 'detail' || route.screen === 'report' || route.screen === 'gait3d' ? route.params.sessionId : undefined)
   const actions = useDesignActions()
   const [ui, setUiState] = useState<UiSel>({ cmp: 'base', tk: 'rom' })
   const setUi = useCallback((p: Partial<UiSel>) => setUiState((u) => ({ ...u, ...p })), [])
