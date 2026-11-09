@@ -103,7 +103,8 @@ export const VALIDITY_LABEL: Record<Validity, string> = { VALID: '유효', PARTI
 export const VALIDITY_TONE: Record<Validity, Tone> = { VALID: 'ok', PARTIAL: 'warn', INVALID: 'bad' }
 
 export const CAMERA_SIDE_LABEL: Record<CameraSide, string> = { LEFT: '왼쪽', RIGHT: '오른쪽' }
-export const GAIT_LABEL: Record<GaitType, string> = { WALK: '평보', TROT: '속보', PACE: '측대보', OTHER: '기타' }
+// OTHER = gait 가 null 인 유효 통과 묶음(아직 보행 유형을 가르지 않음). 화면·보고서와 같은 이름(11-09 MR !131)
+export const GAIT_LABEL: Record<GaitType, string> = { WALK: '평보', TROT: '속보', PACE: '측대보', OTHER: '보행 유형 미판별' }
 
 /** 분석 중 촬영(SUBMITTED·ANALYZING)이 있으면 삭제·취소를 막는다(api-spec 10.2) */
 export function isShotInProgress(status: ShotStatus): boolean {
