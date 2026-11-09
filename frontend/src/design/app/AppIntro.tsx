@@ -49,11 +49,12 @@ function Phone({ src, h = 440 }: { src: string; h?: number }) {
   )
 }
 
-function Head({ k, t, p }: { k: string; t: ReactNode; p: ReactNode }) {
+/** one: 제목을 한 줄로(폰 폭에 맞춰 글자 크기를 줄인다) */
+function Head({ k, t, p, one }: { k: string; t: ReactNode; p: ReactNode; one?: boolean }) {
   return (
     <Reveal style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <span style={{ fontSize: 13, fontWeight: 700, color: ORANGE, letterSpacing: '.2px' }}>{k}</span>
-      <b style={{ fontSize: 25, lineHeight: 1.32, letterSpacing: '-0.6px', color: INK }}>{t}</b>
+      <b style={{ fontSize: one ? 'min(25px, 6vw)' : 25, lineHeight: 1.32, letterSpacing: '-0.6px', color: INK , whiteSpace: one ? 'nowrap' : undefined }}>{t}</b>
       <span style={{ fontSize: 15, lineHeight: 1.6, color: SUB }}>{p}</span>
     </Reveal>
   )
@@ -125,7 +126,7 @@ export function IntroBody({ i }: { i: IntroProps }) {
 
         {/* 5. 보고서 */}
         <div style={{ ...sec, background: '#F3EDE4' }}>
-          <Head k="보고서" t={<>보호자용과 수의사용을<br />따로 만듭니다</>} p="보호자용은 주요 결과 한 줄과 그림으로, 수의사용은 관절별 수치로 정리합니다. 보고서 탭에서 반려견별로 모아 보고 PDF로 바로 저장합니다." />
+          <Head k="보고서" one t="보호자용과 수의사용을 따로 만듭니다" p="보호자용은 주요 결과 한 줄과 그림으로, 수의사용은 관절별 수치로 정리합니다. 보고서 탭에서 반려견별로 모아 보고 PDF로 바로 저장합니다." />
           <Reveal style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
             <Phone src="report.webp" h={440} />
             <Phone src="reports.webp" h={440} />
