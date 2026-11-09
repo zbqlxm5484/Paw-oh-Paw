@@ -103,7 +103,7 @@ export function IntroBody({ i }: { i: IntroProps }) {
 
         {/* 3. 체급 */}
         <div style={{ ...sec, background: '#F3EBE0' }}>
-          <Head k="체급" t="소형견부터 대형견까지" p="몸집이 다른 강아지도 같은 방법으로 찍고 잽니다. 체급을 함께 기록해 같은 체급끼리 비교할 수 있습니다." />
+          <Head k="체급" t="소형견부터 대형견까지" p="몸집이 다른 강아지도 같은 방법으로 찍고 잽니다." />
           <Reveal style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, alignItems: 'end' }}>
             {[['dog-small.webp', '소형', 64], ['dog-medium.webp', '중형', 82], ['dog-large.webp', '대형', 100]].map(([src, label, w]) => (
               <div key={label as string} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
