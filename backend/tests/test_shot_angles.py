@@ -6,7 +6,7 @@ import copy
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from app.clients.analysis import load_fixture
+from app.clients.analysis import AnalysisClientError, load_fixture
 from app.models import Shot
 from app.services.analysis_results import ResultFormatError
 from app.services.shot_angles import JOINTS, MAX_PASS_FRAMES, build_angles, dump_angles
@@ -249,6 +249,179 @@ def test_deleting_the_shot_removes_the_angles_file(db: Session, dog, staff) -> N
 
 
 # ---- API ----
+
+
+# ---- 다시 만들기(12.4 관절 각도 파일, 271 리뷰) ----
+
+
+class FlakyAngles:
+    """angles.json 쓰기만 정해진 횟수만큼 실패하는 저장소(디스크가 잠깐 가득 찬 상황)."""
+
+    def __init__(self, failures: int) -> None:
+        self.real = get_storage()
+        self.failures = failures
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.real, name)
+
+    def write_bytes(self, key: str, data: bytes) -> None:
+        if key.endswith("angles.json") and self.failures > 0:
+            self.failures -= 1
+            raise OSError(28, "No space left on device", str(self.real.path(key)))
+        self.real.write_bytes(key, data)
+
+
+def _ready_shot(db: Session, dog, session, seq_no: int, job_id: str, *, video: str = "READY", **kwargs: Any) -> Shot:
+    """결과 영상까지 끝난 촬영. 분석 결과 파일은 있고 각도 파일은 없다."""
+    shot = _analyzed_shot(db, dog, session, seq_no, job_id=job_id, **kwargs)
+    shot.video_status = video
+    db.flush()
+    return shot
+
+
+def _write_angles(dog, session, shot, job_id: str) -> None:
+    key = angles_key(dog.institution_id, dog.id, session.id, shot.id)
+    get_storage().write_bytes(key, dump_angles({"job_id": job_id, "fps": 10.0, "passes": []}))
+
+
+def test_angles_that_could_not_be_stored_are_rebuilt_after_the_retry_interval(db: Session, dog, staff, caplog) -> None:
+    session = _session(db, dog, staff)
+    shot = _analyzed_shot(db, dog, session)
+    settings = _settings()
+    analysis = KeypointClient()
+    renderer = _renderer(settings, analysis, FakeExecutor("run"), storage=FlakyAngles(1))
+
+    with caplog.at_level(logging.INFO, logger="app.worker.render"):
+        assert _run(db, renderer, settings, analysis).render_started == 1  # 영상은 그대로 맡긴다
+        assert _run(db, renderer, settings, analysis).rendered == 1
+        assert not _angles_path(dog, session, shot).exists()
+        assert analysis.calls == ["job-1"]  # 간격이 되기 전에는 다시 받지 않는다
+
+        renderer._next_angles_retry = 0.0  # 5분이 지났다
+        _run(db, renderer, settings, analysis)
+    assert json.loads(_angles_path(dog, session, shot).read_bytes())["job_id"] == "job-1"
+    assert analysis.calls == ["job-1", "job-1"]  # 관절점 파일을 다시 받아 만들었다
+    assert "retrying later" in caplog.text and f"angles rebuilt shot={shot.id}" in caplog.text
+    assert str(dog.id) not in caplog.text  # 로그에 파일 경로가 없다(11.8)
+
+    renderer._next_angles_retry = 0.0
+    _run(db, renderer, settings, analysis)
+    assert analysis.calls == ["job-1", "job-1"]  # 만든 뒤에는 더 하지 않는다
+    renderer.shutdown()
+
+
+def test_a_restarted_worker_finds_recent_shots_without_angles(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    missing = _ready_shot(db, dog, session, 1, "job-missing")
+    stale = _ready_shot(db, dog, session, 2, "job-stale")
+    _write_angles(dog, session, stale, "job-before")  # 다시 분석하기 전의 파일이 남아 있다
+    good = _ready_shot(db, dog, session, 3, "job-good")
+    _write_angles(dog, session, good, "job-good")
+    old = _ready_shot(db, dog, session, 4, "job-old")
+    old.analyzed_at = datetime.now(UTC) - timedelta(hours=49)
+    no_video = _ready_shot(db, dog, session, 5, "job-no-video", video="FAILED")
+    without_result = _done_shot(db, dog, session, 6, job_id="job-without-result")
+    without_result.video_status = "READY"
+    db.flush()
+
+    settings = _settings()
+    analysis = KeypointClient()
+    renderer = _renderer(settings, analysis, FakeExecutor("hang"))  # 새로 켠 워커: 기억해 둔 것이 없다
+    _run(db, renderer, settings, analysis)
+
+    assert sorted(analysis.calls) == ["job-missing", "job-no-video", "job-stale"]
+    for shot, job_id in (
+        (missing, "job-missing"),
+        (stale, "job-stale"),
+        (no_video, "job-no-video"),
+        (good, "job-good"),
+    ):
+        assert json.loads(_angles_path(dog, session, shot).read_bytes())["job_id"] == job_id
+    assert not _angles_path(dog, session, old).exists()  # 48시간이 지난 촬영은 보지 않는다
+    assert not _angles_path(dog, session, without_result).exists()
+
+    _run(db, renderer, settings, analysis)
+    assert len(analysis.calls) == 3  # 다음 확인(30분 뒤)까지는 다시 보지 않는다
+    renderer.shutdown()
+
+
+def test_failures_that_cannot_change_are_given_up(db: Session, dog, staff, caplog) -> None:
+    session = _session(db, dog, staff)
+    broken = _ready_shot(db, dog, session, 1, "job-broken")
+    get_storage().write_bytes(broken.analysis_key, b'{"validity": "valid"}')  # 계약과 다른 분석 결과
+    settings = _settings()
+    analysis = KeypointClient()
+    renderer = _renderer(settings, analysis, FakeExecutor("hang"))
+    with caplog.at_level(logging.ERROR, logger="app.worker.render"):
+        _run(db, renderer, settings, analysis)
+    assert "giving up" in caplog.text and not _angles_path(dog, session, broken).exists()
+
+    gone = _ready_shot(db, dog, session, 2, "job-gone")
+    analysis.error = AnalysisClientError("gone", status_code=410)  # 분석 API에 작업이 없다
+    renderer._next_angles_check = 0.0
+    _run(db, renderer, settings, analysis)
+    assert analysis.calls == ["job-broken", "job-gone"]
+    assert renderer._angles_missing == {}
+
+    analysis.error = None
+    renderer._next_angles_check = 0.0  # 다음 확인에서도 그만둔 것은 다시 하지 않는다
+    _run(db, renderer, settings, analysis)
+    assert analysis.calls == ["job-broken", "job-gone"]
+    assert not _angles_path(dog, session, gone).exists()
+    renderer.shutdown()
+
+
+def test_an_unreachable_analysis_api_stops_the_round_and_keeps_the_shots(db: Session, dog, staff, caplog) -> None:
+    session = _session(db, dog, staff)
+    first = _ready_shot(db, dog, session, 1, "job-a", analyzed_sec=2)
+    second = _ready_shot(db, dog, session, 2, "job-b", analyzed_sec=1)
+    settings = _settings()
+    analysis = KeypointClient(error=AnalysisClientError("503", status_code=503))
+    renderer = _renderer(settings, analysis, FakeExecutor("hang"))
+    with caplog.at_level(logging.WARNING, logger="app.worker.render"):
+        _run(db, renderer, settings, analysis)
+    assert len(analysis.calls) == 1  # 답이 없으면 남은 촬영은 이번 차례에 부르지 않는다
+    assert set(renderer._angles_missing) == {first.id, second.id}
+    assert "retrying later" in caplog.text
+
+    analysis.error = None
+    renderer._next_angles_retry = 0.0
+    _run(db, renderer, settings, analysis)
+    assert renderer._angles_missing == {}
+    assert _angles_path(dog, session, first).exists() and _angles_path(dog, session, second).exists()
+    renderer.shutdown()
+
+
+def test_a_shot_that_changed_before_the_retry_is_dropped(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    reanalysed = _analyzed_shot(db, dog, session, 1, analyzed_sec=1)
+    deleted = _analyzed_shot(db, dog, session, 2, analyzed_sec=2)
+    settings = _settings(WORKER_RENDER_CONCURRENCY=2)
+    analysis = KeypointClient()
+    renderer = _renderer(settings, analysis, FakeExecutor("hang"), storage=FlakyAngles(2))
+    _run(db, renderer, settings, analysis)
+    assert set(renderer._angles_missing) == {reanalysed.id, deleted.id}
+
+    db.execute(update(Shot).where(Shot.id == reanalysed.id).values(job_id="job-2"))  # 다시 분석에 들어갔다
+    delete_shot(db, dog.institution_id, deleted.id, KeypointClient())
+    renderer._next_angles_retry = 0.0
+    _run(db, renderer, settings, analysis)
+    assert renderer._angles_missing == {} and len(analysis.calls) == 2  # 맡길 때 받은 두 번뿐이다
+    assert not _angles_path(dog, session, reanalysed).exists()
+    renderer.shutdown()
+
+
+def test_a_file_that_is_already_there_is_not_rebuilt(db: Session, dog, staff) -> None:
+    session = _session(db, dog, staff)
+    shot = _ready_shot(db, dog, session, 1, "job-1")
+    _write_angles(dog, session, shot, "job-1")
+    settings = _settings()
+    analysis = KeypointClient()
+    renderer = _renderer(settings, analysis, FakeExecutor("hang"))
+    renderer._angles_missing[shot.id] = "job-1"  # 저장소가 잠깐 안 읽혀 빠진 것으로 보였던 촬영
+    _run(db, renderer, settings, analysis)
+    assert analysis.calls == [] and renderer._angles_missing == {}
+    renderer.shutdown()
 
 
 def _stored(db: Session, dog, session, *, job_id: str | None = "job-1", doc: Any = None, **kwargs: Any) -> Shot:

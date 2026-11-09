@@ -20,6 +20,11 @@
 - 관절점을 못 받으면: 분석 API에 작업이 없거나(404·410) 요청을 거부하면 바로 FAILED, 연결 실패·5xx면 다음 바퀴에 다시.
 - 관절 각도 파일: 관절점 파일을 받은 김에 통과별 각도를 뽑아 촬영 키의 angles.json에 쓴다(12.4 관절 각도 파일,
   services/shot_angles.py). 주 반복에서 바로 하고(가벼운 일), 실패해도 결과 영상은 그대로 맡긴다.
+- 관절 각도 파일 다시 만들기(repair_angles, 271 리뷰 박규원): 결과 영상이 READY가 되면 그 촬영은 맡기기 대상에서
+  빠지므로, 각도 파일을 못 쓴 촬영은 따로 다시 만든다. ① 못 쓴 촬영을 메모리에 기억해 두고 ANGLES_RETRY_SEC마다
+  관절점 파일을 다시 받아 만든다. ② 워커를 켤 때와 ANGLES_CHECK_SEC마다, 최근 ANGLES_CHECK_WINDOW 안에 분석이 끝난
+  촬영 중 각도 파일이 없거나 앞 분석의 것인 촬영을 찾아 ①에 넣는다(워커가 재시작되어 기억이 사라진 경우).
+  분석 결과가 계약과 다르거나 분석 API에 작업이 없으면 다시 해도 같으므로 그만둔다.
 - 자식이 죽으면(BrokenProcessPool): 풀을 새로 만들고 그 풀에서 실행 중이던 작업은 모두 FAILED다(12.4).
 - 워커가 멈추면 풀을 닫고 작업 폴더를 지운다. 만들던 촬영은 PENDING 그대로라 다시 켜면 처음부터 다시 만든다(12.4).
 
@@ -40,7 +45,7 @@ from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import ExitStack
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +70,16 @@ DONE = ShotStatus.DONE.value
 PENDING = VideoStatus.PENDING.value
 READY = VideoStatus.READY.value
 FAILED = VideoStatus.FAILED.value
+
+# 관절 각도 파일 다시 만들기(12.4 관절 각도 파일)
+ANGLES_RETRY_SEC = 300  # 못 쓴 촬영을 다시 시도하는 간격
+ANGLES_CHECK_SEC = 1800  # 최근 촬영에 각도 파일이 있는지 보는 간격. 켤 때도 한 번 본다
+ANGLES_CHECK_WINDOW = timedelta(hours=48)  # 분석이 끝난 지 이보다 오래된 촬영은 보지 않는다
+ANGLES_CHECK_LIMIT = 200  # 한 번에 보는 촬영 수(최근 것부터)
+ANGLES_RETRY_BATCH = 10  # 한 번에 다시 만드는 촬영 수
+ANGLES_RETRY_MAX_SEC = 10.0  # 한 번에 쓰는 시간 상한. 주 반복과 같은 스레드라 오래 잡으면 상태 조회가 밀린다
+
+_STORED, _RETRY, _GAVE_UP, _API_DOWN = "stored", "retry", "gave_up", "api_down"
 
 RenderFn = Callable[..., RenderResult]
 
@@ -130,6 +145,11 @@ class VideoRenderer:
         self._render = render
         self._pool: Executor | None = None
         self.jobs: dict[uuid.UUID, RenderJob] = {}
+        # 각도 파일을 못 쓴 촬영 → 그때의 job_id. 메모리에만 둔다(다시 켜면 _find_missing_angles가 다시 찾는다)
+        self._angles_missing: dict[uuid.UUID, str | None] = {}
+        self._angles_given_up: set[tuple[uuid.UUID, str | None]] = set()
+        self._next_angles_retry = 0.0  # time.monotonic() 기준
+        self._next_angles_check = 0.0  # 0이면 켜자마자 한 번 본다
 
     # ---- 풀 ----
 
@@ -156,9 +176,14 @@ class VideoRenderer:
     # ---- 한 바퀴 ----
 
     def run(self, db: Session, stats: Any) -> None:
-        """끝난 작업을 거두고 빈 자리만큼 새로 맡긴다. 기다리지 않는다."""
+        """끝난 작업을 거두고 빈 자리만큼 새로 맡긴다. 기다리지 않는다. 빠진 관절 각도 파일도 여기서 다시 만든다."""
         self.reap(db, stats)
         self.dispatch(db, stats)
+        try:
+            self.repair_angles(db)
+        except Exception as error:  # 각도 파일은 덤이다. 여기서 실패해도 주 반복의 나머지는 돈다
+            db.rollback()
+            logger.error("angles repair failed; continuing: %s", describe_error(error))
 
     def reap(self, db: Session, stats: Any) -> None:
         for shot_id, job in list(self.jobs.items()):
@@ -243,34 +268,167 @@ class VideoRenderer:
                 )
             return None
 
-    def _store_angles(self, db: Session, candidate: _Candidate, keypoints: dict[str, Any]) -> None:
+    def _store_angles(self, db: Session, candidate: _Candidate, fetch: Callable[[], dict[str, Any]]) -> str:
         """통과별 관절 각도를 angles.json에 써 둔다(12.4 관절 각도 파일). 실패해도 결과 영상은 만든다.
 
-        쓴 뒤 촬영이 그대로인지(DONE이고 job_id가 같음) 다시 보고, 아니면 방금 쓴 파일을 지운다.
+        fetch는 관절점 파일을 주는 함수다(맡길 때는 이미 받은 것, 다시 만들 때는 분석 API 호출). 분석 결과를 먼저
+        읽으므로 그것을 못 읽으면 분석 API를 부르지 않는다. 쓴 뒤 촬영이 그대로인지(DONE이고 job_id가 같음) 다시 보고,
+        아니면 방금 쓴 파일을 지운다. 저장소·분석 API가 잠깐 안 된 것이면 기억해 두어 repair_angles가 다시 만들고,
+        다시 해도 같은 실패면 그만둔다.
         """
         shot_id = candidate.shot_id
         if not candidate.analysis_key or not candidate.angles_key:
-            return
+            return _GAVE_UP  # 분석 결과 파일이 없는 촬영이다. 만들 재료가 없다
         try:
             result = json.loads(self.storage.read_bytes(candidate.analysis_key))
-            doc = build_angles(result, keypoints, shot_id=shot_id, job_id=candidate.job_id)
+            doc = build_angles(result, fetch(), shot_id=shot_id, job_id=candidate.job_id)
             self.storage.write_bytes(candidate.angles_key, dump_angles(doc))
-        except (StorageError, OSError, ValueError, ResultFormatError) as error:
-            # 분석 결과를 읽을 수 없거나 저장소에 쓰지 못했다. 경로가 섞일 수 있어 종류만 남긴다(11.8)
-            logger.error("angles store failed shot=%s: %s", shot_id, describe_error(error))
-            return
+        except AnalysisClientError as error:
+            if error.job_gone or not error.retryable:
+                logger.error("angles impossible shot=%s job=%s; giving up: %s", shot_id, candidate.job_id, error)
+                return self._give_up_angles(candidate)
+            logger.warning(
+                "angles keypoints fetch failed shot=%s job=%s; retrying later: %s", shot_id, candidate.job_id, error
+            )
+            self._remember_missing_angles(candidate)
+            return _API_DOWN
+        except (StorageError, OSError) as error:
+            # 저장소를 읽거나 쓰지 못했다. 잠깐일 수 있다. 경로가 섞일 수 있어 종류만 남긴다(11.8)
+            logger.error("angles store failed shot=%s; retrying later: %s", shot_id, describe_error(error))
+            self._remember_missing_angles(candidate)
+            return _RETRY
+        except (ValueError, ResultFormatError) as error:
+            # 분석 결과가 깨졌거나 계약과 다르다. 다시 해도 같다
+            logger.error("angles store failed shot=%s; giving up: %s", shot_id, describe_error(error))
+            return self._give_up_angles(candidate)
+        self._angles_missing.pop(shot_id, None)
         unchanged = db.scalar(
             select(Shot.id).where(Shot.id == shot_id, Shot.status == DONE, Shot.job_id == candidate.job_id)
         )
         if unchanged is None:
             self._discard(candidate.angles_key, shot_id)
             logger.warning("shot %s changed before its angles were stored; angles.json discarded", shot_id)
+        return _STORED
+
+    # ---- 관절 각도 파일 다시 만들기 ----
+
+    def _remember_missing_angles(self, candidate: _Candidate) -> None:
+        if not self._angles_missing:
+            self._next_angles_retry = time.monotonic() + ANGLES_RETRY_SEC
+        self._angles_missing[candidate.shot_id] = candidate.job_id
+
+    def _give_up_angles(self, candidate: _Candidate) -> str:
+        self._angles_missing.pop(candidate.shot_id, None)
+        self._angles_given_up.add((candidate.shot_id, candidate.job_id))
+        return _GAVE_UP
+
+    def _angles_candidates(
+        self, db: Session, *, shot_id: uuid.UUID | None = None, job_id: str | None = None
+    ) -> list[_Candidate]:
+        """각도 파일을 다시 만들 수 있는 촬영: DONE이고 분석 결과 파일이 있으며 분석이 끝난 지 오래되지 않았다.
+
+        shot_id를 주면 그 촬영 하나(job_id가 그대로일 때만. 결과 영상이 아직 PENDING이어도 된다), 아니면 결과 영상이
+        끝난(PENDING이 아닌) 최근 촬영들이다. PENDING은 맡길 때 각도 파일을 쓰므로 찾지 않는다.
+        """
+        query = (
+            select(
+                Shot.id,
+                Shot.job_id,
+                Shot.original_key,
+                Shot.analysis_key,
+                MeasureSession.id,
+                Dog.id,
+                Dog.institution_id,
+            )
+            .join(MeasureSession, Shot.session_id == MeasureSession.id)
+            .join(Dog, MeasureSession.dog_id == Dog.id)
+            .where(
+                Shot.status == DONE,
+                Shot.job_id.is_not(None),
+                Shot.analysis_key.is_not(None),
+                Shot.analyzed_at >= _now() - ANGLES_CHECK_WINDOW,
+            )
+        )
+        if shot_id is not None:
+            query = query.where(Shot.id == shot_id, Shot.job_id == job_id)
+        else:
+            query = (
+                query.where(Shot.video_status != PENDING)
+                .order_by(Shot.analyzed_at.desc(), Shot.id)
+                .limit(ANGLES_CHECK_LIMIT)
+            )
+        return [
+            _Candidate(
+                found_id,
+                found_job,
+                original_key,
+                result_key(institution_id, dog_id, session_id, found_id),
+                analysis_key,
+                angles_key(institution_id, dog_id, session_id, found_id),
+            )
+            for found_id, found_job, original_key, analysis_key, session_id, dog_id, institution_id in db.execute(
+                query
+            ).all()
+        ]
+
+    def _angles_present(self, candidate: _Candidate) -> bool:
+        """이 분석의 각도 파일이 있다. 못 읽거나 앞 분석의 파일이면 없는 것으로 본다(API가 빈 배열을 주는 경우)."""
+        try:
+            doc = json.loads(self.storage.read_bytes(candidate.angles_key or ""))
+        except (StorageError, OSError, ValueError):
+            return False
+        return isinstance(doc, dict) and doc.get("job_id") == candidate.job_id
+
+    def _find_missing_angles(self, db: Session, deadline: float) -> int:
+        """최근 촬영 중 각도 파일이 빠진 것을 기억 목록에 넣고 그 수를 돌려준다. 워커를 다시 켠 뒤의 복구 길이다."""
+        found = 0
+        for candidate in self._angles_candidates(db):
+            if time.monotonic() >= deadline:
+                break
+            key = (candidate.shot_id, candidate.job_id)
+            if candidate.shot_id in self._angles_missing or key in self._angles_given_up:
+                continue
+            if not self._angles_present(candidate):
+                self._angles_missing[candidate.shot_id] = candidate.job_id
+                found += 1
+        if found:
+            logger.info("angles check: %d shot(s) have no angles file; rebuilding", found)
+        return found
+
+    def _retry_angles(self, db: Session, shot_id: uuid.UUID) -> bool:
+        """기억해 둔 촬영 하나의 각도 파일을 다시 만든다. 분석 API가 답하지 않으면 False다(이번 차례를 멈춘다)."""
+        job_id = self._angles_missing.pop(shot_id)
+        found = self._angles_candidates(db, shot_id=shot_id, job_id=job_id)
+        if not found:
+            return True  # 지워졌거나, 다시 분석에 들어갔거나, 너무 오래됐다. 더 볼 것이 없다
+        candidate = found[0]
+        if self._angles_present(candidate):
+            return True  # 그사이 생겼다(저장소가 잠깐 안 읽혀 빠진 것으로 보였던 경우)
+        outcome = self._store_angles(db, candidate, lambda: self.client.get_keypoints(candidate.job_id or ""))
+        if outcome == _STORED:
+            logger.info("angles rebuilt shot=%s", shot_id)
+        return outcome != _API_DOWN
+
+    def repair_angles(self, db: Session) -> None:
+        """빠진 관절 각도 파일을 다시 만든다(12.4 관절 각도 파일). 할 일이 없으면 시각만 보고 돌아온다."""
+        now = time.monotonic()
+        deadline = now + ANGLES_RETRY_MAX_SEC
+        if now >= self._next_angles_check:
+            self._next_angles_check = now + ANGLES_CHECK_SEC
+            if self._find_missing_angles(db, deadline):
+                self._next_angles_retry = 0.0  # 찾은 것은 기다리지 않고 만든다
+        if not self._angles_missing or now < self._next_angles_retry:
+            return
+        self._next_angles_retry = now + ANGLES_RETRY_SEC
+        for shot_id in list(self._angles_missing)[:ANGLES_RETRY_BATCH]:
+            if time.monotonic() >= deadline or not self._retry_angles(db, shot_id):
+                break
 
     def _start(self, db: Session, candidate: _Candidate, stats: Any) -> None:
         keypoints = self._fetch_keypoints(db, candidate, stats)
         if keypoints is None:
             return
-        self._store_angles(db, candidate, keypoints)
+        self._store_angles(db, candidate, lambda: keypoints)
         shot_id = candidate.shot_id
         job_dir = self.tmp_root / str(shot_id)
         stack = ExitStack()

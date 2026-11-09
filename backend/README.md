@@ -36,7 +36,7 @@
 | 차트 자료(v1.36, BE-28~30): 반려견의 동물번호·보호자·단계, 바이탈(하루 한 줄, 잰 값만 적고 가장 최근 체중은 반려견 체중이 된다 v1.41, 회차 시작의 `vital`), 진단 이력(진단·수술·재활, 단계 변경, 수정·삭제 v1.41), 메모·진료 기록(지우지 않고 고치면 수정 이력) (12.5 차트 자료, 13.9, 15.11) | `app/api/routes/chart.py`, `app/services/vitals.py`·`dog_history.py`·`notes.py`, `app/schemas/chart.py` |
 | 대칭 점수(v1.38, BE-31): 회차의 좌우 균형을 0~100의 점수 하나로(100 − 평균 대칭 지수). 회차 결과·측정 이력·기관 회차 목록·반려견의 `last_symmetry`에 싣는다 (12.3) | `app/services/symmetry.py` |
 | 홈 배지·변동(v1.38, BE-32): 반려견 목록·상세의 `badges`·`changes`·`last_symmetry`, `GET /dogs?changed_within_days=`로 변동이 있는 반려견만 (12.5 홈 배지·변동, 15.5) | `app/services/dog_home.py` |
-| 통과별 관절 각도 `GET /shots/{id}/angles`(v1.39, BE-14): 워커가 결과 영상을 맡길 때 관절점 파일에서 통과별 각도를 뽑아 `angles.json`에 써 두고 API가 읽는다 (12.4 관절 각도 파일, 15.6) | `app/services/shot_angles.py`, `app/worker/render.py` |
+| 통과별 관절 각도 `GET /shots/{id}/angles`(v1.39, BE-14): 워커가 결과 영상을 맡길 때 관절점 파일에서 통과별 각도를 뽑아 `angles.json`에 써 두고 API가 읽는다. 못 쓴 촬영은 워커가 5분마다, 켤 때와 30분마다는 최근 촬영을 훑어 다시 만든다(v1.42) (12.4 관절 각도 파일, 15.6) | `app/services/shot_angles.py`, `app/worker/render.py` |
 | 기관 회차 목록 `GET /sessions`(v1.39, BE-33): 최신순, 담당자·상태로 거르기 (15.6) | `app/services/sessions.py` |
 | 반려견 사진(v1.40, BE-34): 올리기·목록·열기(서명 URL)·지우기. 사람 얼굴을 가린 사진만 저장하고 원본은 두지 않는다(XRAY는 가리지 않음) (12.5 사진, 13.9, 15.11) | `app/api/routes/images.py`, `app/services/dog_images.py`, `app/video/photo.py` |
 | 오류 형식·오류 코드·422 변환 (11.5, 14절) | `app/core/errors.py` |
