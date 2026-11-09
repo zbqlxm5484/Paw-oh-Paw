@@ -101,6 +101,58 @@ def test_diagnosis_is_the_badge_only_without_a_surgery(client, db: Session, dog,
     ]
 
 
+def test_last_surgery_and_last_diagnosis_come_together(client, db: Session, dog, staff, auth_headers) -> None:
+    """배지는 수술 하나만 주지만 last_surgery·last_diagnosis는 둘 다 준다(v1.41)."""
+    assert (_one(client, auth_headers, dog)["last_surgery"], _one(client, auth_headers, dog)["last_diagnosis"]) == (
+        None,
+        None,
+    )
+    _history(db, dog, staff, "DIAGNOSIS", "슬개골 탈구", _ago(120), site=None)
+    _history(db, dog, staff, "DIAGNOSIS", "앞십자인대 파열", _ago(100))
+    _history(db, dog, staff, "SURGERY", "TPLO", _ago(90), site="LH")
+    _history(db, dog, staff, "REHAB", "재활 시작", _ago(60))
+
+    item = _one(client, auth_headers, dog)
+    assert item["last_surgery"] == {"occurred_on": _ago(90).isoformat(), "title": "TPLO", "site": "LH"}
+    assert item["last_diagnosis"] == {"occurred_on": _ago(100).isoformat(), "title": "앞십자인대 파열", "site": "RH"}
+    assert [badge["code"] for badge in item["badges"]] == ["SURGERY"]  # 배지 규칙은 그대로다
+    detail = client.get(f"{DOGS}/{dog.id}", headers=auth_headers).json()
+    assert (detail["last_surgery"], detail["last_diagnosis"]) == (item["last_surgery"], item["last_diagnosis"])
+
+
+def test_search_finds_dogs_by_history_title(client, db: Session, dog, staff, other_staff, auth_headers) -> None:
+    """q는 병명·수술명으로도 찾는다(15.5, v1.41). 다른 기관의 이력으로는 찾지 않는다."""
+    from decimal import Decimal
+
+    from app.models import Dog
+
+    _history(db, dog, staff, "SURGERY", "TPLO (경골 고원 수평화 절골술)", _ago(90))
+    _history(db, dog, staff, "DIAGNOSIS", "앞십자인대 파열", _ago(100))
+    plain = Dog(
+        institution_id=staff.institution_id, name="두부", breed="말티즈", weight_kg=Decimal("3.2"), size_class="SMALL"
+    )
+    foreign = Dog(
+        institution_id=other_staff.institution_id,
+        name="콩이",
+        breed="말티즈",
+        weight_kg=Decimal("3.2"),
+        size_class="SMALL",
+    )
+    db.add_all([plain, foreign])
+    db.flush()
+    _history(db, foreign, other_staff, "SURGERY", "TPLO", _ago(10))
+
+    def names(q: str) -> list[str]:
+        body = client.get(DOGS, params={"q": q}, headers=auth_headers).json()
+        assert body["total"] == len(body["items"])
+        return [item["name"] for item in body["items"]]
+
+    assert names("tplo") == ["보리"]  # 대소문자 무시, 한 반려견은 한 번만
+    assert names("인대") == ["보리"]
+    assert names("두부") == ["두부"]  # 이름 검색은 그대로
+    assert names("100%") == []  # %는 글자 그대로 찾는다
+
+
 def test_important_note_badge_has_the_date_but_never_the_body(client, db: Session, dog, staff, auth_headers) -> None:
     _note(db, dog, staff, _ago(200))
     _note(db, dog, staff, _ago(30), category="A")
@@ -331,6 +383,7 @@ def test_trash_list_has_no_badges_and_ignores_the_filter(client, db: Session, do
     for params in ({"trash": "true"}, {"trash": "true", "changed_within_days": 7}):
         (item,) = _items(client, auth_headers, **params)
         assert (item["badges"], item["changes"], item["last_symmetry"]) == ([], [], None)
+        assert (item["last_surgery"], item["last_diagnosis"]) == (None, None)
 
 
 def test_detail_carries_the_same_values_as_the_list(client, db: Session, dog, staff, auth_headers) -> None:

@@ -10,14 +10,14 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
-from app.models import Dog, DogVital, MeasureSession
+from app.models import Dog, DogHistory, DogVital, MeasureSession
 from app.models.enums import SessionStatus
 from app.schemas.chart import VitalOut
 from app.schemas.dogs import DogCreate, DogOut, DogUpdate
@@ -105,6 +105,8 @@ def to_dog_out(
             "badges": home.badges,
             "changes": home.changes,
             "last_symmetry": home.last_symmetry,
+            "last_surgery": home.last_surgery,
+            "last_diagnosis": home.last_diagnosis,
             "owner_phone": None if in_list else dog.owner_phone,
             "owner_phone_last4": phone_last4(dog.owner_phone),
             "latest_vital": latest_vital,
@@ -173,7 +175,8 @@ def list_dogs(
     trash: bool = False,
     changed_within_days: int | None = None,
 ) -> tuple[list[DogOut], int]:
-    """목록·검색(15.5). q는 이름·동물번호·보호자 이름 중 하나에 포함되면 찾고(대소문자 무시) %·_는 이스케이프한다.
+    """목록·검색(15.5). q는 이름·동물번호·보호자 이름·진단 이력의 이름(병명·수술명) 중 하나에 포함되면 찾고
+    (대소문자 무시) %·_는 이스케이프한다.
 
     연락처로는 찾지 않는다. trash면 휴지통 목록. 항목의 보호자 연락처는 뒤 4자리만 준다.
 
@@ -196,6 +199,7 @@ def list_dogs(
             Dog.name.icontains(q, autoescape=True),
             Dog.chart_no.icontains(q, autoescape=True),
             Dog.owner_name.icontains(q, autoescape=True),
+            exists().where(DogHistory.dog_id == Dog.id, DogHistory.title.icontains(q, autoescape=True)),
         )
         query = query.where(matches)
         count_query = count_query.where(matches)

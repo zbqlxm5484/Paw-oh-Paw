@@ -62,7 +62,7 @@ def start_session(
 
     회차 체급(12.5): 담당자가 반려견 체급을 직접 지정했으면 그 값, 아니면 그날 체중(없으면 등록 체중)으로 정한다.
     vital을 보내면 그날 바이탈로 저장하고 이 회차와 묶는다(15.6). weight_kg가 없으면 vital의 체중이 회차 체중이고,
-    둘이 다르면 422다.
+    둘이 다르면 422다. vital의 체중은 바이탈 규칙대로 반려견의 등록 체중에도 반영된다(12.5, v1.41).
     """
     weight = data.weight_kg
     if data.vital is not None:
@@ -93,7 +93,12 @@ def start_session(
     db.flush()
     if data.vital is not None:  # 반려견 행을 잠근 채라 같은 날 두 줄이 생기지 않는다
         save_vital(
-            db, dog=dog, measured_on=session.measured_on, data=data.vital, staff_id=staff_id, session_id=session.id
+            db,
+            dog=dog,
+            measured_on=session.measured_on,
+            values=data.vital.model_dump(),
+            staff_id=staff_id,
+            session_id=session.id,
         )
     db.refresh(session)
     return session

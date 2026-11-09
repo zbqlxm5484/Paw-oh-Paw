@@ -33,7 +33,7 @@
 | 보고서 워커(12.4): 회차 DONE 때 생긴 OWNER·VET 행을 PENDING → GENERATING → DONE(PDF 저장소)·FAILED(`REPORT_CHECK_FAILED`·`REPORT_FAILED`). 보고서 풀 1개(결과 영상 풀과 별도), 다시 켜면 GENERATING → PENDING, 거두는 중 DB 오류는 다음 바퀴에 다시 거둠 | `app/worker/report.py`, `app/services/report_input.py`(입력 dict) |
 | 보고서 API: 판본별 상태, 다시 만들기(GENERATING이면 409), PDF 미리보기·내려받기(서명 URL, 한글 파일 이름) (15.7의 19~21) | `app/api/routes/reports.py`, `app/services/reports.py`, `app/schemas/reports.py` |
 | 측정 이력 `GET /dogs/{id}/sessions`(측정일 내림차순, 12.5 기준 회차 표시, 좌우 유효 통과 수, 판본별 보고서 상태), 회차 비교 `GET /dogs/{id}/compare`(기준·직전·지정 회차 대비, 보행 유형·다리별 합집합, `report/judge.py` 판정 + `usable_tolerance` 통과 8회 조건, 비교 불가는 400 `COMPARE_INVALID`와 `detail.reason`), 수치 추이 `GET /dogs/{id}/trends`(DONE 회차 순서, 관심 다리 먼저, 좌우 차이 추이) (5절, 12.5, 15.8) | `app/api/routes/history.py`, `app/services/history.py`·`compare.py`·`trends.py`, `app/schemas/history.py` |
-| 차트 자료(v1.36, BE-28~30): 반려견의 동물번호·보호자·단계, 바이탈(하루 한 줄, 회차 시작의 `vital`), 진단 이력(진단·수술·재활, 단계 변경), 메모·진료 기록(지우지 않고 고치면 수정 이력) (12.5 차트 자료, 13.9, 15.11) | `app/api/routes/chart.py`, `app/services/vitals.py`·`dog_history.py`·`notes.py`, `app/schemas/chart.py` |
+| 차트 자료(v1.36, BE-28~30): 반려견의 동물번호·보호자·단계, 바이탈(하루 한 줄, 잰 값만 적고 가장 최근 체중은 반려견 체중이 된다 v1.41, 회차 시작의 `vital`), 진단 이력(진단·수술·재활, 단계 변경, 수정·삭제 v1.41), 메모·진료 기록(지우지 않고 고치면 수정 이력) (12.5 차트 자료, 13.9, 15.11) | `app/api/routes/chart.py`, `app/services/vitals.py`·`dog_history.py`·`notes.py`, `app/schemas/chart.py` |
 | 대칭 점수(v1.38, BE-31): 회차의 좌우 균형을 0~100의 점수 하나로(100 − 평균 대칭 지수). 회차 결과·측정 이력·기관 회차 목록·반려견의 `last_symmetry`에 싣는다 (12.3) | `app/services/symmetry.py` |
 | 홈 배지·변동(v1.38, BE-32): 반려견 목록·상세의 `badges`·`changes`·`last_symmetry`, `GET /dogs?changed_within_days=`로 변동이 있는 반려견만 (12.5 홈 배지·변동, 15.5) | `app/services/dog_home.py` |
 | 통과별 관절 각도 `GET /shots/{id}/angles`(v1.39, BE-14): 워커가 결과 영상을 맡길 때 관절점 파일에서 통과별 각도를 뽑아 `angles.json`에 써 두고 API가 읽는다 (12.4 관절 각도 파일, 15.6) | `app/services/shot_angles.py`, `app/worker/render.py` |
@@ -44,7 +44,7 @@
 | 앱 생성, CORS, 요청 ID·요청 로그 (11.8, 16절) | `app/main.py` |
 | `GET /api/v1/health` (15.9) | `app/api/routes/health.py` |
 | 테이블 10개 모델 (12.2) | `app/models/` |
-| 마이그레이션 (0001 테이블 9개, 0002 회차 체급, 0003 회원가입·역할·계약: 디바이스 코드 테이블, 계약 종료일, 역할 셋, 아이디 전역 유일. 그 뒤 0004 파기 기록, 0013 휴지통, 0010 약관 동의, 0012 디바이스 코드, 0014 탈퇴·알림, 0015 반려견 차트 칸, 0016 바이탈, 0017 진단 이력, 0018 메모·진료 기록, 0019 반려견 사진 순서) | `alembic/versions/` |
+| 마이그레이션 (0001 테이블 9개, 0002 회차 체급, 0003 회원가입·역할·계약: 디바이스 코드 테이블, 계약 종료일, 역할 셋, 아이디 전역 유일. 그 뒤 0004 파기 기록, 0013 휴지통, 0010 약관 동의, 0012 디바이스 코드, 0014 탈퇴·알림, 0015 반려견 차트 칸, 0016 바이탈, 0017 진단 이력, 0018 메모·진료 기록, 0019 반려견 사진, 0020 바이탈 부분 입력 순서) | `alembic/versions/` |
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 테스트 | `tests/` |
 

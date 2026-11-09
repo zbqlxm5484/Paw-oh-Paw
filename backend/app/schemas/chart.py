@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, StringConstraints, ValidationInfo, field_validator, model_validator
 
 from app.core.dates import today_local
 from app.models.enums import DogStage, HistoryKind, HistorySite, NoteCategory
@@ -24,7 +24,7 @@ NoteBody = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1,
 
 
 class VitalIn(BaseModel):
-    """바이탈 하루치. 다섯 값 모두 필수다(13.9). PUT /dogs/{dog_id}/vitals/{measured_on}과 회차 시작의 vital이 쓴다."""
+    """바이탈 하루치. 다섯 값 모두 필수다(13.9). 회차 시작의 vital이 쓴다. 따로 적는 PUT은 VitalPut이다."""
 
     weight_kg: Weight
     temp_c: TempC
@@ -42,16 +42,36 @@ class VitalIn(BaseModel):
         return value
 
 
+class VitalPut(BaseModel):
+    """PUT /dogs/{dog_id}/vitals/{measured_on} 요청(13.9, v1.41). 보낸 값만 바꾸고 보내지 않은 값은 그대로 둔다.
+
+    null을 보내면 그 값을 비운다. 하나도 보내지 않으면 422다. 그날 줄에 값이 하나는 남아야 하고 혈압은 둘이 함께
+    있어야 한다는 규칙은 저장된 값과 합친 뒤에 서비스가 본다(services/vitals.py).
+    """
+
+    weight_kg: Weight | None = None
+    temp_c: TempC | None = None
+    heart_rate: int | None = Field(default=None, ge=20, le=300)
+    sbp: int | None = Field(default=None, ge=30, le=300)
+    dbp: int | None = Field(default=None, ge=10, le=250)
+
+    @model_validator(mode="after")
+    def something_sent(self) -> VitalPut:
+        if not self.model_fields_set:
+            raise ValueError("값을 하나 이상 보내야 합니다")
+        return self
+
+
 class VitalOut(OutModel):
-    """바이탈 하루치(15.3). staff는 마지막으로 저장한 담당자다."""
+    """바이탈 하루치(15.3). 재지 않은 값은 null이다(v1.41). staff는 마지막으로 저장한 담당자다."""
 
     id: uuid.UUID
     measured_on: date
-    weight_kg: float
-    temp_c: float
-    heart_rate: int
-    sbp: int
-    dbp: int
+    weight_kg: float | None
+    temp_c: float | None
+    heart_rate: int | None
+    sbp: int | None
+    dbp: int | None
     staff: StaffBriefOut
     session_id: uuid.UUID | None
     created_at: UtcDateTime
@@ -80,6 +100,41 @@ class DogHistoryCreate(BaseModel):
         if value > today_local():
             raise ValueError("오늘 이전 날짜여야 합니다")
         return value
+
+
+class DogHistoryUpdate(BaseModel):
+    """PATCH /dogs/{dog_id}/history/{history_id} 요청(13.9, v1.41). 보낸 것만 바꾼다.
+
+    occurred_on·kind·title은 비울 수 없고 site·clinician은 null로 비운다. 하나도 보내지 않으면 422다.
+    단계(stage)는 여기서 바꾸지 않는다(반려견 수정이나 이력 추가로 바꾼다).
+    """
+
+    occurred_on: date | None = None
+    kind: HistoryKind | None = None
+    title: Text100 | None = None
+    site: HistorySite | None = None
+    clinician: Text50 | None = None
+
+    @field_validator("occurred_on", "kind", "title", mode="before")
+    @classmethod
+    def cannot_be_null(cls, value: object) -> object:
+        # 보내지 않은 필드에는 검증기가 돌지 않으므로, 여기 None은 "null을 보낸 것"이다
+        if value is None:
+            raise ValueError("비울 수 없습니다")
+        return value
+
+    @field_validator("occurred_on")
+    @classmethod
+    def not_future(cls, value: date) -> date:
+        if value > today_local():
+            raise ValueError("오늘 이전 날짜여야 합니다")
+        return value
+
+    @model_validator(mode="after")
+    def something_sent(self) -> DogHistoryUpdate:
+        if not self.model_fields_set:
+            raise ValueError("바꿀 값을 하나 이상 보내야 합니다")
+        return self
 
 
 class DogHistoryOut(OutModel):

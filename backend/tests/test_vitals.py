@@ -1,4 +1,4 @@
-"""바이탈(12.5 차트 자료, 13.9, 15.6 회차 시작의 vital, 15.11, 17.2 BE-28, v1.36)."""
+"""바이탈(12.5 차트 자료, 13.9, 15.6 회차 시작의 vital, 15.11, 17.2 BE-28, v1.36. 부분 입력·체중 반영은 v1.41)."""
 
 import uuid
 from datetime import date, timedelta
@@ -100,7 +100,6 @@ def test_list_is_empty_without_vitals(client: TestClient, dog, auth_headers: dic
         ({"dbp": 9}, "dbp"),
         ({"sbp": 120, "dbp": 120}, "dbp"),  # 이완기는 수축기보다 작아야 한다
         ({"sbp": 100, "dbp": 130}, "dbp"),
-        ({"temp_c": None}, "temp_c"),  # 다섯 값 모두 필수
     ],
 )
 def test_input_rules(client: TestClient, dog, auth_headers: dict, overrides: dict, field: str) -> None:
@@ -109,10 +108,113 @@ def test_input_rules(client: TestClient, dog, auth_headers: dict, overrides: dic
     assert _fields(response) == [field]
 
 
-def test_every_value_is_required(client: TestClient, dog, auth_headers: dict) -> None:
-    response = client.put(f"{DOGS}/{dog.id}/vitals/{DAY}", json={"weight_kg": 28.1}, headers=auth_headers)
-    assert response.status_code == 422
-    assert set(_fields(response)) == {"temp_c", "heart_rate", "sbp", "dbp"}
+# ---- 부분 입력(v1.41) ----
+
+
+def _send(client: TestClient, dog, headers: dict, body: dict, day: str = DAY):
+    return client.put(f"{DOGS}/{dog.id}/vitals/{day}", json=body, headers=headers)
+
+
+def test_one_value_is_enough(client: TestClient, dog, auth_headers: dict) -> None:
+    response = _send(client, dog, auth_headers, {"temp_c": 38.6})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["temp_c"] == 38.6
+    assert [body[key] for key in ("weight_kg", "heart_rate", "sbp", "dbp")] == [None] * 4
+
+
+def test_put_changes_only_what_was_sent(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    first = _send(client, dog, auth_headers, {"weight_kg": 28.1}).json()
+    second = _send(client, dog, auth_headers, {"temp_c": 39.1, "heart_rate": 110}).json()
+    assert second["id"] == first["id"] and _count(db, dog) == 1
+    assert (second["weight_kg"], second["temp_c"], second["heart_rate"]) == (28.1, 39.1, 110)  # 체중은 그대로
+
+
+def test_null_clears_a_value_but_one_must_remain(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    _put(client, dog, auth_headers)
+    cleared = _send(client, dog, auth_headers, {"heart_rate": None})
+    assert cleared.status_code == 200 and cleared.json()["heart_rate"] is None
+    assert cleared.json()["temp_c"] == 38.6
+
+    everything = _send(client, dog, auth_headers, {"weight_kg": None, "temp_c": None, "sbp": None, "dbp": None})
+    assert everything.status_code == 422 and _fields(everything) == ["body"]
+    (kept,) = _list(client, dog, auth_headers)
+    assert kept["weight_kg"] == 28.1 and kept["sbp"] == 132  # 422면 아무것도 바뀌지 않는다
+
+
+def test_nothing_sent_or_only_nulls_on_a_new_day_is_422(client: TestClient, db: Session, dog, auth_headers) -> None:
+    for body in ({}, {"temp_c": None}):
+        response = _send(client, dog, auth_headers, body)
+        assert response.status_code == 422 and _fields(response) == ["body"]
+    assert _count(db, dog) == 0
+
+
+def test_blood_pressure_comes_as_a_pair(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    only_sbp = _send(client, dog, auth_headers, {"sbp": 120})
+    assert only_sbp.status_code == 422 and _fields(only_sbp) == ["dbp"]
+    only_dbp = _send(client, dog, auth_headers, {"dbp": 80})
+    assert only_dbp.status_code == 422 and _fields(only_dbp) == ["sbp"]
+    assert _count(db, dog) == 0
+
+    assert _send(client, dog, auth_headers, {"sbp": 120, "dbp": 80}).status_code == 200
+    half = _send(client, dog, auth_headers, {"sbp": None})  # 저장된 이완기만 남게 된다
+    assert half.status_code == 422 and _fields(half) == ["sbp"]
+    assert _send(client, dog, auth_headers, {"temp_c": 38.6, "sbp": None, "dbp": None}).json()["sbp"] is None
+
+
+def test_blood_pressure_order_is_checked_against_the_stored_value(client: TestClient, dog, auth_headers) -> None:
+    _put(client, dog, auth_headers)  # 132 / 84
+    response = _send(client, dog, auth_headers, {"sbp": 80})
+    assert response.status_code == 422 and _fields(response) == ["dbp"]
+    assert _send(client, dog, auth_headers, {"dbp": 131}).status_code == 200
+
+
+# ---- 체중 반영(12.5, v1.41) ----
+
+
+def _dog(client: TestClient, dog, headers: dict) -> dict:
+    return client.get(f"{DOGS}/{dog.id}", headers=headers).json()
+
+
+def test_latest_weight_becomes_the_dog_weight_and_reclassifies(client: TestClient, dog, auth_headers: dict) -> None:
+    before = _dog(client, dog, auth_headers)
+    assert (before["weight_kg"], before["size_class"]) == (28.4, "LARGE")
+
+    assert _send(client, dog, auth_headers, {"weight_kg": 3.2}).status_code == 200
+    after = _dog(client, dog, auth_headers)
+    assert (after["weight_kg"], after["size_class"]) == (3.2, "SMALL")
+    assert after["version"] == before["version"] + 1  # 반려견 수정 화면은 다시 읽어야 한다
+
+
+def test_older_weight_or_no_weight_leaves_the_dog_alone(client: TestClient, dog, auth_headers: dict) -> None:
+    _send(client, dog, auth_headers, {"weight_kg": 27.0}, day="2026-10-20")
+    before = _dog(client, dog, auth_headers)
+    assert before["weight_kg"] == 27.0
+
+    _send(client, dog, auth_headers, {"weight_kg": 25.0}, day="2026-10-01")  # 지난 날짜를 뒤늦게 적음
+    _send(client, dog, auth_headers, {"temp_c": 38.6}, day="2026-10-25")  # 체중 없이
+    _send(client, dog, auth_headers, {"weight_kg": 27.0}, day="2026-10-20")  # 같은 값
+    _send(client, dog, auth_headers, {"weight_kg": None, "temp_c": 38.6}, day="2026-10-20")  # 체중을 비움
+    after = _dog(client, dog, auth_headers)
+    assert after["weight_kg"] == 27.0 and after["version"] == before["version"]
+
+    # 뒤에 체중 없는 줄만 있으면 그날이 여전히 가장 최근 체중이다
+    _send(client, dog, auth_headers, {"weight_kg": 26.5}, day="2026-10-22")
+    assert _dog(client, dog, auth_headers)["weight_kg"] == 26.5
+
+
+def test_manual_size_class_survives_a_new_weight(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    dog.size_class_manual = True
+    db.flush()
+    _send(client, dog, auth_headers, {"weight_kg": 3.2})
+    after = _dog(client, dog, auth_headers)
+    assert (after["weight_kg"], after["size_class"], after["size_class_manual"]) == (3.2, "LARGE", True)
+
+
+def test_rejected_vital_does_not_touch_the_dog(client: TestClient, dog, auth_headers: dict) -> None:
+    before = _dog(client, dog, auth_headers)
+    assert _send(client, dog, auth_headers, {"weight_kg": 3.2, "sbp": 120}).status_code == 422
+    assert _dog(client, dog, auth_headers) == before
 
 
 def test_boundary_values_are_accepted(client: TestClient, dog, auth_headers: dict) -> None:
@@ -213,6 +315,7 @@ def test_session_start_saves_the_vital_and_links_the_session(
     assert response.status_code == 201
     session = response.json()
     assert session["weight_kg"] == 28.1  # weight_kg를 빼면 vital의 체중이 회차 체중이다
+    assert client.get(f"{DOGS}/{dog.id}", headers=auth_headers).json()["weight_kg"] == 28.1  # 등록 체중에도 반영(v1.41)
 
     (vital,) = _list(client, dog, auth_headers)
     assert vital["measured_on"] == DAY and vital["session_id"] == session["id"]

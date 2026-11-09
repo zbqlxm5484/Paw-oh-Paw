@@ -8,7 +8,7 @@
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 59개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 61개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
 
@@ -161,7 +161,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제(되돌릴 수 없음) | — | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 45 | `DELETE /auth/me` | 회원 탈퇴 | 계정 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
 | 46 | `GET /dogs/{dog_id}/vitals` | 바이탈 목록(최신이 앞) | 차트 | 200 | — |
-| 47 | `PUT /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 저장(있으면 바꿈) | 차트 | 200 | — |
+| 47 | `PUT /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 저장(있으면 보낸 값만 바꿈) | 차트 | 200 | — |
 | 48 | `GET /dogs/{dog_id}/history` | 진단 이력(오래된 것부터) | 차트 | 200 | — |
 | 49 | `POST /dogs/{dog_id}/history` | 진단·수술·재활 추가, 단계 변경 | 차트 | 201 | — |
 | 50 | `GET /dogs/{dog_id}/notes` | 메모·진료 기록 목록(최신이 앞) | 차트 | 200 | — |
@@ -174,6 +174,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 57 | `POST /dogs/{dog_id}/images` | 사진 올리기(얼굴을 가려 저장) | 차트 | 201 | 400 `IMAGE_FORMAT`, `IMAGE_UNREADABLE`, 413 `IMAGE_TOO_LARGE` |
 | 58 | `GET /images/{image_id}/file` | 사진 열기 (서명 URL) | 차트 | 200 | 403 `FILE_LINK_EXPIRED` |
 | 59 | `DELETE /images/{image_id}` | 사진 지우기 | 차트 | 204 | — |
+| 60 | `PATCH /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 고치기 | 차트 | 200 | — |
+| 61 | `DELETE /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 지우기 | 차트 | 204 | — |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
@@ -254,6 +256,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
   "badges": [{"code": "SURGERY", "title": "TPLO", "site": "RH", "on": "2026-08-27"}],
   "changes": [{"code": "GAIT_BETTER", "on": "2026-11-05", "delta": 4}],
   "last_symmetry": 91,
+  "last_surgery": {"occurred_on": "2026-08-27", "title": "TPLO", "site": "RH"},
+  "last_diagnosis": {"occurred_on": "2026-08-14", "title": "앞십자인대 파열", "site": "RH"},
   "version": 0,
   "session_count": 3,
   "last_measured_on": "2026-10-20",
@@ -273,7 +277,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - `chart_no`·`owner_name`: 동물번호(병원 차트 번호)와 보호자 이름. 없으면 `null`. 보고서에는 들어가지 않는다.
 - `owner_phone`: 보호자 연락처. **상세·등록·수정 응답에만 값이 있고 목록에서는 `null`이다.** 목록은 `owner_phone_last4`(숫자 중 뒤 4자리)만 준다.
 - `stage`: `PRE`(수술 전)·`REHAB`(재활 중)·`DONE`(종결). `stage_changed_on`은 단계가 바뀐 날이고 바뀐 적이 없으면 `null`이다. 서버가 적는 값이라 보낼 수 없다.
-- `latest_vital`: 가장 최근 날짜의 바이탈(5절 차트 자료의 VitalOut). 없으면 `null`. 목록에서도 온다.
+- `latest_vital`: 가장 최근 날짜의 바이탈(5절 차트 자료의 VitalOut). 없으면 `null`. 목록에서도 온다. 그날 재지 않은 값은 `null`이다.
+- `last_surgery`·`last_diagnosis`: 가장 최근 수술과 가장 최근 진단. 각각 `{"occurred_on", "title", "site"}`이고 없으면 `null`. **`badges`와 달리 수술이 있어도 진단이 함께 온다.** 홈의 "최근 수술 · 부위 · D+일"과 "최근 진단 · 부위"는 이 둘로 만든다. 목록에서도 온다.
 - `badges`: 홈 화면의 특이사항 배지. 없으면 빈 배열. 글은 화면이 만든다(서버는 코드와 재료만 준다).
   - `SURGERY`: 가장 최근 수술. `title`(수술 이름), `site`(부위 `LF`·`RF`·`LH`·`RH`·`SP` 또는 `null`), `on`(수술한 날). "TPLO · 오른뒤 · D+71"의 71은 오늘 − `on`으로 화면이 센다.
   - `DIAGNOSIS`: 수술이 없을 때만, 가장 최근 진단 하나. 필드는 같다.
@@ -493,7 +498,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 | 쿼리 | 필수 | 규칙 |
 | --- | --- | --- |
-| `q` | 선택 | 최대 50자. 이름·동물번호·보호자 이름 중 하나에 이 글자가 들어 있으면 찾는다(대소문자 무시). 연락처로는 찾지 않는다 |
+| `q` | 선택 | 최대 50자. 이름·동물번호·보호자 이름·병명·수술명(진단 이력의 `title`) 중 하나에 이 글자가 들어 있으면 찾는다(대소문자 무시). 연락처로는 찾지 않는다 |
 | `page` | 선택 | 1 이상, 기본 1 |
 | `size` | 선택 | 1~100, 기본 20 |
 
@@ -561,7 +566,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 반려견 차트 화면의 자료다. 모두 자기 기관의 반려견에만 되고, 다른 기관이거나 휴지통에 있는 반려견은 404다. 쓴 담당자(`staff`)는 서버가 로그인한 담당자로 채운다(요청으로 받지 않는다). 입력 규칙은 12.9다. "방문"은 서버에 따로 없고, 같은 날짜의 측정·바이탈·기록을 화면이 묶는다.
 
-**바이탈** — 반려견마다 하루 한 줄이다.
+**바이탈** — 반려견마다 하루 한 줄이다. 잰 값만 적고, 재지 않은 값은 `null`로 온다.
 
 ```json
 // VitalOut
@@ -574,8 +579,10 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ```
 
 - **`GET /dogs/{dog_id}/vitals`:** 응답 200 `{"items": [VitalOut, …]}`. 최신 날짜가 앞이고 전부 온다(페이지 없음).
-- **`PUT /dogs/{dog_id}/vitals/{measured_on}`:** 본문은 다섯 값 `{"weight_kg", "temp_c", "heart_rate", "sbp", "dbp"}` 모두 필수. 응답 200 **VitalOut**. 그날 값이 없으면 만들고 있으면 바꾼다(어느 쪽이든 200). 미래 날짜는 422, 날짜 형식이 아니면 404다.
-- 회차를 시작할 때 `vital`을 함께 보내면 그날 바이탈로 저장되고 `session_id`에 그 회차가 들어간다(6절 회차 시작). 회차를 취소해도 바이탈은 남고 `session_id`만 `null`이 된다.
+- **`PUT /dogs/{dog_id}/vitals/{measured_on}`:** 본문은 `{"weight_kg"?, "temp_c"?, "heart_rate"?, "sbp"?, "dbp"?}` 중 **잰 값만** 보낸다(하나는 있어야 한다). 응답 200 **VitalOut**. 그날 줄이 없으면 만들고, 있으면 **보낸 값만** 바꾼다(어느 쪽이든 200). 보내지 않은 값은 그대로이고 `null`을 보내면 그 값을 비운다. 미래 날짜는 422, 날짜 형식이 아니면 404다.
+  - 혈압은 `sbp`·`dbp`를 함께 보낸다. 그날 줄에 한쪽만 남거나 값이 하나도 남지 않으면 422이고 아무것도 바뀌지 않는다.
+  - 체중을 보냈고 그날보다 뒤에 체중이 적힌 날이 없으면 반려견의 체중(`DogOut.weight_kg`)도 그 값이 된다. 반려견의 `version`이 1 늘어나므로 **그 뒤 반려견을 다시 읽는다.** 지난 날짜의 체중으로는 바뀌지 않는다.
+- 회차를 시작할 때 `vital`을 함께 보내면(이때는 다섯 값이 모두 필수다) 그날 바이탈로 저장되고 `session_id`에 그 회차가 들어간다(6절 회차 시작). 회차를 취소해도 바이탈은 남고 `session_id`만 `null`이 된다.
 
 **진단 이력** — 진단·수술·재활. 주소의 `history`는 진단 이력이고, 측정 이력은 `GET /dogs/{dog_id}/sessions`(8절)다.
 
@@ -590,7 +597,9 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 - **`GET /dogs/{dog_id}/history`:** 응답 200 `{"items": [DogHistoryOut, …]}`. 일어난 날이 오래된 것부터, 같으면 적은 순서다.
 - **`POST /dogs/{dog_id}/history`:** 본문 `{"occurred_on", "kind", "title", "site"?, "clinician"?, "stage"?}`. 응답 201 **DogHistoryOut**. `kind`는 `DIAGNOSIS`·`SURGERY`·`REHAB`, `site`는 `LF`·`RF`·`LH`·`RH`·`SP`(척추)다. `stage`를 보내면 반려견의 단계를 함께 바꾼다. 값이 지금과 다르면 반려견의 `version`이 1 늘어나므로 **그 뒤 반려견을 다시 읽는다.**
-- 고치거나 지우는 API는 없다.
+- **`PATCH /dogs/{dog_id}/history/{history_id}`:** 본문은 `{"occurred_on"?, "kind"?, "title"?, "site"?, "clinician"?}` 중 바꿀 것만(하나는 있어야 한다). 응답 200 **DogHistoryOut**. `site`·`clinician`은 `null`로 비울 수 있고 나머지 셋은 비울 수 없다. `staff`(적은 담당자)는 고쳐도 그대로다. 반려견의 단계는 바뀌지 않는다.
+- **`DELETE /dogs/{dog_id}/history/{history_id}`:** 응답 204, 본문 없음. 되돌릴 수 없다. 이력을 더하며 함께 바꾼 단계는 되돌아가지 않는다.
+- 두 API 모두 그 반려견의 줄이 아니면 404다.
 
 **메모·진료 기록** — 분류(`category`)만 다르고 모양은 같다. 메모는 `CAUTION`(주의)·`GUARDIAN`(보호자)·`BOOKING`(예약)·`OTHER`(기타), 진료 기록은 `S`·`O`·`A`·`P`다.
 

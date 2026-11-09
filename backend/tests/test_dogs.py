@@ -59,6 +59,8 @@ DOG_OUT_KEYS = {
     "badges",
     "changes",
     "last_symmetry",
+    "last_surgery",
+    "last_diagnosis",
     "session_count",
     "last_measured_on",
     "open_session_id",

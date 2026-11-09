@@ -28,6 +28,8 @@ EXPECTED_CONSTRAINTS = {
     "dog_vital": {
         "dog_vital_pkey",
         "uq_dog_vital_day",
+        "ck_dog_vital_any_value",
+        "ck_dog_vital_bp_pair",
         "fk_dog_vital_dog",
         "fk_dog_vital_staff",
         "fk_dog_vital_session",

@@ -4,13 +4,14 @@ import uuid
 from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import CurrentStaff, DbSession
 from app.schemas.chart import (
     DogHistoryCreate,
     DogHistoryListOut,
     DogHistoryOut,
+    DogHistoryUpdate,
     NoteBatchCreate,
     NoteBatchOut,
     NoteCreate,
@@ -18,9 +19,9 @@ from app.schemas.chart import (
     NoteOut,
     NoteRevisionListOut,
     NoteUpdate,
-    VitalIn,
     VitalListOut,
     VitalOut,
+    VitalPut,
 )
 from app.services import dog_history as history_service
 from app.services import notes as note_service
@@ -35,8 +36,8 @@ def list_vitals(dog_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> VitalL
 
 
 @router.put("/dogs/{dog_id}/vitals/{measured_on}", response_model=VitalOut)
-def put_vital(dog_id: uuid.UUID, measured_on: date, body: VitalIn, staff: CurrentStaff, db: DbSession) -> VitalOut:
-    """그날 바이탈을 만들거나 바꾼다. 어느 쪽이든 200이다."""
+def put_vital(dog_id: uuid.UUID, measured_on: date, body: VitalPut, staff: CurrentStaff, db: DbSession) -> VitalOut:
+    """그날 바이탈을 만들거나 보낸 값만 바꾼다. 어느 쪽이든 200이다."""
     return vital_service.put_vital(
         db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, measured_on=measured_on, data=body
     )
@@ -53,6 +54,23 @@ def add_history(dog_id: uuid.UUID, body: DogHistoryCreate, staff: CurrentStaff, 
     return history_service.add_history(
         db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, data=body
     )
+
+
+@router.patch("/dogs/{dog_id}/history/{history_id}", response_model=DogHistoryOut)
+def update_history(
+    dog_id: uuid.UUID, history_id: uuid.UUID, body: DogHistoryUpdate, staff: CurrentStaff, db: DbSession
+) -> DogHistoryOut:
+    return history_service.update_history(
+        db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, history_id=history_id, data=body
+    )
+
+
+@router.delete("/dogs/{dog_id}/history/{history_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_history(dog_id: uuid.UUID, history_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
+    history_service.delete_history(
+        db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, history_id=history_id
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/dogs/{dog_id}/notes", response_model=NoteListOut)

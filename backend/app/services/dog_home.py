@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.dates import local_zone
 from app.models import Dog, DogHistory, DogNote, MeasureSession, Shot, WalkPass
 from app.models.enums import DogBadgeCode, DogChangeCode, HistoryKind, SessionStatus, Validity
-from app.schemas.dogs import DogBadgeOut, DogChangeOut
+from app.schemas.dogs import DogBadgeOut, DogChangeOut, DogHistoryBriefOut
 from app.services.symmetry import session_scores
 
 # changed_within_days를 보내지 않았을 때 변동을 보는 날수
@@ -35,6 +35,8 @@ class DogHome:
     badges: list[DogBadgeOut] = field(default_factory=list)
     changes: list[DogChangeOut] = field(default_factory=list)
     last_symmetry: int | None = None
+    last_surgery: DogHistoryBriefOut | None = None
+    last_diagnosis: DogHistoryBriefOut | None = None
 
 
 def _since(today: date, days: int) -> date:
@@ -146,6 +148,15 @@ def _badges(history: dict[str, tuple], noted_on: date | None) -> list[DogBadgeOu
     return badges
 
 
+def _brief(history: dict[str, tuple], kind: HistoryKind) -> DogHistoryBriefOut | None:
+    """가장 최근 수술·진단 한 줄(15.3). 배지와 달리 수술이 있어도 진단을 가리지 않는다."""
+    found = history.get(kind.value)
+    if found is None:
+        return None
+    title, site, occurred_on = found
+    return DogHistoryBriefOut(occurred_on=occurred_on, title=title, site=site)
+
+
 def load(db: Session, dog_ids: Sequence[uuid.UUID], *, days: int, today: date) -> dict[uuid.UUID, DogHome]:
     """반려견들의 홈 배지·변동·가장 최근 대칭 점수. 규칙은 명세 12.5 홈 배지·변동."""
     if not dog_ids:
@@ -197,5 +208,7 @@ def load(db: Session, dog_ids: Sequence[uuid.UUID], *, days: int, today: date) -
             badges=_badges(history.get(dog_id, {}), noted_on),
             changes=changes,
             last_symmetry=scored[-1][1] if scored else None,
+            last_surgery=_brief(history.get(dog_id, {}), HistoryKind.SURGERY),
+            last_diagnosis=_brief(history.get(dog_id, {}), HistoryKind.DIAGNOSIS),
         )
     return homes

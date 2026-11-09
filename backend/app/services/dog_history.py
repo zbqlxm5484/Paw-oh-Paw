@@ -1,11 +1,12 @@
 """진단 이력(BE-29, 12.5 차트 자료, 13.9, 15.11): 진단·수술·재활. 측정 이력(services/history.py)과는 다른 것이다.
 
 반려견은 services/dogs.in_institution으로 거른다(다른 기관·휴지통은 404). flush()까지만 한다.
-제목과 수의사 이름은 로그에 남기지 않는다(11.8).
+제목과 수의사 이름은 로그에 남기지 않는다(11.8). 고치거나 지운 것은 누가 했는지 로그에 ID만 남긴다(v1.41).
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -14,8 +15,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog, DogHistory
-from app.schemas.chart import DogHistoryCreate, DogHistoryOut
+from app.schemas.chart import DogHistoryCreate, DogHistoryOut, DogHistoryUpdate
 from app.services.dogs import get_dog, in_institution, set_stage
+
+logger = logging.getLogger(__name__)
 
 
 def list_history(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID) -> list[DogHistoryOut]:
@@ -59,3 +62,46 @@ def add_history(
     db.flush()
     db.refresh(row)
     return DogHistoryOut.model_validate(row)
+
+
+def _get_row(db: Session, institution_id: uuid.UUID, dog_id: uuid.UUID, history_id: uuid.UUID) -> DogHistory:
+    """그 반려견의 이력 한 줄을 잠그고 읽는다. 없거나 다른 반려견·다른 기관·휴지통의 것이면 똑같이 404(15.1)."""
+    row = db.scalars(
+        select(DogHistory)
+        .join(Dog, DogHistory.dog_id == Dog.id)
+        .where(DogHistory.id == history_id, DogHistory.dog_id == dog_id, in_institution(institution_id))
+        .with_for_update(of=DogHistory)
+    ).one_or_none()
+    if row is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return row
+
+
+def update_history(
+    db: Session,
+    *,
+    institution_id: uuid.UUID,
+    staff_id: uuid.UUID,
+    dog_id: uuid.UUID,
+    history_id: uuid.UUID,
+    data: DogHistoryUpdate,
+) -> DogHistoryOut:
+    """보낸 것만 바꾼다(13.9). 적은 담당자(staff)와 적은 시각은 그대로 둔다. 반려견의 단계는 바꾸지 않는다."""
+    row = _get_row(db, institution_id, dog_id, history_id)
+    changes = data.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(row, field, value.value if hasattr(value, "value") else value)
+    db.flush()
+    db.refresh(row)
+    logger.info("dog history updated history=%s staff=%s fields=%s", row.id, staff_id, ",".join(sorted(changes)))
+    return DogHistoryOut.model_validate(row)
+
+
+def delete_history(
+    db: Session, *, institution_id: uuid.UUID, staff_id: uuid.UUID, dog_id: uuid.UUID, history_id: uuid.UUID
+) -> None:
+    """한 줄을 지운다. 반려견의 단계는 되돌리지 않는다(이력을 더할 때 함께 바꾼 단계도 그대로 남는다)."""
+    row = _get_row(db, institution_id, dog_id, history_id)
+    db.delete(row)
+    db.flush()
+    logger.info("dog history deleted history=%s staff=%s", history_id, staff_id)

@@ -263,7 +263,7 @@ paths:
       parameters:
         - name: q
           in: query
-          description: 이름·동물번호·보호자 이름 중 하나에 포함되면 찾는다(대소문자 무시). 연락처로는 찾지 않는다.
+          description: 이름·동물번호·보호자 이름·병명·수술명(진단 이력의 title) 중 하나에 포함되면 찾는다(대소문자 무시). 연락처로는 찾지 않는다.
           schema: {type: string, maxLength: 50}
           example: 보리
         - name: trash
@@ -460,12 +460,15 @@ paths:
       tags: [차트 자료]
       operationId: putVital
       summary: 그날 바이탈 저장 (BE-28)
-      description: 그날 값이 없으면 만들고 있으면 바꾼다. 어느 쪽이든 200이다. 바꾸면 staff는 바꾼 담당자가 되고 session_id는 그대로다.
+      description: >-
+        그날 줄이 없으면 만들고 있으면 보낸 값만 바꾼다. 어느 쪽이든 200이다. 보내지 않은 값은 그대로이고 null은 그 값을 비운다.
+        바꾸면 staff는 바꾼 담당자가 되고 session_id는 그대로다. 그날 줄에 값이 하나도 남지 않거나 혈압이 한쪽만 남으면 422다.
+        체중을 보냈고 그날보다 뒤에 체중이 적힌 줄이 없으면 반려견의 weight_kg도 그 값이 되고 반려견의 version이 1 는다.
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/VitalIn'}
+            schema: {$ref: '#/components/schemas/VitalPut'}
       responses:
         '200':
           description: 저장된 바이탈
@@ -513,6 +516,49 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/DogHistoryOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/history/{history_id}:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+      - name: history_id
+        in: path
+        required: true
+        description: 진단 이력 한 줄의 ID. 그 반려견의 줄이 아니면 404 NOT_FOUND
+        schema: {$ref: '#/components/schemas/Uuid'}
+    patch:
+      tags: [차트 자료]
+      operationId: updateDogHistory
+      summary: 진단 이력 한 줄 고치기 (BE-29)
+      description: 보낸 것만 바꾼다. staff(적은 담당자)와 created_at은 그대로다. 반려견의 단계는 바꾸지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DogHistoryUpdate'}
+      responses:
+        '200':
+          description: 고친 줄
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogHistoryOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [차트 자료]
+      operationId: deleteDogHistory
+      summary: 진단 이력 한 줄 지우기 (BE-29)
+      description: 되돌릴 수 없다. 이력을 더하며 함께 바꾼 반려견의 단계는 되돌리지 않는다.
+      responses:
+        '204':
+          description: 지웠다. 본문 없음
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/AccountDisabled'}
         '404': {$ref: '#/components/responses/NotFound'}
@@ -2011,7 +2057,8 @@ components:
       type: object
       required: [id, name, breed, weight_kg, size_class, size_class_manual, birth_year, sex, rehab_start_date,
                  focus_limb, baseline_session_id, memo, chart_no, owner_name, owner_phone, owner_phone_last4, stage,
-                 stage_changed_on, latest_vital, badges, changes, last_symmetry, version, session_count,
+                 stage_changed_on, latest_vital, badges, changes, last_symmetry, last_surgery, last_diagnosis,
+                 version, session_count,
                  last_measured_on, open_session_id,
                  deleted_at, purge_at, created_at, updated_at]
       properties:
@@ -2048,7 +2095,7 @@ components:
           example: null
         latest_vital:
           oneOf: [{$ref: '#/components/schemas/VitalOut'}, {type: 'null'}]
-          description: 가장 최근 날짜의 바이탈. 없으면 null
+          description: 가장 최근 날짜의 바이탈. 없으면 null. 그날 재지 않은 값은 null이다.
         badges:
           type: array
           description: 홈 배지. 수술(없으면 진단) 하나와 중요 메모. 휴지통 목록에서는 빈 배열.
@@ -2063,6 +2110,12 @@ components:
           maximum: 100
           description: 대칭 점수가 있는 완료 회차 중 가장 최근 것의 점수. 없으면 null
           example: 91
+        last_surgery:
+          oneOf: [{$ref: '#/components/schemas/DogHistoryBriefOut'}, {type: 'null'}]
+          description: 가장 최근 수술. 없으면 null. 휴지통 목록에서는 null
+        last_diagnosis:
+          oneOf: [{$ref: '#/components/schemas/DogHistoryBriefOut'}, {type: 'null'}]
+          description: 가장 최근 진단. badges와 달리 수술이 있어도 준다. 없으면 null. 휴지통 목록에서는 null
         version: {type: integer, description: 수정할 때 그대로 돌려보낸다(PATCH의 version), example: 0}
         session_count: {type: integer, description: 상태 상관없이 회차 수, example: 3}
         last_measured_on: {type: [string, 'null'], format: date, example: '2026-10-20'}
@@ -2182,7 +2235,7 @@ components:
         name: {type: string, example: 김담당}
     VitalIn:
       type: object
-      description: 다섯 값 모두 필수. 범위는 제안 값이다.
+      description: 회차 시작의 vital. 다섯 값 모두 필수. 범위는 제안 값이다.
       required: [weight_kg, temp_c, heart_rate, sbp, dbp]
       properties:
         weight_kg: {type: number, minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 28.1}
@@ -2190,6 +2243,24 @@ components:
         heart_rate: {type: integer, minimum: 20, maximum: 300, description: 심박(회/분), example: 92}
         sbp: {type: integer, minimum: 30, maximum: 300, description: 수축기 혈압(mmHg), example: 132}
         dbp: {type: integer, minimum: 10, maximum: 250, description: 이완기 혈압(mmHg). sbp보다 작아야 한다, example: 84}
+    VitalPut:
+      type: object
+      description: 그날 바이탈로 잰 값만 보낸다. 하나는 보내야 한다. null은 그 값을 비운다. 혈압은 sbp·dbp를 함께 보낸다.
+      minProperties: 1
+      properties:
+        weight_kg: {type: [number, 'null'], minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 28.1}
+        temp_c: {type: [number, 'null'], minimum: 30.0, maximum: 45.0, description: 체온(℃). 소수 첫째 자리까지, example: 38.6}
+        heart_rate: {type: [integer, 'null'], minimum: 20, maximum: 300, description: 심박(회/분), example: 92}
+        sbp: {type: [integer, 'null'], minimum: 30, maximum: 300, description: 수축기 혈압(mmHg), example: 132}
+        dbp: {type: [integer, 'null'], minimum: 10, maximum: 250, description: 이완기 혈압(mmHg). sbp보다 작아야 한다, example: 84}
+    DogHistoryBriefOut:
+      type: object
+      required: [occurred_on, title, site]
+      description: 가장 최근 수술·진단 한 줄. 글은 화면이 만든다.
+      properties:
+        occurred_on: {type: string, format: date, example: '2026-08-27'}
+        title: {type: string, example: TPLO}
+        site: {type: [string, 'null'], enum: [LF, RF, LH, RH, SP, null], example: RH}
     DogBadgeOut:
       type: object
       required: [code, title, site, 'on']
@@ -2213,11 +2284,11 @@ components:
       properties:
         id: {$ref: '#/components/schemas/Uuid'}
         measured_on: {type: string, format: date, example: '2026-11-06'}
-        weight_kg: {type: number, example: 28.1}
-        temp_c: {type: number, example: 38.6}
-        heart_rate: {type: integer, example: 92}
-        sbp: {type: integer, example: 132}
-        dbp: {type: integer, example: 84}
+        weight_kg: {type: [number, 'null'], description: 재지 않았으면 null, example: 28.1}
+        temp_c: {type: [number, 'null'], example: 38.6}
+        heart_rate: {type: [integer, 'null'], example: 92}
+        sbp: {type: [integer, 'null'], example: 132}
+        dbp: {type: [integer, 'null'], example: 84}
         staff:
           allOf: [{$ref: '#/components/schemas/StaffBrief'}]
           description: 마지막으로 저장한 담당자
@@ -2250,6 +2321,19 @@ components:
         stage:
           oneOf: [{$ref: '#/components/schemas/DogStage'}, {type: 'null'}]
           description: 보내면 반려견의 단계를 함께 바꾼다.
+    DogHistoryUpdate:
+      type: object
+      description: 바꿀 것만 보낸다. 하나는 보내야 한다. occurred_on·kind·title은 null로 비울 수 없다.
+      minProperties: 1
+      properties:
+        occurred_on: {type: string, format: date, description: 오늘(한국 날짜)까지, example: '2026-08-27'}
+        kind: {type: string, enum: [DIAGNOSIS, SURGERY, REHAB]}
+        title: {type: string, minLength: 1, maxLength: 100, example: TPLO}
+        site:
+          type: [string, 'null']
+          enum: [LF, RF, LH, RH, SP, null]
+          description: 네 다리 또는 척추(SP). null이면 비운다
+        clinician: {type: [string, 'null'], minLength: 1, maxLength: 50, description: null이면 비운다, example: 박수의}
     DogHistoryOut:
       type: object
       required: [id, occurred_on, kind, title, site, clinician, staff, created_at]
