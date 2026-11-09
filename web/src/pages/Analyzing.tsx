@@ -6,7 +6,7 @@ import { css } from '../app/css'
 import { staticUrl, usePage, useTitle } from '../app/page'
 import { redirect, setToast, type Go } from '../app/session'
 import { STEPS } from '../config'
-import { activeJobs, jobOf, jobProgress, dogOf } from '../store/db'
+import { activeJobs, jobOf, jobProgress, jobStep, dogOf } from '../store/db'
 import { api_job } from '../store/actions_impl'
 import { start_job } from '../views/analysis'
 import { pyround } from '../views/pyfmt'
@@ -31,7 +31,7 @@ export default function Analyzing() {
   const isDemo = job_id === 'demo'
   const job = acct && !isDemo ? jobOf(acct, job_id) : undefined
   const p0 = job ? jobProgress(job) : 0
-  const [step, setStep] = useState(STEPS[Math.min(4, Math.trunc(p0))])
+  const [step, setStep] = useState(job ? jobStep(job, STEPS) : STEPS[0])
   const [pct, setPct] = useState<number | string>(pyround((p0 / 5) * 100))
   const prints = useRef<(HTMLImageElement | null)[]>([])
 

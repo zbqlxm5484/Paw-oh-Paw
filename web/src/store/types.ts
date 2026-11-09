@@ -113,6 +113,10 @@ export interface Job {
   by: string
   /** 백엔드 회차(id = 회차 id). 진행은 서버 상태로만 끝난다 */
   remote?: boolean
+  /** 백엔드 회차의 지금 서버 상태(폴링 때마다 갱신): 회차 상태, 촬영 수, 분석이 끝난(DONE·FAILED) 촬영 수 */
+  srv?: { status: string; total: number; done: number }
+  /** 시연 데이터에 처음부터 있던 분석 중 작업: 진행 화면 견본으로 두고 끝내지 않는다 */
+  hold?: boolean
 }
 
 export interface DeviceCode {
