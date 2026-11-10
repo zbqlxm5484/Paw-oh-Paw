@@ -19,6 +19,7 @@ from app.models.enums import ReportEdition, SessionStatus
 from app.schemas.history import ReportStatusesOut, SessionHistoryItem, ValidPassesOut
 from app.services.dogs import get_dog
 from app.services.sessions import side_counts
+from app.services.symmetry import session_scores
 
 
 def done_sessions(
@@ -73,7 +74,9 @@ def _report_statuses(session: MeasureSession) -> ReportStatusesOut:
     )
 
 
-def _history_item(session: MeasureSession, baseline_id: uuid.UUID | None) -> SessionHistoryItem:
+def _history_item(
+    session: MeasureSession, baseline_id: uuid.UUID | None, symmetry_score: int | None
+) -> SessionHistoryItem:
     left, right = side_counts(session.shots)
     return SessionHistoryItem(
         id=session.id,
@@ -83,6 +86,7 @@ def _history_item(session: MeasureSession, baseline_id: uuid.UUID | None) -> Ses
         is_baseline=session.id == baseline_id,
         valid_passes=ValidPassesOut(LEFT=left, RIGHT=right),
         model_version=session.model_version,
+        symmetry_score=symmetry_score,
         reports=_report_statuses(session),
     )
 
@@ -93,6 +97,7 @@ def list_sessions(
     """GET /dogs/{dog_id}/sessions(BE-17). 모든 상태의 회차를 measured_on 내림차순, 같으면 created_at 내림차순으로.
 
     촬영·통과·보고서 행은 selectinload로 한 번에 읽고(N+1 금지), 기준 회차 ID는 쿼리 하나로 정한다.
+    대칭 점수(12.3)는 이 페이지의 DONE 회차만 쿼리 한 번으로 계산한다.
     """
     dog = get_dog(db, institution_id, dog_id)
     query = (
@@ -117,4 +122,5 @@ def list_sessions(
             .order_by(MeasureSession.measured_on, MeasureSession.created_at, MeasureSession.id)
             .limit(1)
         )
-    return [_history_item(session, baseline_id) for session in sessions], total
+    scores = session_scores(db, [session.id for session in sessions if session.status == SessionStatus.DONE.value])
+    return [_history_item(session, baseline_id, scores.get(session.id)) for session in sessions], total

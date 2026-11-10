@@ -12,7 +12,7 @@ import {
   type Go,
 } from '../app/session'
 import { start_job } from '../views/analysis'
-import { f, on } from './actions'
+import { f, on, petInputError } from './actions'
 import {
   activeJobs,
   byCode,
@@ -411,6 +411,8 @@ post('/dogs', (_p, fd) => {
   const dog_id = f(fd, 'dog_id'), next_url = F(fd, 'next_url', '/home'), version = f(fd, 'version')
   const p0 = _pet_from_form(fd)
   if (!(p0.name && p0.breed && p0.kg)) return redirect(next_url, '이름·견종·체중을 입력해 주세요')
+  const bad = petInputError(p0.kg, p0.birth)
+  if (bad) return redirect(next_url, bad)
   const manual = !!p0.size
   const data = { ...p0, size: p0.size || config.auto_size(p0.breed, p0.kg), size_manual: manual }
   let d = dogOf(acct, dog_id)

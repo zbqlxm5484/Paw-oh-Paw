@@ -33,7 +33,10 @@ class ReportStatusesOut(BaseModel):
 
 
 class SessionHistoryItem(BaseModel):
-    """측정 이력 한 줄(15.8 SessionHistoryItem). is_baseline은 12.5 규칙의 기준 회차 하나만 TRUE다."""
+    """측정 이력 한 줄(15.8 SessionHistoryItem). is_baseline은 12.5 규칙의 기준 회차 하나만 TRUE다.
+
+    symmetry_score는 12.3의 대칭 점수이고 DONE이 아니거나 계산할 쌍이 없으면 null이다.
+    """
 
     id: uuid.UUID
     measured_on: date
@@ -42,6 +45,7 @@ class SessionHistoryItem(BaseModel):
     is_baseline: bool
     valid_passes: ValidPassesOut
     model_version: str | None
+    symmetry_score: int | None = None
     reports: ReportStatusesOut
 
 

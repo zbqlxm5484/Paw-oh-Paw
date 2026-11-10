@@ -310,9 +310,9 @@ def test_the_sweep_stops_at_the_time_limit_and_finishes_later(
     assert _trash(client, dog_id, auth_headers).status_code == 204
     _age_trash(db, dog, TRASH_RETENTION_DAYS + 1)
     fake = _FakeAnalysis()
-    fake.hook = lambda job_id: time.sleep(0.05)  # 분석 API가 느리게 답한다
+    fake.hook = lambda job_id: time.sleep(0.6)  # 분석 API가 느리게 답한다
 
-    result = purge_expired(db, get_storage(), fake, deadline=time.monotonic() + 0.02)
+    result = purge_expired(db, get_storage(), fake, deadline=time.monotonic() + 0.5)
     assert result == SweepResult(0, 0, out_of_time=True)
     assert len(fake.deleted) == 1 and _rows_of_dog(db, dog_id) == rows and _purge_logs(db) == []
     # 이미 지난 상한이면 시작하지 않는다

@@ -56,6 +56,49 @@ class FocusLimb(StrEnum):
     RH = "RH"
 
 
+class DogStage(StrEnum):
+    """반려견 단계(12.5 차트 자료): 수술 전·재활 중·종결"""
+
+    PRE = "PRE"
+    REHAB = "REHAB"
+    DONE = "DONE"
+
+
+class HistoryKind(StrEnum):
+    """진단 이력의 종류: 진단·수술·재활"""
+
+    DIAGNOSIS = "DIAGNOSIS"
+    SURGERY = "SURGERY"
+    REHAB = "REHAB"
+
+
+class HistorySite(StrEnum):
+    """진단 이력의 부위: 네 다리와 척추(SP)"""
+
+    LF = "LF"
+    RF = "RF"
+    LH = "LH"
+    RH = "RH"
+    SP = "SP"
+
+
+class NoteCategory(StrEnum):
+    """메모·진료 기록의 분류. S·O·A·P는 진료 기록, 나머지는 메모(주의·보호자·예약·기타)다."""
+
+    SUBJECTIVE = "S"
+    OBJECTIVE = "O"
+    ASSESSMENT = "A"
+    PLAN = "P"
+    CAUTION = "CAUTION"
+    GUARDIAN = "GUARDIAN"
+    BOOKING = "BOOKING"
+    OTHER = "OTHER"
+
+
+CHART_CATEGORIES = frozenset({"S", "O", "A", "P"})
+MEMO_CATEGORIES = frozenset(member.value for member in NoteCategory) - CHART_CATEGORIES
+
+
 class Limb(StrEnum):
     """회차 수치의 다리. NONE은 몸 전체 수치(walk_speed, gait_cycles)."""
 
@@ -119,6 +162,33 @@ class ReportStatus(StrEnum):
     GENERATING = "GENERATING"
     DONE = "DONE"
     FAILED = "FAILED"
+
+
+class ImageKind(StrEnum):
+    """반려견 사진의 종류. XRAY는 얼굴을 가리지 않는다(12.5 사진)."""
+
+    PRE_OP = "PRE_OP"
+    POST_OP = "POST_OP"
+    XRAY = "XRAY"
+    PHOTO = "PHOTO"
+
+
+class DogBadgeCode(StrEnum):
+    """홈 배지(12.5 홈 배지·변동). DB에 저장하지 않고 응답에만 쓴다."""
+
+    SURGERY = "SURGERY"
+    DIAGNOSIS = "DIAGNOSIS"
+    IMPORTANT_NOTE = "IMPORTANT_NOTE"
+
+
+class DogChangeCode(StrEnum):
+    """최근 변동(12.5 홈 배지·변동). 적힌 순서가 같은 날 안의 정렬 순서다."""
+
+    RESHOOT_NEEDED = "RESHOOT_NEEDED"
+    GAIT_WORSE = "GAIT_WORSE"
+    GAIT_BETTER = "GAIT_BETTER"
+    SURGERY_ADDED = "SURGERY_ADDED"
+    IMPORTANT_NOTE = "IMPORTANT_NOTE"
 
 
 class PurgeScope(StrEnum):

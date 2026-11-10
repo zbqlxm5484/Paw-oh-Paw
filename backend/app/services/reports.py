@@ -38,7 +38,8 @@ def download_name(dog_name: str, measured_on: object, edition: str) -> str:
 def content_disposition(name: str, *, download: bool) -> str:
     """한글 이름은 filename*=UTF-8''<퍼센트 인코딩>으로, 이를 무시하는 뷰어용 ASCII 이름도 넣는다(RFC 6266, 15.7)."""
     kind = "attachment" if download else "inline"
-    return f"{kind}; filename=\"{ASCII_FILE_NAME}\"; filename*=UTF-8''{quote(name)}"
+    # quote는 기본으로 '/'를 그대로 둔다. 반려견 이름에 '/'가 있으면 값이 RFC 8187 형식을 벗어나므로 모두 바꾼다
+    return f"{kind}; filename=\"{ASCII_FILE_NAME}\"; filename*=UTF-8''{quote(name, safe='')}"
 
 
 def to_report_out(report: Report, dog_name: str, measured_on: object) -> ReportOut:
