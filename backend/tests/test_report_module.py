@@ -237,6 +237,23 @@ def test_gait_notes_and_no_pass_sentence_follow_the_template() -> None:
     ]
 
 
+def _unclassified_result() -> dict:
+    """실제 분석 결과의 모양: 통과의 gait가 null이라 수치가 모두 OTHER 묶음에 든다(15.7)."""
+    result = sample_result()
+    result["gaits"][0]["gait_type"] = "OTHER"
+    return result
+
+
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_passes_without_a_gait_type_are_named_unclassified_not_other(edition: str) -> None:
+    rendered = render(sample_input(edition, result=_unclassified_result()))
+    assert rendered.sentences.gait_notes["OTHER"][0] == "보행 유형 미판별: 수치 8개 중 7개를 측정했습니다."
+    assert rendered.sentences.summary[0].startswith("보행 유형 미판별에서 왼쪽과 오른쪽의 차이를")
+    assert "<h2>보행 유형 미판별 수치</h2>" in rendered.html
+    assert "기타" not in rendered.html  # 평보·속보가 아닌 걸음이라는 뜻으로 읽히지 않게
+    assert check_texts(rendered.texts, edition=edition) == []  # 금지 표현·용어 검사(8절 7번)에 걸리지 않는다
+
+
 def test_compare_skip_note_lists_each_reason_once() -> None:
     result = sample_result()
     result["gaits"][0]["limb_compare"] = [
@@ -360,6 +377,9 @@ def test_html_has_title_tables_chart_glossary_and_footer() -> None:
     assert "용어 설명" in html and f"템플릿 {TEMPLATE_VERSION}" in html
     assert "<footer>이 보고서는 보행 평가 보조 자료이며 진단을 대신하지 않습니다.</footer>" in html  # 고정 문구 그대로
     assert "tr { break-inside: avoid; }" in html  # 표 한 줄이 쪽 경계에서 갈라지지 않게
+    # 쪽 번호(여백 상자)는 body의 글꼴을 물려받지 않는다. @page에도 같은 글꼴 목록이 있어야 한다
+    fonts = 'font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif;'
+    assert html.count(fonts) == 2 and html.index(fonts) < html.index("@bottom-left")
     assert "<script" not in html
 
 
