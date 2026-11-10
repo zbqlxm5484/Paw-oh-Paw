@@ -801,7 +801,14 @@ export class AppProto extends DCLogic<Props, any> {
       closeSheet: () => this.setState({ sheet: null }),
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',
-      confirmDel: () => { this.setState({ sheet: null }); this.toast('반려견 삭제는 준비 중입니다') },
+      confirmDel: async () => {
+        const id = s.delId, name = (dogById(id) || ({} as Partial<DDog>)).name || '반려견'
+        this.setState({ sheet: null })
+        if (!id) return
+        if (isDemo()) return this.toast('체험 모드에서는 반려견을 삭제할 수 없습니다')
+        try { await this.props.actions.deleteDog(id); this.setState({ delId: null }); this.toast(`${name} 정보를 삭제했습니다`); if (this.props.screen !== 'my') this.nav('my') }
+        catch (e) { this.toast(errMsg(e, '반려견을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.')) }
+      },
       confirmLogout: () => { this.props.auth.logout(); this.setState({ sheet: null, li: { id: '', pw: '' } }); this.props.nav('/welcome', { replace: true }) },
       toastOn: !!s.toast, toastMsg: s.toast,
       statusC: landscape ? 'transparent' : dark ? '#fff' : '#1B2433', indC: dark ? '#fff' : '#1B2433', indOp: landscape ? 0 : dark ? 0.8 : 0.25,

@@ -130,6 +130,10 @@ export function useDesignActions() {
         throw e
       }
     },
+    deleteDog: async (id: string) => {
+      await dogsApi.deleteDog(id)
+      await invDogs()
+    },
     startSession: async (dogId: string, weight: number | null) => {
       const s = await sessApi.startSession(dogId, { weight_kg: weight })
       await invDogs()
