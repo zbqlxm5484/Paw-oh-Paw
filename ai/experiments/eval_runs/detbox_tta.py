@@ -1,16 +1,24 @@
 
-import json, sys, time, subprocess
-from pathlib import Path
-import cv2, numpy as np, torch
-from mmdet.apis import init_detector, inference_detector
-from mmengine.registry import DefaultScope
+import json
 import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+from mmdet.apis import inference_detector, init_detector
+from mmengine.registry import DefaultScope
+
 root=Path(os.environ.get('CREAMOFF_ROOT', Path.home()/'Desktop/jjh/ssafy'))
 paw=root/'paw_eval'
 sys.path[:0]=[str(paw),str(Path(__file__).resolve().parents[1]/'cv/screen')]
-from predict import MMPose, read_image
-from speed import best_dog
-from tta_eval import unrotate
+from predict import MMPose, read_image  # noqa: E402
+from speed import best_dog  # noqa: E402
+from tta_eval import unrotate  # noqa: E402
+
 out=Path(sys.argv[1])
 limit=int(sys.argv[2])
 out.mkdir(parents=True,exist_ok=True)
@@ -35,7 +43,8 @@ for tag,gt,images in [('jeni','gt_fall.json','keypoints_260820'),('wowwow','gt_w
         image=read_image(root/'dataset'/images/im['file_name'])
         with DefaultScope.overwrite_default_scope('mmdet'):
             b=best_dog(inference_detector(det,image),.25)
-        if b is None: continue
+        if b is None:
+            continue
         box=np.asarray(b,float)
         c=(box[:2]+box[2:])/2
         for tag_t,model,scales,rots in [('t0',models[0],[1],[]),('t2',models[1],[.9,1,1.1],[]),('t4',models[1],[.85,.9,1,1.1,1.15],[8,-8])]:
@@ -43,7 +52,8 @@ for tag,gt,images in [('jeni','gt_fall.json','keypoints_260820'),('wowwow','gt_w
             for s in scales:
                 half=(box[2:]-box[:2])*s/2
                 kp,sc=model(image,np.r_[c-half,c+half].tolist())
-                if s==1: base_sc=sc[:22]
+                if s==1:
+                    base_sc=sc[:22]
                 points.append(kp[:22])
             for deg in rots:
                 matrix=cv2.getRotationMatrix2D(tuple(c),deg,1)
@@ -51,7 +61,8 @@ for tag,gt,images in [('jeni','gt_fall.json','keypoints_260820'),('wowwow','gt_w
                 kp,_=model(rotated,box.tolist())
                 points.append(unrotate(kp[:22],c,deg))
             preds[tag_t].append(dict(ann_id=a['id'],image_id=a['image_id'],category_id=a.get('category_id',1),keypoints=np.column_stack([np.mean(points,axis=0),base_sc]).ravel().tolist(),score=float(np.mean(base_sc))))
-        if index%100==0: print(tag,index,round(time.time()-start),flush=True)
+        if index%100==0:
+            print(tag,index,round(time.time()-start),flush=True)
     gt_path=root/'experiments/cv/data'/gt
     if limit:
         d['annotations']=annotations

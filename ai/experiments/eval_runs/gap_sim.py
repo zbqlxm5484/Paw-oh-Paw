@@ -1,6 +1,5 @@
 import json
 import os
-import sys
 
 R = os.environ.get("CREAMOFF_ROOT", "C:/Users/SSAFY/Desktop/jjh/ssafy") + "/experiments/results/sweep_1027/"
 base = json.load(open(R + "base.track.json", encoding="utf-8"))["videos"]

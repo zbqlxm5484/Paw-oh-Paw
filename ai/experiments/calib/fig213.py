@@ -8,7 +8,7 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 files = sorted((HERE / "submissions").glob("*_calib.xml"))
 sys.argv = [sys.argv[0], str(HERE / "key")]
-import compare as C
+import compare as C  # noqa: E402
 
 IMG = Path("C:/Users/SSAFY/Desktop/jjh/ssafy/calib_kit_1027/images")
 OUT = HERE / "fig213"

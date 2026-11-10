@@ -8,8 +8,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, "C:/Users/SSAFY/Desktop/jjh/ssafy/paw_eval")
 files = sys.argv[1:]
 sys.argv = [sys.argv[0], str(HERE / "key")]
-import compare as C
-import score as S
+import compare as C  # noqa: E402
+import score as S  # noqa: E402
 
 GT = HERE / "key" / "gt_calib.json"
 tmp = Path(tempfile.mkdtemp())

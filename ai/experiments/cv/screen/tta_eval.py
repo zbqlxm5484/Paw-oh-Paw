@@ -8,7 +8,7 @@ import numpy as np
 
 PAW = Path("@HOME@/work/ssafy/paw_eval")
 sys.path.insert(0, str(PAW))
-from predict import MMPose, input_box, load_boxes, read_image
+from predict import MMPose, input_box, load_boxes, read_image  # noqa: E402
 
 N = 22
 

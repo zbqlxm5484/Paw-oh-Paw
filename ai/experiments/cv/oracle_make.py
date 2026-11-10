@@ -63,7 +63,6 @@ def update_stats(aid, g, k):
 
 def variant(slf, gtr, kind, first):
     out = copy.deepcopy(slf)
-    g_by = {a["id"]: a for a in gtr["annotations"]}
     for a in out["annotations"]:
         aid = a["id"]
         k = a["keypoints"]

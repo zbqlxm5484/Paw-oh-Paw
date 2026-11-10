@@ -1,4 +1,3 @@
-import json
 import math
 import sys
 from pathlib import Path
@@ -6,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 files = sys.argv[1:]
 sys.argv = [sys.argv[0], str(Path(__file__).parent / "key")]
-import compare as C
+import compare as C  # noqa: E402
 
 labs = {Path(f).stem.replace("_calib", ""): C.read_xml(f) for f in files}
 who = list(labs)

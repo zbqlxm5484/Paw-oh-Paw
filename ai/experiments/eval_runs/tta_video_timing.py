@@ -1,20 +1,19 @@
 import json
+import os
 import sys
 import tomllib
 from pathlib import Path
 from statistics import median
 
 import cv2
-import torch
 
-import os
 root=Path(os.environ.get('CREAMOFF_ROOT', Path.home()/'Desktop/jjh/ssafy'))
 paw=root/'paw_eval'
 delivery=root/'deliver_1105'
 out=Path(sys.argv[1])
 sys.path[:0]=[str(paw),str(delivery/'plus')]
-import speed
-import skipdet2
+import skipdet2  # noqa: E402
+import speed  # noqa: E402
 
 cfg_path=delivery/'models/creamoff-b4-wise05team-tta.toml'
 cfg=tomllib.loads(cfg_path.read_text(encoding='utf-8'))
