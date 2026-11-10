@@ -22,6 +22,7 @@ import Upload from './pages/Upload'
 import Analyzing from './pages/Analyzing'
 import Results from './pages/Results'
 import Report from './pages/Report'
+import ReportPrint from './pages/ReportPrint'
 import Gait3d from './pages/Gait3d'
 import Legal from './pages/Legal'
 import Compare from './pages/Compare'
@@ -69,6 +70,7 @@ function Pages() {
       <Route path="/results/:rid" element={<Report />} />
       <Route path="/results/:rid/report" element={<Report />} />
       <Route path="/results/:rid/3d" element={<Gait3d />} />
+      <Route path="/print/reports/:rid" element={<ReportPrint />} />
       <Route path="/compare/:dog_id" element={<Compare />} />
       <Route path="/my" element={<My />} />
       <Route path="/account" element={<AccountPage />} />

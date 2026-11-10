@@ -3,7 +3,7 @@
  */
 import { ApiError } from '../api/client'
 import { BREEDS } from '../api/labels'
-import { ST, type DDog, type DGait, type DRes, type DRow, type DRowsKey, type DSize } from './adapter'
+import { ST, allShotsFailed, type DDog, type DGait, type DRes, type DRow, type DRowsKey, type DSize } from './adapter'
 
 const SMALLB = ['말티즈', '푸들', '토이 푸들', '포메라니안', '시츄', '치와와', '비숑 프리제', '요크셔테리어', '닥스훈트', '미니어처 슈나우저', '퍼그', '이탈리안 그레이하운드', '잭 러셀 테리어']
 const LARGEB = ['골든 리트리버', '래브라도 리트리버', '사모예드', '시베리안 허스키', '저먼 셰퍼드', '말라뮤트', '알래스칸 말라뮤트', '풍산개']
@@ -27,6 +27,8 @@ export const GAIT_GROUP_NAME: Record<DRowsKey, string> = { walk: '평보', trot:
 export const NO_VALID_MSG = '쓸 수 있는 통과가 없었습니다. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'
 /** 서버 쪽 실패(FAILED, 예: 집계 오류). 반려견 탓이 아니므로 촬영 안내를 하지 않는다 */
 export const SERVER_FAIL_MSG = '분석에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+/** 회차는 끝났지만 영상이 전부 분석 서버에서 실패(보내지 못함·시간 초과·분석 실패). 영상 문제가 아니므로 다시 찍으라고 하지 않는다 */
+export const SHOTS_FAILED_MSG = '분석 서버가 영상을 처리하지 못했습니다. 영상 문제가 아니니 다시 찍지 말고, 잠시 후 다시 분석해 주세요.'
 export const r1 = (v: number) => Math.round(v * 10) / 10
 export const num = (v: number | null | undefined) => (v == null ? '—' : v)
 /** 회차 체중 문구. 그날 체중을 안 적은 회차(weight_kg null → '-')는 '-kg' 대신 측정 불가 표기 */
@@ -72,7 +74,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   if (!R) return { rd, rp }
   const d = ctx.dogById(R.dog) || ({ name: '-', breed: '', birth: '', kg: '' } as DDog), stt = ST[R.st]
   rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · ${wkg(R.w)}`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
-    failMsg: R.status === 'FAILED' ? R.result?.fail_reason?.message || SERVER_FAIL_MSG : NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
+    failMsg: R.status === 'FAILED' ? R.result?.fail_reason?.message || SERVER_FAIL_MSG : allShotsFailed(R.result) ? SHOTS_FAILED_MSG : NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
   if (R.st === 'fail') return { rd, rp }
   const vv = valid(ctx, R.dog), idx = vv.findIndex((x) => x.id === R.id), P = vv[idx + 1]
   // 고른 보행에 표가 없으면 속보 → 평보 → 미판별(OTHER) 순으로 있는 표를 쓴다. gaitKey 는 실제로 보여 준 묶음

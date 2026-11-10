@@ -105,6 +105,38 @@ def test_gaits_are_kept_apart_and_fore_pairs_use_the_front_limbs(db: Session, do
     ) not in reference
 
 
+def test_previous_session_adds_its_values_and_the_changes_for_the_same_gait(db: Session, dog, staff) -> None:
+    """직전 회차 비교 표의 기준(272): 직전 값은 있는 것만, 차이는 두 값이 다 있을 때만, 같은 보행 유형만."""
+    older = _session(
+        db,
+        dog,
+        staff,
+        [
+            ("TROT", "rom_stifle", "LH", "45.0", "deg"),
+            ("TROT", "rom_stifle", "RH", None, "deg"),
+            ("TROT", "rom_hip", "LH", "30.2", "deg"),
+            ("WALK", "rom_hip", "LH", "30.0", "deg"),
+        ],
+    )
+    session = _session(
+        db,
+        dog,
+        staff,
+        [("TROT", "rom_stifle", "LH", "47.3", "deg"), ("TROT", "rom_stifle", "RH", "43.1", "deg")],
+    )
+    reference = reference_numbers(db, session.id, older.id)
+    added = {key: value for key, value in reference.items() if key[3] in ("previous", "change")}
+    assert added == {
+        ("TROT", "rom_stifle", "LH", "previous"): 45.0,
+        ("TROT", "rom_stifle", "LH", "change"): 2.3,
+        ("TROT", "rom_hip", "LH", "previous"): 30.2,  # 이번 회차에 없는 수치도 표에 직전 값이 실린다
+    }
+    without = reference_numbers(db, session.id)
+    assert without == {key: value for key, value in reference.items() if key not in added}
+    # 직전 회차가 그사이 지워졌으면 기준이 없어, 그 값을 실은 보고서는 대조에서 걸린다
+    assert reference_numbers(db, session.id, uuid.uuid4()) == without
+
+
 def test_unknown_session_has_no_reference_numbers(db: Session) -> None:
     assert reference_numbers(db, uuid.uuid4()) == {}
 

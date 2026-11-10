@@ -10,6 +10,7 @@ import { PetModal } from './parts/Modals'
 import { DayPicker, dayLabel } from './parts/DayPicker'
 import { VV } from './parts/Vital'
 import { link } from '../config'
+import { isRemote, syncTodayCharts } from '../store/backend'
 
 // EMR 첫 화면처럼 오늘 온 반려견부터(11-02)
 const HOME_VIEWS: [string, string][] = [['today', '오늘'], ['analyses', '분석'], ['dogs', '반려견'], ['staff', '촬영 담당자']]
@@ -34,6 +35,11 @@ export default function Home() {
   useEffect(() => {
     if (toDog) navigate(toDog, { replace: true }) // 반려견은 차트에서 본다
   }, [toDog, navigate])
+  // 서버 기관: 오늘 진료 기록·바이탈이 있는 반려견 차트를 뒤에서 읽어 '오늘' 목록을 채운다(차트를 안 열어 본 반려견도)
+  const acctId = acct?.id ?? ''
+  useEffect(() => {
+    if (acctId && isRemote(acctId)) void syncTodayCharts(acctId, isoToday()).catch(() => undefined)
+  }, [acctId])
   if (!acct || toDog) return null
 
   const q = query.get('q') || ''
@@ -69,13 +75,14 @@ export default function Home() {
   let table
   if (view === 'today') {
     const cols = '70px minmax(190px,1.4fr) minmax(170px,1.3fr) minmax(220px,1.6fr) minmax(120px,.8fr) 110px'
+    const colsN = '64px minmax(150px,1.2fr) minmax(120px,1fr) minmax(170px,1.4fr) 104px' // 좁은 창: 담당 칸 숨김
     table = (
-      <div style={css('min-width:900px')}>
-        <div style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
-          <span>시각</span><span>반려견</span><span>병명</span><span>{day === isoToday() ? '오늘 한 것' : '그날 한 것'}</span><span>담당</span><span>진료 기록</span>
+      <div className="tbl" style={css('--tw:900px;--tw-n:680px')}>
+        <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
+          <span>시각</span><span>반려견</span><span>병명</span><span>{day === isoToday() ? '오늘 한 것' : '그날 한 것'}</span><span className="tbl-opt">담당</span><span>진료 기록</span>
         </div>
         {rows.map((r, i) => (
-          <div key={r.id} className="hv-row" data-href={`/dogs/${r.id}`} style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>
+          <div key={r.id} className="hv-row tbl-r" data-href={`/dogs/${r.id}`} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>
             <b style={css('font-size:15px;font-variant-numeric:tabular-nums')}>{r.time}</b>
             <span style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}>
               <span style={css('font-size:12px;color:#8E949C;font-variant-numeric:tabular-nums')}>{r.no}</span>
@@ -83,7 +90,7 @@ export default function Home() {
             </span>
             <span style={css('font-size:14.5px;font-weight:600;color:#3A4250;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')} title={r.dx}>{r.dx}</span>
             <span style={css('display:flex;gap:5px;flex-wrap:wrap')}>{r.steps.map((s: Chip, j: number) => <span key={j} style={css(`padding:3px 9px;border-radius:7px;background:${s.bg};color:${s.c};font-size:12.5px;font-weight:700`)}>{s.t}</span>)}</span>
-            <span style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.who}</span>
+            <span className="tbl-opt" style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.who}</span>
             <span>{r.todo ? <a className="lk" href={link(`/dogs/${r.id}?v=${today_iso}`)} style={css('padding:4px 10px;border-radius:8px;border:1px solid #D2601A;color:#B4501A;font-size:12.5px;font-weight:700;white-space:nowrap')}>{r.todo} ›</a> : <span style={css('font-size:13px;color:#2E7A4F;font-weight:700')}>작성함</span>}</span>
           </div>
         ))}
@@ -91,13 +98,14 @@ export default function Home() {
     )
   } else if (view === 'analyses') {
     const cols = '104px minmax(190px,1.5fr) minmax(170px,1.4fr) 66px 128px 96px minmax(100px,.8fr)'
+    const colsN = '92px minmax(140px,1.3fr) minmax(110px,1fr) 56px 110px 88px' // 좁은 창: 촬영 칸 숨김
     table = (
-      <div style={css('min-width:900px')}>
-        <div style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
-          <span>측정일</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 지수</span><span>상태</span><span>촬영</span>
+      <div className="tbl" style={css('--tw:900px;--tw-n:680px')}>
+        <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
+          <span>측정일</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 지수</span><span>상태</span><span className="tbl-opt">촬영</span>
         </div>
         {rows.map((r, i) => (
-          <div key={r.id} className="hv-row" data-href={`/results/${r.id}`} style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>
+          <div key={r.id} className="hv-row tbl-r" data-href={`/results/${r.id}`} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>
             <span style={css('font-size:14px;color:#5B6472;font-variant-numeric:tabular-nums')}>{r.when}</span>
             <span style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}>
               <span style={css('font-size:12px;color:#8E949C;font-variant-numeric:tabular-nums')}>{r.no}</span>
@@ -107,34 +115,36 @@ export default function Home() {
             <span style={css('font-size:14px;color:#5B6472')}>{r.no_s}</span>
             <span style={css('display:flex;align-items:center;gap:6px')}><b style={css(`padding:4px 10px;border-radius:8px;background:${r.sym_bg};color:${r.sym_c};font-size:14px;font-variant-numeric:tabular-nums`)}>{r.sym}</b>{r.sym_d ? <span style={css(`font-size:12.5px;font-weight:700;color:${r.sym_dc}`)}>{r.sym_d}</span> : null}</span>
             <span><span style={css(`padding:4px 9px;border-radius:8px;background:${r.bg};color:${r.c};font-size:12.5px;font-weight:700;white-space:nowrap`)}>{r.st}</span></span>
-            <a className="lk" href={link(qs({ by: r.by, page: '' }))} style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.by}</a>
+            <a className="lk tbl-opt" href={link(qs({ by: r.by, page: '' }))} style={css('font-size:13.5px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.by}</a>
           </div>
         ))}
       </div>
     )
   } else if (view === 'dogs') {
     const cols = 'minmax(140px,1fr) minmax(130px,.9fr) minmax(190px,1.2fr) minmax(200px,1.6fr) ' + (changed ? 'minmax(150px,1.1fr) ' : '') + '110px 84px'
+    const colsN = 'minmax(120px,1fr) minmax(212px,1.2fr) ' + (changed ? 'minmax(130px,1.1fr) ' : 'minmax(150px,1.4fr) ') + '78px' // 좁은 창
+    const dxOpt = changed ? 'tbl-opt' : undefined
     table = (
-      <div style={css(`min-width:${changed ? 1080 : 940}px`)}>
-        <div style={css(`display:grid;grid-template-columns:${cols};gap:14px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
-          <span>반려견</span><span>견종 · 체급</span><span>체중 · 체온 · 심박 · 혈압</span><span>수술 · 진단</span>{changed ? <span>일주일 간 변동</span> : null}<span>분석</span><span>단계</span>
+      <div className="tbl" style={css(`--tw:${changed ? 1080 : 940}px;--tw-n:620px`)}>
+        <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:14px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
+          <span>반려견</span><span className="tbl-opt">견종 · 체급</span><span>체중 · 체온 · 심박 · 혈압</span><span className={dxOpt}>수술 · 진단</span>{changed ? <span>일주일 간 변동</span> : null}<span className="tbl-opt">분석</span><span>단계</span>
         </div>
         {rows.map((r, i) => {
           const bs = r.badges.filter((b: Badge) => b.kind !== 'warn')
           return (
-            <div key={r.id} className="hv-row" data-href={`/dogs/${r.id}`} style={css(`display:grid;grid-template-columns:${cols};gap:14px;padding:13px 20px;border-top:${bt(i)};align-items:center;cursor:pointer`)}>
-              <div style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}><span style={css('font-size:12.5px;color:#8E949C;font-variant-numeric:tabular-nums')}>{r.no}</span><b style={css('font-size:16px')}>{r.name}</b><span style={css('font-size:13px;color:#5B6472')}>{r.sex} · {r.age}</span></div>
-              <div style={css('display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:14.5px;font-weight:600')}>{r.breed}</span><span style={css('font-size:13px;color:#5B6472')}>{r.size}</span></div>
+            <div key={r.id} className="hv-row tbl-r" data-href={`/dogs/${r.id}`} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:14px;padding:13px 20px;border-top:${bt(i)};align-items:center;cursor:pointer`)}>
+              <div style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}><span style={css('font-size:12.5px;color:#8E949C;font-variant-numeric:tabular-nums')}>{r.no}</span><b style={css('font-size:16px')}>{r.name}</b><span style={css('font-size:13px;color:#5B6472')}>{r.sex} · {r.age}</span><span className="tbl-n" style={css('font-size:13px;color:#5B6472')}>{r.breed} · {r.size}</span></div>
+              <div className="tbl-opt" style={css('display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:14.5px;font-weight:600')}>{r.breed}</span><span style={css('font-size:13px;color:#5B6472')}>{r.size}</span></div>
               <div style={css('display:grid;grid-template-columns:repeat(4,auto);justify-content:start;column-gap:12px;row-gap:2px;font-variant-numeric:tabular-nums')}>
-                {['체중', '체온', '심박', '혈압'].map((k) => <span key={k} style={css('font-size:11.5px;color:#8E949C')}>{k}</span>)}
+                {['체중', '체온', '심박', '혈압'].map((k) => <span key={k} style={css('font-size:11.5px;color:#8E949C;white-space:nowrap')}>{k}</span>)}
                 {['kg', 'temp', 'hr', 'bp'].map((key) => <VV key={key} value={r.v[key]} f={r.v.f[key]} size={14} />)}
               </div>
-              <div style={css('display:flex;flex-wrap:wrap;gap:5px;min-width:0')}>
+              <div className={dxOpt} style={css('display:flex;flex-wrap:wrap;gap:5px;min-width:0')}>
                 {bs.map((b: Badge, j: number) => <span key={j} title={b.full || b.t} style={css(`padding:4px 9px;border-radius:8px;background:${tone[b.kind][0]};color:${tone[b.kind][1]};font-size:12.5px;font-weight:700;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis`)}>{b.t}</span>)}
                 {!bs.length ? <span style={css('font-size:13px;color:#A0A7B2')}>없음</span> : null}
               </div>
               {changed ? <div style={css('display:flex;flex-wrap:wrap;gap:5px')}>{r.changes.map((c: { t: string; tone: string }, j: number) => <span key={j} style={css(`padding:4px 9px;border-radius:8px;background:${tone[c.tone][0]};color:${tone[c.tone][1]};font-size:12.5px;font-weight:700;white-space:nowrap`)}>{c.t}</span>)}</div> : null}
-              <div style={css('display:flex;flex-direction:column;gap:2px')}><b style={css('font-size:14.5px')}>{r.n}건</b><span style={css('font-size:12px;color:#8E949C')}>{r.last}</span></div>
+              <div className="tbl-opt" style={css('display:flex;flex-direction:column;gap:2px')}><b style={css('font-size:14.5px')}>{r.n}건</b><span style={css('font-size:12px;color:#8E949C')}>{r.last}</span></div>
               <span><span style={css(`padding:4px 10px;border-radius:8px;background:${r.st_bg};color:${r.st_c};font-size:13px;font-weight:700;white-space:nowrap`)}>{r.stage}</span></span>
             </div>
           )
@@ -143,13 +153,14 @@ export default function Home() {
     )
   } else {
     const cols = 'minmax(180px,1.4fr) 110px 110px 110px 120px'
+    const colsN = cols
     table = (
-      <div style={css('min-width:640px')}>
-        <div style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
+      <div className="tbl" style={css('--tw:640px')}>
+        <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
           <span>촬영 담당자</span><span>촬영한 분석</span><span>반려견</span><span>분석 실패</span><span>마지막 촬영</span>
         </div>
         {rows.map((r, i) => (
-          <div key={r.name} className="hv-row" data-href={qs({ view: 'analyses', by: r.name, page: '' })} style={css(`display:grid;grid-template-columns:${cols};gap:12px;padding:14px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;font-size:15px`)}>
+          <div key={r.name} className="hv-row tbl-r" data-href={qs({ view: 'analyses', by: r.name, page: '' })} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:14px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;font-size:15px`)}>
             <b>{r.name}</b><span>{r.n}건</span><span>{r.dogs}마리</span><span style={css(`color:${r.fail ? '#C2412D' : '#5B6472'}`)}>{r.fail}건</span><span style={css('color:#5B6472')}>{r.last}</span>
           </div>
         ))}

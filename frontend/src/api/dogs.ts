@@ -30,6 +30,10 @@ export function createDog(body: DogCreate): Promise<DogOut> {
 export function updateDog(id: string, body: DogUpdate): Promise<DogOut> {
   return request(`/dogs/${id}`, { method: 'PATCH', body })
 }
+/** 반려견을 휴지통으로 보낸다(서버가 정한 기간 뒤 영구 삭제). 회차·영상도 같이 숨는다 */
+export function deleteDog(id: string): Promise<void> {
+  return request(`/dogs/${id}`, { method: 'DELETE' })
+}
 export function listDogSessions(id: string, p: { page?: number; size?: number } = {}): Promise<Paged<SessionHistoryItem>> {
   return request(`/dogs/${id}/sessions${qs({ page: p.page, size: p.size ?? 100 })}`)
 }

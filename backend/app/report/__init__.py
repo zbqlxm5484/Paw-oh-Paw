@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-TEMPLATE_VERSION = "0.4"
+TEMPLATE_VERSION = "0.5"
 
 
 class ReportError(Exception):

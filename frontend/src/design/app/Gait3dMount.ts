@@ -16,6 +16,8 @@ export type Ctx = {
   rom_ref: Record<string, number>
   overall: { sym: number; front: string; hind: string }
   gait_url: string
+  /** 측정 걸음 곡선을 주는 함수(이 회차의 실제 각도 → 없으면 견본, gaitClip.ts loadSessionGait). 없으면 gait_url 을 받는다 */
+  gait_load?: () => Promise<GaitClip | null>
   gait_src: string
   view_main: string
   /** 기준 회차(겹쳐 보기). 이 회차가 기준 회차이거나 기준 회차가 없으면 null */
@@ -36,7 +38,7 @@ export interface Els {
   setLoading: (s: string | null) => void
   api: { current: { setView: (k: string) => void; setMode: (m: string) => void; setWalking: (on: boolean) => void; setGhost: (on: boolean) => void } | null }
 }
-type GaitClip = { legs: Record<string, { joint: Record<string, number[]> }> }
+export type GaitClip = { legs: Record<string, { joint: Record<string, number[]> }> }
 type GB = { b: THREE.Object3D; joint: string; q0: THREE.Quaternion; dqs: THREE.Quaternion[]; scale: number }
 /** 걷는 모델 하나(이 회차, 또는 겹쳐 보는 기준 회차) */
 type Rig = {
@@ -287,7 +289,7 @@ export function mount(ctx: Ctx, el: Els): () => void {
       main = rigOf(model, STANCE, null)
       if (ghostModel && ctx.ghost) ghost = rigOf(ghostModel, ctx.ghost.stance, GHOST_COLOR)
     }
-    fetch(GAIT_URL).then((r) => (r.ok ? r.json() : null)).then((g: GaitClip | null) => {
+    (ctx.gait_load ? ctx.gait_load() : fetch(GAIT_URL).then((r) => (r.ok ? r.json() : null))).then((g: GaitClip | null) => {
       if (dead) return
       if (g) {
         gait = g
@@ -297,7 +299,7 @@ export function mount(ctx: Ctx, el: Els): () => void {
           if (!rig) return
           const amp = (code: string, j: string): number | null => {
             if (roms[code] && roms[code][j]) return roms[code][j] // 그 회차 실측 가동 범위
-            const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null // 없으면 시연 곡선
+            const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null // 없으면 걸음 곡선(이 회차 실제 각도, 못 받았으면 견본)
           }
           for (const [code, bones] of Object.entries(rig.bones)) bones.forEach((x) => {
             if (!x) return

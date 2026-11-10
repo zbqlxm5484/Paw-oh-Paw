@@ -52,11 +52,11 @@ export default function Results() {
           ))}
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow-x:auto')}>
-          <div style={css('min-width:720px')}>
-            <div style={css('display:grid;grid-template-columns:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;gap:12px;padding:14px 24px;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>반려견</span><span>측정일 · 회차</span><span>상태</span><span>유효 통과</span><span>대칭 지수</span><span>체중</span><span></span></div>
+          <div className="tbl" style={css('--tw:720px;--tw-n:560px')}>
+            <div className="tbl-r" style={css('--tc:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;--tc-n:1.1fr 1.4fr 1fr 1fr 1fr 32px;display:grid;gap:12px;padding:14px 24px;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>반려견</span><span>측정일 · 회차</span><span>상태</span><span>유효 통과</span><span>대칭 지수</span><span className="tbl-opt">체중</span><span></span></div>
             {rows.map((r) => (
-              <a key={r.id} className="lk hv-row" href={link(`/results/${r.id}`)} style={css(`display:grid;grid-template-columns:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;gap:12px;align-items:center;padding:16px 24px;border-top:${r.bt};font-size:15px;font-variant-numeric:tabular-nums`)}>
-                <b>{r.name}</b><span style={css('color:#5B6472')}>{r.when}</span><span><span style={css(`height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:${r.bg};color:${r.c};display:inline-flex;align-items:center`)}>{r.st}</span></span><span>{r.pass}</span><span>{r.sym}</span><span>{r.w}</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
+              <a key={r.id} className="lk hv-row tbl-r" href={link(`/results/${r.id}`)} style={css(`--tc:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;--tc-n:1.1fr 1.4fr 1fr 1fr 1fr 32px;display:grid;gap:12px;align-items:center;padding:16px 24px;border-top:${r.bt};font-size:15px;font-variant-numeric:tabular-nums`)}>
+                <b>{r.name}</b><span style={css('color:#5B6472')}>{r.when}</span><span><span style={css(`height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:${r.bg};color:${r.c};display:inline-flex;align-items:center`)}>{r.st}</span></span><span>{r.pass}</span><span>{r.sym}</span><span className="tbl-opt">{r.w}</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
               </a>
             ))}
             {all.length > shown ? <div style={css('padding:14px;display:flex;justify-content:center;border-top:1px solid #F2EFEA')}><button type="button" className="bt" onClick={() => setShown(shown + PAGE)} style={css('height:42px;padding:0 20px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;font-size:14.5px;font-weight:700;cursor:pointer')}>{`더 보기 (${all.length - shown}건 남음)`}</button></div> : null}

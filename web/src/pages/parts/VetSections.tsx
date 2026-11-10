@@ -172,7 +172,7 @@ export function mainGait(r: Result): string {
   return r.gait && gaits.includes(r.gait) ? r.gait : gaits[gaits.length - 1] ?? '속보'
 }
 
-export function VetSections({ acct, r, fromServer, knee }: { acct: Account; r: Result; fromServer: boolean; knee?: ReactNode }) {
+export function VetSections({ acct, r, fromServer, knee, onReady }: { acct: Account; r: Result; fromServer: boolean; knee?: ReactNode; onReady?: () => void }) {
   const gait = mainGait(r)
   const [cmp, setCmp] = useState<CmpView | null | undefined>(() => (fromServer ? undefined : cmpLocal(acct, r, gait)))
   useEffect(() => {
@@ -189,6 +189,12 @@ export function VetSections({ acct, r, fromServer, knee }: { acct: Account; r: R
       alive = false
     }
   }, [acct, r, gait, fromServer])
+  // 인쇄 전용 화면: 비교 값을 다 받은 뒤(서버 회차) 또는 바로(브라우저 계산) 다 그렸다고 알린다
+  // (서버 회차는 비교 API 응답이 오기 전까지 cmp 가 undefined. 브라우저 계산은 직전 회차가 없으면 undefined 여도 다 그린 것)
+  const loading = fromServer && cmp === undefined
+  useEffect(() => {
+    if (!loading) onReady?.()
+  }, [loading, onReady])
   return (
     <div style={css('display:flex;flex-direction:column;gap:28px')}>
       {/* 인쇄(A4): 1쪽 끝 = 측정 품질(Report.tsx), 2쪽 = 좌우 비교·뒷무릎 각도(이번 회차), 3쪽 = 지난 측정과 비교·무릎 가동 범위 변화(시간에 따른 변화).

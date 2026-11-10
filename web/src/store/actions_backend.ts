@@ -1,12 +1,12 @@
 // 백엔드에 있는 기능의 폼 처리. 가짜 서버 모드(--mode mock)가 아니면 BACKEND 우선순위로 등록돼, import 순서와 무관하게
 // actions_impl.ts 보다 먼저 같은 주소를 받는다.
-// 백엔드에 없는 기능(메모·바이탈·진단 이력·기준 회차·삭제 등)은 등록하지 않아 actions_impl.ts(브라우저 저장소)가 그대로 받는다.
+// 바이탈·진단 이력·메모·진료 기록(271)도 서버에 쓰고 그 반려견 차트를 다시 읽는다. 시연 기관은 '__local__' 로 actions_impl.ts 에 넘긴다.
 import { ApiError } from '../api/client'
 import { redirect, need_login, setLogin, current, currentStaff, type Go } from '../app/session'
 import * as config from '../config'
 import { on, f, petInputError, BACKEND, type Handler } from './actions'
-import { api, MOCK, SEX_OUT, SIZE_OUT, syncFromBackend, tokenStore, isRemote, syncAdmin } from './backend'
-import { db, dogOf, resultOf } from './db'
+import { api, MOCK, SEX_OUT, SIZE_OUT, STAGE_OUT, KIND_OUT, CAT_OUT, syncFromBackend, syncDogChart, toDog, tokenStore, isRemote, syncAdmin } from './backend'
+import { db, dogOf, isoToday, resultOf } from './db'
 import { remember } from './sessions_backend'
 import { LEGAL } from '../legal/content'
 
@@ -132,14 +132,31 @@ if (!MOCK) {
       focus_limb: focus in config.LIMB ? focus : null, memo: f(fd, 'memo').trim() || null,
     }
     const dog_id = f(fd, 'dog_id')
+    // 동물번호·보호자·단계(271). 수정 때는 바뀐 칸만 보낸다(목록에서 읽은 반려견은 연락처 전체를 모를 수 있어서). 지울 때는 null
+    const prev = dogOf(acct, dog_id)
+    const extra: [string, string, string][] = [['chart_no', 'no', prev?.no ?? ''], ['owner_name', 'owner', prev?.owner ?? ''], ['owner_phone', 'phone', prev?.phone ?? '']]
+    for (const [key, field, old] of extra) {
+      if (!fd.has(field)) continue
+      const v = f(fd, field).trim()
+      if (prev ? v !== old : v) body[key] = v || null
+    }
+    const stage = f(fd, 'stage')
+    if (stage in config.STAGE && (!prev || stage !== prev.stage)) body.stage = STAGE_OUT[stage]
     try {
       if (dogOf(acct, dog_id)) {
-        await api.updateDog(dog_id, { ...body, version: Number(f(fd, 'version') || dogOf(acct, dog_id)!.version) })
+        const o = await api.updateDog(dog_id, { ...body, version: Number(f(fd, 'version') || dogOf(acct, dog_id)!.version) })
         await syncFromBackend()
+        // 목록 응답에는 연락처 전체가 없어 수정 응답(상세 모양)으로 한 번 더 맞춘다
+        const a = current()
+        const i = a ? a.dogs.findIndex((x) => x.id === o.id) : -1
+        if (a && i >= 0) a.dogs[i] = toDog(o, a.dogs[i])
         return redirect(next_url, '저장했습니다')
       }
       const o = await api.createDog(body)
       await syncFromBackend()
+      const a = current()
+      const i = a ? a.dogs.findIndex((x) => x.id === o.id) : -1
+      if (a && i >= 0) a.dogs[i] = toDog(o, a.dogs[i])
       const sep = next_url.includes('?') ? '&' : '?'
       if (next_url.startsWith('/upload') || next_url.startsWith('/my')) return redirect(`${next_url}${sep}dog=${o.id}`, `${o.name} 등록을 마쳤습니다`)
       return redirect(`/dogs/${o.id}`, `${o.name} 등록을 마쳤습니다`)
@@ -216,6 +233,144 @@ if (!MOCK) {
     return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸습니다')
   })
 
+  // ── 반려견 차트(271): 메모·진료 기록·바이탈·진단 이력. 쓴 담당자는 서버가 로그인한 사람으로 적는다(작성자 칸은 보내지 않는다) ──
+  /** 서버에 쓰고 차트를 다시 읽은 뒤 돌아간다. 실패하면 서버 문구 그대로 */
+  const chartDo = async (dogId: string, back: string, run: () => Promise<string>): Promise<Go> => {
+    const acct = current()!
+    try {
+      const toast = await run()
+      await syncDogChart(acct.id, dogId).catch(() => undefined)
+      return redirect(back, toast)
+    } catch (e) {
+      await syncDogChart(acct.id, dogId).catch(() => undefined) // 여러 번 부르다 중간에 실패했으면 된 데까지 보인다
+      return redirect(back, msg(e))
+    }
+  }
+  const badNum = (...vs: string[]) => vs.some((v) => v !== '' && !Number.isFinite(Number(v)))
+
+  onB('/dogs/:dog_id/notes', async (p, fd) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const d = dogOf(acct, p.dog_id)
+    const next_url = f(fd, 'next_url')
+    const back = next_url.startsWith('/results/') || next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}`
+    if (!d) return redirect('/home')
+    const note_id = f(fd, 'note_id'), text = f(fd, 'text').trim(), important = !!f(fd, 'important'), visit = !!f(fd, 'visit')
+    const soap = (['S', 'O', 'A', 'P'] as const).map((k) => [k, f(fd, k.toLowerCase()).trim()] as [string, string]).filter(([, v]) => v)
+    const r = resultOf(acct, f(fd, 'rid'))
+    const session_id = r && r.dog === d.id ? r.id : undefined
+    const soapBatch = () => api.addNotes(d.id, { session_id, notes: soap.map(([k, v], i) => ({ category: k, body: v, important: important && i === 0 })) })
+    if (note_id) {
+      if (!text) return redirect(back, '내용을 적어 주세요')
+      return chartDo(d.id, back, async () => {
+        await api.updateNote(note_id, { body: text })
+        return '고쳤습니다. 이전 내용은 이력에 남습니다'
+      })
+    }
+    if (visit) {
+      // 오늘 방문 기록: 바이탈은 방문마다 반드시 잰다(11-02). 오늘 이미 잰 값이 있으면 바꾼다
+      const vals = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
+      if (!vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
+      if (badNum(...vals)) return redirect(back, '바이탈은 숫자로 적어 주세요')
+      const [kg, temp, hr, sbp, dbp] = vals.map(Number)
+      return chartDo(d.id, back, async () => {
+        await api.putVital(d.id, isoToday(), { weight_kg: kg, temp_c: temp, heart_rate: hr, sbp, dbp })
+        if (!soap.length) return '바이탈을 기록했습니다'
+        await soapBatch()
+        return '기록을 남겼습니다'
+      })
+    }
+    if (soap.length) {
+      return chartDo(d.id, back, async () => {
+        await soapBatch()
+        return '기록을 남겼습니다'
+      })
+    }
+    if (!text) return redirect(back, '내용을 적어 주세요')
+    const cat = f(fd, 'cat') || 'O'
+    const category = CAT_OUT[cat] ?? 'OTHER'
+    return chartDo(d.id, back, async () => {
+      await api.addNote(d.id, { category, body: text, important, session_id })
+      return cat in config.SOAP ? '기록을 남겼습니다' : '메모를 남겼습니다'
+    })
+  })
+
+  // 바이탈 한 날짜 저장·고치기. 적은 값만 보낸다(빈 칸은 그대로 둔다). 지우는 API 는 없다
+  onB('/dogs/:dog_id/vitals', async (p, fd) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const d = dogOf(acct, p.dog_id)
+    if (!d) return redirect('/home')
+    const day = f(fd, 'day') || isoToday()
+    const next_url = f(fd, 'next_url')
+    const back = next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}?v=${day}`
+    const [kg, temp, hr, sbp, dbp] = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
+    if (![kg, temp, hr, sbp, dbp].some(Boolean)) return redirect(back, '값을 하나 이상 적어 주세요')
+    if (badNum(kg, temp, hr, sbp, dbp)) return redirect(back, '바이탈은 숫자로 적어 주세요')
+    if (!!sbp !== !!dbp) return redirect(back, '혈압은 수축기·이완기를 함께 적어 주세요')
+    const body: Record<string, number> = {}
+    if (kg) body.weight_kg = Number(kg)
+    if (temp) body.temp_c = Number(temp)
+    if (hr) body.heart_rate = Number(hr)
+    if (sbp) {
+      body.sbp = Number(sbp)
+      body.dbp = Number(dbp)
+    }
+    return chartDo(d.id, back, async () => {
+      await api.putVital(d.id, day, body)
+      return '바이탈을 기록했습니다'
+    })
+  })
+
+  const historyBody = (fd: FormData) => {
+    const k = f(fd, 'kind')
+    const site = f(fd, 'site')
+    return {
+      occurred_on: f(fd, 'day') || isoToday(), kind: KIND_OUT[k] ?? 'DIAGNOSIS', title: f(fd, 'title').trim(),
+      site: site in config.SITE ? site : null, clinician: f(fd, 'by').trim() || null,
+    }
+  }
+
+  onB('/dogs/:dog_id/history', async (p, fd) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const d = dogOf(acct, p.dog_id)
+    const back = `/dogs/${p.dog_id}?tab=dx`
+    if (!d) return redirect('/home')
+    const b = historyBody(fd)
+    if (!b.title) return redirect(back, '내용을 적어 주세요')
+    const stage = f(fd, 'stage')
+    return chartDo(d.id, back, async () => {
+      await api.addHistory(d.id, { ...b, ...(stage in config.STAGE && stage !== d.stage ? { stage: STAGE_OUT[stage] } : {}) })
+      return '진단 이력에 남겼습니다'
+    })
+  })
+
+  // 진단 이력 한 줄 고치기·지우기(!130). 반려견 단계는 바뀌지 않는다
+  onB('/dogs/:dog_id/history/:hid', async (p, fd) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const d = dogOf(acct, p.dog_id)
+    const back = `/dogs/${p.dog_id}?tab=dx`
+    if (!d) return redirect('/home')
+    if (f(fd, 'delete')) {
+      return chartDo(d.id, back, async () => {
+        await api.deleteHistory(d.id, p.hid)
+        return '진단 이력에서 지웠습니다'
+      })
+    }
+    const b = historyBody(fd)
+    if (!b.title) return redirect(`${back}&hedit=${encodeURIComponent(p.hid)}`, '내용을 적어 주세요')
+    return chartDo(d.id, back, async () => {
+      await api.updateHistory(d.id, p.hid, b)
+      return '진단 이력을 고쳤습니다'
+    })
+  })
+
   // ── 크림오프 관리(백엔드 /admin) ──
   const adminOnly = (): Go | null => (currentStaff()?.role === 'ADMIN' ? null : redirect('/admin', '조회 전용 계정입니다'))
   const after = async (toast: string): Promise<Go> => {
@@ -273,5 +428,37 @@ if (!MOCK) {
     } catch (e) {
       return redirect('/admin', msg(e))
     }
+  })
+
+  // 반려견 삭제: 서버 휴지통으로 보낸다(DELETE /dogs/{id}). 예전에는 브라우저에서만 지워 새로 불러오면 다시 나타났다
+  onB('/dogs/:dog_id/delete', async (p) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const d = dogOf(acct, p.dog_id)
+    if (!d) return redirect('/my')
+    try {
+      await api.deleteDog(d.id)
+    } catch (e) {
+      return redirect(`/dogs/${d.id}`, msg(e))
+    }
+    acct.dogs = acct.dogs.filter((x) => x.id !== d.id)
+    acct.results = acct.results.filter((r) => r.dog !== d.id)
+    acct.jobs = acct.jobs.filter((j) => j.dog !== d.id)
+    return redirect('/my', `${d.name} 정보를 삭제했습니다`)
+  })
+
+  // 분석 완료 알림 켜기·끄기: 담당자 설정(PATCH /auth/me notif_on)
+  onB('/my/notif', async () => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    try {
+      const me = await api.updateMe({ notif_on: !acct.notif_on })
+      acct.notif_on = me.notif_on ?? !acct.notif_on
+    } catch (e) {
+      return redirect('/my', msg(e))
+    }
+    return redirect('/my', acct.notif_on ? '분석 완료 알림을 켰습니다' : '분석 완료 알림을 껐습니다')
   })
 }

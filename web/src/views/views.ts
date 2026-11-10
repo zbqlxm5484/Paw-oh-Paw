@@ -513,6 +513,15 @@ export type Badge = { t: string; kind: string; full?: string }
 /** 홈에 바로 보이는 특이사항: 최근 수술(없으면 진단) 하나만. */
 export function badges(d: Dog): Badge[] {
   const out: Badge[] = []
+  const sb = d.srv?.badges
+  if (sb) {
+    // 서버 배지(271). 중요 메모 배지는 '최근 변동'의 중요 메모와 겹쳐 따로 띄우지 않는다(이 화면의 원래 규칙과 같게)
+    for (const b of sb) {
+      if (b.code === 'SURGERY') out.push({ t: `${head(b.title ?? '')} · ${SITE[b.site ?? ''] ?? ''} · D+${days_ago(b.on)}`, kind: 'surg' })
+      else if (b.code === 'DIAGNOSIS') out.push({ t: `${head(b.title ?? '')} · ${SITE[b.site ?? ''] ?? ''}`, kind: 'diag' })
+    }
+    return out
+  }
   const surg = lastOf(d.history, (h) => h.kind === '수술')
   if (surg) out.push({ t: `${head(surg.title)} · ${SITE[surg.site] ?? ''} · D+${days_ago(surg.day)}`, kind: 'surg' })
   else {
@@ -553,6 +562,21 @@ export function changes(acct: Account, d: Dog): [Change[], string] {
     out.push({ t: label, tone })
     if (day > last) last = day
   }
+  const sc = d.srv?.changes
+  if (sc) {
+    // 서버 변동(271, 최근 7일). 앱(AppProto changesOf)과 같은 규칙: 재촬영은 가장 최근 회차가 실패면 '재촬영 필요', 아니면 '일부 유효'
+    const latest = acct.results.find((r) => r.dog === d.id && r.day)
+    for (const c of sc) {
+      if (c.code === 'SURGERY_ADDED') add(c.on, '수술 등록', 'surg')
+      else if (c.code === 'RESHOOT_NEEDED') {
+        if (!latest || latest.st === 'fail') add(c.on, '재촬영 필요', 'bad')
+        else add(c.on, '일부 유효 · 재촬영 권장', 'warn')
+      } else if (c.code === 'GAIT_BETTER' && c.delta != null) add(c.on, `보행 좋아짐 +${c.delta}%p`, 'good')
+      else if (c.code === 'GAIT_WORSE' && c.delta != null) add(c.on, `보행 나빠짐 −${-c.delta}%p`, 'bad')
+      else if (c.code === 'IMPORTANT_NOTE') add(c.on, '중요 메모', 'warn')
+    }
+    return [out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i), last]
+  }
   for (const h of d.history) if (h.kind === '수술' && days_ago(h.day) <= CHANGE_DAYS) add(h.day, '수술 등록', 'surg')
   const rs = acct.results.filter((r) => r.dog === d.id && r.day)
   for (const r of rs) {
@@ -590,7 +614,7 @@ export function patient_row(acct: Account, d: Dog, live: Set<string>) {
     id: d.id, no: d.no || '—', name: d.name, init: cp(d.name)[0],
     breed: d.breed || '견종 미입력', size: SIZE[d.size] ?? '', age: age(d), sex: SEX[d.sex] ?? '',
     v: vital_line(lv, d.size, d.vitals.length ? prev_vital(d, lv!) : null), badges: badges(d),
-    owner: d.owner || '—', phone4: d.phone ? cp(d.phone).slice(-4).join('') : '',
+    owner: d.owner || '—', phone4: d.phone ? cp(d.phone).slice(-4).join('') : d.phone4 ?? '',
     last: last ? `${short(last.date)} · ${last.by.split(' ')[0]}` : '측정 전', tr: trend(acct, d),
     stage: st_label, st_bg, st_c, live: live.has(d.id),
     changes: ch, ch_day, site: lastOf(d.history, (h) => h.site)?.site ?? '',
@@ -600,8 +624,8 @@ export function patient_row(acct: Account, d: Dog, live: Set<string>) {
 // ── 홈: 분석 · 반려견 · 촬영 담당자 목록 (10-28 2판) ──
 /** 검색 대상: 이름·동물번호·견종·보호자·진단/수술·메모. */
 export function dog_text(d: Dog): string {
-  return [d.name, d.no, d.breed, d.owner, d.phone ? cp(d.phone).slice(-4).join('') : '', d.memo,
-    ...d.history.map((h) => h.title), ...d.notes.map((n) => n.text)].join(' ')
+  return [d.name, d.no, d.breed, d.owner, d.phone ? cp(d.phone).slice(-4).join('') : d.phone4 ?? '', d.memo,
+    ...d.history.map((h) => h.title), ...d.notes.map((n) => n.text), ...(d.srv?.dx_text ? [d.srv.dx_text] : [])].join(' ')
 }
 
 export function analysis_rows(acct: Account, rs: Result[]) {
@@ -632,7 +656,7 @@ export function sym_view(acct: Account, r: Result): { sym_bg: string; sym_c: str
 /** 병명: 히스토리의 가장 최근 진단(분석 표 칸). 괄호 설명은 뺀다 */
 export function diagnosis(d: Dog): string {
   const h = lastOf(d.history, (h) => h.kind === '진단')
-  return h ? head(h.title) : '—'
+  return h ? head(h.title) : d.srv?.diag ? head(d.srv.diag) : '—' // 차트를 열기 전 백엔드 반려견은 목록의 최근 진단
 }
 
 /** 홈 '오늘' 탭(EMR 의 오늘 접수 목록): 오늘 바이탈·진료 기록·메모·보행 측정이 있거나 지금 분석 중인 반려견.
