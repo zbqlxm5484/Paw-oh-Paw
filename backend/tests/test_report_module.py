@@ -14,9 +14,10 @@ from app.report.checks import DISCLAIMER, check_texts, find_unexplained_jargon, 
 from app.report.generate import generate_report, render
 from app.report.inputs import parse_input
 from app.report.judge import INCREASE, WITHIN_RANGE
-from app.report.numbers import UNMEASURABLE, build_tables, format_value
+from app.report.numbers import UNMEASURABLE, build_tables, format_change, format_value
 from app.report.pdf import PdfUnavailableError, pdf_available
 from app.report.sentences import _glossary
+from app.report.verify import KIND_NOT_IN_SOURCE, compare_numbers, reference_from_result
 from tests.report_fixtures import compare, metric, sample_input, sample_result
 
 # ---- 입력 ----
@@ -75,15 +76,20 @@ def test_tables_group_metrics_by_limb_and_mark_unmeasurable_with_reason() -> Non
     assert len(numbers) == 12
 
 
-def test_compare_lines_keep_reasons_and_previous_values_go_into_cells() -> None:
+def test_compare_lines_keep_reasons_and_previous_values_go_into_the_change_table() -> None:
     previous = sample_result(measured_on="2026-10-20")
     previous["gaits"][0]["metrics"] = [metric("rom_stifle", "LH", 45.0), metric("rom_stifle", "RH", 44.0)]
     tables, _ = build_tables(sample_result(), previous)
     line = tables[0].compare[1]
     assert not line.comparable and line.diff == "-" and "NO_DATA" in line.reason
-    row = next(row for row in tables[0].rows if row.code == "rom_stifle")
-    assert row.cells["LH"].previous == "45.0°" and row.cells["RH"].previous == "44.0°"
-    assert next(row for row in tables[0].rows if row.code == "rom_hip").cells["LH"].previous is None
+    changes = {row.code: row for row in tables[0].changes}
+    stifle = changes["rom_stifle"].cells
+    assert (stifle["LH"].previous, stifle["LH"].current) == ("45.0°", "47.3°")
+    assert (stifle["RH"].previous, stifle["RH"].current) == ("44.0°", "43.1°")
+    # 직전 회차에 줄이 없는 수치는 비교 불가이고 사유를 적는다
+    hip = changes["rom_hip"].cells["LH"]
+    assert (hip.previous, hip.current, hip.diff, hip.change) == ("-", "41.9°", None, None)
+    assert hip.note == "직전 회차에 이 수치가 없습니다."
 
 
 def test_format_value_never_prints_zero_for_missing() -> None:
@@ -360,7 +366,8 @@ def test_previous_session_with_another_model_version_is_not_compared() -> None:
 def test_previous_session_with_the_same_model_version_points_at_the_table() -> None:
     rendered = render(sample_input(previous=sample_result(measured_on="2026-10-20"), settings={"tolerance": {}}))
     assert rendered.texts["previous"] == (
-        "직전 회차(2026-10-20)의 값을 표의 괄호 안에 함께 적었습니다. "
+        "직전 회차(2026-10-20)와 이번 회차의 값을 표에 나란히 적었습니다. "
+        "차이는 이번 값에서 직전 값을 뺀 것입니다. "
         "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
     )
 
@@ -489,32 +496,133 @@ def _previous_for_change() -> dict:
 
 def test_change_labels_follow_the_tolerance_and_are_absent_without_one() -> None:
     tables, _ = build_tables(sample_result(), _previous_for_change(), tolerance={"rom_stifle": 4.2})
-    stifle = next(row for row in tables[0].rows if row.code == "rom_stifle")
+    changes = {row.code: row for row in tables[0].changes}
+    stifle = changes["rom_stifle"]
     assert (stifle.cells["LH"].change, stifle.cells["LH"].change_label) == (WITHIN_RANGE, "범위 안")
     assert (stifle.cells["RH"].change, stifle.cells["RH"].change_label) == (INCREASE, "증가")
-    stance = next(row for row in tables[0].rows if row.code == "stance_ratio")
-    assert stance.cells["LH"].previous == "50.0%" and stance.cells["LH"].change is None
-    assert next(row for row in tables[0].rows if row.code == "rom_hip").cells["LH"].change is None
+    assert (stifle.cells["LH"].diff, stifle.cells["RH"].diff) == ("+2.3°", "+5.1°")
+    # 오차 범위가 없는 수치는 값과 차이만 적는다(5절)
+    stance = changes["stance_ratio"].cells["LH"]
+    assert (stance.previous, stance.diff, stance.change, stance.note) == ("50.0%", "+8.2%p", None, None)
+    assert changes["rom_hip"].cells["LH"].change is None
+    # 본문 표는 이번 회차의 값만 싣는다
+    assert next(row for row in tables[0].rows if row.code == "rom_stifle").cells["LH"].text == "47.3°"
 
 
 def test_a_changed_model_keeps_previous_values_but_no_change_labels() -> None:
     previous = _previous_for_change()
     previous["model_version"] = "0.3.0/v1/deadbeef"
     tables, _ = build_tables(sample_result(), previous, tolerance={"rom_stifle": 4.2}, model_changed=True)
-    stifle = next(row for row in tables[0].rows if row.code == "rom_stifle")
-    assert stifle.cells["RH"].previous == "38.0°" and stifle.cells["RH"].change is None
+    stifle = next(row for row in tables[0].changes if row.code == "rom_stifle")
+    cell = stifle.cells["RH"]
+    assert (cell.previous, cell.current, cell.diff, cell.change, cell.note) == ("38.0°", "43.1°", None, None, None)
 
 
-def test_rendered_report_shows_changes_in_the_cells_and_explains_the_rule() -> None:
+def _pair(before: str, now: str) -> str:
+    """비교 표의 값 한 쌍이 HTML에 찍히는 모양."""
+    return f'<span class="pair">{before} →</span> <span class="pair">{now}</span>'
+
+
+def test_rendered_report_shows_changes_in_their_own_section_and_explains_the_rule() -> None:
     rendered = render(sample_input(previous=_previous_for_change()))
-    assert "(38.0°, 증가)" in rendered.html and "(45.0°, 범위 안)" in rendered.html and "(50.0%)" in rendered.html
+    html = rendered.html
+    assert "<h2>직전 회차와 비교</h2>" in html and "<h3>속보</h3>" in html
+    assert _pair("38.0°", "43.1°") in html and '<span class="delta">+5.1° 증가</span>' in html
+    assert _pair("45.0°", "47.3°") in html and '<span class="delta">+2.3° 범위 안</span>' in html
+    assert _pair("50.0%", "58.2%") in html and '<span class="delta">+8.2%p</span>' in html
+    assert "(38.0°" not in html and "(45.0°" not in html  # 본문 표의 괄호는 없앴다
+    assert html.index("<h2>직전 회차와 비교</h2>") < html.index('<table class="changes">') < html.index("<h2>참고</h2>")
     assert rendered.texts["previous"] == (
-        "직전 회차(2026-10-20)의 값을 표의 괄호 안에 함께 적었습니다. "
+        "직전 회차(2026-10-20)와 이번 회차의 값을 표에 나란히 적었습니다. "
+        "차이는 이번 값에서 직전 값을 뺀 것입니다. "
         "오차 범위보다 크게 달라진 값은 증가·감소로 적었습니다. "
         '"범위 안"은 달라진 크기가 오차 범위 안이라는 뜻이고, 정상 범위라는 뜻은 아닙니다. '
-        "판단할 기준이 없거나 걸음 수가 적으면 값만 적었습니다. "
+        "판단할 기준이 없거나 걸음 수가 적으면 값과 차이만 적었습니다. "
         "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
     )
+
+
+def test_a_report_without_a_previous_session_has_no_comparison_section() -> None:
+    rendered = render(sample_input())
+    assert "직전 회차" not in rendered.html and "previous" not in rendered.texts
+    assert all(table.changes == [] for table in rendered.tables)
+
+
+def test_format_change_keeps_the_sign_and_writes_ratio_differences_as_points() -> None:
+    assert format_change(3.84, "deg") == "+3.8°" and format_change(-3.84, "deg") == "-3.8°"
+    assert format_change(0.0, "deg") == "0.0°"
+    assert format_change(-2.0, "pct") == "-2.0%p" and format_change(0.125, "pct_body") == "+0.12%p"
+    assert format_change(2.0, "count") == "+2회" and format_change(-0.25, "body_per_sec") == "-0.25"
+
+
+def test_rows_only_one_session_has_are_listed_as_not_comparable_with_the_side() -> None:
+    previous = sample_result(measured_on="2026-10-20")
+    previous["gaits"][0]["metrics"] = [
+        metric("rom_hip", "LH", None, reason="NOT_ENOUGH_CYCLES"),  # 직전 회차에서 측정 불가
+        metric("rom_hip", "RH", 40.0),  # 이번 회차에서 측정 불가
+        metric("rom_tarsus", "LH", 30.0),  # 직전 회차에만 있는 수치
+    ]
+    tables, numbers = build_tables(sample_result(), previous, tolerance={"rom_hip": 3.6})
+    changes = tables[0].changes
+    assert [row.code for row in changes][-1] == "rom_tarsus"  # 이번 회차의 수치 순서 뒤에 붙는다
+    cells = {(row.code, limb): cell for row in changes for limb, cell in row.cells.items()}
+    assert cells[("rom_hip", "LH")].note == "직전 회차: NOT_ENOUGH_CYCLES 메시지"
+    assert (cells[("rom_hip", "LH")].previous, cells[("rom_hip", "LH")].current) == (UNMEASURABLE, "41.9°")
+    assert cells[("rom_hip", "RH")].note == "이번 회차: NOT_ENOUGH_CYCLES 메시지"
+    tarsus = cells[("rom_tarsus", "LH")]
+    assert (tarsus.previous, tarsus.current, tarsus.note) == ("30.0°", "-", "이번 회차에 이 수치가 없습니다.")
+    assert all(cell.diff is None and cell.change is None for cell in cells.values() if cell.note)
+    # 실린 숫자: 직전 값은 있는 것만, 차이는 비교한 것만
+    kinds = {(n.metric_code, n.limb, n.kind) for n in numbers}
+    assert ("rom_hip", "RH", "previous") in kinds and ("rom_tarsus", "LH", "previous") in kinds
+    assert not any(kind == "change" for _, _, kind in kinds)
+    html = render(sample_input(previous=previous)).html
+    assert "비교 불가. 직전 회차: NOT_ENOUGH_CYCLES 메시지" in html and _pair("30.0°", "-") in html
+
+
+@pytest.mark.parametrize("edition", ["OWNER", "VET"])
+def test_gaits_the_other_session_lacks_are_not_compared_and_say_so(edition: str) -> None:
+    previous = sample_result(measured_on="2026-10-20")
+    previous["gaits"][0]["gait_type"] = "WALK"
+    rendered = render(sample_input(edition, previous=previous))
+    assert rendered.tables[0].changes == []
+    assert rendered.sentences.previous_note is None
+    assert rendered.sentences.previous_gaps == [
+        "속보 수치는 직전 회차(2026-10-20)에 같은 보행 유형이 없어 비교하지 않았습니다.",
+        "직전 회차(2026-10-20)의 평보 수치는 이번 회차에 같은 보행 유형이 없어 비교하지 않았습니다.",
+    ]
+    assert "<h2>직전 회차와 비교</h2>" in rendered.html and 'class="pair"' not in rendered.html
+    assert not any(n.kind in ("previous", "change") for n in rendered.numbers)
+    assert check_texts(rendered.texts, edition=edition) == []
+
+
+def test_previous_values_and_changes_are_listed_and_match_the_reference() -> None:
+    data = sample_input(previous=_previous_for_change())
+    numbers = render(data).numbers
+    listed = {(n.metric_code, n.limb, n.kind): n.value for n in numbers}
+    assert listed[("rom_stifle", "RH", "previous")] == 38.0 and listed[("rom_stifle", "RH", "change")] == 5.1
+    assert listed[("stance_ratio", "LH", "change")] == 8.2
+    assert compare_numbers(numbers, reference_from_result(data["result"], data["previous"])).ok
+    # 직전 회차 없이 만든 기준에는 직전 값·차이가 없어 걸린다
+    without = compare_numbers(numbers, reference_from_result(data["result"]))
+    assert {m.kind for m in without.mismatches} == {KIND_NOT_IN_SOURCE}
+    assert {m.key[3] for m in without.mismatches} == {"previous", "change"}
+    # 직전 회차의 값이 그사이 바뀌었으면 직전 값과 차이가 함께 어긋난다
+    moved = _previous_for_change()
+    moved["gaits"][0]["metrics"][1]["value"] = 39.0
+    wrong = compare_numbers(numbers, reference_from_result(data["result"], moved))
+    assert {m.key[1:] for m in wrong.mismatches} == {("rom_stifle", "RH", "previous"), ("rom_stifle", "RH", "change")}
+
+
+def test_a_changed_model_lists_previous_values_but_no_differences() -> None:
+    previous = _previous_for_change()
+    previous["model_version"] = "0.3.0/v1/deadbeef"
+    data = sample_input(previous=previous)
+    rendered = render(data)
+    kinds = {n.kind for n in rendered.numbers}
+    assert "previous" in kinds and "change" not in kinds
+    assert 'class="delta"' not in rendered.html and _pair("38.0°", "43.1°") in rendered.html
+    assert compare_numbers(rendered.numbers, reference_from_result(data["result"], previous)).ok
 
 
 def test_only_the_vet_note_counts_the_changes() -> None:
@@ -534,8 +642,8 @@ def test_a_change_needs_eight_passes_in_both_sessions(
     result = sample_result()
     result["gaits"][0]["metrics"] = [metric("rom_stifle", "LH", 47.3, n=passes)]
     tables, _ = build_tables(result, previous, tolerance={"rom_stifle": 4.2})
-    cell = tables[0].rows[0].cells["LH"]
-    assert cell.previous == "45.0°" and cell.change == change
+    cell = tables[0].changes[0].cells["LH"]
+    assert cell.previous == "45.0°" and cell.diff == "+2.3°" and cell.change == change
 
 
 def test_without_any_tolerance_only_the_template_note_and_values_remain() -> None:

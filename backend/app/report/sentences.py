@@ -13,7 +13,7 @@ from decimal import Decimal
 from app.report.checks import DISCLAIMER, TermRules, contains_term, load_rules, normalize
 from app.report.inputs import ReportInput
 from app.report.judge import WITHIN_RANGE, usable_tolerance
-from app.report.numbers import NO_VALUE, CompareLine, GaitTable
+from app.report.numbers import NO_VALUE, CompareLine, GaitTable, gait_label
 
 EDITION_LABELS = {"OWNER": "보호자용", "VET": "수의사용"}
 SIZE_LABELS = {"SMALL": "소형", "MEDIUM": "중형", "LARGE": "대형"}
@@ -30,6 +30,7 @@ class Sentences:
     previous_note: str | None
     caution: list[str]
     glossary: list[tuple[str, str]] = field(default_factory=list)
+    previous_gaps: list[str] = field(default_factory=list)  # 보행 유형이 달라 비교하지 않은 묶음
     disclaimer: str = f"이 보고서는 {DISCLAIMER}이며 진단을 대신하지 않습니다."
 
     def texts(self) -> dict[str, str]:
@@ -39,7 +40,7 @@ class Sentences:
             "intro": self.intro,
             "summary": " ".join(self.summary),
             "gaits": " ".join(" ".join(notes) for notes in self.gait_notes.values()),
-            "previous": self.previous_note or "",
+            "previous": " ".join(filter(None, [self.previous_note, *self.previous_gaps])),
             "caution": " ".join(self.caution),
             "glossary": " ".join(f"{term}: {explanation}" for term, explanation in self.glossary),
             "footer": self.disclaimer,
@@ -132,26 +133,50 @@ def _gait_notes(tables: list[GaitTable]) -> dict[str, list[str]]:
 
 
 def _previous_note(inp: ReportInput, tables: list[GaitTable]) -> str | None:
-    """직전 회차 비교 안내(5절 비교 규칙). 평가 단어 없이 방향만 말한다."""
-    if not inp.previous:
+    """직전 회차 비교 표의 안내(5절 비교 규칙). 평가 단어 없이 방향만 말한다. 비교 표가 하나도 없으면 None이다."""
+    if not inp.previous or not any(table.changes for table in tables):
         return None
     measured_on = inp.previous.get("measured_on")
     if inp.previous_model_changed:
         return f"직전 회차({measured_on})는 분석 방식이 달라 값만 표에 함께 적고, 변화는 판단하지 않았습니다."
-    head = f"직전 회차({measured_on})의 값을 표의 괄호 안에 함께 적었습니다."
+    head = (
+        f"직전 회차({measured_on})와 이번 회차의 값을 표에 나란히 적었습니다. "
+        "차이는 이번 값에서 직전 값을 뺀 것입니다."
+    )
     caution = "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
     if not inp.tolerance:
         return f"{head} {caution}"
     counts = ""
     if inp.edition == "VET":  # 보호자용에는 개수를 적지 않는다(박규원 MR 86 리뷰)
-        cells = [cell for table in tables for row in table.rows for cell in row.cells.values() if cell.change]
+        cells = [cell for table in tables for row in table.changes for cell in row.cells.values() if cell.change]
         outside = sum(1 for cell in cells if cell.change != WITHIN_RANGE)
         counts = f"(범위 밖 {outside}개, 범위 안 {len(cells) - outside}개)"
     return (
         f"{head} 오차 범위보다 크게 달라진 값은 증가·감소로 적었습니다{counts}. "
         '"범위 안"은 달라진 크기가 오차 범위 안이라는 뜻이고, 정상 범위라는 뜻은 아닙니다. '
-        f"판단할 기준이 없거나 걸음 수가 적으면 값만 적었습니다. {caution}"
+        f"판단할 기준이 없거나 걸음 수가 적으면 값과 차이만 적었습니다. {caution}"
     )
+
+
+def _previous_gaps(inp: ReportInput, tables: list[GaitTable]) -> list[str]:
+    """보행 유형이 달라 비교하지 않은 묶음(5절: 같은 유형끼리만). 이번 회차에 수치 표가 없으면 적지 않는다."""
+    if not inp.previous or not tables:
+        return []
+    measured_on = inp.previous.get("measured_on")
+    before = [str(gait.get("gait_type")) for gait in inp.previous.get("gaits") or []]
+    now = {table.gait_type for table in tables}
+    gaps = [
+        f"{table.label} 수치는 직전 회차({measured_on})에 같은 보행 유형이 없어 비교하지 않았습니다."
+        for table in tables
+        if table.gait_type not in before
+    ]
+    gaps.extend(
+        f"직전 회차({measured_on})의 {gait_label(gait_type)} 수치는 "
+        "이번 회차에 같은 보행 유형이 없어 비교하지 않았습니다."
+        for gait_type in dict.fromkeys(before)
+        if gait_type not in now
+    )
+    return gaps
 
 
 def _caution(inp: ReportInput) -> list[str]:
@@ -186,6 +211,7 @@ def compose(inp: ReportInput, tables: list[GaitTable], rules: TermRules | None =
         gait_notes=_gait_notes(tables),
         previous_note=_previous_note(inp, tables),
         caution=_caution(inp),
+        previous_gaps=_previous_gaps(inp, tables),
     )
     if inp.edition != "OWNER":
         return draft
@@ -199,4 +225,5 @@ def compose(inp: ReportInput, tables: list[GaitTable], rules: TermRules | None =
         previous_note=draft.previous_note,
         caution=draft.caution,
         glossary=_glossary(body, rules),
+        previous_gaps=draft.previous_gaps,
     )

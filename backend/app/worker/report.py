@@ -75,6 +75,15 @@ class ReportJob:
     job_dir: Path
     output: Path
     started_at: float
+    previous_id: uuid.UUID | None = None  # 입력에 넣은 직전 회차. 수치 대조가 같은 회차의 값과 맞춘다
+
+
+def _previous_id(data: dict[str, Any]) -> uuid.UUID | None:
+    raw = (data.get("previous") or {}).get("id")
+    try:
+        return uuid.UUID(str(raw)) if raw else None
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -271,6 +280,7 @@ class ReportGenerator:
             job_dir=job_dir,
             output=output,
             started_at=time.monotonic(),
+            previous_id=_previous_id(data),
         )
         stats.report_started += 1
         logger.info("report generation started report=%s edition=%s", report_id, report.edition)
@@ -281,7 +291,7 @@ class ReportGenerator:
         """실린 숫자 목록을 DB와 대조하고(8절 7번 첫 항목) 맞을 때만 PDF를 붙인다."""
         report_id = job.report_id
         try:
-            reference = reference_numbers(db, job.session_id)
+            reference = reference_numbers(db, job.session_id, job.previous_id)
         except SQLAlchemyError:  # reap이 다음 바퀴에 다시 거둔다
             raise
         except Exception as error:  # 기준을 읽지 못하면 대조할 수 없으므로 DONE으로 두지 않는다

@@ -419,7 +419,7 @@ export class AppProto extends DCLogic<Props, any> {
         }
         return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
       }
-      // 서버 변동이 없는 예전 서버: 최근 7일 회차 중 가장 최근 하나로만 판단(회차마다 칩이 쌓이지 않게)
+      // 서버 변동이 없는 예전 서버: 최근 7일 회차 중 가장 최근 하나로만 재촬영·좋아짐/나빠짐을 판단(회차마다 칩이 쌓이지 않게)
       for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7).slice(0, 1)) {
         if (r.st === 'fail') out.push(failChip(r))
         else {
@@ -436,6 +436,7 @@ export class AppProto extends DCLogic<Props, any> {
     const hvDogs = dogs.filter((d) => !qq || `${d.name} ${d.breed} ${d.memo} ${emrTxt(d)}`.includes(qq))
     const keepIds = new Set(hvDogs.map((d) => d.id))
     const todayRows: HomeRow[] = hvDogs.flatMap((d) => {
+      // 오늘 회차가 여러 개여도 칩은 가장 최근 회차 하나만(results 는 최신순)
       const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
       if (!res.length && !live) return []
       const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]

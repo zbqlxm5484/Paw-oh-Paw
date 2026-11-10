@@ -4,6 +4,8 @@
 기준값은 부르는 쪽이 준다. 팀 서비스는 DB의 session_metric 값과 15.7 다리 비교 계산값으로 만들고
 (app/services/report_numbers.py), 기업 서버는 분석 결과에서 같은 모양으로 만들면 된다. 이 모듈은 DB를 모른다(11.3).
 
+- 직전 회차 비교 표의 직전 값(previous)과 차이(change)도 실린 숫자다. 기준값은 직전 회차의 값과, 두 회차 값으로
+  다시 계산한 차이(judge.difference)다(272).
 - 불일치: 실린 숫자의 값이 기준값과 다르거나(VALUE_DIFFERS), 기준에 없는 숫자가 실렸을 때(NOT_IN_SOURCE).
   하나라도 있으면 워커는 PDF를 저장하지 않고 REPORT_CHECK_FAILED로 남긴다(12.4).
 - 기준에는 있는데 싣지 않은 수치(omitted)는 불일치가 아니다(판본에 따라 덜 실을 수 있다). 개수만 로그에 남긴다.
@@ -20,10 +22,12 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.report.judge import difference
 from app.report.numbers import PAIR_LIMBS, ListedNumber, _number
 from app.report.pairs import pair_numbers
 
-# (보행 유형, 수치 코드, 다리 또는 쌍, 종류). 종류는 metric·left·right·diff·symmetry_index(numbers.ListedNumber.kind)
+# (보행 유형, 수치 코드, 다리 또는 쌍, 종류). 종류는 metric·left·right·diff·symmetry_index·previous·change
+# (numbers.ListedNumber.kind)
 NumberKey = tuple[str, str, str, str]
 TOLERANCE = 1e-6
 
@@ -100,8 +104,49 @@ def _finite(raw: Any) -> float | None:
     return number if number is not None and math.isfinite(number) else None
 
 
-def reference_from_result(result: Mapping[str, Any]) -> dict[NumberKey, float]:
+def previous_reference(
+    current: Mapping[tuple[str, str, str], float | None],
+    previous: Mapping[tuple[str, str, str], float | None],
+    *,
+    model_changed: bool = False,
+) -> dict[NumberKey, float]:
+    """두 회차의 (보행 유형, 수치, 다리) → 값에서 직전 회차 비교 표의 기준값을 만든다.
+
+    이번 회차에 있는 보행 유형만 본다(5절: 같은 유형끼리만 비교한다). 직전 값이 있으면 previous, 두 값이 다 있으면
+    change(이번 − 직전, judge.difference)다. model_changed면 보고서가 차이를 싣지 않으므로 change를 넣지 않는다.
+    팀 서비스 워커(services/report_numbers.py)와 reference_from_result가 같이 쓴다.
+    """
+    reference: dict[NumberKey, float] = {}
+    shown = {gait_type for gait_type, _, _ in current}
+    for key, before in previous.items():
+        if before is None or key[0] not in shown:
+            continue
+        reference[(*key, "previous")] = before
+        now = current.get(key)
+        if now is None or model_changed:
+            continue
+        try:
+            reference[(*key, "change")] = difference(before, now)
+        except InvalidOperation:  # 반올림할 수 없을 만큼 큰 값. 기준에 넣지 않아 NOT_IN_SOURCE가 된다
+            continue
+    return reference
+
+
+def _limb_values(result: Mapping[str, Any]) -> dict[tuple[str, str, str], float | None]:
+    return {
+        (str(gait.get("gait_type")), str(row.get("metric_code")), str(row.get("limb"))): _finite(row.get("value"))
+        for gait in result.get("gaits") or []
+        for row in gait.get("metrics") or []
+    }
+
+
+def reference_from_result(
+    result: Mapping[str, Any], previous: Mapping[str, Any] | None = None, *, model_changed: bool = False
+) -> dict[NumberKey, float]:
     """회차 결과 dict(15.7 SessionResultOut 모양, 보고서 입력의 result) → 대조 기준값.
+
+    previous(보고서 입력의 previous)를 주면 직전 회차 비교 표의 기준값(previous·change)도 넣는다. 두 회차의 분석 모델이
+    다르면(inputs.ReportInput.previous_model_changed) model_changed를 넘겨 차이를 기준에서 뺀다.
 
     팀 서비스 워커는 DB에서 기준값을 만들지만(services/report_numbers.py), 기업 서버와 견본 스크립트
     (scripts/report_samples.py)는 분석 결과에서 같은 모양으로 만든다(8절 7번). 워커처럼 수치 행(metrics)만 읽고
@@ -137,4 +182,6 @@ def reference_from_result(result: Mapping[str, Any]) -> dict[NumberKey, float]:
                 reference[(gait_type, code, pair, "diff")] = float(diff)
                 if symmetry is not None:
                     reference[(gait_type, code, pair, "symmetry_index")] = float(symmetry)
+    if previous:
+        reference.update(previous_reference(_limb_values(result), _limb_values(previous), model_changed=model_changed))
     return reference
