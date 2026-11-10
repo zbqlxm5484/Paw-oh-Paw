@@ -243,15 +243,12 @@ def _to_out(content: ReportContent, session: MeasureSession, dog: Dog, timeline:
     )
 
 
-def report_content(
-    db: Session, institution_id: uuid.UUID, session_id: uuid.UUID, edition: str, *, include_trashed: bool = False
-) -> ReportContentOut:
+def report_content(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID, edition: str) -> ReportContentOut:
     """GET /sessions/{id}/report-content. 없거나 다른 기관이면 404, DONE이 아니면 409 SESSION_NOT_DONE.
 
     글 검사나 수치 대조에 걸리면 409 REPORT_CHECK_FAILED이고 내용은 내지 않는다(PDF를 내보내지 않는 것과 같다).
-    include_trashed는 인쇄 토큰으로 부를 때만 쓴다. 워커는 휴지통에 든 반려견의 보고서도 끝까지 만든다(12.5).
     """
-    session = db.scalars(session_query(institution_id, session_id, include_trashed=include_trashed)).one_or_none()
+    session = db.scalars(session_query(institution_id, session_id)).one_or_none()
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
     if session.status != SessionStatus.DONE.value:

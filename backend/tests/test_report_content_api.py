@@ -24,7 +24,6 @@ from tests.conftest import bearer
 from tests.history_fixtures import add_metric, add_report, make_session
 
 CONTENT = "/api/v1/sessions/{}/report-content"
-COMPARE = "/api/v1/dogs/{}/compare"
 
 
 def _print_headers(session, staff) -> dict[str, str]:
@@ -175,39 +174,32 @@ def test_text_check_failure_is_409(client: TestClient, staff, two_sessions, monk
 # ---- 인쇄 토큰 ----
 
 
-def test_print_token_opens_the_content_of_its_session_only(client: TestClient, staff, two_sessions) -> None:
+def test_print_token_opens_the_content_like_a_login(client: TestClient, staff, two_sessions) -> None:
+    """인쇄 토큰은 그 기관의 읽기 전용이다(11.6). 토큰을 만든 회차가 아니어도 그 기관의 회차면 열린다."""
     first, second, _ = two_sessions
     headers = _print_headers(second, staff)
 
     by_print = _get(client, second, headers, "VET")
     assert by_print.status_code == 200
     assert by_print.json() == _get(client, second, bearer(staff), "VET").json()
-    assert _code(_get(client, first, headers)) == (404, "NOT_FOUND")
+    assert _get(client, first, headers).json() == _get(client, first, bearer(staff)).json()
 
 
-def test_print_token_does_not_open_the_compare_api(client: TestClient, staff, dog, two_sessions) -> None:
-    """직전 회차 비교는 내용 API의 changes로 받는다. 비교 API는 인쇄 토큰을 받지 않는다(11.6)."""
+def test_print_token_of_another_institution_is_404(client: TestClient, staff, other_staff, two_sessions) -> None:
     _, second, _ = two_sessions
-    response = client.get(
-        COMPARE.format(dog.id),
-        params={"target": str(second.id), "base": "PREVIOUS"},
-        headers=_print_headers(second, staff),
-    )
-    assert _code(response) == (401, "AUTH_REQUIRED")
+    assert _code(_get(client, second, _print_headers(second, other_staff))) == (404, "NOT_FOUND")
 
 
-def test_print_token_reads_a_trashed_dog_but_login_does_not(
+def test_trashed_dog_is_404_for_login_and_print_token(
     client: TestClient, db: Session, staff, dog, two_sessions
 ) -> None:
-    """휴지통에 든 반려견: 담당자에게는 404지만, 워커가 그 보고서도 만들므로 인쇄 토큰은 읽는다(12.5)."""
+    """휴지통에 든 반려견은 인쇄 토큰으로도 안 열린다. 워커는 그런 보고서를 기본 템플릿으로 만든다(8절 6번)."""
     _, second, _ = two_sessions
     dog.deleted_at = datetime.now(UTC)
     db.flush()
 
     assert _code(_get(client, second, bearer(staff))) == (404, "NOT_FOUND")
-    headers = _print_headers(second, staff)
-    assert _get(client, second, headers).status_code == 200
-    assert client.get(f"/api/v1/sessions/{second.id}/result", headers=headers).status_code == 200
+    assert _code(_get(client, second, _print_headers(second, staff))) == (404, "NOT_FOUND")
 
 
 # ---- 회차 번호·대칭 점수·기준 회차·지난 회차(박규원 11-10) ----

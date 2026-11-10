@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentStaff, DbSession
+from app.api.deps import CurrentStaff, DbSession, ReadCaller
 from app.models.enums import GaitType, Limb
 from app.schemas.history import BASE_QUERY_PATTERN, CompareOut, SessionHistoryOut, TrendsOut
 from app.services import compare as compare_service
@@ -19,28 +19,31 @@ router = APIRouter(prefix="/dogs", tags=["이력·비교·추이"])
 @router.get("/{dog_id}/sessions", response_model=SessionHistoryOut)
 def list_sessions(
     dog_id: uuid.UUID,
-    staff: CurrentStaff,
+    reader: ReadCaller,
     db: DbSession,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SessionHistoryOut:
-    """측정 이력(BE-17). measured_on 내림차순, 같으면 created_at 내림차순."""
-    items, total = history_service.list_sessions(db, staff.institution_id, dog_id, page=page, size=size)
+    """측정 이력(BE-17). measured_on 내림차순, 같으면 created_at 내림차순. 인쇄 토큰도 받는다(11.6)."""
+    items, total = history_service.list_sessions(db, reader.institution_id, dog_id, page=page, size=size)
     return SessionHistoryOut(items=items, total=total, page=page, size=size)
 
 
 @router.get("/{dog_id}/compare", response_model=CompareOut)
 def compare_sessions(
     dog_id: uuid.UUID,
-    staff: CurrentStaff,
+    reader: ReadCaller,
     db: DbSession,
     target: uuid.UUID | None = None,
     base: Annotated[str, Query(pattern=BASE_QUERY_PATTERN)] = compare_service.BASELINE,
     gait_type: GaitType | None = None,
 ) -> CompareOut:
-    """회차 비교(BE-18). base는 BASELINE·PREVIOUS·회차 ID, 그 밖은 422. 비교할 수 없으면 400 COMPARE_INVALID."""
+    """회차 비교(BE-18). base는 BASELINE·PREVIOUS·회차 ID, 그 밖은 422. 비교할 수 없으면 400 COMPARE_INVALID.
+
+    인쇄 토큰도 받는다(11.6).
+    """
     return compare_service.compare_sessions(
-        db, staff.institution_id, dog_id, target_id=target, base=base, gait_type=gait_type
+        db, reader.institution_id, dog_id, target_id=target, base=base, gait_type=gait_type
     )
 
 

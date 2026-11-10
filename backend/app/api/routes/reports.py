@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentStaff, DbSession, SessionReader, check_file_link
+from app.api.deps import CurrentStaff, DbSession, ReadCaller, check_file_link
 from app.core.config import get_settings
 from app.models.enums import ReportEdition
 from app.schemas.report_content import ReportContentOut
@@ -26,13 +26,10 @@ def list_session_reports(session_id: uuid.UUID, staff: CurrentStaff, db: DbSessi
 
 @router.get("/sessions/{session_id}/report-content", response_model=ReportContentOut)
 def get_report_content(
-    session_id: uuid.UUID, reader: SessionReader, db: DbSession, edition: ReportEdition
+    session_id: uuid.UUID, reader: ReadCaller, db: DbSession, edition: ReportEdition
 ) -> ReportContentOut:
-    """판본 하나의 글·표·숫자(BE-15). 검사에 걸리면 409 REPORT_CHECK_FAILED. 인쇄 토큰이면 그 토큰의 회차만 열린다."""
-    reader.require_session(session_id)
-    return content_service.report_content(
-        db, reader.institution_id, session_id, edition.value, include_trashed=reader.is_print
-    )
+    """판본 하나의 글·표·숫자(BE-15). 검사에 걸리면 409 REPORT_CHECK_FAILED. 인쇄 토큰도 받는다(11.6)."""
+    return content_service.report_content(db, reader.institution_id, session_id, edition.value)
 
 
 @router.post("/reports/{report_id}/regenerate", response_model=ReportOut)

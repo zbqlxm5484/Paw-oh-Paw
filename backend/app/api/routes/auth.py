@@ -3,7 +3,7 @@
 
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentStaff, CurrentStaffAny, DbSession
+from app.api.deps import CurrentStaff, CurrentStaffAny, DbSession, MeCaller, Reader
 from app.core.auth_cache import AuthStaff
 from app.core.errors import AppError, ErrorCode
 from app.core.security import create_access_token
@@ -52,9 +52,14 @@ def signup(body: SignupIn, db: DbSession) -> TokenOut:
 
 
 @router.get("/me", response_model=StaffOut)
-def me(staff: CurrentStaffAny, db: DbSession) -> StaffOut:
-    """내 정보. 계약이 끝난 CLIENT(GUEST)도 된다. 캐시를 거치지 않고 DB를 읽어 캐시를 갱신한다(11.6)."""
-    fresh = refresh_snapshot(db, staff.id)
+def me(caller: MeCaller, db: DbSession) -> StaffOut:
+    """내 정보. 계약이 끝난 CLIENT(GUEST)도 된다. 캐시를 거치지 않고 DB를 읽어 캐시를 갱신한다(11.6).
+
+    인쇄 토큰(11.6)이면 사람이 없으므로 그 기관의 CLIENT처럼 보이는 값을 준다(인쇄 화면이 기관과 역할을 읽는다).
+    """
+    if isinstance(caller, Reader):
+        return auth_service.print_staff_out(db, caller.institution_id)
+    fresh = refresh_snapshot(db, caller.id)
     if fresh is None:
         raise AppError(ErrorCode.AUTH_REQUIRED)
     if not fresh.is_active:

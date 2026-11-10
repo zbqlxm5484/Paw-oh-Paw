@@ -302,10 +302,16 @@ class ReportGenerator:
         logger.info("report generation started report=%s edition=%s", report_id, report.edition)
 
     def _screen_print(self, report: Report) -> ScreenPrint | None:
-        """화면 인쇄 한 건: 이 회차만 읽는 인쇄 토큰을 붙인 인쇄 화면 주소. 설정이 없으면 None(기본 템플릿)."""
+        """화면 인쇄 한 건: 그 기관의 읽기 전용 인쇄 토큰(11.6)을 붙인 인쇄 화면 주소. None이면 기본 템플릿이다.
+
+        설정이 없으면 None. 반려견이 휴지통에 있어도 None이다: 인쇄 토큰은 로그인처럼 휴지통의 반려견을 읽지
+        못하므로, 인쇄 화면이 그리지 못하고 시간 제한까지 기다리기만 한다.
+        """
         if not self.renderer_url:
             return None
         session = report.session
+        if session.dog.deleted_at is not None:
+            return None
         token, _ = create_print_token(session_id=session.id, institution_id=session.dog.institution_id)
         page_url = f"{self.print_url}/print/reports/{session.id}?edition={report.edition}&token={token}"
         return ScreenPrint(

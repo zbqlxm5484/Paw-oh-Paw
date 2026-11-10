@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
 
-from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession
+from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, ReadCaller
 from app.schemas.dogs import DogCreate, DogListOut, DogOut, DogUpdate
 from app.services import dogs as dog_service
 from app.services import trash as trash_service
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/dogs", tags=["반려견"])
 
 @router.get("", response_model=DogListOut)
 def list_dogs(
-    staff: CurrentStaff,
+    reader: ReadCaller,
     db: DbSession,
     q: Annotated[str | None, Query(max_length=50)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -26,11 +26,11 @@ def list_dogs(
 ) -> DogListOut:
     """trash=true면 휴지통 목록이다(최근에 넣은 것부터). 기본은 휴지통에 없는 반려견이다.
 
-    changed_within_days를 주면 그 기간에 변동이 있는 반려견만 준다(15.5).
+    changed_within_days를 주면 그 기간에 변동이 있는 반려견만 준다(15.5). 인쇄 토큰도 받는다(11.6).
     """
     items, total = dog_service.list_dogs(
         db,
-        staff.institution_id,
+        reader.institution_id,
         q=q,
         page=page,
         size=size,

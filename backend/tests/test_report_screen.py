@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -233,6 +234,25 @@ def test_worker_logs_how_each_report_was_made(
     ready = [message for message in caplog.messages if message.startswith("report ready")]
     assert len(ready) == 2 and all(f"made_by={made_by} " in message for message in ready)
     assert "token=" not in caplog.text  # 인쇄 화면 주소는 여전히 로그에 없다
+
+
+def test_worker_skips_the_screen_for_a_trashed_dog(db: Session, dog, staff, tmp_path: Path) -> None:
+    """인쇄 토큰은 휴지통의 반려견을 읽지 못한다. 화면을 열어 시간 제한까지 기다리지 않고 기본 템플릿으로 만든다."""
+    session = _done_session(db, dog, staff)
+    dog.deleted_at = datetime.now(UTC)
+    db.flush()
+    settings = _settings(
+        REPORT_RENDERER_URL="http://renderer.test:3000",
+        REPORT_PRINT_URL="http://web.test/web/",
+        UPLOAD_TMP_DIR=str(tmp_path),
+    )
+    executor = FakeExecutor()
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=lambda: executor, generate=fake_generate)
+    for _ in range(3):
+        _run(db, reporter, settings)
+
+    assert {row.status for row in _reports(db, session).values()} == {"DONE"}
+    assert [kwargs for _, _, kwargs in executor.calls] == [{}, {}]  # 두 판본 모두 to_pdf 없이(기본 템플릿)
 
 
 def test_worker_uses_the_built_in_template_without_the_settings(db: Session, dog, staff, tmp_path: Path) -> None:

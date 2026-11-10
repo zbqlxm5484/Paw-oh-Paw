@@ -195,17 +195,12 @@ def side_counts(shots: list[Shot]) -> tuple[int, int]:
     return counts[CameraSide.LEFT.value], counts[CameraSide.RIGHT.value]
 
 
-def session_detail(
-    db: Session, institution_id: uuid.UUID, session_id: uuid.UUID, *, for_print: bool = False
-) -> SessionDetailOut:
-    """GET /sessions/{id}: 회차·반려견·진행·촬영을 한 번에 준다. 딸린 행은 selectinload로 한 번에 읽는다(15.1).
-
-    for_print(인쇄 토큰)면 휴지통에 든 반려견의 회차도 읽는다(11.6, 12.5).
-    """
+def session_detail(db: Session, institution_id: uuid.UUID, session_id: uuid.UUID) -> SessionDetailOut:
+    """GET /sessions/{id}: 회차·반려견·진행·촬영을 한 번에 준다. 딸린 행은 selectinload로 한 번에 읽는다(15.1)."""
     # populate_existing: 같은 세션이 전에 읽어 둔 촬영 목록이 있어도 DB에서 다시 채운다(2~3초마다 다시 부르는 화면용).
     session = (
         db.scalars(
-            session_query(institution_id, session_id, include_trashed=for_print)
+            session_query(institution_id, session_id)
             .options(
                 joinedload(MeasureSession.dog),
                 joinedload(MeasureSession.staff),
