@@ -17,7 +17,7 @@ from app.report.charts import rom_chart
 from app.report.checks import ensure_checked
 from app.report.html import render_html
 from app.report.inputs import ReportInput, parse_input
-from app.report.numbers import GaitTable, ListedNumber, build_tables
+from app.report.numbers import NOT_COMPARABLE_LABEL, GaitTable, ListedNumber, build_tables
 from app.report.pdf import html_to_pdf
 from app.report.sentences import Sentences, compose
 
@@ -43,18 +43,24 @@ class ReportResult:
 
 
 def _table_texts(tables: list[GaitTable]) -> dict[str, str]:
-    """표에 찍히는 글(수치 이름, 측정 불가 사유, 비교 사유)도 검사 대상이다."""
+    """표에 찍히는 글(수치 이름, 측정 불가 사유, 비교 사유, 직전 회차 비교의 변화·사유)도 검사 대상이다."""
     parts: list[str] = []
     for table in tables:
         parts.append(table.label)
         for row in table.rows:
             parts.append(row.label)
             parts.extend(cell.reason for cell in row.cells.values() if cell.reason)
-            parts.extend(label for cell in row.cells.values() if (label := cell.change_label))
         for line in table.compare:
             parts.append(f"{line.pair_label} {line.label}")
             if line.reason:
                 parts.append(line.reason)
+        for change in table.changes:
+            parts.append(change.label)
+            for pair in change.cells.values():
+                if pair.change_label:
+                    parts.append(pair.change_label)
+                if pair.note:
+                    parts.append(f"{NOT_COMPARABLE_LABEL}. {pair.note}")
     return {"tables": " ".join(parts)} if parts else {}
 
 
