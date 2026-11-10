@@ -11,6 +11,7 @@ import { pystr } from '../views/pyfmt'
 import { DogPanel } from './parts/DogPanel'
 import { link } from '../config'
 import { MOCK, isRemote, syncDogChart } from '../store/backend'
+import type { Account, Result } from '../store/types'
 import { PrintPdf, ServerPdf } from './parts/ServerPdf'
 import { VetSections } from './parts/VetSections'
 
@@ -24,7 +25,8 @@ function useRedirect(g: Go | null) {
   })
 }
 
-type BM = ReturnType<typeof body_map>
+type BM = NonNullable<ReturnType<typeof body_map>>
+type ResultView = NonNullable<ReturnType<typeof result_view>>
 
 // 보호자용 "읽는 법"(PR-F08-08): 수치마다 같은 쪽에 한 줄. 판정·정상 범위는 말하지 않고 무엇을 잰 값인지만
 const READ: Record<string, string> = {
@@ -162,104 +164,113 @@ export default function Report() {
                 <span style={css('display:flex;align-items:center;gap:6px;font-size:13.5px;color:#5B6472;font-variant-numeric:tabular-nums')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>{status}</span>
               </div>
 
-              <div className="print-paper" style={css('background:#fff;border-radius:6px;box-shadow:0 18px 50px rgba(27,36,51,.1);padding:48px 52px;display:flex;flex-direction:column;gap:22px;min-height:960px')}>
-                <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{kind === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용'}</span></div>
-                <div style={css('height:3px;background:#D2601A;width:56px')}></div>
-                <div><div style={css('font-size:32px;font-weight:800;letter-spacing:-0.9px')}>{rp.title}</div><div style={css('font-size:14px;color:#5B6472;margin-top:6px')}>{rp.when}</div></div>
-
-                {kind === 'g' ? <FirstSummary bm={bm} rd={rd} /> : null}
-
-                {/* 한눈에: 좌우 대칭 지수 */}
-                <div style={css('display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:20px 22px;border-radius:14px;background:#FAF7F2')}>
-                  <div style={css('display:flex;flex-direction:column;gap:2px')}>
-                    <span style={css('font-size:13.5px;font-weight:700;color:#5B6472')}>좌우 대칭 지수</span>
-                    <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:20px')}>%</span></b>
-                  </div>
-                  <div style={css('display:flex;flex-direction:column;gap:8px')}>
-                    <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
-                      <span style={css(`position:absolute;top:-5px;left:calc(${bm.sym}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>
-                    </div>
-                    <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
-                    {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-                    <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}%p</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
-                  </div>
-                </div>
-
-                {/* 몸 그림 + 다리별 수치 */}
-                <div style={css('display:grid;grid-template-columns:1fr 228px 1fr;align-items:stretch;gap:8px')}>
-                  <div style={css('position:relative')}>
-                    <div style={css('position:absolute;top:23%;left:0;right:8px')}><LegCard bm={bm} kind={kind} code="LF" align="l" /></div>
-                    <div style={css('position:absolute;top:70%;left:0;right:8px')}><LegCard bm={bm} kind={kind} code="LH" align="l" /></div>
-                  </div>
-                  <div className="rep-map" style={css('width:228px;height:560px')} dangerouslySetInnerHTML={{ __html: bm.svg }}></div>
-                  <div style={css('position:relative')}>
-                    <div style={css('position:absolute;top:23%;right:0;left:8px')}><LegCard bm={bm} kind={kind} code="RF" align="r" /></div>
-                    <div style={css('position:absolute;top:70%;right:0;left:8px')}><LegCard bm={bm} kind={kind} code="RH" align="r" /></div>
-                  </div>
-                </div>
-                <div style={css('display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#5B6472')}>
-                  <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#DCEFE2;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 좌우 비슷 (차이 5% 미만)</span>
-                  <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F7D6AE;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 조금 덜 씀 (5~10%)</span>
-                  <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F2A898;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 많이 덜 씀 (10% 이상)</span>
-                </div>
-
-                {/* 다리 한 쌍씩 한 줄 설명 */}
-                <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px')}>
-                  {([['front', '앞다리'], ['hind', '뒷다리']] as const).map(([part, label]) => {
-                    const p = bm.legs[part]
-                    return (
-                      <div key={part} style={css('padding:16px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
-                        <span style={css('display:flex;justify-content:space-between;font-size:13.5px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span>
-                        <span style={css(`font-size:${kind === 'g' ? '16px' : '14.5px'};line-height:1.55;font-weight:600`)}>{p.say}</span>
-                        {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff} · 대칭 지수 차이 {pystr(p.si)}%</span>
-                          : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#8E949C')}>{READ[p.metric]}</span></> : null}</span>}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 바로 위 안내 상자에서 둘째 쪽, 수의사용은 첫 쪽 끝(11-05) */}
-                {kind === 'g' ? <OwnerGuideBox bm={bm} /> : null}
-
-                <div style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
-                  <b>측정 품질</b>
-                  <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
-                  {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
-                  {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있습니다</span> : null}
-                  {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#8E949C')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
-                </div>
-
-                {kind === 'g' ? (
-                  /* 지금까지 변화 */
-                  bm.trend.length > 1 ? (
-                    <div style={css('display:flex;flex-direction:column;gap:6px')}>
-                      <b style={css('font-size:15px')}>지금까지 좌우 대칭 지수</b>
-                      <span style={css('font-size:12px;color:#8E949C')}>점 하나가 그날 측정한 대칭 지수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
-                      <svg className="rep-trend" viewBox="0 0 360 100" style={css('width:100%;max-width:560px')}>
-                        <polyline points={bm.trend_line} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round"></polyline>
-                        {bm.trend.map((p, i) => (
-                          <Fragment key={i}><circle cx={p.x} cy={p.y} r={p.cur ? 5 : 3.5} fill={p.cur ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2"></circle><text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="10" fill="#3A4250" fontWeight={p.cur ? 700 : 400}>{p.v}</text><text x={p.x} y="97" textAnchor="middle" fontSize="9.5" fill="#8E949C">{p.t}</text></Fragment>
-                        ))}
-                      </svg>
-                    </div>
-                  ) : null
-                ) : (
-                  <>
-                    {/* 백엔드 보고서 시안 반영: 좌우 비교·지난 측정과 비교·무릎 가동 범위 변화·그 밖의 수치 */}
-                    <VetSections acct={acct} r={r} fromServer={fromServer} knee={<div className="rep-sec"><KneeChart kc={rd.kc} /></div>} />
-                  </>
-                )}
-                <div style={css('flex:1')}></div>
-                {/* 보호자용 용어 설명(보고서 검사 terms.yaml 의 설명 문구 그대로, 토씨까지 같아야 검사를 통과한다) */}
-                {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
-                <span style={css('font-size:12px;color:#A0A7B2')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
-              </div>
+              <ReportPaper acct={acct} r={r} rd={rd} rp={rp} bm={bm} kind={kind} fromServer={fromServer} />
             </>
           )}
         </div>
         {panel ? <DogPanel panel={panel} next_url={next_url} /> : null}
       </main>
     </Base>
+  )
+}
+
+/** 보고서 종이 한 장(화면·인쇄 공용). 회차 결과 화면과 인쇄 전용 화면(/print/reports/:rid)이 같이 쓴다 */
+export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: {
+  acct: Account; r: Result; rd: ResultView['rd']; rp: ResultView['rp']; bm: BM; kind: string; fromServer: boolean; onReady?: () => void
+}) {
+  return (
+    <div className="print-paper" style={css('background:#fff;border-radius:6px;box-shadow:0 18px 50px rgba(27,36,51,.1);padding:48px 52px;display:flex;flex-direction:column;gap:22px;min-height:960px')}>
+      <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{kind === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용'}</span></div>
+      <div style={css('height:3px;background:#D2601A;width:56px')}></div>
+      <div><div style={css('font-size:32px;font-weight:800;letter-spacing:-0.9px')}>{rp.title}</div><div style={css('font-size:14px;color:#5B6472;margin-top:6px')}>{rp.when}</div></div>
+
+      {kind === 'g' ? <FirstSummary bm={bm} rd={rd} /> : null}
+
+      {/* 한눈에: 좌우 대칭 지수 */}
+      <div style={css('display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:20px 22px;border-radius:14px;background:#FAF7F2')}>
+        <div style={css('display:flex;flex-direction:column;gap:2px')}>
+          <span style={css('font-size:13.5px;font-weight:700;color:#5B6472')}>좌우 대칭 지수</span>
+          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:20px')}>%</span></b>
+        </div>
+        <div style={css('display:flex;flex-direction:column;gap:8px')}>
+          <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
+            <span style={css(`position:absolute;top:-5px;left:calc(${bm.sym}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>
+          </div>
+          <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
+          {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
+          <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}%p</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+        </div>
+      </div>
+
+      {/* 몸 그림 + 다리별 수치 */}
+      <div style={css('display:grid;grid-template-columns:1fr 228px 1fr;align-items:stretch;gap:8px')}>
+        <div style={css('position:relative')}>
+          <div style={css('position:absolute;top:23%;left:0;right:8px')}><LegCard bm={bm} kind={kind} code="LF" align="l" /></div>
+          <div style={css('position:absolute;top:70%;left:0;right:8px')}><LegCard bm={bm} kind={kind} code="LH" align="l" /></div>
+        </div>
+        <div className="rep-map" style={css('width:228px;height:560px')} dangerouslySetInnerHTML={{ __html: bm.svg }}></div>
+        <div style={css('position:relative')}>
+          <div style={css('position:absolute;top:23%;right:0;left:8px')}><LegCard bm={bm} kind={kind} code="RF" align="r" /></div>
+          <div style={css('position:absolute;top:70%;right:0;left:8px')}><LegCard bm={bm} kind={kind} code="RH" align="r" /></div>
+        </div>
+      </div>
+      <div style={css('display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#5B6472')}>
+        <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#DCEFE2;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 좌우 비슷 (차이 5% 미만)</span>
+        <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F7D6AE;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 조금 덜 씀 (5~10%)</span>
+        <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F2A898;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 많이 덜 씀 (10% 이상)</span>
+      </div>
+
+      {/* 다리 한 쌍씩 한 줄 설명 */}
+      <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px')}>
+        {([['front', '앞다리'], ['hind', '뒷다리']] as const).map(([part, label]) => {
+          const p = bm.legs[part]
+          return (
+            <div key={part} style={css('padding:16px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
+              <span style={css('display:flex;justify-content:space-between;font-size:13.5px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span>
+              <span style={css(`font-size:${kind === 'g' ? '16px' : '14.5px'};line-height:1.55;font-weight:600`)}>{p.say}</span>
+              {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff} · 대칭 지수 차이 {pystr(p.si)}%</span>
+                : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#8E949C')}>{READ[p.metric]}</span></> : null}</span>}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 바로 위 안내 상자에서 둘째 쪽, 수의사용은 첫 쪽 끝(11-05) */}
+      {kind === 'g' ? <OwnerGuideBox bm={bm} /> : null}
+
+      <div style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
+        <b>측정 품질</b>
+        <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
+        {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
+        {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있습니다</span> : null}
+        {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#8E949C')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
+      </div>
+
+      {kind === 'g' ? (
+        /* 지금까지 변화 */
+        bm.trend.length > 1 ? (
+          <div style={css('display:flex;flex-direction:column;gap:6px')}>
+            <b style={css('font-size:15px')}>지금까지 좌우 대칭 지수</b>
+            <span style={css('font-size:12px;color:#8E949C')}>점 하나가 그날 측정한 대칭 지수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
+            <svg className="rep-trend" viewBox="0 0 360 100" style={css('width:100%;max-width:560px')}>
+              <polyline points={bm.trend_line} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round"></polyline>
+              {bm.trend.map((p, i) => (
+                <Fragment key={i}><circle cx={p.x} cy={p.y} r={p.cur ? 5 : 3.5} fill={p.cur ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2"></circle><text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="10" fill="#3A4250" fontWeight={p.cur ? 700 : 400}>{p.v}</text><text x={p.x} y="97" textAnchor="middle" fontSize="9.5" fill="#8E949C">{p.t}</text></Fragment>
+              ))}
+            </svg>
+          </div>
+        ) : null
+      ) : (
+        <>
+          {/* 백엔드 보고서 시안 반영: 좌우 비교·지난 측정과 비교·무릎 가동 범위 변화·그 밖의 수치 */}
+          <VetSections acct={acct} r={r} fromServer={fromServer} onReady={onReady} knee={<div className="rep-sec"><KneeChart kc={rd.kc} /></div>} />
+        </>
+      )}
+      <div style={css('flex:1')}></div>
+      {/* 보호자용 용어 설명(보고서 검사 terms.yaml 의 설명 문구 그대로, 토씨까지 같아야 검사를 통과한다) */}
+      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
+      <span style={css('font-size:12px;color:#A0A7B2')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
+    </div>
   )
 }
 
