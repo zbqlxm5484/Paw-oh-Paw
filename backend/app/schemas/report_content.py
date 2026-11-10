@@ -12,11 +12,12 @@ from pydantic import BaseModel
 
 class ContentSession(BaseModel):
     measured_on: str
-    round: int  # 같은 반려견의 DONE 회차를 (측정일, 만든 시각) 순으로 센 번호, 1부터
+    round: int  # 같은 반려견의 끝난 회차(DONE·FAILED)를 (측정일, 만든 시각) 순으로 센 번호, 1부터
     model_name: str | None
     model_version: str | None
     weight_kg: float | None
     size_class: str | None
+    symmetry_score: int | None  # 12.3 대칭 점수. 계산할 쌍이 없으면 null
 
 
 class ContentDog(BaseModel):
@@ -24,6 +25,7 @@ class ContentDog(BaseModel):
     breed: str | None
     sex: str | None
     birth_year: int | None
+    focus_limb: str | None  # 관심 다리(12.2 dog.focus_limb)
 
 
 class ContentPrevious(BaseModel):
@@ -33,6 +35,23 @@ class ContentPrevious(BaseModel):
     measured_on: str
     round: int
     model_changed: bool
+
+
+class ContentBaseline(BaseModel):
+    """기준 회차(12.5: 지정한 회차, 없으면 가장 이른 DONE 회차)."""
+
+    session_id: uuid.UUID
+    measured_on: str
+    round: int
+    symmetry_score: int | None
+
+
+class ContentHistoryItem(BaseModel):
+    """이 회차까지 끝난 회차 하나. FAILED 회차는 symmetry_score가 null이다."""
+
+    measured_on: str
+    round: int
+    symmetry_score: int | None
 
 
 class GlossaryItem(BaseModel):
@@ -78,6 +97,8 @@ class ContentCompare(BaseModel):
     right: str
     diff: str
     symmetry_index: str
+    diff_value: float | None  # diff·symmetry_index의 숫자 값. 비교할 수 없으면 null
+    symmetry_value: float | None
     comparable: bool
     reason: str | None
 
@@ -118,5 +139,7 @@ class ReportContentOut(BaseModel):
     session: ContentSession
     dog: ContentDog
     previous: ContentPrevious | None
+    baseline: ContentBaseline | None
+    history: list[ContentHistoryItem]
     sentences: ContentSentences
     gaits: list[ContentGait]

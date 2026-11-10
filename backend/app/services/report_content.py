@@ -9,14 +9,15 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCode
-from app.models import MeasureSession, Report
+from app.models import Dog, MeasureSession, Report
 from app.models.enums import SessionStatus
 from app.report import TEMPLATE_VERSION, ReportCheckError, ReportInputError
 from app.report.checks import ensure_checked
@@ -24,12 +25,14 @@ from app.report.content import ReportContent, compose_content
 from app.report.numbers import GaitTable
 from app.report.verify import compare_numbers, summarize
 from app.schemas.report_content import (
+    ContentBaseline,
     ContentCell,
     ContentChangeCell,
     ContentChangeRow,
     ContentCompare,
     ContentDog,
     ContentGait,
+    ContentHistoryItem,
     ContentPrevious,
     ContentRow,
     ContentSentences,
@@ -40,22 +43,68 @@ from app.schemas.report_content import (
 from app.services.report_input import build_report_input
 from app.services.report_numbers import reference_numbers
 from app.services.sessions import session_query
+from app.services.symmetry import session_scores
 from app.services.tolerance import get_tolerance
 
 logger = logging.getLogger(__name__)
 
 
-def session_round(db: Session, session: MeasureSession) -> int:
-    """같은 반려견의 DONE 회차 중 이 회차가 몇 번째인지(1부터). 순서는 (measured_on, created_at)이다(12.5)."""
-    return db.scalar(
-        select(func.count())
-        .select_from(MeasureSession)
-        .where(
-            MeasureSession.dog_id == session.dog_id,
-            MeasureSession.status == SessionStatus.DONE.value,
-            tuple_(MeasureSession.measured_on, MeasureSession.created_at)
-            <= tuple_(session.measured_on, session.created_at),
+HISTORY_SIZE = 8  # 화면의 "지금까지 좌우 대칭 지수" 그래프가 그리는 회차 수(박규원 11-10)
+ENDED = (SessionStatus.DONE.value, SessionStatus.FAILED.value)
+
+
+@dataclass(frozen=True)
+class _Timeline:
+    """반려견의 끝난 회차(DONE·FAILED)를 12.5 순서로 세운 것. 회차 번호는 이 순서의 자리(1부터)다.
+
+    화면의 회차 번호와 같은 규칙이다(박규원 11-10): 분석 실패 회차도 세고, 측정 중·집계 중 회차는 세지 않는다.
+    취소한 회차는 행이 없어 저절로 빠진다.
+    """
+
+    sessions: list[MeasureSession]
+    scores: dict[uuid.UUID, int | None]
+
+    def round_of(self, session_id: uuid.UUID) -> int | None:
+        for index, session in enumerate(self.sessions, start=1):
+            if session.id == session_id:
+                return index
+        return None
+
+    def find(self, session_id: uuid.UUID) -> MeasureSession | None:
+        return next((session for session in self.sessions if session.id == session_id), None)
+
+    def until(self, session_id: uuid.UUID) -> list[MeasureSession]:
+        """이 회차까지(이 회차 포함)의 끝난 회차."""
+        rank = self.round_of(session_id) or 0
+        return self.sessions[:rank]
+
+
+def _timeline(db: Session, dog_id: uuid.UUID) -> _Timeline:
+    sessions = list(
+        db.scalars(
+            select(MeasureSession)
+            .where(MeasureSession.dog_id == dog_id, MeasureSession.status.in_(ENDED))
+            .order_by(MeasureSession.measured_on, MeasureSession.created_at, MeasureSession.id)
         )
+    )
+    done = [session.id for session in sessions if session.status == SessionStatus.DONE.value]
+    return _Timeline(sessions=sessions, scores=session_scores(db, done))
+
+
+def _baseline(dog: Dog, session: MeasureSession, timeline: _Timeline) -> ContentBaseline | None:
+    """12.5 기준 회차. 없거나 이 회차 자신이면 None."""
+    baseline_id = dog.baseline_session_id
+    if baseline_id is None:
+        first_done = next((row for row in timeline.sessions if row.status == SessionStatus.DONE.value), None)
+        baseline_id = first_done.id if first_done else None
+    base = timeline.find(baseline_id) if baseline_id else None
+    if base is None or base.id == session.id:
+        return None
+    return ContentBaseline(
+        session_id=base.id,
+        measured_on=base.measured_on.isoformat(),
+        round=timeline.round_of(base.id),
+        symmetry_score=timeline.scores.get(base.id),
     )
 
 
@@ -91,6 +140,8 @@ def _gait(table: GaitTable, notes: list[str]) -> ContentGait:
                 right=line.right,
                 diff=line.diff,
                 symmetry_index=line.symmetry_index,
+                diff_value=line.diff_value,
+                symmetry_value=line.symmetry_value,
                 comparable=line.comparable,
                 reason=line.reason,
             )
@@ -118,14 +169,15 @@ def _gait(table: GaitTable, notes: list[str]) -> ContentGait:
     )
 
 
-def _to_out(content: ReportContent, session: MeasureSession, round_no: int) -> ReportContentOut:
+def _to_out(content: ReportContent, session: MeasureSession, dog: Dog, timeline: _Timeline) -> ReportContentOut:
     inp, sentences = content.inp, content.sentences
     previous = None
     if inp.previous:
+        previous_id = uuid.UUID(str(inp.previous["id"]))
         previous = ContentPrevious(
-            session_id=uuid.UUID(str(inp.previous["id"])),
+            session_id=previous_id,
             measured_on=str(inp.previous["measured_on"]),
-            round=round_no - 1,  # 직전 회차는 바로 앞 DONE 회차다(report_input.previous_session_id)
+            round=timeline.round_of(previous_id),  # 직전 DONE 회차. 사이에 FAILED 회차가 있으면 번호가 건너뛴다
             model_changed=inp.previous_model_changed,
         )
     return ReportContentOut(
@@ -134,14 +186,30 @@ def _to_out(content: ReportContent, session: MeasureSession, round_no: int) -> R
         template_version=TEMPLATE_VERSION,
         session=ContentSession(
             measured_on=inp.session.measured_on,
-            round=round_no,
+            round=timeline.round_of(session.id),
             model_name=inp.session.model_name,
             model_version=inp.session.model_version,
             weight_kg=inp.session.weight_kg,
             size_class=inp.session.size_class,
+            symmetry_score=timeline.scores.get(session.id),
         ),
-        dog=ContentDog(name=inp.dog.name, breed=inp.dog.breed, sex=inp.dog.sex, birth_year=inp.dog.birth_year),
+        dog=ContentDog(
+            name=inp.dog.name,
+            breed=inp.dog.breed,
+            sex=inp.dog.sex,
+            birth_year=inp.dog.birth_year,
+            focus_limb=dog.focus_limb,
+        ),
         previous=previous,
+        baseline=_baseline(dog, session, timeline),
+        history=[
+            ContentHistoryItem(
+                measured_on=row.measured_on.isoformat(),
+                round=timeline.round_of(row.id),
+                symmetry_score=timeline.scores.get(row.id),
+            )
+            for row in timeline.until(session.id)[-HISTORY_SIZE:]
+        ],
         sentences=ContentSentences(
             title=sentences.title,
             edition_label=sentences.edition_label,
@@ -193,4 +261,4 @@ def report_content(
             "report content numbers mismatch session=%s edition=%s: %s", session.id, edition, summarize(verification)
         )
         raise AppError(ErrorCode.REPORT_CHECK_FAILED)
-    return _to_out(content, session, session_round(db, session))
+    return _to_out(content, session, report.session.dog, _timeline(db, session.dog_id))

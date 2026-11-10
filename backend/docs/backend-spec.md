@@ -2174,9 +2174,11 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
   "session_id": "…",
   "edition": "OWNER",
   "template_version": "0.5",
-  "session": { "measured_on": "2026-11-04", "round": 3, "model_name": "fs-v4", "model_version": "…", "weight_kg": 12.5, "size_class": "MEDIUM" },
-  "dog": { "name": "보리", "breed": "웰시코기", "sex": "M", "birth_year": 2021 },
+  "session": { "measured_on": "2026-11-04", "round": 3, "model_name": "fs-v4", "model_version": "…", "weight_kg": 12.5, "size_class": "MEDIUM", "symmetry_score": 92 },
+  "dog": { "name": "보리", "breed": "웰시코기", "sex": "M", "birth_year": 2021, "focus_limb": "LH" },
   "previous": { "session_id": "…", "measured_on": "2026-10-14", "round": 2, "model_changed": false },
+  "baseline": { "session_id": "…", "measured_on": "2026-10-01", "round": 1, "symmetry_score": 88 },
+  "history": [{ "measured_on": "2026-10-01", "round": 1, "symmetry_score": 88 }, { "measured_on": "2026-10-14", "round": 2, "symmetry_score": 90 }, { "measured_on": "2026-11-04", "round": 3, "symmetry_score": 92 }],
   "sentences": {
     "title": "보리 보행 평가 보고서", "edition_label": "보호자용", "intro": "…", "summary": ["…"],
     "previous_note": "…", "previous_gaps": ["…"], "caution": ["…"],
@@ -2188,16 +2190,18 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
     "rows": [{ "metric_code": "rom_stifle", "label": "무릎 가동 범위", "unit": "deg",
                "cells": { "LH": { "value": 38.6, "text": "38.6°", "reason": null } } }],
     "compare": [{ "pair": "HIND", "pair_label": "뒷다리", "metric_code": "rom_stifle", "label": "무릎 가동 범위",
-                  "left": "38.6°", "right": "36.9°", "diff": "1.7°", "symmetry_index": "4.5%", "comparable": true, "reason": null }],
+                  "left": "38.6°", "right": "36.9°", "diff": "1.7°", "symmetry_index": "4.5%", "diff_value": 1.7, "symmetry_value": 4.5, "comparable": true, "reason": null }],
     "changes": [{ "metric_code": "rom_stifle", "label": "무릎 가동 범위", "unit": "deg",
                   "cells": { "LH": { "previous": "38.0°", "current": "47.3°", "diff": "+9.3°", "change": "INCREASE", "change_label": "증가", "note": null } } }]
   }]
 }
 ```
 
-- `session.round`는 같은 반려견의 DONE 회차를 (측정일, 만든 시각) 순으로 센 번호(1부터)다. `previous`는 바로 앞 DONE 회차이고 없으면 `null`이다(이때 `changes`는 모두 빈 배열).
+- `round`는 같은 반려견의 끝난 회차(DONE·FAILED)를 (측정일, 만든 시각) 순으로 센 번호(1부터)다. 화면의 회차 번호와 같은 규칙이라 분석 실패 회차도 세고, 측정 중·집계 중 회차는 세지 않는다(취소한 회차는 행이 없다). `previous`는 바로 앞 DONE 회차이고 없으면 `null`이다(이때 `changes`는 모두 빈 배열). 사이에 FAILED 회차가 있으면 `previous.round`는 `session.round - 1`이 아니다.
+- `session.symmetry_score`는 12.3의 대칭 점수다(회차 결과의 값과 같다). `baseline`은 12.5의 기준 회차이고, 없거나 이 회차 자신이면 `null`이다. `history`는 이 회차까지(이 회차 포함) 끝난 회차를 오래된 순으로 최대 8개 낸다. FAILED 회차는 `symmetry_score`가 `null`이다. 화면은 대칭 점수의 차이나 그래프를 이 값으로만 그린다.
+- `dog.focus_limb`는 관심 다리(12.2)이고 없으면 `null`이다.
 - `sentences`는 8절 3번의 문장이다. `glossary`는 보호자용에서 쓰인 전문 용어의 설명이고 수의사용은 빈 배열이다.
-- `gaits`는 보행 유형별 묶음이다. `rows`는 수치 표(`cells`의 키는 다리 코드, 측정하지 못한 칸은 `value`가 `null`이고 `reason`에 사유 문장), `compare`는 좌우 비교(15.7 다리 비교와 같은 값), `changes`는 직전 회차와 비교(8절 2번. `diff`는 이번 − 직전, `change`는 `INCREASE`·`DECREASE`·`WITHIN_RANGE` 또는 `null`, 비교하지 못했으면 `note`에 사유)다.
+- `gaits`는 보행 유형별 묶음이다. `rows`는 수치 표(`cells`의 키는 다리 코드, 측정하지 못한 칸은 `value`가 `null`이고 `reason`에 사유 문장), `compare`는 좌우 비교(15.7 다리 비교와 같은 값. `diff_value`·`symmetry_value`는 `diff`·`symmetry_index`의 숫자 값이고 비교할 수 없으면 `null`), `changes`는 직전 회차와 비교(8절 2번. `diff`는 이번 − 직전, `change`는 `INCREASE`·`DECREASE`·`WITHIN_RANGE` 또는 `null`, 비교하지 못했으면 `note`에 사유)다.
 - 글은 모두 화면에 그대로 찍는 문자열이다(단위·소수 자리까지 서버가 붙인다). `value`는 그림을 그릴 때만 쓴다.
 
 **`POST /reports/{report_id}/regenerate`** — 보고서 다시 만들기 (BE-15)

@@ -92,6 +92,8 @@ def test_content_has_the_header_sentences_and_tables(client: TestClient, staff, 
     assert row["cells"]["LH"] == {"value": 47.0, "text": "47.0°", "reason": None}
     (line,) = gait["compare"]
     assert (line["left"], line["right"], line["comparable"]) == ("47.0°", "42.0°", True)
+    assert line["diff_value"] == 5.0
+    assert isinstance(line["symmetry_value"], float) and f"{line['symmetry_value']:.1f}%" == line["symmetry_index"]
     (change,) = gait["changes"]
     left = change["cells"]["LH"]
     assert (left["previous"], left["current"], left["diff"]) == ("40.0°", "47.0°", "+7.0°")
@@ -119,6 +121,8 @@ def test_first_session_has_no_previous_and_no_changes(client: TestClient, staff,
 
     assert body["session"]["round"] == 1
     assert body["previous"] is None
+    assert body["baseline"] is None  # 기준 회차가 이 회차 자신이다
+    assert [item["round"] for item in body["history"]] == [1]
     assert body["sentences"]["previous_note"] is None
     assert [gait["changes"] for gait in body["gaits"]] == [[]]
 
@@ -203,3 +207,67 @@ def test_print_token_reads_a_trashed_dog_but_login_does_not(
     headers = _print_headers(second, staff)
     assert _get(client, second, headers).status_code == 200
     assert client.get(f"/api/v1/sessions/{second.id}/result", headers=headers).status_code == 200
+
+
+# ---- 회차 번호·대칭 점수·기준 회차·지난 회차(박규원 11-10) ----
+
+
+def test_symmetry_score_baseline_and_history_come_from_the_server(client: TestClient, staff, dog, two_sessions) -> None:
+    """화면이 대칭 점수의 차이나 그래프를 따로 계산하지 않게, 이 회차·기준 회차·지난 회차의 점수를 함께 낸다."""
+    first, second, _ = two_sessions
+    body = _get(client, second, bearer(staff)).json()
+    result = client.get(f"/api/v1/sessions/{second.id}/result", headers=bearer(staff)).json()
+    first_result = client.get(f"/api/v1/sessions/{first.id}/result", headers=bearer(staff)).json()
+
+    assert body["session"]["symmetry_score"] == result["symmetry_score"]
+    assert isinstance(body["session"]["symmetry_score"], int)
+    assert body["baseline"] == {
+        "session_id": str(first.id),
+        "measured_on": "2026-10-01",
+        "round": 1,
+        "symmetry_score": first_result["symmetry_score"],
+    }
+    assert body["history"] == [
+        {"measured_on": "2026-10-01", "round": 1, "symmetry_score": first_result["symmetry_score"]},
+        {"measured_on": "2026-10-15", "round": 2, "symmetry_score": result["symmetry_score"]},
+    ]
+    assert body["dog"]["focus_limb"] is None
+
+
+def test_round_counts_failed_sessions_but_not_open_ones(
+    client: TestClient, db: Session, staff, dog, two_sessions
+) -> None:
+    """화면과 같은 규칙: 분석 실패 회차도 세고, 측정 중 회차는 세지 않는다. 직전 회차는 여전히 바로 앞 DONE 회차다."""
+    first, second, _ = two_sessions
+    make_session(db, dog, staff, date(2026, 10, 8), status="FAILED")
+    make_session(db, dog, staff, date(2026, 10, 10), status="MEASURING")
+
+    body = _get(client, second, bearer(staff)).json()
+    assert body["session"]["round"] == 3
+    assert (body["previous"]["session_id"], body["previous"]["round"]) == (str(first.id), 1)
+    assert [(item["round"], item["symmetry_score"] is None) for item in body["history"]] == [
+        (1, False),
+        (2, True),
+        (3, False),
+    ]
+
+
+def test_designated_baseline_and_focus_limb(client: TestClient, db: Session, staff, dog) -> None:
+    sessions = [_done_session(db, dog, staff, date(2026, 9, day), 40.0 + day, 41.0)[0] for day in (1, 8, 15)]
+    dog.baseline_session_id = sessions[1].id
+    dog.focus_limb = "LH"
+    db.flush()
+
+    body = _get(client, sessions[2], bearer(staff)).json()
+    assert (body["baseline"]["session_id"], body["baseline"]["round"]) == (str(sessions[1].id), 2)
+    assert body["dog"]["focus_limb"] == "LH"
+    # 기준 회차가 이 회차 자신이면 낼 것이 없다
+    assert _get(client, sessions[1], bearer(staff)).json()["baseline"] is None
+
+
+def test_history_keeps_the_latest_eight(client: TestClient, db: Session, staff, dog) -> None:
+    sessions = [_done_session(db, dog, staff, date(2026, 9, day), 40.0, 41.0)[0] for day in range(1, 11)]
+
+    body = _get(client, sessions[-1], bearer(staff)).json()
+    assert [item["round"] for item in body["history"]] == list(range(3, 11))
+    assert body["session"]["round"] == 10
