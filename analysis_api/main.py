@@ -52,7 +52,7 @@ MAX_BYTES = int(os.environ.get("ANALYSIS_UPLOAD_MAX_MB", "100")) * 1024 * 1024
 STORAGE_DIR = Path(os.environ.get("ANALYSIS_STORAGE_DIR", HERE.parent / "data" / "analysis_api"))
 # 분석이 이보다 오래 running이면 failed(TIMEOUT)로 본다. 팀 서비스 ANALYSIS_TIMEOUT_SEC(600)보다 길게 둔다.
 # GPU 추론이 멈춰도 작업이 영원히 running으로 남아 지우기·다시 분석이 막히지 않게 하려는 것이다(S15P31A404-258)
-JOB_TIMEOUT_SEC = float(os.environ.get("ANALYSIS_JOB_TIMEOUT_SEC", "900"))
+JOB_TIMEOUT_SEC = float(os.environ.get("ANALYSIS_JOB_TIMEOUT_SEC", "660"))
 VIDEO_SUFFIXES = {".mp4", ".mov"}
 
 logger = logging.getLogger("analysis_api")
