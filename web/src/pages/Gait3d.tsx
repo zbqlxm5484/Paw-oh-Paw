@@ -16,6 +16,9 @@ import type { Account, Result } from '../store/types'
 import { session, source_name } from '../views/real'
 import { base_of, best_view, body_map, MEDIAN_SPEED, result_view, ROM_REF } from '../views/views'
 import { link } from '../config'
+import { api as backendApi } from '../api/client'
+import { MOCK } from '../store/backend'
+import { GAIT_KO, loadSessionGait, type GaitLoad } from '../views/gaitClip'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -37,6 +40,8 @@ type Ctx = {
   rom_ref: Record<string, number>
   overall: { sym: number; front: string; hind: string }
   gait_url: string
+  /** 측정 걸음 곡선을 주는 함수(이 회차의 실제 각도 → 없으면 견본, views/gaitClip.ts loadSessionGait). 없으면 gait_url 을 받는다 */
+  gait_load?: () => Promise<GaitClip | null>
   gait_src: string
   view_main: string
   /** 기준 회차(겹쳐 보기). 이 회차가 기준 회차이거나 기준 회차가 없으면 null */
@@ -65,12 +70,25 @@ function prepare(acct: Account, r: Result) {
     gait_src: s
       ? `${source_name(s)} 회차 · 관절 가동 범위는 AI-Hub 71878 라벨 관절점, 입각기 비율은 공개 논문(PLOS ONE 2018) 실측 분포, 보행 속도는 합성`
       : '시연용 합성 수치(실제 개의 값이 아님)',
-    // 측정 걸음: 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성). 회사 데이터는 쓰지 않는다
+    // 측정 걸음: 이 회차의 실제 관절 각도(백엔드 회차만). 못 받으면 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성)
     gait_url: staticUrl('assets/dog3d/gait_demo.json'),
     view_main: view.main,
     ghost,
   }
-  return { rd: result_view(acct, r).rd, bm, view, ctx }
+  const gait = loadGait(r, ctx.gait_url)
+  ctx.gait_load = () => gait.then((g) => g.clip)
+  return { rd: result_view(acct, r).rd, bm, view, ctx, gait }
+}
+
+/** 측정 걸음 곡선: 백엔드 회차면 GET /sessions/{id} 의 촬영 → GET /shots/{id}/angles 로 만들고, 아니면(체험 모드·이 브라우저 회차)·못 받으면 견본 */
+function loadGait(r: Result, demoUrl: string): Promise<GaitLoad> {
+  const sid = !MOCK && r.src.startsWith('backend:') ? r.src.slice('backend:'.length) : null
+  const prefer = Object.entries(GAIT_KO).find(([, name]) => name === r.gait)?.[0] ?? null
+  return loadSessionGait({
+    session: backendApi.session,
+    angles: backendApi.angles,
+    demo: () => fetch(demoUrl).then((x) => (x.ok ? x.json() : null)),
+  }, sid, prefer)
 }
 
 const JOINT_CODES: Record<string, string> = { 어깨: 'rom_shoulder', 팔꿈치: 'rom_elbow', 앞발목: 'rom_carpus', 고관절: 'rom_hip', 무릎: 'rom_stifle', 뒷발목: 'rom_tarsus' }
@@ -111,6 +129,12 @@ export default function Gait3d() {
   const ghostRef = useRef<HTMLButtonElement>(null)
   const api = useRef<{ setView: (k: string) => void; setMode: (m: string) => void; setWalking: (on: boolean) => void; setGhost: (on: boolean) => void } | null>(null)
   const [ghostOn, setGhostOn] = useState(false)
+  const [gaitNote, setGaitNote] = useState<{ real: boolean; note: string } | null>(null)
+  useEffect(() => {
+    let live = true
+    pv?.gait.then((g) => { if (live) setGaitNote({ real: g.real, note: g.note }) })
+    return () => { live = false }
+  }, [pv])
 
   useEffect(() => {
     if (!pv) return
@@ -151,6 +175,8 @@ export default function Gait3d() {
               ))}
             </div>
             <span style={css('position:absolute;left:14px;bottom:12px;font-size:12.5px;color:#8E949C')}>끌어서 돌리기 · 휠로 확대 · 다리에 마우스를 올리면 수치</span>
+            {/* 측정 걸음의 출처: 이 회차 실제 측정 / 견본 */}
+            <span id="gait-src" style={css(`position:absolute;right:14px;bottom:10px;max-width:calc(100% - 330px);padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.9);border:1px solid ${gaitNote && !gaitNote.real ? '#F0C9A8' : '#ECE8E2'};font-size:12px;line-height:1.4;color:${gaitNote && !gaitNote.real ? '#B4501A' : '#5B6472'};pointer-events:none;text-align:right`)}>{gaitNote ? gaitNote.note : '이 회차 관절 각도를 불러오는 중…'}</span>
             <div id="tip" ref={tipRef} style={css('position:absolute;display:none;pointer-events:none;min-width:200px;padding:10px 12px;border-radius:12px;background:rgba(27,36,51,.94);color:#fff;font-size:13px;line-height:1.55;box-shadow:0 8px 24px rgba(27,36,51,.25)')}></div>
           </div>
           <aside style={css('flex:0 1 340px;display:flex;flex-direction:column;gap:14px')}>
@@ -437,7 +463,7 @@ function mount(ctx: Ctx, el: Els): () => void {
       main = rigOf(model, STANCE, null)
       if (ghostModel && ctx.ghost) ghost = rigOf(ghostModel, ctx.ghost.stance, GHOST_COLOR)
     }
-    fetch(GAIT_URL).then((r) => (r.ok ? r.json() : null)).then((g: GaitClip | null) => {
+    (ctx.gait_load ? ctx.gait_load() : fetch(GAIT_URL).then((r) => (r.ok ? r.json() : null))).then((g: GaitClip | null) => {
       if (dead) return
       if (g) {
         gait = g
@@ -447,7 +473,7 @@ function mount(ctx: Ctx, el: Els): () => void {
           if (!rig) return
           const amp = (code: string, j: string): number | null => {
             if (roms[code] && roms[code][j]) return roms[code][j] // 그 회차 실측 가동 범위
-            const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null // 없으면 시연 곡선
+            const c = g.legs[code] && g.legs[code].joint[j]; return c ? Math.max(...c) - Math.min(...c) : null // 없으면 걸음 곡선(이 회차 실제 각도, 못 받았으면 견본)
           }
           for (const [code, bones] of Object.entries(rig.bones)) bones.forEach((x) => {
             if (!x) return

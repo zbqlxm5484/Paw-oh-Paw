@@ -1,4 +1,4 @@
-// 인쇄 전용 보고서 화면 /print/reports/:rid?type=g|v (S15P31A404-285)
+// 인쇄 전용 보고서 화면 /print/reports/:rid?edition=OWNER|VET (type=g|v 도 받음) (S15P31A404-285)
 // 서버가 headless Chrome(Gotenberg)으로 이 주소를 열어 PDF 로 인쇄한다. 메뉴·버튼·오른쪽 칸 없이 보고서 종이만 그린다.
 // 다 그리면 window.__REPORT_READY__ = true 와 <body data-report-ready="1"> 로 인쇄해도 된다고 알린다(Gotenberg waitForExpression).
 // 지금은 로그인한 상태의 회차 결과로 그린다. 인쇄 토큰·서버 보고서 문장 API 가 생기면 그 값으로 바꾼다.
@@ -25,7 +25,9 @@ function markReady() {
 export default function ReportPrint() {
   const { rid = '' } = useParams()
   const { acct, query } = usePage({ login: true })
-  const type = query.get('type') === 'v' ? 'v' : 'g'
+  // 판본: 서버 워커는 edition=OWNER|VET 로 부른다(백엔드 명세와 같은 이름). 화면 주소처럼 type=g|v 도 받는다
+  const edition = (query.get('edition') || '').toUpperCase()
+  const type = edition === 'VET' || (!edition && query.get('type') === 'v') ? 'v' : 'g'
   const r = acct ? resultOf(acct, rid) : undefined
   const v = acct && r ? result_view(acct, r) : null
   const fail = !r || r.st === 'fail'

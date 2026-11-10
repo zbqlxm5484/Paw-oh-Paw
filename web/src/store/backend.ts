@@ -119,6 +119,30 @@ export async function syncDogChart(acctId: string, dogId: string): Promise<void>
   changed()
 }
 
+/** 홈 '오늘' 목록용: 오늘 기록이 있을 법한 반려견 차트(바이탈·메모·진료 기록)를 먼저, 나머지도 차례로 읽는다.
+ *  오늘 진료 기록은 반려견마다 따로 읽어야 해서(기관 단위 '오늘 기록' API 없음) 홈을 열 때 한 번, 4마리씩 최대 60마리.
+ *  오늘 회차가 있는 반려견은 GET /sessions 로, 오늘 바이탈이 있는 반려견은 목록의 latest_vital 로 먼저 고른다 */
+const homeSynced = new Set<string>()
+export async function syncTodayCharts(acctId: string, today: string): Promise<void> {
+  if (MOCK || !isRemote(acctId) || homeSynced.has(acctId)) return
+  homeSynced.add(acctId)
+  const acct = db.accounts[acctId]
+  if (!acct) return
+  const first = new Set<string>()
+  try {
+    const r = await api.instSessions(1, 100)
+    for (const s of r.items) if (s.measured_on === today) first.add(s.dog.id)
+  } catch {
+    /* 목록을 못 읽으면 순서만 달라진다 */
+  }
+  for (const d of acct.dogs) if (d.vitals.some((v) => v.day === today)) first.add(d.id)
+  const ids = [...first, ...acct.dogs.map((d) => d.id).filter((id) => !first.has(id))]
+  const todo = ids.filter((id) => !acct.dogs.find((d) => d.id === id)?.chart_loaded).slice(0, 60)
+  for (let i = 0; i < todo.length; i += 4) {
+    await Promise.all(todo.slice(i, i + 4).map((id) => syncDogChart(acctId, id).catch(() => undefined)))
+  }
+}
+
 async function listAllNotes(dogId: string): Promise<NoteOut[]> {
   const out: NoteOut[] = []
   for (let page = 1; page < 50; page++) {
@@ -145,7 +169,8 @@ export async function syncFromBackend(me?: StaffOut): Promise<string> {
     id: inst.id, login_id: '', password: '', name: inst.name, loc: '-', dev: '-', joined: '', notif_on: true,
     results: [], jobs: [], dogs: [], code: '', contract_ends: null,
   }
-  const acct: Account = { ...base, name: inst.name, code: inst.code, contract_ends: inst.contract_ends_at }
+  // 분석 완료 알림은 담당자 설정(서버 notif_on). 예전 서버라 필드가 없으면 기존 값
+  const acct: Account = { ...base, name: inst.name, code: inst.code, contract_ends: inst.contract_ends_at, notif_on: s.notif_on ?? base.notif_on }
   db.accounts[inst.id] = acct
   remote.add(inst.id)
   const st = toStaff(s)

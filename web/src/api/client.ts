@@ -124,7 +124,14 @@ export interface NoteOut {
 export interface NoteRevisionOut { id: string; body: string; category: string; important: boolean; staff: StaffRef | null; revised_at: string }
 export interface Paged<T> { items: T[]; total: number; page: number; size: number }
 export interface ReasonOut { code: string; message: string }
-export interface ShotOut { id: string; seq_no: number; status: string; fail_reason: ReasonOut | null; validity: string | null; uploaded_at: string; analyzed_at: string | null; video_status?: string }
+/** 촬영의 통과 한 개(api-spec 5절). 3D 걸음 곡선을 만들 촬영을 고를 때 쓴다 */
+export interface PassOut { pass_no: number; camera_side: 'LEFT' | 'RIGHT' | string; gait_type: string; is_valid: boolean; start_frame: number; end_frame: number }
+export interface ShotOut { id: string; seq_no: number; status: string; fail_reason: ReasonOut | null; validity: string | null; uploaded_at: string; analyzed_at: string | null; video_status?: string; passes?: PassOut[] }
+export type JointCode = 'shoulder' | 'elbow' | 'carpus' | 'hip' | 'stifle' | 'tarsus'
+/** GET /shots/{id}/angles 통과 한 개: angles 의 i번째 값은 start_frame + i 프레임의 각도(°), 못 찾은 프레임은 null. 다리는 camera_side 쪽 */
+export interface AnglesPass { pass_no: number; camera_side: 'LEFT' | 'RIGHT' | string; gait_type: string; start_frame: number; angles: Record<JointCode, (number | null)[]> }
+/** GET /shots/{id}/angles(15.6). 줄 것이 없으면 passes 가 빈 배열 */
+export interface AnglesOut { shot_id: string; fps: number; passes: AnglesPass[] }
 /** GET /shots/{id}. video_url 은 결과 영상이 준비됐을 때만(서명 주소) */
 export interface ShotDetailOut extends ShotOut { video_url: string | null }
 export interface SessionOut {
@@ -146,6 +153,8 @@ export interface SessionResultOut extends SessionOut {
   exclude_summary: (ReasonOut & { count: number })[]
   notices: ReasonOut[]
   gaits: GaitResultOut[]
+  /** 대칭 점수 0~100(100 − 평균 대칭 지수, 앱과 같은 서버 값). 예전 서버면 undefined */
+  symmetry_score?: number | null
 }
 /** 보고서 판본 1개. file_url·download_url 은 status 가 DONE 일 때만 있다(서명 붙은 주소, 로그인 토큰 없이 열린다) */
 export interface ReportOut {
@@ -201,10 +210,16 @@ export const api = {
   dog: (id: string) => request<DogOut>(`/dogs/${id}`),
   createDog: (body: Record<string, unknown>) => request<DogOut>('/dogs', { method: 'POST', body }),
   updateDog: (id: string, body: Record<string, unknown>) => request<DogOut>(`/dogs/${id}`, { method: 'PATCH', body }),
+  /** 휴지통으로 보냄(서버가 정한 기간 뒤 영구 삭제). 회차·영상도 같이 숨는다 */
+  deleteDog: (id: string) => request<void>(`/dogs/${id}`, { method: 'DELETE' }),
+  /** 기관의 모든 회차, 최신순(BE-33) */
+  instSessions: (page = 1, size = 100) => request<{ items: { id: string; measured_on: string; status: string; dog: { id: string; name: string } }[]; total: number }>(`/sessions?page=${page}&size=${size}`),
   startSession: (dogId: string, body: { measured_on?: string; weight_kg?: number }) =>
     request<SessionOut>(`/dogs/${dogId}/sessions`, { method: 'POST', body }),
   session: (id: string) => request<SessionDetailOut>(`/sessions/${id}`),
   shot: (id: string) => request<ShotDetailOut>(`/shots/${id}`),
+  /** 통과별 프레임 관절 각도(15.6). 3D 보기의 측정 걸음 곡선 */
+  angles: (id: string) => request<AnglesOut>(`/shots/${id}/angles`),
   cancelSession: (id: string) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
   completeSession: (id: string) => request<SessionOut>(`/sessions/${id}/complete`, { method: 'POST' }),
   deleteShot: (id: string) => request<void>(`/shots/${id}`, { method: 'DELETE' }),

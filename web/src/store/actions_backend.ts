@@ -429,4 +429,36 @@ if (!MOCK) {
       return redirect('/admin', msg(e))
     }
   })
+
+  // 반려견 삭제: 서버 휴지통으로 보낸다(DELETE /dogs/{id}). 예전에는 브라우저에서만 지워 새로 불러오면 다시 나타났다
+  onB('/dogs/:dog_id/delete', async (p) => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    const d = dogOf(acct, p.dog_id)
+    if (!d) return redirect('/my')
+    try {
+      await api.deleteDog(d.id)
+    } catch (e) {
+      return redirect(`/dogs/${d.id}`, msg(e))
+    }
+    acct.dogs = acct.dogs.filter((x) => x.id !== d.id)
+    acct.results = acct.results.filter((r) => r.dog !== d.id)
+    acct.jobs = acct.jobs.filter((j) => j.dog !== d.id)
+    return redirect('/my', `${d.name} 정보를 삭제했습니다`)
+  })
+
+  // 분석 완료 알림 켜기·끄기: 담당자 설정(PATCH /auth/me notif_on)
+  onB('/my/notif', async () => {
+    const acct = current()
+    if (!acct) return need_login()
+    if (!isRemote(acct.id)) return { to: '__local__' }
+    try {
+      const me = await api.updateMe({ notif_on: !acct.notif_on })
+      acct.notif_on = me.notif_on ?? !acct.notif_on
+    } catch (e) {
+      return redirect('/my', msg(e))
+    }
+    return redirect('/my', acct.notif_on ? '분석 완료 알림을 켰습니다' : '분석 완료 알림을 껐습니다')
+  })
 }

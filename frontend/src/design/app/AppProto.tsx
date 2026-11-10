@@ -419,7 +419,8 @@ export class AppProto extends DCLogic<Props, any> {
         }
         return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
       }
-      for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7)) {
+      // 서버 변동이 없는 예전 서버: 최근 7일 회차 중 가장 최근 하나로만 재촬영·좋아짐/나빠짐을 판단(회차마다 칩이 쌓이지 않게)
+      for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7).slice(0, 1)) {
         if (r.st === 'fail') out.push(failChip(r))
         else {
           if (r.st === 'part') out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
@@ -435,9 +436,10 @@ export class AppProto extends DCLogic<Props, any> {
     const hvDogs = dogs.filter((d) => !qq || `${d.name} ${d.breed} ${d.memo} ${emrTxt(d)}`.includes(qq))
     const keepIds = new Set(hvDogs.map((d) => d.id))
     const todayRows: HomeRow[] = hvDogs.flatMap((d) => {
+      // 오늘 회차가 여러 개여도 칩은 가장 최근 회차 하나만(results 는 최신순)
       const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
       if (!res.length && !live) return []
-      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
+      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
       const times = res.map((r) => r.time).filter(Boolean).sort()
       return [{ key: d.id, when: times[0] || '', name: d.name, sub: d.breed || '견종 미입력', chips: [...chips, ...badgeChips(d)], right: res.map(byOf).find((b) => b !== '—') || '', live, open: () => this.openDog(d.id) }]
     })
@@ -801,7 +803,14 @@ export class AppProto extends DCLogic<Props, any> {
       closeSheet: () => this.setState({ sheet: null }),
       goSignupOrg: () => this.nav('signupOrg'), sheetToLogin: () => this.nav('login'),
       delName: (dogById(s.delId) || ({} as Partial<DDog>)).name || '',
-      confirmDel: () => { this.setState({ sheet: null }); this.toast('반려견 삭제는 준비 중입니다') },
+      confirmDel: async () => {
+        const id = s.delId, name = (dogById(id) || ({} as Partial<DDog>)).name || '반려견'
+        this.setState({ sheet: null })
+        if (!id) return
+        if (isDemo()) return this.toast('체험 모드에서는 반려견을 삭제할 수 없습니다')
+        try { await this.props.actions.deleteDog(id); this.setState({ delId: null }); this.toast(`${name} 정보를 삭제했습니다`); if (this.props.screen !== 'my') this.nav('my') }
+        catch (e) { this.toast(errMsg(e, '반려견을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.')) }
+      },
       confirmLogout: () => { this.props.auth.logout(); this.setState({ sheet: null, li: { id: '', pw: '' } }); this.props.nav('/welcome', { replace: true }) },
       toastOn: !!s.toast, toastMsg: s.toast,
       statusC: landscape ? 'transparent' : dark ? '#fff' : '#1B2433', indC: dark ? '#fff' : '#1B2433', indOp: landscape ? 0 : dark ? 0.8 : 0.25,
