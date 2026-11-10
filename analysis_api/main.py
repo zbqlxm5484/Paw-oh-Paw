@@ -50,6 +50,9 @@ CHUNK_BYTES = 1024 * 1024
 API_KEY = os.environ.get("ANALYSIS_API_KEY", "")
 MAX_BYTES = int(os.environ.get("ANALYSIS_UPLOAD_MAX_MB", "100")) * 1024 * 1024
 STORAGE_DIR = Path(os.environ.get("ANALYSIS_STORAGE_DIR", HERE.parent / "data" / "analysis_api"))
+# 분석이 이보다 오래 running이면 failed(TIMEOUT)로 본다. 팀 서비스 ANALYSIS_TIMEOUT_SEC(600)보다 길게 둔다.
+# GPU 추론이 멈춰도 작업이 영원히 running으로 남아 지우기·다시 분석이 막히지 않게 하려는 것이다(S15P31A404-258)
+JOB_TIMEOUT_SEC = float(os.environ.get("ANALYSIS_JOB_TIMEOUT_SEC", "900"))
 VIDEO_SUFFIXES = {".mp4", ".mov"}
 
 logger = logging.getLogger("analysis_api")
@@ -116,6 +119,33 @@ def _update(job_id: str, **fields) -> None:
         store.save_job(STORAGE_DIR, JOBS[job_id])
 
 
+def _finish(job_id: str, **fields) -> Optional[dict]:
+    """분석이 끝났을 때의 기록. 그사이 시간 초과(TIMEOUT)로 끝냈거나 지운 작업이면 아무것도 쓰지 않는다.
+    늦게 끝난 분석이 지운 작업의 폴더를 다시 만들거나, failed를 done으로 덮지 않게 하려는 것이다"""
+    with _LOCK:
+        job = JOBS.get(job_id)
+        if job is None or job["status"] != "running":
+            logger.warning("late analysis result ignored job=%s status=%s", job_id, job and job["status"])
+            return None
+        job.update(fields, updated_at=_now())
+        store.save_job(STORAGE_DIR, job)
+        return job
+
+
+def _expire(job: dict) -> dict:
+    """running으로 JOB_TIMEOUT_SEC를 넘긴 작업을 failed(TIMEOUT)로 바꾼다. 조회·지우기 때 본다"""
+    started = job.get("started_ts")
+    if job["status"] == "running" and started and time.time() - started > JOB_TIMEOUT_SEC:
+        with _LOCK:
+            if job["status"] == "running":
+                job.update(status="failed", updated_at=_now(), error={
+                    "code": "TIMEOUT", "detail": None,
+                    "message": f"분석이 {JOB_TIMEOUT_SEC:g}초 안에 끝나지 않았습니다. 다시 분석해 주세요"})
+                store.save_job(STORAGE_DIR, job)
+                logger.warning("analysis timed out job=%s", job["id"])
+    return job
+
+
 def _get(job_id: str) -> dict:
     """메모리에 없으면 디스크에서 읽는다 (분석 API를 다시 켠 뒤의 조회)"""
     job = JOBS.get(job_id)
@@ -125,7 +155,7 @@ def _get(job_id: str) -> dict:
             raise ApiError(404, "NOT_FOUND", "없는 분석입니다")
         with _LOCK:
             job = JOBS.setdefault(job_id, job)
-    return job
+    return _expire(job)
 
 
 def _ready(job: dict) -> None:
@@ -193,18 +223,19 @@ def analyze(job_id: str) -> None:
     job = JOBS[job_id]
     started = time.monotonic()
     try:
-        _update(job_id, status="running", video_sha256=sha256_of(Path(job["video_path"])))
+        _update(job_id, status="running", started_ts=time.time(), video_sha256=sha256_of(Path(job["video_path"])))
         result, keypoints = run_pipeline(Path(job["video_path"]), job)
     except AnalysisFailed as e:
-        _update(job_id, status="failed", error={"code": e.code, "message": e.message, "detail": None})
+        done = _finish(job_id, status="failed", error={"code": e.code, "message": e.message, "detail": None})
     except Exception:
         logger.exception("analysis failed job=%s", job_id)
-        _update(job_id, status="failed",
-                error={"code": "INTERNAL", "message": "분석 중 알 수 없는 오류가 났습니다", "detail": None})
+        done = _finish(job_id, status="failed",
+                       error={"code": "INTERNAL", "message": "분석 중 알 수 없는 오류가 났습니다", "detail": None})
     else:
-        _update(job_id, status="done", result=result, keypoints=keypoints,
-                model={k: result["model"][k] for k in ("name", "version")})
-    _record(JOBS[job_id], started)
+        done = _finish(job_id, status="done", result=result, keypoints=keypoints,
+                       model={k: result["model"][k] for k in ("name", "version")})
+    if done is not None:
+        _record(done, started)
 
 
 @app.get("/health")
@@ -271,3 +302,28 @@ def delete_analysis(job_id: str):
         JOBS.pop(job_id, None)
     logger.info("analysis deleted job=%s files=%d bytes=%d", job_id, files, size)
     return Response(status_code=204)
+
+
+@app.delete("/analyses", dependencies=[Depends(require_key)])
+def delete_shot_analyses(shot_id: str):
+    """촬영 하나로 만든 작업을 모두 지운다(DELETE /analyses?shot_id=...). 다시 분석 전의 작업까지 지우려는 것이다.
+    하나라도 분석 중이면 아무것도 지우지 않고 409 JOB_IN_PROGRESS. 지울 작업이 없어도 200({"deleted": []})"""
+    if not shot_id:
+        raise ApiError(400, "INVALID_REQUEST", "shot_id가 필요합니다")
+    on_disk = {job["id"]: job for job in store.jobs_of_shot(STORAGE_DIR, shot_id)}
+    in_memory = {job_id: job for job_id, job in list(JOBS.items()) if job.get("shot_id") == shot_id}
+    jobs = [_expire(in_memory.get(job_id) or job) for job_id, job in {**on_disk, **in_memory}.items()]
+    if any(job["status"] in store.UNFINISHED for job in jobs):
+        raise ApiError(409, "JOB_IN_PROGRESS", "분석 중인 작업이 있어 지울 수 없습니다")
+    deleted = []
+    with _LOCK:
+        for job in jobs:
+            try:
+                store.delete_job(STORAGE_DIR, job["id"])
+            except OSError:
+                logger.exception("analysis delete failed job=%s", job["id"])
+                raise ApiError(500, "DELETE_FAILED", "작업을 다 지우지 못했습니다. 다시 시도해 주세요")
+            JOBS.pop(job["id"], None)
+            deleted.append(job["id"])
+    logger.info("shot analyses deleted jobs=%d", len(deleted))
+    return {"shot_id": shot_id, "deleted": deleted}
