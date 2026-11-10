@@ -117,7 +117,7 @@
 
 기업 무효 사유(이 중 하나가 붙은 통과가 있으면 촬영 전체 `invalid`): `GAIT_PACE`, `RUNNING`, `TURNED`, `STOPPED`, `SITTING`, `PARTIAL_PASS`, `OVERLAP`.
 
-분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERRUPTED`(분석 중에 분석 API가 다시 시작됨), `INTERNAL`. 사유 코드마다의 기본 문장은 `engine/reasons.py`의 `REASON_TEXT`(백엔드 명세 14.3과 같음)다. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
+분석 실패(`status: failed`)는 결과가 아니라 상태 조회의 `error.code`로 온다: `DECODE_FAILED`(영상을 읽지 못함), `POSE_UNAVAILABLE`(이 영상의 관절점을 얻지 못함), `INTERRUPTED`(분석 중에 분석 API가 다시 시작됨), `TIMEOUT`(분석이 `ANALYSIS_JOB_TIMEOUT_SEC` 안에 끝나지 않음, 11-10), `INTERNAL`. 사유 코드마다의 기본 문장은 `engine/reasons.py`의 `REASON_TEXT`(백엔드 명세 14.3과 같음)다. 실패는 다시 분석, 무효는 다시 촬영으로 안내한다.
 
 ## 5. 관절점 파일 (`GET /analyses/{id}/files/keypoints`)
 
