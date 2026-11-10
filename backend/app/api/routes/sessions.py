@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Query, Response, UploadFile, status
 
-from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession
+from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, SessionReader
 from app.models.enums import SessionStatus
 from app.schemas.common import reason_out
 from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionListOut, SessionOut, SessionResultOut
@@ -66,9 +66,11 @@ def complete_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) 
 
 
 @router.get("/sessions/{session_id}/result", response_model=SessionResultOut)
-def get_session_result(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionResultOut:
-    """회차 수치와 다리 비교 요약(BE-14·21)."""
-    return result_service.session_result(db, staff.institution_id, session_id)
+def get_session_result(session_id: uuid.UUID, reader: SessionReader, db: DbSession) -> SessionResultOut:
+    """회차 수치와 다리 비교 요약(BE-14·21). 인쇄 토큰이면 그 토큰의 회차만 열린다(11.6)."""
+    reader.require_session(session_id)
+    # TODO(질문: 휴지통에 든 반려견의 회차도 인쇄 토큰으로는 열어야 하나. 워커는 그런 회차도 보고서를 만든다(12.5))
+    return result_service.session_result(db, reader.institution_id, session_id)
 
 
 @router.post("/sessions/{session_id}/shots", response_model=ShotUploadOut, status_code=status.HTTP_201_CREATED)

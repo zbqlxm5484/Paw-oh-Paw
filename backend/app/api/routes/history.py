@@ -6,11 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentStaff, DbSession
+from app.api.deps import CurrentStaff, DbSession, SessionReader
+from app.core.errors import AppError, ErrorCode
 from app.models.enums import GaitType, Limb
 from app.schemas.history import BASE_QUERY_PATTERN, CompareOut, SessionHistoryOut, TrendsOut
 from app.services import compare as compare_service
 from app.services import history as history_service
+from app.services import sessions as session_service
 from app.services import trends as trends_service
 
 router = APIRouter(prefix="/dogs", tags=["이력·비교·추이"])
@@ -32,15 +34,22 @@ def list_sessions(
 @router.get("/{dog_id}/compare", response_model=CompareOut)
 def compare_sessions(
     dog_id: uuid.UUID,
-    staff: CurrentStaff,
+    reader: SessionReader,
     db: DbSession,
     target: uuid.UUID | None = None,
     base: Annotated[str, Query(pattern=BASE_QUERY_PATTERN)] = compare_service.BASELINE,
     gait_type: GaitType | None = None,
 ) -> CompareOut:
-    """회차 비교(BE-18). base는 BASELINE·PREVIOUS·회차 ID, 그 밖은 422. 비교할 수 없으면 400 COMPARE_INVALID."""
+    """회차 비교(BE-18). base는 BASELINE·PREVIOUS·회차 ID, 그 밖은 422. 비교할 수 없으면 400 COMPARE_INVALID.
+
+    인쇄 토큰이면 target이 그 토큰의 회차이고 dog_id가 그 회차의 반려견일 때만 열린다(11.6).
+    """
+    if reader.print_session_id is not None:
+        reader.require_session(target)
+        if session_service.get_session(db, reader.institution_id, reader.print_session_id).dog_id != dog_id:
+            raise AppError(ErrorCode.NOT_FOUND)
     return compare_service.compare_sessions(
-        db, staff.institution_id, dog_id, target_id=target, base=base, gait_type=gait_type
+        db, reader.institution_id, dog_id, target_id=target, base=base, gait_type=gait_type
     )
 
 
