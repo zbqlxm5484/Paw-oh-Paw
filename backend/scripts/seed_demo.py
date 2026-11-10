@@ -592,6 +592,7 @@ def _insert(
                 category=_enum(item.get("category"), NoteCategory, where),
                 body=body,
                 important=bool(item.get("important")),
+                visited_on=written.astimezone(local_zone()).date(),
                 staff_id=staff_ids[item["staff"]],
                 created_at=written,
                 updated_at=written,

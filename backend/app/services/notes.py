@@ -1,4 +1,7 @@
-"""메모·진료 기록(BE-30, 12.5 차트 자료, 13.9, 15.11). 지우지 않고, 고치면 고치기 전 내용을 이력으로 남긴다.
+"""메모·진료 기록(BE-30, 12.5 차트 자료, 13.9, 15.11). 고치면 고치기 전 내용을 이력으로 남긴다.
+
+방문일(visited_on, v1.46)은 쓸 때만 받고 기본은 오늘이다. 목록은 방문일 → 쓴 시각 순서다.
+한 건을 지우면 수정 이력도 함께 지운다(v1.46). 되돌릴 수 없다.
 
 반려견은 services/dogs.in_institution으로 거른다(다른 기관·휴지통은 404). 쓴 담당자는 로그인한 담당자다.
 본문은 로그에 남기지 않는다(11.8). flush()까지만 한다.
@@ -6,17 +9,21 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog, DogNote, DogNoteRevision, MeasureSession
 from app.models.enums import CHART_CATEGORIES, MEMO_CATEGORIES
 from app.schemas.chart import NoteItemIn, NoteOut, NoteRevisionOut, NoteUpdate
 from app.services.dogs import get_dog, in_institution
+
+logger = logging.getLogger(__name__)
 
 # GET /dogs/{dog_id}/notes의 kind → 분류 묶음(15.11)
 KINDS = {"memo": MEMO_CATEGORIES, "chart": CHART_CATEGORIES}
@@ -61,7 +68,7 @@ def list_notes(
     page: int,
     size: int,
 ) -> tuple[list[NoteOut], int]:
-    """목록(15.11). 쓴 시각 내림차순. kind는 memo 또는 chart, session_id를 주면 그 회차에 단 것만."""
+    """목록(15.11). 방문일 내림차순, 같으면 쓴 시각 내림차순. kind는 memo 또는 chart, session_id를 주면 그 회차 것만."""
     dog = get_dog(db, institution_id, dog_id)
     conditions = [DogNote.dog_id == dog.id]
     if kind is not None:
@@ -72,7 +79,7 @@ def list_notes(
         select(DogNote)
         .options(joinedload(DogNote.staff))
         .where(*conditions)
-        .order_by(DogNote.created_at.desc(), DogNote.id.desc())
+        .order_by(DogNote.visited_on.desc(), DogNote.created_at.desc(), DogNote.id.desc())
         .offset((page - 1) * size)
         .limit(size)
     ).all()
@@ -89,11 +96,16 @@ def create_notes(
     dog_id: uuid.UUID,
     session_id: uuid.UUID | None,
     items: list[NoteItemIn],
+    visited_on: date | None = None,
 ) -> list[NoteOut]:
-    """한 건 또는 여러 건을 같은 시각으로 쓴다(15.11). 보낸 순서로 돌려준다."""
+    """한 건 또는 여러 건을 같은 시각·같은 방문일로 쓴다(15.11). 보낸 순서로 돌려준다.
+
+    visited_on을 주지 않으면 오늘(한국 날짜)이다. 미래 날짜는 스키마가 막는다(13.9).
+    """
     dog = get_dog(db, institution_id, dog_id)
     _check_session(db, dog, session_id)
     now = datetime.now(UTC)  # 묶음의 created_at을 똑같이 맞추고, 요청마다 다르게 하려고 DB 기본값을 쓰지 않는다
+    visited = visited_on or today_local()
     notes = [
         DogNote(
             dog_id=dog.id,
@@ -101,6 +113,7 @@ def create_notes(
             category=item.category.value,
             body=item.body,
             important=item.important,
+            visited_on=visited,
             staff_id=staff_id,
             created_at=now,
             updated_at=now,
@@ -171,3 +184,29 @@ def list_revisions(db: Session, institution_id: uuid.UUID, note_id: uuid.UUID) -
         .order_by(DogNoteRevision.revised_at.desc(), DogNoteRevision.id.desc())
     ).all()
     return [NoteRevisionOut.model_validate(row) for row in rows]
+
+
+def delete_note(db: Session, *, institution_id: uuid.UUID, staff_id: uuid.UUID, note_id: uuid.UUID) -> None:
+    """DELETE /notes/{note_id}(v1.46). 그 한 건과 수정 이력을 함께 지운다. 되돌릴 수 없다(12.5).
+
+    행을 잠그고 읽어 동시에 고치는 요청과 겹치지 않는다: 고치기가 먼저면 그 이력까지 지우고, 지우기가 먼저면
+    고치기는 404다. 연쇄 삭제를 쓰지 않으므로 이력 → 메모 순서로 지운다. 본문은 로그에 남기지 않는다(11.8).
+    """
+    note = _get_note(db, institution_id, note_id, for_update=True)
+    db.execute(delete(DogNoteRevision).where(DogNoteRevision.note_id == note.id))
+    db.delete(note)
+    db.flush()
+    logger.info("dog note deleted note=%s staff=%s", note_id, staff_id)
+
+
+def notes_on(db: Session, institution_id: uuid.UUID, day: date) -> list[NoteOut]:
+    """기관의 그날(방문일) 메모·진료 기록(15.11 그날 기록). 휴지통의 반려견은 빼고, 쓴 순서로 준다."""
+    notes = db.scalars(
+        select(DogNote)
+        .join(Dog, DogNote.dog_id == Dog.id)
+        .options(joinedload(DogNote.staff))
+        .where(in_institution(institution_id), DogNote.visited_on == day)
+        .order_by(DogNote.created_at, DogNote.id)
+    ).all()
+    counts = _revision_counts(db, [note.id for note in notes])
+    return [_to_out(note, counts.get(note.id, 0)) for note in notes]

@@ -91,6 +91,7 @@ EXPECTED_INDEXES = {
     "ix_dog_history_dog_date",
     "ix_dog_image_dog_taken",
     "ix_dog_note_dog_created",
+    "ix_dog_note_dog_visited",
     "ix_dog_note_revision_note",
     "ix_session_dog_date",
     "ix_shot_status",
@@ -280,5 +281,45 @@ def test_0012_keeps_one_usable_code_per_institution(engine: Engine, clean_tables
             assert (str(account[0]), account[1]) == (str(ids["used"]), False)
             total = conn.execute(text("SELECT count(*) FROM device_code")).scalar_one()
             assert total == 6
+    finally:
+        command.upgrade(config, "head")
+
+
+def test_0021_fills_the_visit_date_from_the_written_day(engine: Engine, clean_tables: None) -> None:
+    """0021(v1.46): 있던 메모의 방문일은 쓴 날(한국 날짜)이다. UTC로는 전날 밤이어도 한국 날짜로 채운다."""
+    config = alembic_config()
+    ids = {name: uuid.uuid4() for name in ("inst", "staff", "dog", "night", "noon")}
+    command.downgrade(config, "0020")
+    try:
+        with engine.begin() as conn:
+            assert not _has_column(conn, "dog_note", "visited_on")
+            conn.execute(text("INSERT INTO institution (id, code, name) VALUES (:inst, 'A', '병원 A')"), ids)
+            conn.execute(
+                text(
+                    "INSERT INTO staff (id, institution_id, login_id, password_hash, name, role) "
+                    "VALUES (:staff, :inst, 'kim01', 'x', '갑', 'CLIENT')"
+                ),
+                ids,
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO dog (id, institution_id, name, breed, weight_kg, size_class) "
+                    "VALUES (:dog, :inst, '보리', '믹스', 10, 'MEDIUM')"
+                ),
+                ids,
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO dog_note (id, dog_id, category, body, staff_id, created_at, updated_at) VALUES "
+                    "(:night, :dog, 'S', '가', :staff, '2026-11-05T16:30:00+00', '2026-11-05T16:30:00+00'), "
+                    "(:noon, :dog, 'O', '나', :staff, '2026-11-05T03:00:00+00', '2026-11-05T03:00:00+00')"
+                ),
+                ids,
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            rows = conn.execute(text("SELECT id, visited_on FROM dog_note")).all()
+            days = {str(note_id): day.isoformat() for note_id, day in rows}
+            assert days == {str(ids["night"]): "2026-11-06", str(ids["noon"]): "2026-11-05"}
     finally:
         command.upgrade(config, "head")

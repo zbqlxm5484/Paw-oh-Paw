@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import UTC, date, datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Row, delete, func, select, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.clients.analysis import AnalysisClient
@@ -150,8 +151,26 @@ def list_sessions(
         )
         or 0
     )
+    return _list_items(db, rows), total
+
+
+def sessions_on(db: Session, institution_id: uuid.UUID, day: date) -> list[SessionListItem]:
+    """기관의 그날(measured_on) 회차 전부, 만든 순서로(15.11 그날 기록). 휴지통의 반려견은 뺀다."""
+    rows = db.execute(
+        select(MeasureSession, Dog.name)
+        .join(Dog, MeasureSession.dog_id == Dog.id)
+        .where(in_institution(institution_id), MeasureSession.measured_on == day)
+        .options(joinedload(MeasureSession.staff))
+        .order_by(MeasureSession.created_at, MeasureSession.id)
+        .execution_options(populate_existing=True)
+    ).all()
+    return _list_items(db, rows)
+
+
+def _list_items(db: Session, rows: Sequence[Row[tuple[MeasureSession, str]]]) -> list[SessionListItem]:
+    """(회차, 반려견 이름) 줄들 → SessionListItem. 대칭 점수는 DONE 회차만 쿼리 한 번으로 읽는다(15.1)."""
     scores = session_scores(db, [session.id for session, _ in rows if session.status == SessionStatus.DONE.value])
-    items = [
+    return [
         SessionListItem(
             id=session.id,
             measured_on=session.measured_on,
@@ -167,7 +186,6 @@ def list_sessions(
         )
         for session, dog_name in rows
     ]
-    return items, total
 
 
 def get_session(

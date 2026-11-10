@@ -1,14 +1,15 @@
-"""메모·진료 기록과 수정 이력(12.5 차트 자료, 13.9, 15.11, 17.2 BE-30, v1.36)."""
+"""메모·진료 기록과 수정 이력(12.5 차트 자료, 13.9, 15.11, 17.2 BE-30, v1.36). 방문일과 지우기는 v1.46이다."""
 
 import logging
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 
+from app.core.dates import today_local
 from app.models import DogNote, DogNoteRevision, Staff
 from app.services.purge import purge
 from app.storage.base import get_storage
@@ -78,7 +79,18 @@ def test_post_writes_a_note_by_the_caller(client: TestClient, dog, staff, auth_h
     assert body["staff"] == {"id": str(staff.id), "name": "담당자"}
     assert body["revision_count"] == 0
     assert body["created_at"] == body["updated_at"]
-    assert set(body) == {*MEMO, "id", "dog_id", "session_id", "staff", "revision_count", "created_at", "updated_at"}
+    assert body["visited_on"] == today_local().isoformat()  # 방문일을 빼면 오늘이다(v1.46)
+    assert set(body) == {
+        *MEMO,
+        "id",
+        "dog_id",
+        "session_id",
+        "visited_on",
+        "staff",
+        "revision_count",
+        "created_at",
+        "updated_at",
+    }
 
 
 def test_writer_cannot_be_sent_in_the_request(client: TestClient, dog, staff, colleague, auth_headers: dict) -> None:
@@ -336,10 +348,116 @@ def test_session_id_cannot_be_changed(client: TestClient, db: Session, dog, staf
     assert body["session_id"] is None and body["revision_count"] == 0
 
 
-def test_there_is_no_delete(client: TestClient, dog, auth_headers: dict) -> None:
-    note_id = _post(client, dog, auth_headers).json()["id"]
-    assert client.delete(f"{API}/notes/{note_id}", headers=auth_headers).status_code == 405
-    assert _list(client, dog, auth_headers)["total"] == 1
+# ---- 방문일(v1.46) ----
+
+
+def test_visit_date_can_be_a_past_day_and_orders_the_list(client: TestClient, dog, auth_headers: dict) -> None:
+    """지난 날짜로 쓰면 목록에서 그 날짜 자리에 온다. 순서는 방문일 → 쓴 시각이다."""
+    today = today_local()
+    _post(client, dog, auth_headers, body="오늘 첫 메모", category="OTHER")
+    past = _post(
+        client, dog, auth_headers, body="지난주 방문", category="S", visited_on=(today - timedelta(days=7)).isoformat()
+    )
+    assert past.status_code == 201 and past.json()["visited_on"] == (today - timedelta(days=7)).isoformat()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    _post(client, dog, auth_headers, body="어제 방문", category="S", visited_on=yesterday)
+    _post(client, dog, auth_headers, body="오늘 둘째 메모", category="OTHER", visited_on=today.isoformat())
+    _post(client, dog, auth_headers, body="날짜 없이", category="OTHER", visited_on=None)
+
+    listed = [item["body"] for item in _list(client, dog, auth_headers)["items"]]
+    assert listed == ["날짜 없이", "오늘 둘째 메모", "오늘 첫 메모", "어제 방문", "지난주 방문"]
+
+
+def test_future_visit_date_is_422(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    tomorrow = (today_local() + timedelta(days=1)).isoformat()
+    single = _post(client, dog, auth_headers, visited_on=tomorrow)
+    assert single.status_code == 422 and _fields(single) == ["visited_on"]
+    batch = _batch(client, dog, auth_headers, [{"category": "S", "body": "가"}], visited_on=tomorrow)
+    assert batch.status_code == 422 and _fields(batch) == ["visited_on"]
+    assert _post(client, dog, auth_headers, visited_on="지난주").status_code == 422
+    assert _count(db, DogNote) == 0
+
+
+def test_batch_takes_one_visit_date_for_all(client: TestClient, dog, auth_headers: dict) -> None:
+    day = (today_local() - timedelta(days=3)).isoformat()
+    soap = [{"category": "S", "body": "가", "visited_on": "2020-01-01"}, {"category": "O", "body": "나"}]
+    response = _batch(client, dog, auth_headers, soap, visited_on=day)
+    assert response.status_code == 201
+    assert [item["visited_on"] for item in response.json()["items"]] == [day, day]  # 건마다 보낸 날짜는 보지 않는다
+    today_batch = _batch(client, dog, auth_headers, [{"category": "A", "body": "다"}]).json()["items"]
+    assert today_batch[0]["visited_on"] == today_local().isoformat()
+
+
+def test_visit_date_cannot_be_changed(client: TestClient, dog, auth_headers: dict) -> None:
+    day = (today_local() - timedelta(days=3)).isoformat()
+    note_id = _post(client, dog, auth_headers, visited_on=day).json()["id"]
+    body = _patch(client, note_id, auth_headers, visited_on="2020-01-01").json()
+    assert body["visited_on"] == day and body["revision_count"] == 0
+    edited = _patch(client, note_id, auth_headers, body="고친 내용", visited_on="2020-01-01").json()
+    assert edited["visited_on"] == day and edited["revision_count"] == 1
+
+
+# ---- 지우기(v1.46) ----
+
+
+def _delete(client: TestClient, note_id: str, headers: dict):
+    return client.delete(f"{API}/notes/{note_id}", headers=headers)
+
+
+def test_delete_removes_the_note_and_its_revisions(client: TestClient, db: Session, dog, auth_headers) -> None:
+    kept_id = _post(client, dog, auth_headers, body="남길 메모").json()["id"]
+    _patch(client, kept_id, auth_headers, body="남길 메모 (고침)")
+    note_id = _post(client, dog, auth_headers, body="잘못 쓴 메모").json()["id"]
+    _patch(client, note_id, auth_headers, body="잘못 쓴 메모 (고침)")
+    _patch(client, note_id, auth_headers, important=False)
+    assert (_count(db, DogNote), _count(db, DogNoteRevision)) == (2, 3)
+
+    response = _delete(client, note_id, auth_headers)
+    assert response.status_code == 204 and response.content == b""
+    assert (_count(db, DogNote), _count(db, DogNoteRevision)) == (1, 1)  # 다른 메모와 그 이력은 그대로다
+    assert [item["id"] for item in _list(client, dog, auth_headers)["items"]] == [kept_id]
+    assert len(_revisions(client, kept_id, auth_headers)) == 1
+
+    assert _delete(client, note_id, auth_headers).status_code == 404  # 이미 없다
+    assert _patch(client, note_id, auth_headers, body="지운 뒤 고치기").status_code == 404
+    assert client.get(f"{API}/notes/{note_id}/revisions", headers=auth_headers).status_code == 404
+
+
+def test_delete_takes_one_of_a_batch(client: TestClient, dog, auth_headers: dict) -> None:
+    soap = [{"category": "S", "body": "가"}, {"category": "O", "body": "나"}, {"category": "P", "body": "다"}]
+    items = _batch(client, dog, auth_headers, soap).json()["items"]
+    assert _delete(client, items[1]["id"], auth_headers).status_code == 204
+    assert sorted(item["category"] for item in _list(client, dog, auth_headers)["items"]) == ["P", "S"]
+
+
+def test_deleting_the_important_note_drops_the_home_badge(client: TestClient, dog, auth_headers: dict) -> None:
+    note_id = _post(client, dog, auth_headers).json()["id"]  # MEMO는 중요 표시가 켜져 있다
+    codes = [badge["code"] for badge in client.get(f"{API}/dogs/{dog.id}", headers=auth_headers).json()["badges"]]
+    assert codes == ["IMPORTANT_NOTE"]
+
+    assert _delete(client, note_id, auth_headers).status_code == 204
+    detail = client.get(f"{API}/dogs/{dog.id}", headers=auth_headers).json()
+    assert detail["badges"] == [] and detail["changes"] == []
+
+
+def test_delete_is_404_for_others_and_logs_no_body(
+    client: TestClient, db: Session, dog, staff, auth_headers, other_staff, caplog
+) -> None:
+    note_id = _post(client, dog, auth_headers, body="약 알레르기 있음").json()["id"]
+    assert _delete(client, note_id, bearer(other_staff)).status_code == 404
+    assert _delete(client, str(uuid.uuid4()), auth_headers).status_code == 404
+    assert client.delete(f"{API}/notes/{note_id}").status_code == 401
+    assert client.delete(f"{API}/dogs/{dog.id}", headers=auth_headers).status_code == 204  # 휴지통
+    assert _delete(client, note_id, auth_headers).status_code == 404
+    assert _count(db, DogNote) == 1
+
+    assert client.post(f"{API}/dogs/{dog.id}/restore", headers=auth_headers).status_code == 200
+    with caplog.at_level(logging.DEBUG):
+        assert _delete(client, note_id, auth_headers).status_code == 204
+    logged = [record.getMessage() for record in caplog.records]
+    assert f"dog note deleted note={note_id} staff={staff.id}" in logged
+    assert "알레르기" not in "\n".join(logged)
+    assert _count(db, DogNote) == 0
 
 
 # ---- 기관 분리, 휴지통, 로그 ----

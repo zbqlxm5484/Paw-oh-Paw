@@ -10,7 +10,15 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    StringConstraints,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from app.core.dates import today_local
 from app.models.enums import DogStage, HistoryKind, HistorySite, NoteCategory
@@ -66,6 +74,7 @@ class VitalOut(OutModel):
     """바이탈 하루치(15.3). 재지 않은 값은 null이다(v1.41). staff는 마지막으로 저장한 담당자다."""
 
     id: uuid.UUID
+    dog_id: uuid.UUID
     measured_on: date
     weight_kg: float | None
     temp_c: float | None
@@ -164,16 +173,31 @@ class NoteItemIn(BaseModel):
     important: bool = False
 
 
+def _visit_not_future(value: date | None) -> date | None:
+    """방문일(13.9, v1.46): 오늘(한국 날짜)까지. 빼거나 null이면 서비스가 오늘로 채운다."""
+    if value is not None and value > today_local():
+        raise ValueError("오늘 이전 날짜여야 합니다")
+    return value
+
+
+VisitedOn = Annotated[date | None, AfterValidator(_visit_not_future)]
+
+
 class NoteCreate(NoteItemIn):
-    """POST /dogs/{dog_id}/notes 요청. session_id는 같은 반려견의 회차(선택)."""
+    """POST /dogs/{dog_id}/notes 요청. session_id는 같은 반려견의 회차(선택), visited_on은 방문일(선택, 기본 오늘)."""
 
     session_id: uuid.UUID | None = None
+    visited_on: VisitedOn = None
 
 
 class NoteBatchCreate(BaseModel):
-    """POST /dogs/{dog_id}/notes/batch 요청: 1~8건을 같은 시각으로 쓴다. 같은 분류가 두 번 있으면 422(13.9)."""
+    """POST /dogs/{dog_id}/notes/batch 요청: 1~8건을 같은 시각으로 쓴다. 같은 분류가 두 번 있으면 422(13.9).
+
+    session_id와 visited_on(방문일, 기본 오늘)은 묶음 전체에 하나다.
+    """
 
     session_id: uuid.UUID | None = None
+    visited_on: VisitedOn = None
     notes: list[NoteItemIn] = Field(min_length=1, max_length=8)
 
     @field_validator("notes")
@@ -186,7 +210,7 @@ class NoteBatchCreate(BaseModel):
 
 
 class NoteUpdate(BaseModel):
-    """PATCH /notes/{note_id} 요청. 보낸 것만 바꾼다. 셋 다 null은 안 된다(13.9)."""
+    """PATCH /notes/{note_id} 요청. 보낸 것만 바꾼다. 셋 다 null은 안 된다(13.9). 방문일은 받지 않는다(보내도 무시)."""
 
     body: NoteBody | None = None
     category: NoteCategory | None = None
@@ -202,7 +226,7 @@ class NoteUpdate(BaseModel):
 
 
 class NoteOut(OutModel):
-    """메모·진료 기록 한 건(15.3). staff는 지금 내용을 쓴 담당자, revision_count는 고친 횟수다."""
+    """메모·진료 기록 한 건(15.3). staff는 지금 내용을 쓴 담당자, revision_count는 고친 횟수, visited_on은 방문일."""
 
     id: uuid.UUID
     dog_id: uuid.UUID
@@ -210,6 +234,7 @@ class NoteOut(OutModel):
     category: str
     body: str
     important: bool
+    visited_on: date
     staff: StaffBriefOut
     revision_count: int = 0
     created_at: UtcDateTime

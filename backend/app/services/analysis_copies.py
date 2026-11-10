@@ -4,7 +4,7 @@
 다시 찾을 수 없으므로, 그 전에 여기서 지운다. 부르는 곳은 자료 파기(services/purge.py), 촬영 삭제·다시 분석
 (services/shots.py), 측정 취소(services/sessions.py)다.
 
-- 촬영 단위로 지운다(v1.45, 조유진 258의 DELETE /analyses?shot_id=). 분석 API는 제출 때 받은 촬영 ID를 작업마다
+- 촬영 단위로 지운다(v1.46, 조유진 258의 DELETE /analyses?shot_id=). 분석 API는 제출 때 받은 촬영 ID를 작업마다
   적어 두므로, 팀 서비스가 작업 ID를 모르는 작업도 지워진다. 그런 작업은 제출 응답을 못 받고 다시 보냈을 때,
   제출 직후 워커가 죽었을 때 생긴다.
 - 팀 서비스가 아는 작업(shot.job_id)이 분석 API의 답에 없으면 작업 단위(DELETE /analyses/{id})로 한 번 더 부른다.

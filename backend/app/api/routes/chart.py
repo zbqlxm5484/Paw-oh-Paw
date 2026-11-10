@@ -1,4 +1,7 @@
-"""차트 자료 API(15.11, BE-28~30): 바이탈, 진단 이력, 메모·진료 기록. 요청 검사 → services → 응답만 한다(11.3)."""
+"""차트 자료 API(15.11, BE-28~30·35): 바이탈, 진단 이력, 메모·진료 기록, 그날 기록.
+
+요청 검사 → services → 응답만 한다(11.3).
+"""
 
 import uuid
 from datetime import date
@@ -7,6 +10,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import CurrentStaff, DbSession
+from app.core.dates import today_local
 from app.schemas.chart import (
     DogHistoryCreate,
     DogHistoryListOut,
@@ -23,6 +27,8 @@ from app.schemas.chart import (
     VitalOut,
     VitalPut,
 )
+from app.schemas.daily_records import DailyRecordsOut
+from app.services import daily_records as daily_service
 from app.services import dog_history as history_service
 from app.services import notes as note_service
 from app.services import vitals as vital_service
@@ -41,6 +47,15 @@ def put_vital(dog_id: uuid.UUID, measured_on: date, body: VitalPut, staff: Curre
     return vital_service.put_vital(
         db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, measured_on=measured_on, data=body
     )
+
+
+@router.delete("/dogs/{dog_id}/vitals/{measured_on}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vital(dog_id: uuid.UUID, measured_on: date, staff: CurrentStaff, db: DbSession) -> Response:
+    """그날 줄을 통째로 지운다. 없으면 404. 등록 체중과 회차의 체중은 그대로다."""
+    vital_service.delete_vital(
+        db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, measured_on=measured_on
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/dogs/{dog_id}/history", response_model=DogHistoryListOut)
@@ -99,13 +114,14 @@ def create_note(dog_id: uuid.UUID, body: NoteCreate, staff: CurrentStaff, db: Db
         dog_id=dog_id,
         session_id=body.session_id,
         items=[body],
+        visited_on=body.visited_on,
     )
     return note
 
 
 @router.post("/dogs/{dog_id}/notes/batch", response_model=NoteBatchOut, status_code=status.HTTP_201_CREATED)
 def create_notes(dog_id: uuid.UUID, body: NoteBatchCreate, staff: CurrentStaff, db: DbSession) -> NoteBatchOut:
-    """여러 건을 같은 시각으로 쓴다(SOAP에서 채운 칸들). 하나라도 어긋나면 아무것도 저장하지 않는다."""
+    """여러 건을 같은 시각·같은 방문일로 쓴다(SOAP에서 채운 칸들). 하나라도 어긋나면 아무것도 저장하지 않는다."""
     items = note_service.create_notes(
         db,
         institution_id=staff.institution_id,
@@ -113,13 +129,14 @@ def create_notes(dog_id: uuid.UUID, body: NoteBatchCreate, staff: CurrentStaff, 
         dog_id=dog_id,
         session_id=body.session_id,
         items=body.notes,
+        visited_on=body.visited_on,
     )
     return NoteBatchOut(items=items)
 
 
 @router.patch("/notes/{note_id}", response_model=NoteOut)
 def update_note(note_id: uuid.UUID, body: NoteUpdate, staff: CurrentStaff, db: DbSession) -> NoteOut:
-    """고치기 전 내용은 수정 이력에 남는다. 지우는 API는 없다."""
+    """고치기 전 내용은 수정 이력에 남는다. 방문일은 바꾸지 않는다."""
     return note_service.update_note(
         db, institution_id=staff.institution_id, staff_id=staff.id, note_id=note_id, data=body
     )
@@ -128,3 +145,20 @@ def update_note(note_id: uuid.UUID, body: NoteUpdate, staff: CurrentStaff, db: D
 @router.get("/notes/{note_id}/revisions", response_model=NoteRevisionListOut)
 def list_note_revisions(note_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> NoteRevisionListOut:
     return NoteRevisionListOut(items=note_service.list_revisions(db, staff.institution_id, note_id))
+
+
+@router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_note(note_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Response:
+    """한 건과 그 수정 이력을 지운다. 되돌릴 수 없다."""
+    note_service.delete_note(db, institution_id=staff.institution_id, staff_id=staff.id, note_id=note_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/daily-records", response_model=DailyRecordsOut)
+def daily_records(
+    staff: CurrentStaff,
+    db: DbSession,
+    day: Annotated[date | None, Query(alias="date")] = None,
+) -> DailyRecordsOut:
+    """기관의 그날 바이탈·메모·진료 기록·회차(BE-35). date를 빼면 오늘(한국 날짜)이다."""
+    return daily_service.daily_records(db, staff.institution_id, day or today_local())
