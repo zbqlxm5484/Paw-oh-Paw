@@ -10,7 +10,7 @@ import { SessionThumb } from './SessionThumb'
 import { ApiError } from '../../api/client'
 import { BREEDS } from '../../api/labels'
 import { DCLogic } from '../DCLogic'
-import { ST, STEPS, type DDog, type DGait, type DRes } from '../adapter'
+import { ST, STEPS, allShotsFailed, type DDog, type DGait, type DRes } from '../adapter'
 import type { ProtoProps } from '../DesignRoot'
 import { EMPTY_PET, LIMB, SEX, SIZE, autoSize, baseOf as baseOf_, chk, desc, errMsg, fmtD, knee, petBody, pickSt, resultVals, seg, sessNo as sessNo_, short, valid as valid_, wkg } from '../shared'
 import { AppView } from './AppView'
@@ -360,7 +360,7 @@ export class AppProto extends DCLogic<Props, any> {
         ? { key: `ana:${ana.sessionId}:m`, title: `${anaDog.name} 촬영을 끝내지 않았습니다`, body: `영상 ${ana.n}개를 첨부해 두고 측정 종료를 누르지 않았습니다. 이어서 찍거나 측정을 끝내 주세요.`, when: '촬영 중', dot: '#D2601A', open: () => this.nav('capReview', `/sessions/${ana.sessionId}`) }
         : { key: `ana:${ana.sessionId}`, title: `${anaDog.name} 분석이 진행 중입니다`, body: `영상 ${ana.n}개의 관절점을 찾고 있습니다. 끝나면 알려 드리겠습니다.`, when: '진행 중', dot: '#D2601A', open: () => this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`) }] : []),
       ...results.slice(0, 6).map((r) => { const d = dogById(r.dog); return r.st === 'fail'
-        ? { key: `res:${r.id}:fail`, title: `${d?.name ?? ''} 분석에 실패했습니다`, body: r.result?.fail_reason?.message || '쓸 수 있는 통과가 없었습니다. 다시 촬영해 주세요.', when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
+        ? { key: `res:${r.id}:fail`, title: `${d?.name ?? ''} 분석에 실패했습니다`, body: r.result?.fail_reason?.message || (allShotsFailed(r.result) ? '분석 서버가 영상을 처리하지 못했습니다. 잠시 후 다시 분석해 주세요.' : '쓸 수 있는 통과가 없었습니다. 다시 촬영해 주세요.'), when: r.date, dot: '#C9C4BC', open: () => this.openRes(r.id) }
         : { key: `res:${r.id}:${r.rep ? 'rep' : 'done'}`, title: `${d?.name ?? ''} ${r.rep ? '보고서가 만들어졌습니다' : '분석이 끝났습니다'}`, body: r.rep ? '보호자용·수의사용 보고서를 확인해 보세요.' : '회차 결과를 확인해 보세요.', when: r.date, dot: r.rep ? '#D2601A' : '#C9C4BC', open: () => this.openRes(r.id) } }),
     ]
     if (!rawNotifs.length) rawNotifs.push({ key: 'welcome', title: '가입을 환영합니다', body: '반려견을 등록하고 첫 보행 영상을 찍어 보세요.', when: '방금', dot: '#D2601A', open: this.goPetNew })
@@ -392,10 +392,26 @@ export class AppProto extends DCLogic<Props, any> {
       const [label, c] = syms.length === 1 ? ['첫 측정', '#7A808A'] : diff >= 3 ? ['좋아짐', '#2E8B57'] : diff <= -3 ? ['나빠짐', '#C2412D'] : ['비슷함', '#7A808A']
       return { has: true, pts, line: pts.map((p) => `${p.x},${p.y}`).join(' '), label, c, sym: syms[syms.length - 1] }
     }
+    // 실패 회차라도 영상이 전부 분석 서버에서 실패했으면 다시 찍을 일이 아니다(서버 장애) → '분석 실패'
+    const failChip = (r: DRes) => (r.status === 'FAILED' || allShotsFailed(r.result) ? { t: '분석 실패', bg: '#F2EFEA', c: '#5B6472' } : { t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' })
     const changesOf = (d: DDog) => {
       const out: { t: string; bg: string; c: string }[] = []
+      const srv = d.raw?.changes
+      if (srv) {
+        // 서버 변동(271, 최근 7일). 대칭 점수 차는 서버 delta 그대로. 수술 추가는 수술 배지(D+일)와 겹쳐 따로 띄우지 않는다
+        const latest = results.find((x) => x.dog === d.id && x.loaded)
+        for (const c of srv) {
+          if (c.code === 'RESHOOT_NEEDED') {
+            if (!latest || latest.st === 'fail') out.push(latest ? failChip(latest) : { t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' })
+            else out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
+          } else if (c.code === 'GAIT_BETTER' && c.delta != null) out.push({ t: `보행 좋아짐 +${c.delta}%p`, bg: '#E8F3EC', c: '#2E8B57' })
+          else if (c.code === 'GAIT_WORSE' && c.delta != null) out.push({ t: `보행 나빠짐 −${-c.delta}%p`, bg: '#F8E7E3', c: '#C2412D' })
+          else if (c.code === 'IMPORTANT_NOTE') out.push({ t: '중요 메모', bg: '#EEF1F6', c: '#4A5A78' })
+        }
+        return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
+      }
       for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7)) {
-        if (r.st === 'fail') out.push({ t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' })
+        if (r.st === 'fail') out.push(failChip(r))
         else {
           if (r.st === 'part') out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
           const p = prevValid(r)
@@ -412,7 +428,7 @@ export class AppProto extends DCLogic<Props, any> {
     const todayRows: HomeRow[] = hvDogs.flatMap((d) => {
       const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
       if (!res.length && !live) return []
-      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.map((r) => (r.st === 'fail' ? { t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' } : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
+      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
       const times = res.map((r) => r.time).filter(Boolean).sort()
       return [{ key: d.id, when: times[0] || '', name: d.name, sub: d.breed || '견종 미입력', chips: [...chips, ...badgeChips(d)], right: res.map(byOf).find((b) => b !== '—') || '', live, open: () => this.openDog(d.id) }]
     })
@@ -659,7 +675,7 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       filters: [{ id: 'all', label: '전체' }, ...dogs.map((d) => ({ id: d.id, label: d.name }))].map((f) => { const on = s.filt === f.id; return { label: f.label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.setState({ filt: f.id }) } }),
-      resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date} · ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? '다시 촬영 필요' : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, open: () => this.openRes(r.id) })),
+      resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date} · ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? (r.status === 'FAILED' || allShotsFailed(r.result) ? '분석 실패' : '다시 촬영 필요') : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, open: () => this.openRes(r.id) })),
       hasRes: filtDogs.length > 0, noRes: !filtDogs.length,
       rd, retake: () => { if (R) this.goCapture(R.dog) },
       gaitSegs: seg([['walk', '평보'], ['trot', '속보']], G, (k) => this.setState({ gait: k })), gaitName: rd.gaitName,

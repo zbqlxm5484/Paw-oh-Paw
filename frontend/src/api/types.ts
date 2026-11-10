@@ -118,6 +118,26 @@ export interface DogOut {
   /** 가장 최근 수술·진단(목록 요약) */
   last_surgery?: HistorySummary | null
   last_diagnosis?: HistorySummary | null
+  /** 홈 특이사항 배지(271). 글은 화면이 만든다. 예전 서버면 undefined */
+  badges?: DogBadge[]
+  /** 최근 7일 변동(271). on 이 늦은 순서. 예전 서버면 undefined */
+  changes?: DogChange[]
+  /** 가장 최근 완료 회차의 대칭 점수(271) */
+  last_symmetry?: number | null
+}
+
+export interface DogBadge {
+  code: 'SURGERY' | 'DIAGNOSIS' | 'IMPORTANT_NOTE'
+  title: string | null
+  site: string | null
+  on: string
+}
+
+export interface DogChange {
+  code: 'SURGERY_ADDED' | 'IMPORTANT_NOTE' | 'RESHOOT_NEEDED' | 'GAIT_BETTER' | 'GAIT_WORSE'
+  on: string
+  /** GAIT_* 에서만 점수 차(이번 − 앞) */
+  delta: number | null
 }
 
 /** 진료 정보(11-09 백엔드 조영운): 바이탈·진단/수술 이력 */
@@ -180,6 +200,8 @@ export interface SessionHistoryItem {
   valid_passes: { LEFT: number; RIGHT: number }
   model_version: string | null
   reports: { OWNER: ReportStatus; VET: ReportStatus } | null
+  /** 대칭 점수 0~100(271, 100 − 평균 대칭 지수). 완료 전이거나 계산할 쌍이 없으면 null, 예전 서버면 undefined */
+  symmetry_score?: number | null
 }
 
 /* ---------- 회차 측정 (api-spec 6절, 명세 v1.5: SessionOut.size_class) ---------- */
@@ -326,6 +348,8 @@ export interface GaitResultOut {
 export interface SessionResultOut extends SessionOut {
   pass_counts: { measured: number; used: number; excluded: number }
   shot_counts: { total: number; failed: number; invalid: number }
+  /** 대칭 점수(271). 화면은 이 값을 그대로 쓴다. 예전 서버면 undefined */
+  symmetry_score?: number | null
   exclude_summary: (Reason & { count: number })[]
   notices: Reason[]
   gaits: GaitResultOut[]
