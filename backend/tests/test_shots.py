@@ -439,7 +439,24 @@ def test_retry_stops_when_the_analysis_copy_cannot_be_deleted(
     assert (row.status, row.job_id, row.fail_reason) == ("FAILED", "old-job", "ANALYSIS_TIMEOUT")
 
 
-def test_retry_of_a_shot_that_was_never_submitted_does_not_call_the_analysis_api(
+def test_retry_of_a_shot_without_a_job_id_deletes_what_the_analysis_api_still_holds(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """제출 응답을 못 받고 끝난 촬영은 job_id가 없지만 분석 API에는 작업이 있을 수 있다. 촬영 ID로 지운다."""
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_SUBMIT_FAILED", attempt_count=3)
+    analysis.shot_jobs[shot.id] = ["lost-job"]
+    analysis.hook = lambda job_id: pytest.fail("모르는 작업인데 작업 단위로 불렀다")
+    assert client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers).status_code == 200
+    assert analysis.shot_calls == [shot.id] and analysis.deleted == ["lost-job"]
+
+
+def test_retry_waits_while_a_job_the_team_service_does_not_know_is_still_running(
     client: TestClient,
     db: Session,
     auth_headers: dict,
@@ -449,8 +466,11 @@ def test_retry_of_a_shot_that_was_never_submitted_does_not_call_the_analysis_api
 ) -> None:
     session = _worker_session(db, dog, staff)
     shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_SUBMIT_FAILED", attempt_count=3)
-    analysis.hook = lambda job_id: pytest.fail("제출한 적 없는 촬영인데 분석 API를 불렀다")
-    assert client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers).status_code == 200
+    analysis.shot_fail[shot.id] = AnalysisClientError("JOB_IN_PROGRESS", retryable=False, status_code=409)
+    response = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "SHOT_IN_PROGRESS")
+    db.expire_all()
+    assert db.get(Shot, shot.id).status == "FAILED"
 
 
 def test_retry_also_deletes_a_job_that_changed_while_waiting(
@@ -507,6 +527,24 @@ def test_delete_shot_deletes_the_analysis_copy_first_and_stops_if_it_cannot(
     assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) is None
 
 
+def test_delete_shot_also_deletes_jobs_the_team_service_does_not_know(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """다시 보내기 전의 작업처럼 job_id에 없는 작업도 같은 촬영 ID로 지워진다. 아는 작업을 또 부르지 않는다."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.job_id = "job-9"
+    db.flush()
+    analysis.shot_jobs[shot.id] = ["job-lost", "job-9"]
+    analysis.hook = lambda job_id: pytest.fail("촬영 단위 답에 든 작업을 작업 단위로 또 불렀다")
+    assert client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls == [shot.id] and analysis.deleted == ["job-lost", "job-9"]
+
+
 def test_requests_that_will_be_refused_leave_the_analysis_copy_alone(
     client: TestClient,
     db: Session,
@@ -524,4 +562,4 @@ def test_requests_that_will_be_refused_leave_the_analysis_copy_alone(
     assert (closed.status_code, closed.json()["error"]["code"]) == (409, "SESSION_CLOSED")
     not_failed = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
     assert (not_failed.status_code, not_failed.json()["error"]["code"]) == (409, "SHOT_NOT_FAILED")
-    assert analysis.deleted == []
+    assert analysis.deleted == [] and analysis.shot_calls == []

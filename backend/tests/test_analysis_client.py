@@ -247,6 +247,70 @@ def test_http_delete_connection_failure_is_a_client_error() -> None:
     assert caught.value.status_code is None and not caught.value.job_in_progress
 
 
+@pytest.mark.parametrize("deleted", [["job-1", "job-2"], []])
+def test_http_delete_shot_returns_the_deleted_job_ids(deleted: list[str]) -> None:
+    # 조유진 258: DELETE /analyses?shot_id=… → 200 {shot_id, deleted}. 지울 것이 없어도 200이다
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(
+            method=request.method,
+            path=request.url.path,
+            query=dict(request.url.params),
+            api_key=request.headers.get("x-api-key"),
+        )
+        return httpx.Response(200, json={"shot_id": str(SHOT_ID), "deleted": deleted})
+
+    assert _http(handler).delete_shot(SHOT_ID) == deleted
+    assert seen == {"method": "DELETE", "path": "/analyses", "query": {"shot_id": str(SHOT_ID)}, "api_key": "k1"}
+
+
+def test_http_delete_shot_flags_in_progress_and_a_missing_endpoint() -> None:
+    with pytest.raises(AnalysisClientError, match="JOB_IN_PROGRESS") as caught:
+        _http(lambda request: _rejection(409, "JOB_IN_PROGRESS")).delete_shot(SHOT_ID)
+    assert caught.value.job_in_progress and not caught.value.shot_delete_missing
+    # 옛 분석 API에는 /analyses에 POST만 있어 405가 온다
+    with pytest.raises(AnalysisClientError) as caught:
+        _http(lambda request: httpx.Response(405, json={"detail": "Method Not Allowed"})).delete_shot(SHOT_ID)
+    assert caught.value.shot_delete_missing and not caught.value.job_in_progress
+    for status, code in ((400, "INVALID_REQUEST"), (401, "AUTH_REQUIRED"), (500, "DELETE_FAILED")):
+        with pytest.raises(AnalysisClientError, match=code) as caught:
+            _http(lambda request, s=status, c=code: _rejection(s, c)).delete_shot(SHOT_ID)
+        assert caught.value.status_code == status
+        assert not caught.value.job_in_progress and not caught.value.shot_delete_missing
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, json={"shot_id": "x"}),  # deleted가 없다
+        httpx.Response(200, json={"deleted": "job-1"}),  # 목록이 아니다
+        httpx.Response(200, json={"deleted": [1, 2]}),  # 글자가 아니다
+        httpx.Response(200, json=["job-1"]),  # 객체가 아니다
+        httpx.Response(200, text="ok"),  # JSON이 아니다
+        httpx.Response(204),  # 작업 단위 지우기의 답
+    ],
+)
+def test_http_delete_shot_does_not_trust_a_broken_answer(response: httpx.Response) -> None:
+    # 지웠다고 볼 수 없는 답은 실패로 본다. 성공으로 넘기면 사본이 남은 채 행을 지운다
+    with pytest.raises(AnalysisClientError):
+        _http(lambda request: response).delete_shot(SHOT_ID)
+
+
+def test_http_delete_shot_connection_failure_is_a_client_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow")
+
+    with pytest.raises(AnalysisClientError, match="ReadTimeout") as caught:
+        _http(handler).delete_shot(SHOT_ID)
+    assert caught.value.status_code is None and not caught.value.shot_delete_missing
+
+
+def test_mock_delete_shot_knows_no_jobs() -> None:
+    # 상태를 두지 않아 빈 목록이다. 그래서 아는 작업은 delete로 가고, 거기서 Mock ID인지 본다
+    assert MockAnalysisClient(0).delete_shot(SHOT_ID) == []
+
+
 def test_mock_delete_accepts_only_its_own_job_ids(video: Path) -> None:
     # API 프로세스에 설정이 빠져 mock으로 떠도 실제 작업의 사본을 지운 것으로 치지 않는다(6절)
     client = MockAnalysisClient(0)

@@ -265,7 +265,15 @@ def test_purge_locks_the_target_sessions_before_files_and_rows(db: Session, dog,
 
     with _recorded_sql(db) as events:
         storage = _MarkingStorage(get_storage(), events)
-        purge(db, storage, "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False)
+        purge(
+            db,
+            storage,
+            "DOG",
+            institution_id=dog.institution_id,
+            target_id=dog.id,
+            dry_run=False,
+            analysis=_FakeAnalysis(),  # 작업 ID가 없는 촬영도 촬영 단위로 부르므로 클라이언트가 있어야 한다
+        )
     lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
     files = events.index(_MarkingStorage.MARK)
     first_delete = next(i for i, statement in enumerate(events) if statement.lstrip().upper().startswith("DELETE"))
@@ -420,6 +428,8 @@ class _FakeAnalysis:
     """분석 클라이언트 자리. 지운 작업을 기록하고, fail에 든 작업에서는 그 오류를 낸다.
 
     hook은 지우기 호출 도중(HTTP를 기다리는 사이)에 다른 요청이 끼어드는 상황을 만든다.
+    촬영 단위 지우기(delete_shot)는 shot_jobs에 넣어 둔 작업만 안다. 비워 두면 빈 목록을 돌려주어, 팀 서비스가 아는
+    작업은 작업 단위(delete)로 온다. shot_jobs에는 팀 서비스가 모르는 작업도 넣을 수 있다.
     """
 
     MARK = "analysis.delete"
@@ -429,6 +439,10 @@ class _FakeAnalysis:
         self.deleted: list[str] = []
         self.fail: dict[str, AnalysisClientError] = {}
         self.hook = None
+        self.shot_calls: list[uuid.UUID] = []
+        self.shot_jobs: dict[uuid.UUID, list[str]] = {}
+        self.shot_fail: dict[uuid.UUID, AnalysisClientError] = {}
+        self.shot_error: AnalysisClientError | None = None  # 모든 촬영 단위 호출에 내는 오류
 
     def delete(self, job_id: str) -> None:
         if self.events is not None:
@@ -438,6 +452,18 @@ class _FakeAnalysis:
         if job_id in self.fail:
             raise self.fail[job_id]
         self.deleted.append(job_id)
+
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        if self.events is not None:
+            self.events.append(self.MARK)
+        self.shot_calls.append(shot_id)
+        if self.shot_error is not None:
+            raise self.shot_error
+        if shot_id in self.shot_fail:
+            raise self.shot_fail[shot_id]
+        jobs = self.shot_jobs.pop(shot_id, [])
+        self.deleted.extend(jobs)
+        return list(jobs)
 
 
 @pytest.fixture
@@ -499,16 +525,18 @@ def test_dry_run_counts_analysis_jobs_without_calling(
     response = _purge_dog(client, dog, admin_headers, dry_run=True)
     assert response.status_code == 200, response.text
     assert response.json()["analysis_jobs"] == 2
-    assert analysis.deleted == []
+    assert analysis.deleted == [] and analysis.shot_calls == []
 
 
-def test_only_submitted_shots_of_the_target_are_deleted_from_the_analysis_api(
+def test_every_shot_of_the_target_is_asked_about_and_only_its_jobs_are_deleted(
     client: TestClient, db: Session, dog, staff, admin_headers, analysis: _FakeAnalysis
 ) -> None:
+    """작업 ID가 없는 촬영도 촬영 단위로 부른다(분석 API에 모르는 작업이 있을 수 있다). 남의 것은 안 부른다."""
     _fill(db, dog, staff, sessions=1)
     job_ids = _give_job_ids(db, dog)
     never_submitted = make_session(db, dog, staff, date(2026, 10, 20))
     add_shot(db, never_submitted, 1, status="UPLOADED", passes={})  # job_id가 없다
+    shot_ids = {shot.id for shot in _shots_of(db, dog)}
     keep = another_dog(db, staff.institution_id)
     _fill(db, keep, staff, sessions=1)
     kept_jobs = _give_job_ids(db, keep)
@@ -518,6 +546,60 @@ def test_only_submitted_shots_of_the_target_are_deleted_from_the_analysis_api(
     assert response.json()["analysis_jobs"] == 1
     assert analysis.deleted == job_ids
     assert not set(kept_jobs) & set(analysis.deleted)
+    assert len(shot_ids) == 2 and set(analysis.shot_calls) == shot_ids
+
+
+def test_jobs_the_team_service_does_not_know_are_deleted_and_counted(db: Session, dog, staff) -> None:
+    """제출 응답을 못 받아 job_id를 못 적은 작업도 촬영 ID로 지워진다(조유진 258). 실제 파기의 수에는 그것도 든다."""
+    _fill(db, dog, staff, sessions=1)
+    (known,) = _give_job_ids(db, dog)
+    (submitted,) = _shots_of(db, dog)
+    lost = add_shot(db, make_session(db, dog, staff, date(2026, 10, 20)), 1, status="FAILED", passes={})
+    fake = _FakeAnalysis()
+    fake.shot_jobs = {submitted.id: [known, "lost-1"], lost.id: ["lost-2"]}
+    fake.hook = lambda job_id: pytest.fail("촬영 단위 답에 든 작업을 작업 단위로 또 불렀다")
+    args = dict(institution_id=dog.institution_id, target_id=dog.id, analysis=fake)
+
+    counted = purge(db, get_storage(), "DOG", dry_run=True, **args)
+    assert counted.analysis_jobs == 1 and fake.shot_calls == []  # 세기만 할 때는 아는 것만 센다
+
+    result = purge(db, get_storage(), "DOG", dry_run=False, **args)
+    assert sorted(fake.deleted) == sorted([known, "lost-1", "lost-2"])
+    assert result.analysis_jobs == 3
+    (log,) = _purge_logs(db)
+    assert log.analysis_jobs_deleted == 3
+    assert _rows_of_dog(db, dog.id) == 0
+
+
+def test_an_analysis_api_without_the_shot_delete_still_deletes_the_known_jobs(db: Session, dog, staff) -> None:
+    """분석 API가 옛 판이면(405) 아는 작업을 작업 단위로 지운다. 배포 순서가 어긋나도 파기가 막히지 않는다."""
+    _fill(db, dog, staff, sessions=2)
+    job_ids = _give_job_ids(db, dog)
+    add_shot(db, make_session(db, dog, staff, date(2026, 10, 20)), 1, status="UPLOADED", passes={})
+    fake = _FakeAnalysis()
+    fake.shot_error = AnalysisClientError("405", retryable=False, status_code=405)
+    result = purge(
+        db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
+    )
+    assert sorted(fake.deleted) == sorted(job_ids) and len(fake.shot_calls) == 3
+    assert result.analysis_jobs == 2 and _rows_of_dog(db, dog.id) == 0
+
+
+@pytest.mark.parametrize(("answer", "code"), [(409, "SHOT_IN_PROGRESS"), (500, "ANALYSIS_UNAVAILABLE")])
+def test_a_refused_shot_delete_stops_the_purge_with_everything_in_place(
+    db: Session, dog, staff, answer: int, code: str
+) -> None:
+    """409는 팀 서비스가 모르는 작업이 분석 API에서 아직 도는 경우에도 온다. 팀 서비스 쪽은 그대로다."""
+    rows = _fill(db, dog, staff, sessions=1)
+    (shot,) = _shots_of(db, dog)  # job_id가 없다
+    fake = _FakeAnalysis()
+    fake.shot_fail[shot.id] = AnalysisClientError("거절", status_code=answer)
+    with pytest.raises(AppError) as caught:
+        purge(
+            db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
+        )
+    assert caught.value.code == code
+    assert _rows_of_dog(db, dog.id) == rows and _purge_logs(db) == []
 
 
 def test_institution_purge_deletes_every_job_of_the_institution_only(
@@ -752,7 +834,8 @@ def test_a_job_that_appears_while_waiting_is_deleted_under_the_lock(db: Session,
     assert result.analysis_jobs == 2
     lock = next(i for i, statement in enumerate(events) if _is_session_lock(statement))
     calls = [i for i, statement in enumerate(events) if statement == _FakeAnalysis.MARK]
-    assert calls[0] < lock < calls[1]
+    # 잠그기 전: 촬영 둘의 촬영 단위 호출과 job-first. 잠근 뒤: 작업 ID가 바뀐 촬영의 촬영 단위 호출과 job-late
+    assert [i < lock for i in calls] == [True, True, True, False, False]
     assert _rows_of_dog(db, dog.id) == 0
     (log,) = _purge_logs(db)
     assert log.analysis_jobs_deleted == 2

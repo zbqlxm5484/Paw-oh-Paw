@@ -328,7 +328,8 @@ def test_cancel_session_deletes_the_analysis_copies_first_and_stops_if_it_cannot
     """촬영 행을 지우면 분석 API 사본을 다시 찾을 수 없으므로 먼저 지운다. 못 지우면 503이고 회차는 그대로다."""
     session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
     done, failed = _shot(db, session, 1, "DONE"), _shot(db, session, 2, "FAILED")
-    _shot(db, session, 3, "UPLOADED")  # 제출한 적이 없어 사본이 없다
+    waiting = _shot(db, session, 3, "UPLOADED")  # 작업 ID가 없어도 촬영 단위로는 부른다
+    analysis.shot_jobs[waiting.id] = ["job-lost"]  # 팀 서비스가 모르는 작업
     done.job_id, failed.job_id = "job-a", "job-b"
     db.flush()
     analysis.fail["job-b"] = AnalysisClientError("연결 실패")
@@ -340,7 +341,8 @@ def test_cancel_session_deletes_the_analysis_copies_first_and_stops_if_it_cannot
 
     analysis.fail.clear()
     assert client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers).status_code == 204
-    assert set(analysis.deleted) == {"job-a", "job-b"}
+    assert set(analysis.deleted) == {"job-a", "job-b", "job-lost"}
+    assert set(analysis.shot_calls) == {done.id, failed.id, waiting.id}
     assert db.scalar(select(MeasureSession.id).where(MeasureSession.id == session.id)) is None
 
 
@@ -358,4 +360,4 @@ def test_cancel_that_will_be_refused_leaves_the_analysis_copies_alone(
     db.flush()
     refused = client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers)
     assert (refused.status_code, refused.json()["error"]["code"]) == (409, "SHOT_IN_PROGRESS")
-    assert analysis.deleted == []
+    assert analysis.deleted == [] and analysis.shot_calls == []

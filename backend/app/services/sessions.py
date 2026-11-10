@@ -26,7 +26,7 @@ from app.schemas.sessions import (
     SideProgressOut,
     StaffBriefOut,
 )
-from app.services.analysis_copies import delete_copies
+from app.services.analysis_copies import ShotJob, delete_shot_copies
 from app.services.dogs import classify, in_institution
 from app.services.shots import to_shot_out
 from app.services.symmetry import session_scores
@@ -291,10 +291,10 @@ def complete_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UU
     return session
 
 
-def _job_ids(db: Session, session_id: uuid.UUID) -> list[str]:
-    """회차의 촬영 중 분석 API에 제출한 적이 있는 것의 작업 ID."""
-    query = select(Shot.job_id).where(Shot.session_id == session_id, Shot.job_id.is_not(None))
-    return [job_id for job_id in db.scalars(query) if job_id]
+def _shot_jobs(db: Session, session_id: uuid.UUID) -> list[ShotJob]:
+    """회차의 모든 촬영과 그 작업 ID. 작업 ID가 없는 촬영도 넣는다(분석 API에 모르는 작업이 있을 수 있다)."""
+    query = select(Shot.id, Shot.job_id).where(Shot.session_id == session_id).order_by(Shot.seq_no, Shot.id)
+    return [(shot_id, job_id or None) for shot_id, job_id in db.execute(query)]
 
 
 def _require_cancellable(db: Session, session: MeasureSession) -> None:
@@ -311,15 +311,15 @@ def cancel_session(
 
     촬영 행을 지우면 분석 API 사본을 다시 찾을 수 없으므로 먼저 지운다(199 리뷰 조유진). 못 지우면 503
     ANALYSIS_UNAVAILABLE이고 회차는 그대로다. 분석 API는 HTTP라 회차 행을 잠그기 전에 부르고(조건은 미리 본다),
-    잠근 뒤 조건을 다시 보고 그사이 생긴 작업만 마저 지운다(12.4 잠금).
+    잠근 뒤 조건을 다시 보고 그사이 달라진 촬영(새 촬영, 작업 ID가 바뀐 촬영)만 마저 지운다(12.4 잠금).
     """
     session = get_session(db, institution_id, session_id)
     _require_cancellable(db, session)
-    first_jobs = _job_ids(db, session.id)
-    delete_copies(analysis, first_jobs)
+    first = _shot_jobs(db, session.id)
+    delete_shot_copies(analysis, first)
     session = get_session(db, institution_id, session_id, for_update=True)
     db.refresh(session)  # 잠근 뒤의 상태로 다시 본다
     _require_cancellable(db, session)
-    already = set(first_jobs)
-    delete_copies(analysis, [job_id for job_id in _job_ids(db, session.id) if job_id not in already])
+    already = set(first)
+    delete_shot_copies(analysis, [pair for pair in _shot_jobs(db, session.id) if pair not in already])
     delete_session_tree(db, session, institution_id)

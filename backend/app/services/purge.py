@@ -63,7 +63,7 @@ from app.models import (
 )
 from app.models.enums import PurgeScope, StaffRole
 from app.schemas.admin import PurgeOut
-from app.services.analysis_copies import delete_copies
+from app.services.analysis_copies import ShotJob, delete_shot_copies
 from app.services.dogs import get_dog
 from app.services.sessions import IN_PROGRESS_STATUSES
 from app.storage.base import StorageService
@@ -152,12 +152,24 @@ def has_shot_in_progress(db: Session, dog_ids: list[uuid.UUID]) -> bool:
     return found is not None
 
 
-def _job_ids(db: Session, target: _Target) -> list[str]:
-    """분석 API에서 지울 작업 ID. 아직 제출하지 않은 촬영은 없고, ALL은 작업마다 부르지 않는다(15.9)."""
+def _shot_jobs(db: Session, target: _Target) -> list[ShotJob]:
+    """분석 API 사본을 지울 촬영과 그 작업 ID. ALL은 촬영마다 부르지 않는다(15.9).
+
+    작업 ID가 없는 촬영도 넣는다. 분석 API에 팀 서비스가 모르는 작업이 있을 수 있어서다(services/analysis_copies.py).
+    """
     if target.scope == PurgeScope.ALL or not target.dog_ids:
         return []
-    query = select(Shot.job_id).where(Shot.session_id.in_(_sessions_of(target.dog_ids)), Shot.job_id.is_not(None))
-    return [job_id for job_id in db.scalars(query) if job_id]
+    query = (
+        select(Shot.id, Shot.job_id)
+        .where(Shot.session_id.in_(_sessions_of(target.dog_ids)))
+        .order_by(Shot.created_at, Shot.id)
+    )
+    return [(shot_id, job_id or None) for shot_id, job_id in db.execute(query)]
+
+
+def _known_jobs(shots: list[ShotJob]) -> int:
+    """팀 서비스가 작업 ID를 아는 작업 수. dry_run의 analysis_jobs다(분석 API를 부르지 않고 센다)."""
+    return sum(1 for _, job_id in shots if job_id)
 
 
 def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
@@ -243,11 +255,11 @@ def purge(
 
     기관은 관리자가 지정할 수 있어 부른 담당자의 기관과 다를 수 있다. 없는 기관, 그 기관에 없는 반려견은 404다.
 
-    analysis는 분석 API 사본을 지울 클라이언트다. 지울 작업이 없으면(ALL, 세기만 할 때) 쓰지 않는다.
+    analysis는 분석 API 사본을 지울 클라이언트다. 지울 촬영이 없으면(ALL, 세기만 할 때) 쓰지 않는다.
     include_accounts는 INSTITUTION을 실제로 지울 때만 뜻이 있다: 그 기관의 가입 계정(CLIENT)도 지우고 rows에 더한다.
     계약 종료 뒤 자동 파기만 쓴다(관리자 API는 계정을 남긴다).
     deadline(time.monotonic() 기준)은 워커의 자동 파기만 넘긴다. 1단계에서 넘기면 OutOfTime을 낸다. 그때까지 지운
-    분석 사본은 다시 부르면 404라, 다음 차례에 이어서 끝난다.
+    분석 사본은 다시 부르면 이미 없다는 답이라, 다음 차례에 이어서 끝난다.
     """
     if include_accounts and scope != PurgeScope.INSTITUTION:  # 무엇이든 지우기 전에 본다(199 리뷰)
         raise ValueError("계정까지 지우는 파기는 INSTITUTION에서만 합니다")
@@ -256,7 +268,7 @@ def purge(
     if has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
 
-    job_ids = _job_ids(db, target)
+    shots = _shot_jobs(db, target)
     files = total_bytes = 0
     if dry_run:
         for prefix in target.prefixes:
@@ -269,7 +281,7 @@ def purge(
             rows,
             files,
             total_bytes,
-            len(job_ids),
+            _known_jobs(shots),
         )
         return PurgeOut(
             scope=target.scope,
@@ -278,20 +290,19 @@ def purge(
             rows=rows,
             files=files,
             bytes=total_bytes,
-            analysis_jobs=len(job_ids),
+            analysis_jobs=_known_jobs(shots),
         )
 
     # 1단계(회차 잠금 밖): 분석 API 사본. 파일·행보다 먼저라 실패하면 팀 서비스 쪽은 그대로다
-    delete_copies(analysis, job_ids, deadline=deadline)
+    jobs = delete_shot_copies(analysis, shots, deadline=deadline)
 
-    # 2단계(잠금 안): 다시 확인하고, 그사이 생긴 작업만 마저 지운 뒤 파일 → 행
+    # 2단계(잠금 안): 다시 확인하고, 그사이 달라진 촬영(새 촬영, 작업 ID가 바뀐 촬영)만 마저 지운 뒤 파일 → 행
     target = _lock_target(db, target)
     if has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
-    already = set(job_ids)
-    late = [job_id for job_id in _job_ids(db, target) if job_id not in already]
-    delete_copies(analysis, late)
-    analysis_jobs = len(job_ids) + len(late)
+    already = set(shots)
+    jobs |= delete_shot_copies(analysis, [pair for pair in _shot_jobs(db, target) if pair not in already])
+    analysis_jobs = len(jobs)
 
     for prefix in target.prefixes:
         count, size = storage.delete_prefix(prefix)
