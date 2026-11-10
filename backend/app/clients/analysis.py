@@ -1,7 +1,8 @@
 """분석 클라이언트(명세 6절). 팀 서비스는 분석 API를 직접 부르지 않고 이 한 겹을 거친다.
 
-- `AnalysisClient`: 다섯 동작. submit(영상, 촬영 정보) → 작업 ID, get_status → 상태, get_result → 결과 JSON,
-  get_keypoints → 관절점 파일 JSON은 워커가, delete → 사본 지우기는 자료 파기(services/purge.py)가 쓴다.
+- `AnalysisClient`: 여섯 동작. submit(영상, 촬영 정보) → 작업 ID, get_status → 상태, get_result → 결과 JSON,
+  get_keypoints → 관절점 파일 JSON은 워커가 쓴다. delete_shot(촬영의 작업 모두)·delete(작업 하나) → 사본 지우기는
+  services/analysis_copies.py가 쓴다(자료 파기, 촬영 삭제, 측정 취소, 다시 분석).
 - `HttpAnalysisClient`: 조유진의 분석 API(analysis_api/, 결과 JSON v1 docs/analysisApi/resultFormat.md)를 HTTP로 부른다.
   개발 환경과 기업 GPU 서버는 주소(ANALYSIS_API_BASE_URL)만 다르다.
 - `MockAnalysisClient`: 분석 API 없이 견본 JSON(fixtures/)을 MOCK_ANALYSIS_DELAY_SEC 뒤 돌려준다.
@@ -51,6 +52,8 @@ AUTH_FAILED_STATUSES = (401, 403)
 JOB_GONE_STATUSES = (404, 410)
 # 지우기에서 아직 분석 중이라고 답했다(JOB_IN_PROGRESS). 자료 파기는 SHOT_IN_PROGRESS로 돌려준다(15.9)
 JOB_IN_PROGRESS_STATUS = 409
+# 촬영 단위 지우기(DELETE /analyses?shot_id=)가 없는 옛 분석 API의 답. 그 경로에는 POST만 있어 405가 온다(6절)
+SHOT_DELETE_MISSING_STATUS = 405
 
 
 class AnalysisClientError(Exception):
@@ -81,6 +84,11 @@ class AnalysisClientError(Exception):
     def job_in_progress(self) -> bool:
         """지우기에서 아직 분석 중이라고 답했다. 조회의 409(아직 결과 없음)와 번호가 같아 delete 뒤에만 본다."""
         return self.status_code == JOB_IN_PROGRESS_STATUS
+
+    @property
+    def shot_delete_missing(self) -> bool:
+        """촬영 단위 지우기가 없는 옛 분석 API다. delete_shot 뒤에만 본다. 부르는 쪽은 작업 단위로 지운다(6절)."""
+        return self.status_code == SHOT_DELETE_MISSING_STATUS
 
 
 @dataclass(frozen=True)
@@ -119,6 +127,13 @@ class AnalysisClient(Protocol):
 
     def delete(self, job_id: str) -> None:
         """작업의 사본(영상·결과·관절점)을 지운다. 이미 없으면 성공이다. 못 지우면 AnalysisClientError."""
+        ...
+
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        """그 촬영으로 만든 작업의 사본을 모두 지우고, 지운 작업 ID를 돌려준다. 지울 것이 없으면 빈 목록이다.
+
+        팀 서비스가 작업 ID를 모르는 작업(제출 응답을 못 받은 것)도 지워진다. 못 지우면 AnalysisClientError.
+        """
         ...
 
 
@@ -226,6 +241,13 @@ class MockAnalysisClient:
         """
         self.parse_job_id(job_id)
 
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        """지운 것이 없다(상태를 두지 않아 촬영의 작업을 모른다). 빈 목록이라 부르는 쪽이 아는 작업은 delete로 간다.
+
+        그래서 Mock이 만든 ID가 아닌 작업은 여전히 delete에서 걸린다.
+        """
+        return []
+
 
 # ---- HTTP ----
 
@@ -316,6 +338,18 @@ class HttpAnalysisClient:
         response = self._request("DELETE", f"/analyses/{job_id}")
         if response.status_code != 204 and response.status_code not in JOB_GONE_STATUSES:
             raise self._unexpected(response, expected=204)
+
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        """DELETE /analyses?shot_id=…(조유진 258). 200 {"deleted": [작업 ID]}이고 지울 것이 없어도 200이다.
+
+        그 촬영의 작업이 하나라도 분석 중이면 아무것도 지우지 않고 409(job_in_progress)다. 이 경로가 없는 옛 분석
+        API는 405(shot_delete_missing)다.
+        """
+        response = self._request("DELETE", "/analyses", params={"shot_id": str(shot_id)})
+        deleted = self._json(response, expected=200).get("deleted")
+        if not isinstance(deleted, list) or not all(isinstance(job_id, str) for job_id in deleted):
+            raise AnalysisClientError("분석 API가 지운 작업 목록을 주지 않았습니다")
+        return deleted
 
 
 def _error_summary(response: httpx.Response) -> str:

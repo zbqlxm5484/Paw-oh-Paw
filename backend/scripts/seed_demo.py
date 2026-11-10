@@ -72,6 +72,7 @@ from app.models.enums import (
     VideoStatus,
 )
 from app.services.aggregation import AggregationError, aggregate_session
+from app.services.analysis_copies import Cleared, read_shot_copies
 from app.services.analysis_results import ResultFormatError, apply_result, parse_result
 from app.services.purge import purge
 from app.services.shot_angles import build_angles, dump_angles
@@ -294,8 +295,9 @@ def reset_institution(
 ) -> int:
     """이 기관의 반려견과 그 아래 전부를 파기한다(15.9 INSTITUTION, 계정·기관은 남김). commit은 부르는 쪽이 한다.
 
-    넣은 촬영의 job_id는 분석 API에 없는 번호라 파기 전에 비운다. 그래서 파기는 시연 중에 실제로 올린 촬영의 사본만
-    지우고, 파기 기록의 analysis_jobs_deleted도 그 수만 센다. 파기가 실패하면 함께 되돌아간다.
+    넣은 촬영의 job_id는 분석 API에 없는 번호라 파기 전에 비우고, 그 촬영들은 이미 끝낸 것으로 넘겨(cleared) 촬영
+    단위로도 묻지 않는다(분석 API에 보낸 적이 없다). 그래서 파기는 시연 중에 실제로 올린 촬영의 사본만 지우고, 파기
+    기록의 analysis_jobs_deleted도 그 수만 센다. 파기가 실패하면 함께 되돌아간다.
     """
     pairs = db.execute(
         select(Shot.id, Shot.job_id)
@@ -304,11 +306,19 @@ def reset_institution(
         .where(Dog.institution_id == institution.id, Shot.job_id.is_not(None))
     ).all()
     seeded = [shot_id for shot_id, job_id in pairs if job_id == demo_job_id(shot_id)]
+    cleared: Cleared = {}
     if seeded:
         db.execute(update(Shot).where(Shot.id.in_(seeded)).values(job_id=None))
+        cleared = {shot: frozenset() for shot in read_shot_copies(db, Shot.id.in_(seeded))}
     try:
         out = purge(
-            db, storage, PurgeScope.INSTITUTION.value, institution_id=institution.id, dry_run=False, analysis=analysis
+            db,
+            storage,
+            PurgeScope.INSTITUTION.value,
+            institution_id=institution.id,
+            dry_run=False,
+            analysis=analysis,
+            cleared=cleared,
         )
     except AppError as error:
         db.rollback()
@@ -582,6 +592,7 @@ def _insert(
                 category=_enum(item.get("category"), NoteCategory, where),
                 body=body,
                 important=bool(item.get("important")),
+                visited_on=written.astimezone(local_zone()).date(),
                 staff_id=staff_ids[item["staff"]],
                 created_at=written,
                 updated_at=written,

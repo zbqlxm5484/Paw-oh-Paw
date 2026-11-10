@@ -167,6 +167,9 @@ class KeypointClient:
     def delete(self, job_id: str) -> None:
         self.deleted.append(job_id)
 
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        return []
+
     def get_keypoints(self, job_id: str) -> dict[str, Any]:
         self.calls.append(job_id)
         if self.error is not None:
