@@ -47,6 +47,7 @@
 | 마이그레이션 (0001 테이블 9개, 0002 회차 체급, 0003 회원가입·역할·계약: 디바이스 코드 테이블, 계약 종료일, 역할 셋, 아이디 전역 유일. 그 뒤 0004 파기 기록, 0013 휴지통, 0010 약관 동의, 0012 디바이스 코드, 0014 탈퇴·알림, 0015 반려견 차트 칸, 0016 바이탈, 0017 진단 이력, 0018 메모·진료 기록, 0019 반려견 사진, 0020 바이탈 부분 입력 순서) | `alembic/versions/` |
 | 기관·계정 만들기 | `scripts/seed.py` |
 | 시연 기관 데이터 넣기, `--reset`으로 다시 넣기 (17.7 시연 기관 데이터) | `scripts/seed_demo.py` |
+| 동시 처리 점검: 여러 계정으로 동시에 요청을 보내고 오류·지연·상한·자료의 어긋남을 센다 (시험 전용 DB에서만. 기록은 `docs/report/concurrencyCheck.md`) | `scripts/load_check.py` |
 | 테스트 | `tests/` |
 
 결과 영상 재생(서명 URL 검증)·보고서 등은 다음 작업 단위에서 더한다. 업로드 검사에는 ffprobe, 결과 영상 인코딩에는 ffmpeg가 필요하다: ffmpeg를 설치하고 `.env`의 `FFPROBE_PATH`·`FFMPEG_PATH`에 실행 파일 경로를 적는다(Windows는 `winget install Gyan.FFmpeg` 뒤 전체 경로를 슬래시(`/`)로 적는다). 체급은 등록 체중으로만 나눈다(10 kg 미만 SMALL, 25 kg 미만 MEDIUM, 25 kg 이상 LARGE. 박규원의 체급 기준). 견종 목록(`config/breeds.yaml`)은 화면 자동완성용 초안이고 최종 목록은 박규원과 확정한다. 토큰이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 붙인다(로그인 응답의 `access_token`). 로그인은 아이디+비밀번호다(기관 코드는 받지 않는다). 기관의 계약 종료일(`institution.contract_ends_at`)이 지나면 그 기관 CLIENT는 `effective_role`이 GUEST가 되어 로그인과 `/auth/me`만 되고 나머지는 403 `CONTRACT_EXPIRED`다. 담당자 스냅샷은 `AUTH_CACHE_TTL_SEC`(기본 60초) 동안 프로세스 메모리에 두므로 계정 중지·계약 만료는 최대 60초 뒤에 반영된다(관리자 API로 바꾼 것은 같은 프로세스에서 즉시). 고객 담당자는 크림오프가 발급한 디바이스 코드(20자, 화면 표시 `XXXXX-XXXXX-XXXXX-XXXXX`)로 `POST /auth/signup`에서 스스로 가입하고(CLIENT, 이메일 필수), 비밀번호를 잊으면 `POST /auth/password-reset/request`가 `{FRONTEND_BASE_URL}/reset-password?token=…` 링크를 메일로 보낸다(`.env`의 `SMTP_HOST`가 비어 있으면 503 `MAIL_UNAVAILABLE`).

@@ -36,6 +36,7 @@ Oct 19, 2026 · @조영운
 | v1.41 | 2026-11-09 | 차트 자료 보완(박규원 11-09 요청 중 화면 동작에 걸린 다섯 가지, 조영운 결정 11-09. 이름과 기록자 방식은 그대로 둠): ① 바이탈 부분 입력(잰 값만 적고, 같은 날 다시 보내면 보낸 값만 바꿈. 12.2 `dog_vital` 다섯 값 NULL 허용과 CHECK 둘, 마이그레이션 0020, 12.5, 13.9, 15.11) ② 가장 최근 체중을 반려견의 등록 체중에 반영(12.5, 15.11) ③ 진단 이력 수정·삭제(15.2 60·61번, 13.9, 15.11) ④ `DogOut.last_surgery`·`last_diagnosis`(12.5, 15.3) ⑤ 검색에 병명·수술명(15.5). 4절 BE-03·28·29, 17.2. |
 | v1.42 | 2026-11-09 | 관절 각도 파일 다시 만들기(271 MR 리뷰 박규원, 간격은 조영운 결정 11-09): 12.4 관절 각도 파일에 '못 쓴 촬영은 5분마다 다시 시도하고, 워커를 켤 때와 30분마다 최근 48시간의 촬영에 파일이 있는지 본다'를 더했다. 15.6 `GET /shots/{shot_id}/angles`의 빈 배열 설명, 17.2 BE-14. 테이블·마이그레이션·API는 바뀌지 않는다. |
 | v1.45 | 2026-11-10 | 시연 기관 데이터 넣기(S15P31A404-273, 박규원 11-10 요청. v1.44는 276번 브랜치가 쓴다): 3절 `scripts/seed_demo.py`, 17.7 시연 기관 데이터(계정은 모두 CLIENT, 워커와 같은 결과 반영·집계, 관절 각도 파일·결과 영상은 받은 관절점으로, `job_id`는 촬영 ID의 UUID5, `--reset`은 그 기관만 파기) |
+| v1.47 | 2026-11-11 | 동시 처리 점검(S15P31A404-274. v1.46은 271번 추가분 브랜치가 쓴다): 여러 계정이 동시에 요청을 보내는 점검 스크립트 `scripts/load_check.py`와 기록 `docs/report/concurrencyCheck.md`. 점검에서 나온 둘을 고침: ① 11.7 DB 연결 수를 API 스레드 수와 같은 40개(평소 20 + 넘칠 때 20)로 ② 11.11 `LocalStorage`가 동시에 쓰고 지울 때 빈 폴더 정리 때문에 실패하지 않게. 11.2 폴더 구조, 17.6. 테이블·마이그레이션·API·환경 변수는 바뀌지 않는다 |
 | v1.43 | 2026-11-09 | 보고서 직전 회차 비교 표(S15P31A404-272. v1.38~v1.42는 271번 브랜치가 쓴다): 8절 2번에서 본문 표의 괄호 안 직전 값을 없애고 "직전 회차와 비교" 표를 따로 둠(같은 보행 유형·수치·다리끼리 직전 → 이번, 차이, 증가·감소·범위 안, 비교 불가 사유). 8절 7번과 12.4에 직전 값(`previous`)·차이(`change`)도 실린 숫자로 대조한다고 적음. 17.4 BE-15 고침. 템플릿 판 0.5 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
@@ -516,6 +517,7 @@ backend/
 ├─ scripts/seed.py           # 기관·담당자 계정 만들기
 ├─ scripts/purge.py          # 전체 파기: python -m scripts.purge --all (15.9)
 ├─ scripts/seed_demo.py      # 시연 기관 데이터 넣기: python -m scripts.seed_demo --data <폴더> [--reset] (17.7)
+├─ scripts/load_check.py     # 동시 처리 점검: 떠 있는 API·워커에 여러 계정으로 동시에 요청 (시험 전용 DB에서만)
 ├─ alembic/                  # DB 변경 이력
 ├─ tests/
 ├─ requirements.txt
@@ -625,6 +627,8 @@ sig:  71dc0ee5f533d3459657e501b062aefcaec8867af045a52eaab5b75bb3c98b95
 - **격리 수준**: PostgreSQL 기본값(READ COMMITTED)을 그대로 쓴다. 상태는 조건을 건 UPDATE와 행 잠금으로 지키므로(12.4) 더 높은 수준이 필요 없다.
 - **잠금 조회**: `with_for_update()`를 건 조회에는 `joinedload`를 붙이지 않는다. 외부 조인이 생기면 PostgreSQL이 "FOR UPDATE cannot be applied to the nullable side of an outer join" 오류를 낸다. 딸린 행은 잠근 뒤 따로 읽는다.
 
+- **연결 수**(v1.47): 엔진은 연결을 40개까지 연다(`app/core/db.py`의 `POOL_SIZE` 20 + `POOL_MAX_OVERFLOW` 20). API는 요청을 스레드 40개에서 처리하고 요청 하나가 연결 하나를 쓰므로, 연결 수를 스레드 수와 같게 둔다. 기본값(15개)이면 분석 API를 기다리는 요청 15개가 연결을 다 쥐었을 때 다른 요청이 연결을 기다리며 멈춘다(`docs/report/concurrencyCheck.md` 3절). PostgreSQL 기본 `max_connections`(100) 안에서 API 두 벌(배포 전환 중)과 워커가 함께 쓰는 수다. API를 여러 프로세스로 띄우거나 세 벌 이상 띄우려면 이 값과 `max_connections`를 함께 본다.
+
 **get\_db 코드**: FastAPI 0.146은 yield 의존성의 뒷부분을 기본으로 응답을 보낸 뒤에 실행한다. 그러면 commit이 실패해도 화면은 이미 성공 응답을 받는다(시험 구현에서 확인). 그래서 `scope="function"`으로 응답 전에 commit하고, 모든 라우트는 아래 `DbSession`만 쓴다.
 
 ```python
@@ -700,6 +704,7 @@ def get_storage() -> StorageService:
 | `check_writable` | `/health`의 저장소 검사 | 시험 파일을 쓰고 지운다 | 호출마다 다른 키로 `.health/` 아래에 쓰고 지운다 |
 | `path` (`LocalStorage`만) | local 파일 API(15.2의 16·21번)가 `FileResponse`에 넘길 경로 | 실제 경로 | 없음 |
 
+- **동시에 쓰고 지울 때**(v1.47, `local`): 파일을 지우면 빈 폴더를 루트 직전까지 지운다. 요청 여럿이 같은 기관·반려견 폴더 아래에서 함께 쓰고 지우므로 ① 빈 폴더 정리는 비었는지 미리 보지 않고 바로 지워 보고, 이미 없으면 위 폴더로 넘어가며 비어 있지 않으면 멈춘다 ② 쓰기는 방금 만든 폴더가 다른 요청의 정리로 지워졌으면 폴더를 다시 만들어 다시 한다(최대 4번) ③ 지우기와 세기는 그사이 없어진 파일을 0으로 센다. 고치기 전에는 촬영 삭제가 겹치면 500이 났고, 그때 파일은 지워졌는데 촬영 행이 남았다.
 - **키**: `app/storage/keys.py`의 함수로만 만든다. 파일 키는 `original_key(inst, dog, session, shot, ext)`, `result_key(…)`, `analysis_key(…)`, `report_key(inst, dog, session, report_id)`이고, 접두어는 `institution_prefix(inst)`, `dog_prefix(inst, dog)`, `session_prefix(inst, dog, session)`, `shot_prefix(inst, dog, session, shot)`이다. 형식은 7절과 같다. 접두어는 `/`로 끝나고, `ext`는 점 없는 소문자(`mp4`·`mov`)다. `S3_PREFIX`는 `S3Storage`가 앞에 붙이며 DB에 저장하는 키에는 넣지 않는다.
 - **주소**: `*_url`의 값은 `file_url`만 만든다. `local`이면 `/api/v1`부터 쓴 상대 주소, `s3`면 절대 주소다(15.1). `s3`일 때 파일 API(15.2의 16·21번)는 쓰이지 않고, 불리면 404 `NOT_FOUND`다. local의 16·21번은 `LocalStorage.path(key)`로 경로를 얻어 `FileResponse`로 보낸다(11.3의 예외).
 - **내려받는 이름**: `app/services/reports.py`의 `report_download_name(dog, session, edition)` 하나로 만들고, local의 21번과 s3의 presigned URL이 함께 쓴다. `Content-Disposition`에는 ASCII 대체 이름(`report.pdf`)과 `filename*=UTF-8''<퍼센트 인코딩>`을 함께 넣는다(15.7).
@@ -2685,6 +2690,7 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-20: DB를 멈추면 `/api/v1/health`가 503과 `"db": "error"`를 낸다.
 - [ ] 워커: 결과 영상 20건이 밀려 있어도 새 촬영의 판정은 2초 조회 주기대로 나온다(무거운 일이 주 반복을 막지 않는다, 12.4).
 - [ ] 워커: 한 기관이 촬영 30건을 한꺼번에 올려도 그 기관의 SUBMITTED·ANALYZING 수는 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`을 넘지 않고, 다른 기관의 새 촬영은 전체 자리(`WORKER_MAX_IN_FLIGHT`)가 남아 있으면 바로 SUBMITTED가 된다.
+- [ ] 동시 처리(v1.47): `python -m scripts.load_check`를 돌리면 5xx가 0건이고, 끝난 뒤 DB 확인(겹친 촬영 순번, 한 반려견의 MEASURING 회차 둘, 멈춘 촬영·회차, 보고서가 2부가 아닌 DONE 회차)이 모두 0이며, 분석 중인 촬영의 최댓값이 `WORKER_MAX_IN_FLIGHT`와 기관별 상한을 넘지 않는다(`docs/report/concurrencyCheck.md`).
 - [ ] 워커: 회차가 DONE이 될 때 결과 영상이 밀려 있어도 보고서는 기다리지 않고 바로 만든다(보고서 전용 프로세스).
 - [ ] 워커: 보고서를 만드는 도중에 워커를 껐다 켜면 그 보고서가 다시 만들어져 DONE이 된다.
 - [ ] BE-19: `s3`에서 파기하면 버킷에 그 대상의 키가 하나도 남지 않는다.
