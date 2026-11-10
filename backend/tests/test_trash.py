@@ -311,14 +311,21 @@ def test_the_sweep_stops_at_the_time_limit_and_finishes_later(
     _age_trash(db, dog, TRASH_RETENTION_DAYS + 1)
     fake = _FakeAnalysis()
     fake.hook = lambda job_id: time.sleep(0.6)  # 분석 API가 느리게 답한다
+    cleared: dict = {}  # 워커가 차례마다 넘기는 것. 끝낸 촬영을 적어 둔다
 
-    result = purge_expired(db, get_storage(), fake, deadline=time.monotonic() + 0.5)
+    result = purge_expired(db, get_storage(), fake, deadline=time.monotonic() + 0.5, cleared=cleared)
     assert result == SweepResult(0, 0, out_of_time=True)
     assert len(fake.deleted) == 1 and _rows_of_dog(db, dog_id) == rows and _purge_logs(db) == []
+    (finished,) = fake.shot_calls
     # 이미 지난 상한이면 시작하지 않는다
-    assert purge_expired(db, get_storage(), fake, deadline=time.monotonic() - 1) == SweepResult(0, 0, out_of_time=True)
+    late = time.monotonic() - 1
+    assert purge_expired(db, get_storage(), fake, deadline=late, cleared=cleared) == SweepResult(0, 0, out_of_time=True)
     assert len(fake.deleted) == 1
 
     fake.hook = None
-    assert purge_expired(db, get_storage(), fake) == SweepResult(1, 0)
+    assert purge_expired(db, get_storage(), fake, cleared=cleared) == SweepResult(1, 0)
     assert _rows_of_dog(db, dog_id) == 0 and set(fake.deleted) == set(job_ids)
+    # 앞 차례에 끝낸 촬영은 다시 묻지 않았고(분석 API는 물을 때마다 작업을 모두 훑는다), 지운 수에는 그것도 든다
+    assert fake.shot_calls.count(finished) == 1 and len(fake.shot_calls) == 2
+    (log,) = _purge_logs(db)
+    assert log.analysis_jobs_deleted == 2

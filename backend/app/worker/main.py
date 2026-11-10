@@ -53,6 +53,7 @@ from app.models.enums import SessionStatus, ShotStatus
 from app.services import retention as retention_service
 from app.services import trash as trash_service
 from app.services.aggregation import AggregationError, aggregate_session
+from app.services.analysis_copies import Cleared
 from app.services.analysis_results import ResultFormatError, apply_result, parse_result
 from app.storage.base import StorageError, StorageService, get_storage
 from app.storage.keys import analysis_key
@@ -517,6 +518,9 @@ class Worker:
         # 계약 종료 뒤 자동 파기는 켠 뒤 한 간격이 지나야 처음 돈다. 배포하자마자 기관의 자료가 지워지지 않게
         # 하려는 것이다(되돌릴 수 없다). 켤 때는 대상 기관을 로그로만 알린다(199 리뷰 박규원)
         self._contract_sweep_from = time.monotonic() + TRASH_SWEEP_INTERVAL_SEC
+        # 자동 파기가 시간 상한에 닿아 남겼을 때, 분석 API 사본을 끝낸 촬영을 다음 차례까지 기억한다. 없으면 차례마다
+        # 처음부터 다시 불러, 촬영이 많은 기관은 끝나지 않는다(services/analysis_copies.py)
+        self._cleared: Cleared = {}
 
     def stop(self, *_: object) -> None:
         """SIGINT·SIGTERM 처리기. 하던 바퀴는 끝내고 멈춘다."""
@@ -529,7 +533,9 @@ class Worker:
         """
         try:
             with SessionLocal() as db:
-                result = trash_service.purge_expired(db, self.storage, self.client, deadline=deadline)
+                result = trash_service.purge_expired(
+                    db, self.storage, self.client, deadline=deadline, cleared=self._cleared
+                )
                 db.commit()
             if result.purged or result.failed or result.out_of_time:
                 logger.info(
@@ -547,7 +553,9 @@ class Worker:
         """
         try:
             with SessionLocal() as db:
-                result = retention_service.purge_expired_contracts(db, self.storage, self.client, deadline=deadline)
+                result = retention_service.purge_expired_contracts(
+                    db, self.storage, self.client, deadline=deadline, cleared=self._cleared
+                )
                 db.commit()
             if result.purged or result.failed or result.out_of_time:
                 logger.info(
@@ -588,6 +596,8 @@ class Worker:
         out_of_time = self.empty_trash(deadline)
         if not out_of_time and time.monotonic() >= self._contract_sweep_from:
             out_of_time = self.purge_expired_contracts(deadline)
+        if not out_of_time:
+            self._cleared.clear()  # 남긴 것이 없다. 못 지운 것은 다음 차례에 처음부터 다시 부른다
         return out_of_time
 
     def run_forever(self, max_loops: int | None = None) -> int:

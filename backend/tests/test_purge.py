@@ -6,7 +6,7 @@ import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -443,6 +443,7 @@ class _FakeAnalysis:
         self.shot_jobs: dict[uuid.UUID, list[str]] = {}
         self.shot_fail: dict[uuid.UUID, AnalysisClientError] = {}
         self.shot_error: AnalysisClientError | None = None  # 모든 촬영 단위 호출에 내는 오류
+        self.shot_hook = None  # 촬영 단위 호출이 답을 받은 직후에 끼어드는 상황
 
     def delete(self, job_id: str) -> None:
         if self.events is not None:
@@ -463,6 +464,8 @@ class _FakeAnalysis:
             raise self.shot_fail[shot_id]
         jobs = self.shot_jobs.pop(shot_id, [])
         self.deleted.extend(jobs)
+        if self.shot_hook is not None:  # 분석 API가 답을 낸 뒤, 부른 쪽이 다음 일을 하기 전
+            self.shot_hook(shot_id)
         return list(jobs)
 
 
@@ -528,15 +531,20 @@ def test_dry_run_counts_analysis_jobs_without_calling(
     assert analysis.deleted == [] and analysis.shot_calls == []
 
 
-def test_every_shot_of_the_target_is_asked_about_and_only_its_jobs_are_deleted(
+def test_every_sent_shot_of_the_target_is_asked_about_and_only_its_jobs_are_deleted(
     client: TestClient, db: Session, dog, staff, admin_headers, analysis: _FakeAnalysis
 ) -> None:
-    """작업 ID가 없는 촬영도 촬영 단위로 부른다(분석 API에 모르는 작업이 있을 수 있다). 남의 것은 안 부른다."""
+    """작업 ID가 없어도 분석 API에 보낸 적이 있는 촬영은 부른다(모르는 작업이 있을 수 있다). 남의 것은 안 부른다.
+
+    워커가 아직 가져가지 않은 촬영(UPLOADED)은 보낸 적이 없으니 부르지 않는다.
+    """
     _fill(db, dog, staff, sessions=1)
     job_ids = _give_job_ids(db, dog)
-    never_submitted = make_session(db, dog, staff, date(2026, 10, 20))
-    add_shot(db, never_submitted, 1, status="UPLOADED", passes={})  # job_id가 없다
     shot_ids = {shot.id for shot in _shots_of(db, dog)}
+    later = make_session(db, dog, staff, date(2026, 10, 20))
+    add_shot(db, later, 1, status="UPLOADED", passes={})  # 워커가 아직 가져가지 않았다
+    lost = add_shot(db, later, 2, status="FAILED", passes={})  # 제출 응답을 못 받고 끝났다. job_id가 없다
+    shot_ids.add(lost.id)
     keep = another_dog(db, staff.institution_id)
     _fill(db, keep, staff, sessions=1)
     kept_jobs = _give_job_ids(db, keep)
@@ -581,7 +589,7 @@ def test_an_analysis_api_without_the_shot_delete_still_deletes_the_known_jobs(db
     result = purge(
         db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
     )
-    assert sorted(fake.deleted) == sorted(job_ids) and len(fake.shot_calls) == 3
+    assert sorted(fake.deleted) == sorted(job_ids) and len(fake.shot_calls) == 1  # 405를 받은 뒤로는 안 부른다
     assert result.analysis_jobs == 2 and _rows_of_dog(db, dog.id) == 0
 
 
@@ -839,6 +847,51 @@ def test_a_job_that_appears_while_waiting_is_deleted_under_the_lock(db: Session,
     assert _rows_of_dog(db, dog.id) == 0
     (log,) = _purge_logs(db)
     assert log.analysis_jobs_deleted == 2
+
+
+def test_a_shot_the_worker_sent_while_waiting_is_asked_about_again_under_the_lock(db: Session, dog, staff) -> None:
+    """1단계에서 물은 뒤에 워커가 그 촬영을 보냈다가 응답을 못 받고 끝냈다. job_id는 여전히 없지만 다시 물어야 한다.
+
+    (촬영, 작업 ID)만 보면 달라진 것이 없어 모르는 작업이 남는다(적대적 검증 11-10). 워커가 건드리면 달라지는
+    값(가져간 시각, 시도 횟수) 전체로 가린다.
+    """
+    _fill(db, dog, staff, sessions=1)
+    (known,) = _give_job_ids(db, dog)
+    lost = add_shot(db, make_session(db, dog, staff, date(2026, 10, 20)), 1, status="FAILED", passes={})
+    lost_id = lost.id
+    fake = _FakeAnalysis()
+
+    def meanwhile(job_id: str) -> None:  # 아는 작업을 지우는 사이: 다시 분석 → 워커가 세 번 보냈다가 포기
+        if lost_id in fake.shot_jobs:
+            return
+        db.execute(update(Shot).where(Shot.id == lost_id).values(attempt_count=3, submitted_at=datetime.now(UTC)))
+        fake.shot_jobs[lost_id] = ["lost-1", "lost-2", "lost-3"]
+
+    fake.hook = meanwhile
+    result = purge(
+        db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake
+    )
+    assert fake.shot_calls.count(lost_id) == 2  # 잠그기 전에 한 번, 잠근 뒤에 한 번
+    assert sorted(fake.deleted) == sorted([known, "lost-1", "lost-2", "lost-3"])
+    assert result.analysis_jobs == 4 and _rows_of_dog(db, dog.id) == 0
+
+
+def test_a_shot_uploaded_while_waiting_is_not_asked_about(db: Session, dog, staff) -> None:
+    """기다리는 사이 새로 올라온 촬영은 워커가 가져가기 전이면 분석 API에 없다. 부르지 않고 같이 지운다."""
+    _fill(db, dog, staff, sessions=1)
+    _give_job_ids(db, dog)
+    session = make_session(db, dog, staff, date(2026, 10, 20))
+    fake = _FakeAnalysis()
+    added: list[uuid.UUID] = []
+
+    def meanwhile(job_id: str) -> None:
+        if not added:
+            added.append(add_shot(db, session, 1, status="UPLOADED", passes={}).id)
+
+    fake.hook = meanwhile
+    purge(db, get_storage(), "DOG", institution_id=dog.institution_id, target_id=dog.id, dry_run=False, analysis=fake)
+    assert added and added[0] not in fake.shot_calls
+    assert _rows_of_dog(db, dog.id) == 0
 
 
 def test_a_shot_submitted_while_waiting_stops_the_purge_with_everything_in_place(db: Session, dog, staff) -> None:

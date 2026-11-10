@@ -9,10 +9,10 @@
 - dry_run이면 세기만 한다(stat_prefix, count). 어느 쪽이든 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409
   SHOT_IN_PROGRESS.
 - 실제로 지울 때는 두 단계다(12.4 잠금, 199 리뷰 박규원).
-  1. 잠금 밖: 진행 중 촬영을 미리 보고, 분석 API 사본을 작업마다 지운다. HTTP라 오래 걸릴 수 있어 회차 행을 잠근 채
+  1. 잠금 밖: 진행 중 촬영을 미리 보고, 분석 API 사본을 촬영마다 지운다. HTTP라 오래 걸릴 수 있어 회차 행을 잠근 채
      부르지 않는다. 잠근 채 기다리면 업로드·측정 종료와 워커의 주 반복이 같은 행에서 멈춘다.
   2. 잠금 안: (INSTITUTION이면 기관 행 →) 반려견 행 → 회차 행을 FOR UPDATE로 잠그고, 진행 중 촬영을 다시 보고,
-     1단계 뒤에 생긴 작업만 마저 지운 다음 파일 → 행을 지운다. 보통 마저 지울 작업은 없다.
+     1단계 뒤에 달라진 촬영만 마저 지운 다음 파일 → 행을 지운다. 보통 마저 지울 것은 없다.
 - 반려견 행을 잠그는 이유: 복원(휴지통에서 꺼내기)과 회차 시작이 같은 행을 잠그므로, 파기가 먼저면 둘은 commit을
   기다렸다가 404이고, 둘이 먼저면 파기는 그 결과를 보고 판단한다. DOG는 처음부터(1단계 전부터) 반려견 행을 쥔다.
   분석 사본만 지워진 채 복원되는 일을 막기 위해서다. 한 마리라 다른 요청을 막지 않는다. INSTITUTION은 2단계에서만
@@ -21,9 +21,9 @@
 - 회차 행을 잠그는 이유: 워커가 UPLOADED 촬영을 가져갈 때 같은 행을 잠그므로, 확인과 삭제 사이에 촬영이 분석 API로
   나가는 틈이 없다(199 리뷰, 조유진). dry_run은 지우지 않으니 잠그지 않는다.
 - 분석 API를 파일보다 먼저 부르는 이유: 가장 흔한 실패(분석 API 무응답)에서 팀 서비스 쪽을 하나도 지우지 않은 채
-  멈추기 위해서다. 실패하면 503 ANALYSIS_UNAVAILABLE이고 행에 job_id가 남아 다시 부르면 이어서 끝난다(이미 지운
-  작업은 404라 성공). 분석 중이라는 409는 SHOT_IN_PROGRESS로 돌려준다. ALL은 작업마다 부르지 않고 분석 API의 전체
-  파기 명령으로 나눈다.
+  멈추기 위해서다. 실패하면 503 ANALYSIS_UNAVAILABLE이고 촬영 행이 남아 다시 부르면 이어서 끝난다(이미 지운
+  촬영은 빈 목록, 작업 단위는 404라 성공). 분석 중이라는 409는 SHOT_IN_PROGRESS로 돌려준다. ALL은 촬영마다 부르지
+  않고 분석 API의 전체 파기 명령으로 나눈다. 지우는 순서와 건너뛰는 촬영은 services/analysis_copies.py에 있다.
 - INSTITUTION·ALL은 반려견과 그 아래 자료만 지우고 기관·담당자 계정·디바이스 코드는 남긴다(15.9). ALL은 API로 열지 않고
   scripts/purge.py만 부른다.
 - 휴지통(12.5): 담당자의 삭제는 휴지통에 넣기일 뿐이고, 영구 삭제와 30일 뒤 자동 비우기가 이 파기를 DOG로 부른다
@@ -63,7 +63,7 @@ from app.models import (
 )
 from app.models.enums import PurgeScope, StaffRole
 from app.schemas.admin import PurgeOut
-from app.services.analysis_copies import ShotJob, delete_shot_copies
+from app.services.analysis_copies import Cleared, ShotCopy, delete_shot_copies, read_shot_copies
 from app.services.dogs import get_dog
 from app.services.sessions import IN_PROGRESS_STATUSES
 from app.storage.base import StorageService
@@ -152,24 +152,19 @@ def has_shot_in_progress(db: Session, dog_ids: list[uuid.UUID]) -> bool:
     return found is not None
 
 
-def _shot_jobs(db: Session, target: _Target) -> list[ShotJob]:
-    """분석 API 사본을 지울 촬영과 그 작업 ID. ALL은 촬영마다 부르지 않는다(15.9).
+def _shot_copies(db: Session, target: _Target) -> list[ShotCopy]:
+    """분석 API 사본을 지울 촬영. ALL은 촬영마다 부르지 않는다(15.9).
 
     작업 ID가 없는 촬영도 넣는다. 분석 API에 팀 서비스가 모르는 작업이 있을 수 있어서다(services/analysis_copies.py).
     """
     if target.scope == PurgeScope.ALL or not target.dog_ids:
         return []
-    query = (
-        select(Shot.id, Shot.job_id)
-        .where(Shot.session_id.in_(_sessions_of(target.dog_ids)))
-        .order_by(Shot.created_at, Shot.id)
-    )
-    return [(shot_id, job_id or None) for shot_id, job_id in db.execute(query)]
+    return read_shot_copies(db, Shot.session_id.in_(_sessions_of(target.dog_ids)))
 
 
-def _known_jobs(shots: list[ShotJob]) -> int:
+def _known_jobs(shots: list[ShotCopy]) -> int:
     """팀 서비스가 작업 ID를 아는 작업 수. dry_run의 analysis_jobs다(분석 API를 부르지 않고 센다)."""
-    return sum(1 for _, job_id in shots if job_id)
+    return sum(1 for shot in shots if shot.job_id)
 
 
 def _count_rows(db: Session, dog_ids: list[uuid.UUID]) -> int:
@@ -250,6 +245,7 @@ def purge(
     analysis: AnalysisClient | None = None,
     include_accounts: bool = False,
     deadline: float | None = None,
+    cleared: Cleared | None = None,
 ) -> PurgeOut:
     """파기 또는 dry_run 집계(15.9). institution_id는 지울 자료의 기관(ALL이면 없음), executed_by는 부른 담당자 ID.
 
@@ -259,7 +255,8 @@ def purge(
     include_accounts는 INSTITUTION을 실제로 지울 때만 뜻이 있다: 그 기관의 가입 계정(CLIENT)도 지우고 rows에 더한다.
     계약 종료 뒤 자동 파기만 쓴다(관리자 API는 계정을 남긴다).
     deadline(time.monotonic() 기준)은 워커의 자동 파기만 넘긴다. 1단계에서 넘기면 OutOfTime을 낸다. 그때까지 지운
-    분석 사본은 다시 부르면 이미 없다는 답이라, 다음 차례에 이어서 끝난다.
+    분석 사본은 다시 부르면 이미 없다는 답이라, 다음 차례에 이어서 끝난다. cleared도 워커의 자동 파기만 넘긴다.
+    끝낸 촬영을 적어 두는 곳이고, 다음 차례에 그 촬영을 다시 부르지 않게 한다(services/analysis_copies.py).
     """
     if include_accounts and scope != PurgeScope.INSTITUTION:  # 무엇이든 지우기 전에 본다(199 리뷰)
         raise ValueError("계정까지 지우는 파기는 INSTITUTION에서만 합니다")
@@ -268,7 +265,7 @@ def purge(
     if has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
 
-    shots = _shot_jobs(db, target)
+    shots = _shot_copies(db, target)
     files = total_bytes = 0
     if dry_run:
         for prefix in target.prefixes:
@@ -294,14 +291,15 @@ def purge(
         )
 
     # 1단계(회차 잠금 밖): 분석 API 사본. 파일·행보다 먼저라 실패하면 팀 서비스 쪽은 그대로다
-    jobs = delete_shot_copies(analysis, shots, deadline=deadline)
+    jobs = delete_shot_copies(analysis, shots, deadline=deadline, cleared=cleared)
 
-    # 2단계(잠금 안): 다시 확인하고, 그사이 달라진 촬영(새 촬영, 작업 ID가 바뀐 촬영)만 마저 지운 뒤 파일 → 행
+    # 2단계(잠금 안): 다시 확인하고, 그사이 달라진 촬영(새 촬영, 워커가 가져가거나 보낸 촬영)만 마저 지운 뒤 파일 → 행
     target = _lock_target(db, target)
     if has_shot_in_progress(db, target.dog_ids):
         raise AppError(ErrorCode.SHOT_IN_PROGRESS)
     already = set(shots)
-    jobs |= delete_shot_copies(analysis, [pair for pair in _shot_jobs(db, target) if pair not in already])
+    late = [shot for shot in _shot_copies(db, target) if shot not in already]
+    jobs |= delete_shot_copies(analysis, late, cleared=cleared)
     analysis_jobs = len(jobs)
 
     for prefix in target.prefixes:

@@ -25,7 +25,7 @@ from app.models import Dog, MeasureSession, Shot, WalkPass
 from app.models.enums import SessionStatus, ShotStatus, VideoStatus
 from app.schemas.common import reason_out
 from app.schemas.shots import PassOut, ShotDetailOut, ShotOut
-from app.services.analysis_copies import delete_shot_copies
+from app.services.analysis_copies import ShotCopy, delete_shot_copies
 from app.services.dogs import in_institution
 from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
@@ -193,13 +193,13 @@ def retry_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, analy
     shot = get_shot(db, institution_id, shot_id)
     # 잠그기 전에 미리 본다. 조건이 안 맞는 요청 때문에 사본을 지우지 않게
     _require_retryable(shot.status, _session_status(db, shot.session_id))
-    first_job = shot.job_id
-    delete_shot_copies(analysis, [(shot.id, first_job)])
+    before = ShotCopy.of(shot)
+    delete_shot_copies(analysis, [before])
     session = _lock_session(db, institution_id, shot.session_id)
     db.refresh(shot)  # 잠근 뒤의 상태로 다시 본다
     _require_retryable(shot.status, session.status)
-    if shot.job_id and shot.job_id != first_job:  # 그사이 다시 제출됐다가 실패했다. 드물다
-        delete_shot_copies(analysis, [(shot.id, shot.job_id)])
+    if ShotCopy.of(shot) != before:  # 그사이 워커가 다시 가져가 보냈다가 실패했다. 드물다
+        delete_shot_copies(analysis, [ShotCopy.of(shot)])
     db.execute(delete(WalkPass).where(WalkPass.shot_id == shot.id))
     shot.status = ShotStatus.UPLOADED.value
     shot.fail_reason = None
@@ -220,13 +220,13 @@ def delete_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, anal
     shot = get_shot(db, institution_id, shot_id)
     # 잠그기 전에 미리 본다. 조건이 안 맞는 요청 때문에 사본을 지우지 않게
     _require_deletable(shot.status, _session_status(db, shot.session_id))
-    first_job = shot.job_id
-    delete_shot_copies(analysis, [(shot.id, first_job)])
+    before = ShotCopy.of(shot)
+    delete_shot_copies(analysis, [before])  # 아직 워커가 가져가지 않은 촬영이면 부르지 않는다
     session = _lock_session(db, institution_id, shot.session_id)
     db.refresh(shot)
     _require_deletable(shot.status, session.status)
-    if shot.job_id and shot.job_id != first_job:  # 그사이 다시 제출됐다가 끝났다. 드물다
-        delete_shot_copies(analysis, [(shot.id, shot.job_id)])
+    if ShotCopy.of(shot) != before:  # 그사이 워커가 가져가 보냈다가 끝났다. 드물다
+        delete_shot_copies(analysis, [ShotCopy.of(shot)])
     get_storage().delete_prefix(shot_prefix(institution_id, session.dog_id, session.id, shot.id))
     db.execute(delete(WalkPass).where(WalkPass.shot_id == shot.id))
     db.execute(delete(Shot).where(Shot.id == shot.id))
