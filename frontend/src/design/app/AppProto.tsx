@@ -419,7 +419,8 @@ export class AppProto extends DCLogic<Props, any> {
         }
         return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
       }
-      for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7)) {
+      // 서버 변동이 없는 예전 서버: 최근 7일 회차 중 가장 최근 하나로만 판단(회차마다 칩이 쌓이지 않게)
+      for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7).slice(0, 1)) {
         if (r.st === 'fail') out.push(failChip(r))
         else {
           if (r.st === 'part') out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
@@ -437,7 +438,7 @@ export class AppProto extends DCLogic<Props, any> {
     const todayRows: HomeRow[] = hvDogs.flatMap((d) => {
       const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
       if (!res.length && !live) return []
-      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
+      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
       const times = res.map((r) => r.time).filter(Boolean).sort()
       return [{ key: d.id, when: times[0] || '', name: d.name, sub: d.breed || '견종 미입력', chips: [...chips, ...badgeChips(d)], right: res.map(byOf).find((b) => b !== '—') || '', live, open: () => this.openDog(d.id) }]
     })
@@ -452,11 +453,21 @@ export class AppProto extends DCLogic<Props, any> {
     const analysisRows: HomeRow[] = results.filter((r) => keepIds.has(r.dog) && (!s.by || byOf(r) === s.by) && inPeriod(r.measured_on)).map((r) => { const d = dogById(r.dog)!; return { key: r.id, when: `${short(r.date)} ${r.time}`.trim(), name: d.name, sub: `${d.breed || '견종 미입력'} · ${sessNo(r)}회차`, chips: [], sym: symChip(r), st: stChip(r), right: byOf(r), open: () => this.openRes(r.id) } })
     // 정렬: 측정 중인 반려견이 맨 위, 나머지는 서버 순서(마지막 측정일 최신순, 측정 전은 아래, 같으면 최근 등록순)
     const isLive = (d: DDog) => !!d.open || (!!ana && ana.dog === d.id)
+    // 가장 최근 분석 결과 한 칸(정상이면 대칭 지수, 일부 유효·실패면 다시 찍을지 안내). 회차마다 칩이 쌓이지 않게 하나만
+    const latestChip = (d: DDog) => {
+      const r = results.find((x) => x.dog === d.id && x.loaded)
+      if (!r) return []
+      if (r.st === 'fail') return [failChip(r)]
+      if (r.st === 'part') return [{ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' }]
+      return [{ t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }]
+    }
+    // 변화 칩 중 재촬영·실패·일부 유효는 latestChip 과 겹치므로 뺀다(좋아짐·나빠짐·중요 메모만)
+    const RETAKE_T = new Set(['재촬영 필요', '분석 실패', '일부 유효 · 재촬영 권장'])
     const dogRows: HomeRow[] = [...hvDogs.filter(isLive), ...hvDogs.filter((d) => !isLive(d))].map((d) => {
       const all = results.filter((r) => r.dog === d.id), last = all[0], tr = trendOf(d.id)
       return { key: d.id, when: last ? `마지막 측정 ${short(last.date)}` : '측정 전', name: d.name, sub: `${SEX[d.sex || 'm']} · ${ageOf(d)} · ${d.breed || '견종 미입력'} · ${SIZE[d.size]}`,
         // 셋째 줄: 수술·질병 이름, 그 뒤에 조치가 필요한 변화(재촬영 필요·보행 좋아짐/나빠짐)
-        chips: [...badgeChips(d), ...changesOf(d)], right: `분석 ${all.length}건`,
+        chips: [...badgeChips(d), ...latestChip(d), ...changesOf(d).filter((c) => !RETAKE_T.has(c.t))], right: `분석 ${all.length}건`,
         sym: tr.has ? { t: `${tr.sym}%`, bg: '#F2EFEA', c: '#1B2433', d: tr.label, dc: tr.c } : undefined, open: () => this.openDog(d.id) }
     })
     const staffRows: HomeRow[] = (() => {
@@ -792,6 +803,40 @@ export class AppProto extends DCLogic<Props, any> {
       sheetLogin: s.sheet === 'login', sheetDel: s.sheet === 'del', sheetLogout: s.sheet === 'logout', sheetAcct: s.sheet === 'acct', sheetPw: s.sheet === 'pw', sheetWithdraw: s.sheet === 'withdraw', sheetResume: s.sheet === 'resume', anySheet: !!s.sheet,
       // 중단한 촬영이 있는 반려견: 이어서 할지, 지우고 새로 할지(11-06)
       resumeName: capD.name || '', confirmResume: () => { this.setState({ sheet: null }); if (capD.open) this.nav('capReview', `/sessions/${capD.open}`) },
+      // 촬영 확인 화면의 '측정 취소': 회차와 첨부한 영상을 지운다(DELETE /sessions/{id}). 분석 중인 영상이 있으면 서버가 409 로 거절하므로
+      // 끝날 때까지 5초마다 다시 시도한다(최대 2분). 측정 종료 뒤(집계 중)는 취소할 수 없다
+      cancelBusy: !!s.cancelBusy,
+      // 확인은 앱 아래 시트(반려견 삭제와 같은 모양)로 묻는다
+      sheetCancel: s.sheet === 'cancelCap',
+      cancelDesc: `첨부한 영상${shots ? ` ${shots}개` : ''}와 분석 결과가 모두 지워지고 되돌릴 수 없습니다.`,
+      cancelCap: () => {
+        if (!this.sessionId() || s.cancelBusy) return
+        if (isDemo()) return this.toast('체험 모드에서는 측정을 취소할 수 없습니다')
+        this.setState({ sheet: 'cancelCap' })
+      },
+      confirmCancel: async () => {
+        const sid = this.sessionId()
+        if (!sid || s.cancelBusy) return
+        this.setState({ sheet: null, cancelBusy: true })
+        let told = false
+        try {
+          for (let k = 0; k < 24; k++) {
+            try {
+              await this.props.actions.cancelSession(sid)
+              this.toast('측정을 취소했습니다')
+              this.nav('home', '/', true)
+              return
+            } catch (e) {
+              const code = e instanceof ApiError ? e.code : ''
+              if (code === 'SESSION_CLOSED') return this.toast('이미 분석을 시작해 취소할 수 없습니다')
+              if (code !== 'SHOT_IN_PROGRESS' && code !== 'ANALYSIS_UNAVAILABLE') return this.toast(errMsg(e, '측정을 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.'))
+              if (!told) { this.toast('분석 중인 영상이 끝나는 대로 지웁니다. 잠시만 기다려 주세요'); told = true }
+              await new Promise((r) => setTimeout(r, 5000))
+            }
+          }
+          this.toast('분석이 길어져 아직 지우지 못했습니다. 잠시 후 다시 눌러 주세요')
+        } finally { this.setState({ cancelBusy: false }) }
+      },
       startFresh: async () => {
         if (!capD.open || s.busy) return
         this.setState({ busy: true })
