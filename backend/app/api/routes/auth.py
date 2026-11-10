@@ -10,8 +10,10 @@ from app.core.security import create_access_token
 from app.schemas.auth import (
     DeviceCodeVerifyIn,
     DeviceCodeVerifyOut,
+    DeviceOut,
     LoginIn,
     MeUpdate,
+    MyDeviceOut,
     PasswordChangeIn,
     PasswordResetConfirmIn,
     PasswordResetRequestIn,
@@ -21,6 +23,7 @@ from app.schemas.auth import (
     WithdrawIn,
 )
 from app.services import auth as auth_service
+from app.services import device_codes as device_code_service
 from app.services import password_reset as password_reset_service
 from app.services import signup as signup_service
 from app.services.auth import authenticate, refresh_snapshot, staff_out
@@ -60,6 +63,17 @@ def me(staff: CurrentStaffAny, db: DbSession) -> StaffOut:
     if not fresh.is_active:
         raise AppError(ErrorCode.ACCOUNT_DISABLED)
     return staff_out(fresh)
+
+
+@router.get("/me/device", response_model=MyDeviceOut)
+def my_device(staff: CurrentStaffAny, db: DbSession) -> MyDeviceOut:
+    """내 기관의 측정 기기(쓸 수 있는 디바이스 코드, BE-36). 코드는 가운데를 가려서 준다. GUEST도 된다."""
+    code = device_code_service.usable_code_of(db, staff.institution_id)
+    if code is None:
+        return MyDeviceOut(device=None)
+    return MyDeviceOut(
+        device=DeviceOut(code_masked=device_code_service.mask_code(code.code), issued_at=code.created_at)
+    )
 
 
 @router.patch("/me", response_model=StaffOut)

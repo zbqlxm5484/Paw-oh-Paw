@@ -1,5 +1,9 @@
-"""바이탈(12.5 차트 자료, 13.9, 15.6 회차 시작의 vital, 15.11, 17.2 BE-28, v1.36. 부분 입력·체중 반영은 v1.41)."""
+"""바이탈(12.5 차트 자료, 13.9, 15.6 회차 시작의 vital, 15.11, 17.2 BE-28, v1.36. 부분 입력·체중 반영은 v1.41).
 
+그날 줄 지우기는 v1.46이다.
+"""
+
+import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -46,7 +50,8 @@ def test_put_creates_the_day_and_returns_the_writer(client: TestClient, dog, sta
     assert body["measured_on"] == DAY
     assert body["staff"] == {"id": str(staff.id), "name": "담당자"}
     assert body["session_id"] is None
-    assert set(body) == {*VITAL, "id", "measured_on", "staff", "session_id", "created_at", "updated_at"}
+    assert body["dog_id"] == str(dog.id)
+    assert set(body) == {*VITAL, "id", "dog_id", "measured_on", "staff", "session_id", "created_at", "updated_at"}
 
 
 def test_put_on_the_same_day_replaces_the_values(client: TestClient, db: Session, dog, staff, auth_headers) -> None:
@@ -361,6 +366,99 @@ def test_cancelling_the_session_keeps_the_vital(client: TestClient, db: Session,
 
     (vital,) = _list(client, dog, auth_headers)
     assert vital["session_id"] is None and vital["heart_rate"] == 92  # 병원은 그날 실제로 쟀다
+
+
+# ---- 그날 줄 지우기(v1.46) ----
+
+
+def _delete(client: TestClient, dog, headers: dict, day: str = DAY):
+    return client.delete(f"{DOGS}/{dog.id}/vitals/{day}", headers=headers)
+
+
+def test_delete_removes_only_that_day(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    _put(client, dog, auth_headers, day="2026-10-01", heart_rate=80)
+    _put(client, dog, auth_headers, heart_rate=100)
+
+    response = _delete(client, dog, auth_headers)
+    assert response.status_code == 204 and response.content == b""
+    assert [item["measured_on"] for item in _list(client, dog, auth_headers)] == ["2026-10-01"]
+    detail = client.get(f"{DOGS}/{dog.id}", headers=auth_headers).json()
+    assert detail["latest_vital"]["measured_on"] == "2026-10-01"  # 최근 바이탈도 앞 날짜로 돌아간다
+
+    assert _delete(client, dog, auth_headers).status_code == 404  # 이미 없다
+    assert _count(db, dog) == 1
+    again = _put(client, dog, auth_headers, heart_rate=90)  # 지운 날에 다시 적을 수 있다
+    assert again.status_code == 200 and again.json()["heart_rate"] == 90
+
+
+def test_delete_leaves_the_dog_weight_and_version(client: TestClient, dog, auth_headers: dict) -> None:
+    """지워도 등록 체중은 되돌리지 않는다(체중을 비워도 그대로인 것과 같다, 12.5)."""
+    _put(client, dog, auth_headers, day="2026-10-01", weight_kg=27.0)
+    _put(client, dog, auth_headers, weight_kg=30.5)
+    before = client.get(f"{DOGS}/{dog.id}", headers=auth_headers).json()
+    assert before["weight_kg"] == 30.5
+
+    assert _delete(client, dog, auth_headers).status_code == 204
+    after = client.get(f"{DOGS}/{dog.id}", headers=auth_headers).json()
+    assert (after["weight_kg"], after["version"]) == (30.5, before["version"])
+
+
+def test_delete_of_a_session_vital_keeps_the_session(client: TestClient, db: Session, dog, auth_headers) -> None:
+    session = client.post(
+        f"{DOGS}/{dog.id}/sessions", json={"measured_on": DAY, "vital": VITAL}, headers=auth_headers
+    ).json()
+
+    assert _delete(client, dog, auth_headers).status_code == 204
+    assert _count(db, dog) == 0
+    kept = client.get(f"/api/v1/sessions/{session['id']}", headers=auth_headers).json()
+    assert kept["status"] == "MEASURING" and kept["weight_kg"] == VITAL["weight_kg"]  # 회차와 그 체중은 그대로다
+
+
+def test_delete_is_404_without_a_row_and_for_others(
+    client: TestClient, db: Session, dog, auth_headers, other_staff
+) -> None:
+    _put(client, dog, auth_headers)
+    assert _delete(client, dog, auth_headers, day="2026-10-19").status_code == 404  # 그날 줄이 없다
+    assert _delete(client, dog, auth_headers, day="어제").status_code == 404  # 주소의 값은 ID처럼 404(15.1)
+    tomorrow = (today_local() + timedelta(days=1)).isoformat()
+    assert _delete(client, dog, auth_headers, day=tomorrow).status_code == 404  # 미래 날짜도 줄이 없을 뿐이다
+    assert _delete(client, dog, bearer(other_staff)).status_code == 404
+    assert client.delete(f"{DOGS}/{uuid.uuid4()}/vitals/{DAY}", headers=auth_headers).status_code == 404
+    assert client.delete(f"{DOGS}/{dog.id}/vitals/{DAY}").status_code == 401
+    assert _count(db, dog) == 1
+
+    assert client.delete(f"{DOGS}/{dog.id}", headers=auth_headers).status_code == 204  # 휴지통
+    assert _delete(client, dog, auth_headers).status_code == 404
+    assert _count(db, dog) == 1
+
+
+def test_delete_locks_the_dog_first(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    """저장과 같이 반려견 행을 잠근 뒤에 찾아 지운다(같은 날의 저장·자료 파기와 겹치지 않게)."""
+    _put(client, dog, auth_headers)
+    seen: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        text = " ".join(statement.split())
+        if "FOR UPDATE" in text:
+            seen.append("lock " + text.split(" FROM ")[1].split()[0])
+        elif text.startswith("DELETE FROM "):
+            seen.append("delete " + text.split()[2])
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        assert _delete(client, dog, auth_headers).status_code == 204
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert seen == ["lock dog", "delete dog_vital"]
+
+
+def test_delete_logs_ids_only(client: TestClient, db: Session, dog, staff, auth_headers, caplog) -> None:
+    vital_id = _put(client, dog, auth_headers).json()["id"]
+    with caplog.at_level(logging.INFO, logger="app.services.vitals"):
+        assert _delete(client, dog, auth_headers).status_code == 204
+    logged = [record.getMessage() for record in caplog.records if record.name == "app.services.vitals"]
+    assert logged == [f"dog vital deleted vital={vital_id} staff={staff.id}"]
 
 
 # ---- 파기(12.5 삭제 순서) ----

@@ -15,7 +15,7 @@ from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
 from app.models import DeviceCode, Staff
 
-# 13.5: 혼동되는 0·O·1·I·L을 뺀 32종. 20자 = 100비트라 요청 횟수 제한 없이도 추측이 안 된다(15.10)
+# 13.5: 혼동되는 0·O·1·I·L을 뺀 31종. 20자 = 약 99비트라 요청 횟수 제한 없이도 추측이 안 된다(15.10)
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 20
 # 화면 표시 XXXXX-XXXXX-XXXXX-XXXXX
@@ -38,6 +38,23 @@ def generate_code() -> str:
 def format_code(code: str) -> str:
     """저장 모양 → 화면 모양(XXXXX-XXXXX-XXXXX-XXXXX)."""
     return "-".join(code[i : i + CODE_GROUP] for i in range(0, len(code), CODE_GROUP))
+
+
+def mask_code(code: str) -> str:
+    """화면 모양에서 첫 묶음과 끝 묶음만 남기고 가운데를 *로 가린다(15.4 측정 기기 정보, v1.46).
+
+    코드는 가입에 쓰는 값이라 기관 계정에게도 통째로 보여 주지 않는다. 네 묶음보다 짧으면 전부 가린다.
+    """
+    groups = [code[i : i + CODE_GROUP] for i in range(0, len(code), CODE_GROUP)]
+    shown = {0, len(groups) - 1} if len(groups) >= 4 else set()
+    return "-".join(group if i in shown else "*" * len(group) for i, group in enumerate(groups))
+
+
+def usable_code_of(db: Session, institution_id: uuid.UUID) -> DeviceCode | None:
+    """기관의 쓸 수 있는(회수하지 않은) 코드. 기관마다 하나이고(uq_device_code_active) 없으면 None이다."""
+    return db.scalars(
+        select(DeviceCode).where(DeviceCode.institution_id == institution_id, DeviceCode.revoked_at.is_(None))
+    ).one_or_none()
 
 
 def active_accounts(db: Session, device_code_id: uuid.UUID) -> int:

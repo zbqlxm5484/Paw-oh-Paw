@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, update
 from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClientError
@@ -328,7 +328,9 @@ def test_cancel_session_deletes_the_analysis_copies_first_and_stops_if_it_cannot
     """촬영 행을 지우면 분석 API 사본을 다시 찾을 수 없으므로 먼저 지운다. 못 지우면 503이고 회차는 그대로다."""
     session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
     done, failed = _shot(db, session, 1, "DONE"), _shot(db, session, 2, "FAILED")
-    _shot(db, session, 3, "UPLOADED")  # 제출한 적이 없어 사본이 없다
+    lost = _shot(db, session, 3, "FAILED")  # 제출 응답을 못 받고 끝났다. 작업 ID가 없어도 촬영 단위로는 부른다
+    analysis.shot_jobs[lost.id] = ["job-lost"]  # 팀 서비스가 모르는 작업
+    waiting = _shot(db, session, 4, "UPLOADED")  # 워커가 아직 가져가지 않았다. 부르지 않는다
     done.job_id, failed.job_id = "job-a", "job-b"
     db.flush()
     analysis.fail["job-b"] = AnalysisClientError("연결 실패")
@@ -336,11 +338,51 @@ def test_cancel_session_deletes_the_analysis_copies_first_and_stops_if_it_cannot
     stopped = client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers)
     assert stopped.status_code == 503, stopped.text
     assert stopped.json()["error"]["code"] == "ANALYSIS_UNAVAILABLE"
-    assert db.scalar(select(func.count()).select_from(Shot).where(Shot.session_id == session.id)) == 3
+    assert db.scalar(select(func.count()).select_from(Shot).where(Shot.session_id == session.id)) == 4
 
     analysis.fail.clear()
     assert client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers).status_code == 204
-    assert set(analysis.deleted) == {"job-a", "job-b"}
+    assert set(analysis.deleted) == {"job-a", "job-b", "job-lost"}
+    assert set(analysis.shot_calls) == {done.id, failed.id, lost.id} and waiting.id not in analysis.shot_calls
+
+
+def test_cancel_works_while_the_analysis_api_is_down_if_nothing_was_sent(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """올리기만 하고 워커가 가져가지 않은 촬영뿐이면 분석 API를 부르지 않는다. 꺼져 있어도 취소할 수 있다."""
+    session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
+    _shot(db, session, 1, "UPLOADED")
+    analysis.shot_error = AnalysisClientError("연결 실패")
+    assert client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls == []
+
+
+def test_cancel_asks_again_about_a_shot_the_worker_sent_while_waiting(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """분석 API는 회차 행을 잠그기 전에 부른다. 그사이 워커가 보냈다가 끝난 촬영은 잠근 뒤 다시 묻는다(12.4)."""
+    session = db.get(MeasureSession, _start(client, auth_headers, dog.id).json()["id"])
+    done, lost = _shot(db, session, 1, "DONE"), _shot(db, session, 2, "FAILED")
+    done.job_id = "job-a"
+    db.flush()
+    lost_id = lost.id
+
+    def meanwhile(job_id: str) -> None:  # job-a를 지우는 사이: 워커가 다시 보냈다가 응답을 못 받고 끝났다
+        if lost_id not in analysis.shot_jobs:
+            db.execute(update(Shot).where(Shot.id == lost_id).values(attempt_count=3))
+            analysis.shot_jobs[lost_id] = ["job-lost"]
+
+    analysis.hook = meanwhile
+    assert client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls.count(lost_id) == 2 and "job-lost" in analysis.deleted
     assert db.scalar(select(MeasureSession.id).where(MeasureSession.id == session.id)) is None
 
 
@@ -358,4 +400,4 @@ def test_cancel_that_will_be_refused_leaves_the_analysis_copies_alone(
     db.flush()
     refused = client.delete(f"/api/v1/sessions/{session.id}", headers=auth_headers)
     assert (refused.status_code, refused.json()["error"]["code"]) == (409, "SHOT_IN_PROGRESS")
-    assert analysis.deleted == []
+    assert analysis.deleted == [] and analysis.shot_calls == []

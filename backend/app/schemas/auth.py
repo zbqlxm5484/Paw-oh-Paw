@@ -67,6 +67,19 @@ class DeviceCodeVerifyOut(BaseModel):
     institution: InstitutionBriefOut
 
 
+class DeviceOut(BaseModel):
+    """내 기관의 측정 기기 = 쓸 수 있는 디바이스 코드(15.4, v1.46). 코드는 가운데를 가린 모양으로만 준다."""
+
+    code_masked: str
+    issued_at: UtcDateTime
+
+
+class MyDeviceOut(BaseModel):
+    """GET /auth/me/device 응답. 쓸 수 있는 코드가 없으면 device는 null이다."""
+
+    device: DeviceOut | None
+
+
 # 13.5 약관 버전: 1~20자, 앞뒤 공백은 지운다
 TermsVersion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
 

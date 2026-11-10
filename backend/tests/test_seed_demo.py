@@ -211,9 +211,14 @@ class _Renders:
 class _Analysis:
     def __init__(self) -> None:
         self.deleted: list[str] = []
+        self.shot_calls: list[uuid.UUID] = []
 
     def delete(self, job_id: str) -> None:
         self.deleted.append(job_id)
+
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        self.shot_calls.append(shot_id)
+        return []
 
 
 def _run(db: Session, root: Path, tmp_path: Path, *, storage: StorageService | None = None, **kwargs: Any):
@@ -351,10 +356,12 @@ def test_reset_replaces_only_the_demo_institution(
     old_dogs = set(db.scalars(select(Dog.id).where(Dog.institution_id == _institution(db).id)))
     # 시연 중에 실제로 올린 촬영 하나(분석 API에 작업이 있다)
     live = _sessions(db)[TODAY]
-    db.add(Shot(session_id=live.id, seq_no=5, status="DONE", job_id="real-job-1", original_key="x/original.mp4",
-                width=1920, height=1080, fps=Decimal("30"), duration_sec=Decimal("4"), bitrate_kbps=8000,
-                codec="h264", uploaded_at=live.created_at))  # fmt: skip
+    live_shot = Shot(session_id=live.id, seq_no=5, status="DONE", job_id="real-job-1", original_key="x/original.mp4",
+                     width=1920, height=1080, fps=Decimal("30"), duration_sec=Decimal("4"), bitrate_kbps=8000,
+                     codec="h264", uploaded_at=live.created_at)  # fmt: skip
+    db.add(live_shot)
     db.flush()
+    live_shot_id = live_shot.id
     other_sessions = db.scalar(select(func.count()).select_from(MeasureSession).where(MeasureSession.dog_id == dog.id))
 
     analysis = _Analysis()
@@ -364,8 +371,9 @@ def test_reset_replaces_only_the_demo_institution(
     new_dogs = set(db.scalars(select(Dog.id).where(Dog.institution_id == institution.id)))
     assert new_dogs and not (new_dogs & old_dogs)
     assert report.purged_rows > 0 and report.kept_accounts == ["seed-admin", "seed-tech"]
-    # 넣은 촬영의 번호는 분석 API에 묻지 않고, 실제로 올린 촬영만 지운다
+    # 넣은 촬영은 분석 API에 묻지 않고(작업 단위로도, 촬영 단위로도), 실제로 올린 촬영만 지운다
     assert analysis.deleted == ["real-job-1"]
+    assert analysis.shot_calls == [live_shot_id]
     log = db.scalars(select(PurgeLog).where(PurgeLog.target_id == institution.id)).one()
     assert log.scope == "INSTITUTION" and log.analysis_jobs_deleted == 1
     # 다른 기관은 그대로다

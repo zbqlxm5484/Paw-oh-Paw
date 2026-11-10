@@ -25,7 +25,7 @@ from app.models import Dog, MeasureSession, Shot, WalkPass
 from app.models.enums import SessionStatus, ShotStatus, VideoStatus
 from app.schemas.common import reason_out
 from app.schemas.shots import PassOut, ShotDetailOut, ShotOut
-from app.services.analysis_copies import delete_copies
+from app.services.analysis_copies import ShotCopy, delete_shot_copies
 from app.services.dogs import in_institution
 from app.storage.base import get_storage
 from app.storage.keys import shot_prefix
@@ -186,19 +186,20 @@ def retry_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, analy
 
     fail_reason·job_id를 비우고 attempt_count를 0, video_status를 PENDING으로 돌리며 남은 통과 행을 지운다(15.6).
     uploaded_at은 그대로라 워커는 올린 순서대로 다시 가져간다(12.4 FAILED → UPLOADED).
-    job_id를 비우기 전에 실패했던 작업의 분석 API 사본을 지운다. 못 지우면 503 ANALYSIS_UNAVAILABLE, 분석 API가
-    아직 그 작업을 돌리고 있으면 409 SHOT_IN_PROGRESS이고 촬영은 FAILED 그대로다.
+    job_id를 비우기 전에 이 촬영으로 만든 작업의 분석 API 사본을 모두 지운다(팀 서비스가 작업 ID를 모르는 것도,
+    services/analysis_copies.py). 못 지우면 503 ANALYSIS_UNAVAILABLE, 분석 API가 아직 이 촬영의 작업을 돌리고
+    있으면 409 SHOT_IN_PROGRESS이고 촬영은 FAILED 그대로다.
     """
     shot = get_shot(db, institution_id, shot_id)
     # 잠그기 전에 미리 본다. 조건이 안 맞는 요청 때문에 사본을 지우지 않게
     _require_retryable(shot.status, _session_status(db, shot.session_id))
-    first_job = shot.job_id
-    delete_copies(analysis, [first_job] if first_job else [])
+    before = ShotCopy.of(shot)
+    delete_shot_copies(analysis, [before])
     session = _lock_session(db, institution_id, shot.session_id)
     db.refresh(shot)  # 잠근 뒤의 상태로 다시 본다
     _require_retryable(shot.status, session.status)
-    if shot.job_id and shot.job_id != first_job:  # 그사이 다시 제출됐다가 실패했다. 드물다
-        delete_copies(analysis, [shot.job_id])
+    if ShotCopy.of(shot) != before:  # 그사이 워커가 다시 가져가 보냈다가 실패했다. 드물다
+        delete_shot_copies(analysis, [ShotCopy.of(shot)])
     db.execute(delete(WalkPass).where(WalkPass.shot_id == shot.id))
     shot.status = ShotStatus.UPLOADED.value
     shot.fail_reason = None
@@ -219,13 +220,13 @@ def delete_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, anal
     shot = get_shot(db, institution_id, shot_id)
     # 잠그기 전에 미리 본다. 조건이 안 맞는 요청 때문에 사본을 지우지 않게
     _require_deletable(shot.status, _session_status(db, shot.session_id))
-    first_job = shot.job_id
-    delete_copies(analysis, [first_job] if first_job else [])
+    before = ShotCopy.of(shot)
+    delete_shot_copies(analysis, [before])  # 아직 워커가 가져가지 않은 촬영이면 부르지 않는다
     session = _lock_session(db, institution_id, shot.session_id)
     db.refresh(shot)
     _require_deletable(shot.status, session.status)
-    if shot.job_id and shot.job_id != first_job:  # 그사이 다시 제출됐다가 끝났다. 드물다
-        delete_copies(analysis, [shot.job_id])
+    if ShotCopy.of(shot) != before:  # 그사이 워커가 가져가 보냈다가 끝났다. 드물다
+        delete_shot_copies(analysis, [ShotCopy.of(shot)])
     get_storage().delete_prefix(shot_prefix(institution_id, session.dog_id, session.id, shot.id))
     db.execute(delete(WalkPass).where(WalkPass.shot_id == shot.id))
     db.execute(delete(Shot).where(Shot.id == shot.id))
