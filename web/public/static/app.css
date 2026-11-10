@@ -34,6 +34,8 @@ form.inline { display: contents; }
 
 /* 인쇄 쪽 여백을 정해 둔다(브라우저 기본 여백에 따라 쪽이 다르게 잘리지 않게, 11-02). 보호자용 첫 쪽은 이 안(약 703×1032px)에 맞춘다 */
 @page { size: A4; margin: 12mm; }
+/* 인쇄 전용 화면(/print/reports): 화면에서도 종이 그림자·바깥 여백 없이 인쇄 모양 그대로 */
+.print-only .print-paper { box-shadow: none !important; }
 @media print {
   /* 쪽 바탕은 흰색(11-05): '배경 그래픽'을 켜면 화면용 베이지 바탕이 쪽 가장자리에 찍혔다 */
   html, body, .page-bg { background: #fff !important; }
@@ -112,3 +114,15 @@ a.memo-card[href]:hover { border-color:#E2C9B4; }
 
 /* 분석 결과 오른쪽 칸의 메모: 세로로 쌓을 때는 가로 줄용 폭(210px)이 높이로 바뀌지 않게 */
 .memo-col > .memo-card { flex: none; }
+
+/* 목록 표(홈·분석 결과): 칸 너비는 style 의 --tc, 최소 폭은 --tw. 좁은 창(1000px 이하)에서는 --tc-n·--tw-n 으로 바꾸고
+   덜 중요한 칸(.tbl-opt)을 숨겨 800px 에서도 칸이 잘리지 않게 한다(11-07 QA 10). .tbl-n 은 좁은 창에서만 보인다 */
+.tbl { min-width: var(--tw); }
+.tbl-r { grid-template-columns: var(--tc); }
+.tbl-n { display: none; }
+@media (max-width: 1000px) {
+  .tbl { min-width: var(--tw-n, var(--tw)); }
+  .tbl-r { grid-template-columns: var(--tc-n, var(--tc)); }
+  .tbl-opt { display: none !important; }
+  .tbl-n { display: inline; }
+}

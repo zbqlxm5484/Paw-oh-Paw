@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { css } from '../../app/css'
 import { PostForm } from '../../app/page'
 import { current } from '../../app/session'
-import { BREEDS, LARGE_BREEDS, LIMB, SEX, SIZE, SMALL_BREEDS } from '../../config'
+import { BREEDS, LARGE_BREEDS, LIMB, SEX, SIZE, SMALL_BREEDS, STAGE_NAMES } from '../../config'
 import type { Dog } from '../../store/types'
 
 declare global {
@@ -52,9 +52,13 @@ interface PetState {
   sex: string
   size: string
   focus: string
+  no: string
+  owner: string
+  phone: string
+  stage: string
 }
 
-const EMPTY: PetState = { dog: null, name: '', breed: '', kg: '', birth: '', rehab: '', memo: '', sex: 'm', size: '', focus: '' }
+const EMPTY: PetState = { dog: null, name: '', breed: '', kg: '', birth: '', rehab: '', memo: '', sex: 'm', size: '', focus: '', no: '', owner: '', phone: '', stage: 'rehab' }
 
 function dogsNow(dogs?: Dog[]): Dog[] {
   if (dogs) return dogs
@@ -88,6 +92,10 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
         sex: d ? d.sex || 'm' : 'm',
         size: d && d.size_manual ? d.size : '',
         focus: d && d.focus ? d.focus : '',
+        no: d ? d.no || '' : '',
+        owner: d ? d.owner || '' : '',
+        phone: d ? d.phone || '' : '',
+        stage: d ? d.stage || 'rehab' : 'rehab',
       })
       showModal('petModal')
     }
@@ -133,7 +141,7 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
   const list = q ? BREEDS.filter((b) => b.replace(/\s/g, '').indexOf(q) >= 0).slice(0, 6) : []
   const showSug = !!q && !exact
 
-  const set = (k: 'name' | 'breed' | 'kg' | 'birth' | 'rehab' | 'memo') => (e: { currentTarget: { value: string } }) => {
+  const set = (k: 'name' | 'breed' | 'kg' | 'birth' | 'rehab' | 'memo' | 'no' | 'owner' | 'phone' | 'stage') => (e: { currentTarget: { value: string } }) => {
     const v = e.currentTarget.value
     setS((p) => ({ ...p, [k]: v }))
   }
@@ -174,6 +182,15 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
           <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>체급</span><span id="sizeNote" style={css('font-size:12.5px;color:#5B6472')}>{s.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다'}</span></div>
           <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px')}>{Object.entries(SIZE).map(([k, label]) => <div key={k} className="pick" data-field="size" data-val={k} data-toggle="1" style={pickStyle('size', k, '15px')} onClick={() => pick('size', k, true)}>{label}</div>)}</div>
+        </div>
+        <div style={css('height:1px;background:#ECE8E2')}></div>
+        {/* 동물번호·보호자·단계(271). 보고서에는 들어가지 않는다 */}
+        <b style={css('font-size:16px')}>차트 정보 <span style={css('font-size:14px;font-weight:500;color:#A0A7B2')}>선택</span></b>
+        <div style={css('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px')}>
+          <label style={css('display:flex;flex-direction:column;gap:8px;min-width:0')}><span style={css('font-size:14px;font-weight:600')}>동물번호</span><input className="inp" name="no" placeholder="예) A-1024" autoComplete="off" style={css(`${FI};min-width:0`)} value={s.no} onChange={set('no')} /></label>
+          <label style={css('display:flex;flex-direction:column;gap:8px;min-width:0')}><span style={css('font-size:14px;font-weight:600')}>단계</span><select name="stage" style={css(`${FI};min-width:0;background-color:#fff;font-family:inherit`)} value={s.stage} onChange={set('stage')}>{Object.entries(STAGE_NAMES).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></label>
+          <label style={css('display:flex;flex-direction:column;gap:8px;min-width:0')}><span style={css('font-size:14px;font-weight:600')}>보호자 이름</span><input className="inp" name="owner" placeholder="예) 김보호" autoComplete="off" style={css(`${FI};min-width:0`)} value={s.owner} onChange={set('owner')} /></label>
+          <label style={css('display:flex;flex-direction:column;gap:8px;min-width:0')}><span style={css('font-size:14px;font-weight:600')}>보호자 연락처</span><input className="inp" name="phone" inputMode="tel" placeholder={s.dog && !s.phone && s.dog.phone4 ? `뒤 4자리 ${s.dog.phone4}` : '예) 010-1234-5678'} autoComplete="off" style={css(`${FI};min-width:0`)} value={s.phone} onChange={set('phone')} /></label>
         </div>
         <div style={css('height:1px;background:#ECE8E2')}></div>
         <b style={css('font-size:16px')}>재활 정보 <span style={css('font-size:14px;font-weight:500;color:#A0A7B2')}>선택</span></b>

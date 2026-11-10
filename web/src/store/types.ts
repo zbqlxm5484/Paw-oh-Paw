@@ -9,6 +9,8 @@ export interface History {
   site: string // LF | RF | LH | RH | SP | ''
   by: string // 집도의·진단의
   author: string // 기록한 사람
+  /** 백엔드 이력만: 서버 id(고치기·지우기) */
+  id?: string
 }
 
 export interface Vital {
@@ -66,6 +68,20 @@ export interface Dog {
   version: number
   /** 백엔드 반려견만: 측정 중인 회차 id */
   open_session_id?: string | null
+  /** 백엔드 반려견만: 목록에서 온 보호자 연락처 뒤 4자리(목록 응답에는 전체 번호가 없다) */
+  phone4?: string
+  /** 백엔드 반려견만(271): 서버가 계산한 홈 배지·최근 변동·최근 대칭 점수. 예전 서버면 없음 → 화면이 이 브라우저의 기록으로 계산 */
+  srv?: {
+    badges?: { code: string; title: string | null; site: string | null; on: string }[]
+    changes?: { code: string; on: string; delta: number | null }[]
+    last_symmetry?: number | null
+    /** 검색용 최근 수술·진단 이름(차트를 열기 전에도 찾게) */
+    dx_text?: string
+    /** 최근 진단 이름(홈 병명 칸) */
+    diag?: string
+  }
+  /** 백엔드 반려견만: 바이탈·진단 이력·메모를 서버에서 읽어 왔으면 true(아니면 목록의 최근 바이탈 한 줄만 있다) */
+  chart_loaded?: boolean
 }
 
 export type Metrics = Record<string, Record<string, number>> // {다리: {코드: 값}}
