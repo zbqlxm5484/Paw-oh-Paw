@@ -17,7 +17,7 @@ import { AppView } from './AppView'
 import { IntroBody } from './AppIntro'
 import { Gait3dBody } from './AppGait3d'
 import { DogBody, HomeBody, ReportsBody, type HomeRow, type WebDog, type WebHome, type WebReports } from './AppWebScreens'
-import { isDemo } from '../../app/demoMode'
+import { exitDemo, isDemo } from '../../app/demoMode'
 import { badgesOfDog, emrSearchText } from '../../app/emr'
 import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
 import { HELP_CARDS, HELP_CONTACT } from '../help'
@@ -51,14 +51,23 @@ export class AppProto extends DCLogic<Props, any> {
     const loop = () => { this.frame(); this.raf = requestAnimationFrame(loop) }
     this.raf = requestAnimationFrame(loop)
     this.syncRoute()
+    this.leaveDemoForAuth()
     // QR·앱 링크로 촬영 화면에 바로 들어온 경우(화면 전환이 없어 componentDidUpdate 가 안 불린다)
     if (this.props.screen === 'capGuide') this.enterCapGuide()
   }
   /** 촬영 화면에 들어올 때: 가로 안내 애니메이션, 하단바 숨김, 카메라 미리 켜기 */
   enterCapGuide() { this.startRot(); void camera.setNavBarHidden(true); if (camera.canRecordInApp()) { this.setState({ camLoading: !camera.isLive() }); void camera.warm() } }
+  /** 체험 모드에서 로그인·회원가입 화면에 오면 체험 모드를 끝내고 같은 화면을 다시 연다.
+   *  체험 모드는 모든 요청이 가짜 서버로 가서, 그대로 로그인하면 실제 계정도 가짜 데이터만 보였다 */
+  leaveDemoForAuth() {
+    if (!isDemo()) return
+    if (this.props.screen === 'login') exitDemo('/login')
+    else if (this.props.screen === 'signupOrg') exitDemo('/signup')
+  }
   componentDidUpdate(prev: Props) {
     if (prev.screen !== this.props.screen || prev.params !== this.props.params) {
       this.syncRoute()
+      this.leaveDemoForAuth()
       if (this.props.screen === 'capGuide') this.enterCapGuide()
       if (prev.screen === 'capGuide' && this.props.screen !== 'capGuide') { if (camera.isRecording()) void camera.stopRecording(); camera.stopLater(); void camera.setNavBarHidden(false); clearInterval(this.recTick); this.setState({ camLive: false, recSec: -1, camLoading: false }) }
       if (this.props.screen === 'story') this.setState({ page: 0 })
@@ -173,7 +182,7 @@ export class AppProto extends DCLogic<Props, any> {
   savePdfOf = async (R: DRes | undefined, edition: 'OWNER' | 'VET') => {
     const rep = this.props.reports?.reports.find((x) => x.edition === edition)
     if (!R || !rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했습니다. 보고서 화면에서 다시 만들기를 눌러 주세요' : '보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
-    if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 로그인하면 받을 수 있습니다')
+    if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 체험 모드를 끝내고 로그인하면 받을 수 있습니다')
     if (this.state.pdfBusy) return
     this.setState({ pdfBusy: true }); this.toast('PDF를 준비하는 중입니다')
     const name = `${R.measured_on.replace(/-/g, '').slice(2)} ${this.props.data.dogs.find((d) => d.id === R.dog)?.name ?? ''} 분석 결과 (${edition === 'VET' ? '수의사용' : '보호자용'})`
@@ -701,7 +710,7 @@ export class AppProto extends DCLogic<Props, any> {
       savePdfG: () => this.savePdfOf(R, 'OWNER'), savePdfV: () => this.savePdfOf(R, 'VET'),
       saveRep: async () => {
         if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했습니다. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
-        if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 로그인하면 받을 수 있습니다')
+        if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 체험 모드를 끝내고 로그인하면 받을 수 있습니다')
         if (s.pdfBusy) return
         this.setState({ pdfBusy: true }); this.toast('PDF를 준비하는 중입니다')
         // 파일명은 웹과 같게: "261108 보리 분석 결과 (보호자용)"
