@@ -108,7 +108,11 @@ deploy:
     - cp "$ENV_FILE" .env
     - bash infra/ci/deploy.sh
 
-# GPU 서버 분석 API 배포 (Jira 239). 보호된 태그 v* 에서만 실행된다.
+# GPU 서버 분석 API 배포 (Jira 239). 두 경우에 실행된다.
+#  1) 보호된 태그 v*: 배포. 릴리스 폴더명은 태그명
+#  2) develop 머지: 분석 API 관련 파일이 바뀐 때만 자동 배포. 릴리스 폴더명은 develop-<커밋 SHA 8자>
+#     동결: CI/CD 변수 GPU_DEPLOY_FREEZE=1 이면 태그·develop 배포 모두 건너뛴다(태그를 미리 붙여도 동결 중엔 배포되지 않음).
+#           긴급 배포가 필요하면 변수를 끄거나(0·삭제) 가이드 11절 수동 배포를 쓴다
 # 러너: GPU 서버(jupyter12) shell executor, 태그 gpu-deploy, Protected. 위의 check·build·smoke 가 통과해야 도달한다.
 # 동작은 infra/ci/deploy_gpu.sh 참고. 수동 배포 절차는 manual/GPU서버_분석API_배포_가이드.md
 deploy_gpu:
@@ -117,6 +121,11 @@ deploy_gpu:
   resource_group: gpu-analysis-api    # GPU 서버 배포 동시 실행 방지
   timeout: 20m
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v/
+    - if: $CI_COMMIT_TAG =~ /^v/ && $GPU_DEPLOY_FREEZE != "1"
+    - if: $CI_COMMIT_BRANCH == "develop" && $GPU_DEPLOY_FREEZE != "1"
+      changes:                        # pipeline.py 가 루트 engine 을 불러오므로 engine 도 포함
+        - analysis_api/**/*
+        - engine/**/*
+        - infra/ci/deploy_gpu.sh
   script:
-    - bash infra/ci/deploy_gpu.sh "$CI_COMMIT_TAG"
+    - bash infra/ci/deploy_gpu.sh "${CI_COMMIT_TAG:-develop}"    # 태그 없으면(develop) 스크립트가 develop-<SHA 8자>로 바꾼다
