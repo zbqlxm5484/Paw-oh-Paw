@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
@@ -13,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClientError
 from app.models import Dog, MeasureSession
+from app.services import analysis_copies
+from app.services import trash as trash_service
 from app.services.dogs import TRASH_RETENTION_DAYS
 from app.services.purge import SweepResult
 from app.services.trash import purge_expired
@@ -300,8 +301,21 @@ def test_the_sweep_skips_a_dog_that_was_restored_after_it_was_listed(
     assert len(_purge_logs(db)) == 1
 
 
+class _Clock:
+    """time 모듈 자리에 끼우는 시계. advance를 부를 때만 간다."""
+
+    def __init__(self) -> None:
+        self.now = 100.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
 def test_the_sweep_stops_at_the_time_limit_and_finishes_later(
-    client: TestClient, db: Session, dog, staff, auth_headers
+    client: TestClient, db: Session, dog, staff, auth_headers, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """시간 상한에 닿으면 남은 것을 다음 차례로 미룬다. 그때까지 지운 분석 사본은 다시 불러도 성공이라 이어진다."""
     dog_id = dog.id
@@ -310,15 +324,20 @@ def test_the_sweep_stops_at_the_time_limit_and_finishes_later(
     assert _trash(client, dog_id, auth_headers).status_code == 204
     _age_trash(db, dog, TRASH_RETENTION_DAYS + 1)
     fake = _FakeAnalysis()
-    fake.hook = lambda job_id: time.sleep(0.6)  # 분석 API가 느리게 답한다
+    # 실제 시계로 재면 DB가 느린 날에는 첫 사본을 지우기도 전에 상한이 지나 시험이 떨어진다.
+    # 시계를 바꿔 끼워 분석 API가 답할 때만 시간이 가게 한다
+    clock = _Clock()
+    monkeypatch.setattr(trash_service, "time", clock)
+    monkeypatch.setattr(analysis_copies, "time", clock)
+    fake.hook = lambda job_id: clock.advance(0.05)  # 분석 API가 느리게 답한다
     cleared: dict = {}  # 워커가 차례마다 넘기는 것. 끝낸 촬영을 적어 둔다
 
-    result = purge_expired(db, get_storage(), fake, deadline=time.monotonic() + 0.5, cleared=cleared)
+    result = purge_expired(db, get_storage(), fake, deadline=clock.monotonic() + 0.02, cleared=cleared)
     assert result == SweepResult(0, 0, out_of_time=True)
     assert len(fake.deleted) == 1 and _rows_of_dog(db, dog_id) == rows and _purge_logs(db) == []
     (finished,) = fake.shot_calls
     # 이미 지난 상한이면 시작하지 않는다
-    late = time.monotonic() - 1
+    late = clock.monotonic() - 1
     assert purge_expired(db, get_storage(), fake, deadline=late, cleared=cleared) == SweepResult(0, 0, out_of_time=True)
     assert len(fake.deleted) == 1
 

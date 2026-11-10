@@ -221,7 +221,14 @@ def test_upload_stores_the_photo_and_lists_it(
     # 7절 키: 반려견 접두어 아래, 휴대폰의 원래 파일 이름은 들어가지 않는다
     assert row.file_key == f"{dog.institution_id}/{dog.id}/images/{row.id}.png"
     assert [path.name for path in _stored_files(dog)] == [f"{row.id}.png"]
-    assert _list(client, dog, auth_headers) == [body]
+    # 서명 주소의 만료 시각은 부르는 순간의 초라, 올리기와 목록이 초 경계를 걸치면 exp·sig·url_expires_at이 달라진다.
+    # 그 셋은 모양만 보고 나머지는 그대로 견준다
+    listed = _list(client, dog, auth_headers)
+    signed = ("file_url", "url_expires_at")
+    assert [{key: value for key, value in item.items() if key not in signed} for item in listed] == [
+        {key: value for key, value in body.items() if key not in signed}
+    ]
+    assert listed[0]["file_url"].startswith(f"/api/v1/images/{body['id']}/file?exp=") and listed[0]["url_expires_at"]
 
 
 def test_file_url_opens_the_stored_photo_without_a_token(client: TestClient, dog, auth_headers, no_faces) -> None:

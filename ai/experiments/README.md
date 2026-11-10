@@ -9,12 +9,13 @@ GPU 서버를 받기 전에 노트북(RTX 4070, Docker)에서 돌린 경량화, 
 | 폴더 | 내용 |
 | --- | --- |
 | `run` | 실행 스크립트. `setup.sh`가 `paw_eval`을 `/work`로 복사하고 탐지 건너뛰기 실행부를 `speed.py`에 등록합니다 |
-| `stacks` | 탐지 건너뛰기 실행부(`skipdet.py`). 키프레임에서만 탐지하고 사이는 상자를 보간합니다 |
+| `stacks` | 탐지 건너뛰기 실행부. `skipdet.py`는 키프레임에서만 탐지하고 사이는 상자를 보간합니다. `skipdet2.py`는 여기에 fp16 계산, 빈 구간 확인(probe), 추론 증강(배율, 회전), 뒷다리 좌우 바로잡기를 더한 것으로 11-04 기업 점검 묶음이 쓰는 판입니다 |
 | `smooth` | 시간 평활(`smooth_track.py`), 평활이 점을 움직인 양 확인(`blur_check.py`), 좌표 정규화(`normalize.py`) |
 | `train` | 미세조정 설정(`ft_base.py`)과 46점 학습 데이터 만들기, CPU 점검 스크립트 |
-| `cv` | 제니 반쪽 교차 학습 실험 틀(10-27). `run_queue.py`가 대기열 파일(한 줄에 실험 하나)을 읽어 학습, 채점, 기록을 이어서 돌립니다. 결과는 위키 실험 결과 종합의 10-27 절 |
+| `cv` | 제니 반쪽 교차 학습 실험 틀(10-27). `run_queue.py`가 대기열 파일(한 줄에 실험 하나)을 읽어 학습, 채점, 기록을 이어서 돌립니다. 결과는 위키 실험 결과 종합의 10-27 절. `cv/screen`은 11-03 기업 점검 후보를 고른 선별 실행부입니다(팀 라벨 학습, 가중치 섞기, 추론 증강 7가지, 바로잡기 강도) |
+| `calib` | 라벨러 맞추기 키트(제니 20장)를 만들고 팀원 교정 결과를 기업 정답과 관절별로 비교(10-27~11-02, 장준환) |
 | `pl` | 영상 좌우 바로잡기(비터비, `viterbi.py`)와 의사 라벨 준비. 라벨 없는 학습 쪽 개 영상을 추적해 믿을 만한 프레임만 학습 데이터로 고릅니다 |
-| `eval_runs` | 기업 `paw_eval`에 얹어 쓴 추론 증강(배율·회전·flip), 후처리(좌우 바로잡기·평활·가장자리 상자 거르기), 탐지 간격·fp16 실행부, 처리 성능·KPI 일괄 실행, 팀 시트 내보내기(10-20~10-26, 박규원) |
+| `eval_runs` | 기업 `paw_eval`에 얹어 쓴 추론 증강(배율·회전·flip), 후처리(좌우 바로잡기·평활·가장자리 상자 거르기), 탐지 간격·fp16 실행부, 처리 성능·KPI 일괄 실행, 팀 시트 내보내기(10-20~10-26, 박규원). `box_motion.py`, `gap_sim.py`(빈 구간 모의 계산), `detbox_tta.py`, `tta_compare.py`, `tta_video_timing.py`(11-09 탐지기 상자와 증강 비교)는 장준환 |
 | `finetune` | fs-v4 이어 학습 실행부(`train.py`, `ft_creamoff.py`), 22점→46점 변환, 학습셋별 3시드 일괄 학습(10-22~10-26, 박규원) |
 | `labels` | 라벨 기준 실험: 라벨 맞추기 pilot20, 시험 라벨 검수, 와우와우 기준 차이 보정, 기업 정답·와우와우를 오토라벨과 비교한 방향 통계와 그림, CVAT 보조 스크립트(10-20~10-28, 박규원) |
 | `normalize` | 좌표 정규화 실험: KPI-02 화면 위치 효과 가르기, 매트 평면 투영, 비스듬 보행·카메라 오차 합성 확인 그림(10-19~10-26, 박규원) |
@@ -33,12 +34,32 @@ docker run --rm --gpus all -e PYTHONUTF8=1 -v "<전달본 폴더>:/ssafy:ro" -v 
 docker run --rm --gpus all -e PYTHONUTF8=1 -v "<전달본 폴더>:/ssafy:ro" -v "<이 폴더>:/exp" cvat-autolabel:creamoff-2.73.1 bash /exp/run/run_all.sh
 ```
 
-- `make_models.py`를 먼저 돌려야 `models/`(FP16 가중치, 해상도별 탐지기 설정, 건너뛰기 설정)가 생깁니다.
+- `make_models.py`를 먼저 돌려야 `models/`(FP16 가중치, 해상도별 탐지기 설정, 건너뛰기 설정)가 생깁니다. FP16 가중치는 `save_fp16.py`로 만듭니다(아래 FP16 절).
 - `run_all.sh`의 FP16 비교는 재현 기록 결과(`/ssafy/재현기록-261021/fs-v4.json`)가 있어야 돌아갑니다.
 - `train/smoke.sh`, `train/smoke_wow.sh`는 학습이 도는지만 보는 점검용입니다. 결과를 성능으로 쓰지 않습니다.
 - 학습 상자는 채점과 같게 정답 상자를 긴 변의 15%씩 넓힌 뒤 1.25배로 넣습니다(`make_train_set.py`, `pad_coco.py`의 `--box-margin`, `ft_base.py`의 `padding`). 10-26까지의 학습은 1.15배로만 넣어 이어 학습할수록 나빠졌습니다.
 - 교차 실험: `bash /exp/cv/run_cv.sh`(대기열 1), `bash /exp/cv/run_night.sh`(대기열 2, 3과 속도 측정). 정리는 `python cv/summarize.py`, 그림은 `python cv/report.py <출력.html>`
 - 의사 라벨: `pl/make_list.py`로 영상 목록을 만든 뒤 `bash /exp/pl/run_pl.sh`. 개 단위 분할 결과(`pl/dog_split.json`)는 `ai/data_prep/split_by_dog.py`로 만들어 둡니다
+
+### FP16 저장과 fp16 계산
+
+둘은 다른 것이고 따로 켭니다.
+
+| | FP16 저장 | fp16 계산 |
+| --- | --- | --- |
+| 하는 일 | 가중치 파일의 실수 텐서를 16비트로 저장. 같은 저장 공간을 쓰는 텐서는 한 번만 저장하고 옵티마이저 상태는 뺌 | 탐지와 관절점 계산을 `torch.autocast(cuda, float16)` 안에서 돌림 |
+| 바뀌는 지표 | 모델 파일 크기(KPI-17) | 처리 시간(KPI-14) |
+| 코드 | `run/save_fp16.py` | `stacks/skipdet2.py`의 `_amp()`, 모델 설정 `[stack]`의 `fp16 = true` |
+| 결과 | fs-v4 탐지기 94.62에서 47.40 MiB, 관절점 56.20에서 28.14 MiB, 합계 75.54 MiB(E-104) | 매 프레임 탐지 기준 0.675배(10-29 노트북, 현행과 번갈아 3바퀴) |
+
+```
+python /exp/run/save_fp16.py <det.pth> <pose.pth> --out <출력 폴더>
+```
+
+- 저장한 파일을 mmengine으로 불러오면 모델의 FP32 파라미터에 복사되므로 속도와 메모리는 그대로입니다. fs-v4 관절점은 다시 불러온 파라미터와 원본의 최대 차이가 0.0076입니다(11-05 컨테이너 확인).
+- fp16 계산은 CUDA에서만 켜집니다. CPU면 설정에 `fp16 = true`가 있어도 무시합니다.
+- 사진 정확도 채점(`predict.py`)은 정답 상자로 관절점만 돌리므로 fp16 계산이 들어가지 않습니다. 영상 처리(`speed.py`)에만 영향이 있습니다.
+- 학습한 가중치도 같은 스크립트로 줄입니다. 학습 체크포인트의 옵티마이저 상태가 빠지므로 원본보다 많이 작아집니다.
 
 ### `eval_runs`, `finetune`, `labels`, `normalize`
 

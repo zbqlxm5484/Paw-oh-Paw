@@ -1,8 +1,7 @@
-import os
 from pathlib import Path
 
-import torch
 from mmengine.config import Config
+from save_fp16 import save_fp16
 
 PAW = Path("/work/ssafy/paw_eval/models/fs-v4")
 OUT = Path("/exp/models")
@@ -25,12 +24,9 @@ def toml(name, det_config, det_weights, pose_weights=PAW / "pose.pth", backend="
 
 
 fp = OUT / "fs-v4-fp16"
-fp.mkdir(exist_ok=True)
 for n in ("pose", "det"):
-    c = torch.load(PAW / f"{n}.pth", map_location="cpu", weights_only=False)
-    c["state_dict"] = {k: (v.half() if v.is_floating_point() else v) for k, v in c["state_dict"].items()}
-    torch.save(c, fp / f"{n}.pth")
-    print(n, round(os.path.getsize(PAW / f"{n}.pth") / 2**20, 2), "->", round(os.path.getsize(fp / f"{n}.pth") / 2**20, 2), "MiB")
+    r = save_fp16(PAW / f"{n}.pth", fp / f"{n}.pth")
+    print(n, r["mib"][0], "->", r["mib"][1], "MiB, 최대 차이", f'{r["max_abs_diff"]:.2e}')
 toml("fs-v4-fp16", PAW / "det.py", fp / "det.pth", pose_weights=fp / "pose.pth")
 
 for size in (512, 416, 320):

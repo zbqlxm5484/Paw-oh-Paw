@@ -51,8 +51,20 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(path: string, opts: { method?: string; body?: unknown; auth?: boolean } = {}): Promise<T> {
-  const { method = 'GET', body, auth = true } = opts
+/** 가짜 서버 모드(vite --mode mock)에서 백엔드 대신 응답하는 처리 함수. undefined 를 돌려주면 그 주소는 맡지 않는다 */
+export type MockRoute = (method: string, path: string) => Promise<unknown> | undefined
+const mockRoutes: MockRoute[] = []
+export const registerMock = (route: MockRoute): void => {
+  mockRoutes.push(route)
+}
+
+/** token 을 주면 저장된 로그인 토큰 대신 그 토큰을 Bearer 로 보낸다(서버 PDF 워커의 인쇄 토큰) */
+export async function request<T>(path: string, opts: { method?: string; body?: unknown; auth?: boolean; token?: string | null } = {}): Promise<T> {
+  const { method = 'GET', body, auth = true, token } = opts
+  for (const route of mockRoutes) {
+    const hit = route(method, path)
+    if (hit !== undefined) return (await hit) as T
+  }
   const headers: Record<string, string> = { Accept: 'application/json' }
   let payload: BodyInit | undefined
   if (body instanceof FormData) payload = body
@@ -61,7 +73,7 @@ export async function request<T>(path: string, opts: { method?: string; body?: u
     payload = JSON.stringify(body)
   }
   if (auth) {
-    const t = tokenStore.get()
+    const t = token || tokenStore.get()
     if (t) headers.Authorization = `Bearer ${t}`
   }
   const res = await fetch(`${BASE}${path}`, { method, headers, body: payload })
@@ -191,6 +203,63 @@ export interface StaffAdminOut { id: string; login_id: string; name: string; ema
 /** 가입 약관 동의(192). 필수 셋은 true 여야 서버가 받는다, marketing 만 선택 */
 export interface TermsIn { version: string; service: boolean; privacy: boolean; device_location: boolean; marketing: boolean }
 
+// ── 보고서 내용(GET /sessions/{id}/report-content, 285). 서버가 문장·표·수치를 만들고 KPI-30(숫자 대조)·KPI-31(금지 표현)
+//    검사를 통과한 것만 준다. 인쇄 화면(/print/reports/:rid)은 이 값으로 그리기만 한다. `?` 칸은 아직 확정 전이라 없을 수 있다 ──
+export type ReportEdition = 'OWNER' | 'VET'
+export type LimbCode = 'LF' | 'RF' | 'LH' | 'RH'
+export type PairCode = 'FORE' | 'HIND'
+export type LegLevel = 'SIMILAR' | 'SLIGHT' | 'LARGE'
+export interface ReportContentSession {
+  measured_on: string; round: number; model_name: string | null; model_version: string | null
+  weight_kg: number | null; size_class: string | null; symmetry_score: number | null
+  /** 100 − 점수에 다리 단계와 같은 경계. 칸이 없으면 화면이 같은 규칙으로 정한다 */
+  symmetry_level?: LegLevel | string | null
+}
+export interface ReportContentDog { name: string; breed: string | null; sex: string | null; birth_year: number | null; focus_limb: LimbCode | string | null }
+export interface ReportContentPrevious { session_id: string; measured_on: string; round: number; model_changed: boolean }
+export interface ReportContentBaseline {
+  session_id: string; measured_on: string; round: number; symmetry_score: number | null
+  /** 이번 − 기준(%p). 한쪽이라도 없으면 null. 예전 서버라 칸이 없으면 화면이 symmetry_score − baseline.symmetry_score */
+  diff?: number | null
+}
+/** 이 회차 포함 최대 8개, 오래된 순. 실패 회차는 symmetry_score null */
+export interface ReportContentHistory { measured_on: string; round: number; symmetry_score: number | null }
+/** 다리 쌍 하나의 색 단계와 덜 쓰는 다리. 비교할 수 있는 대상 수치가 없는 쌍은 빠진다.
+ *  gait_type = 서버가 고른 보행 유형(TROT → WALK → OTHER 중 대상 수치를 비교할 수 있는 첫 유형). level 경계는 소수 첫째 자리로 반올림한 대칭 지수로 가른다 */
+export interface ReportContentLeg {
+  pair: PairCode; gait_type: string; metric_code: string; label: string
+  /** 화면에 찍는 글("18.2%") */
+  symmetry_index: string
+  symmetry_value: number | null; weak_limb: LimbCode | null; level: LegLevel
+}
+export interface ReportContentSentences {
+  title: string; edition_label: string; intro: string; summary: string[]
+  previous_note: string | null; previous_gaps: string[]; caution: string[]
+  glossary: { term: string; explanation: string }[]; disclaimer: string
+}
+export interface ReportContentCell { value: number | null; text: string; reason: string | null }
+export interface ReportContentRow { metric_code: string; label: string; unit: string; cells: Partial<Record<string, ReportContentCell>> }
+export interface ReportContentCompare {
+  pair: PairCode | string; pair_label: string; metric_code: string; label: string
+  left: string; right: string; diff: string; symmetry_index: string
+  diff_value: number | null; symmetry_value: number | null; comparable: boolean; reason: string | null
+}
+export interface ReportContentChangeCell { previous: string; current: string; diff: string | null; change: string | null; change_label: string | null; note: string | null }
+export interface ReportContentChange { metric_code: string; label: string; unit: string; cells: Partial<Record<string, ReportContentChangeCell>> }
+export interface ReportContentGait {
+  gait_type: string; label: string; notes: string[]
+  rows: ReportContentRow[]; compare: ReportContentCompare[]; changes: ReportContentChange[]
+}
+export interface ReportContentOut {
+  session_id: string; edition: ReportEdition; template_version: string
+  session: ReportContentSession; dog: ReportContentDog
+  previous: ReportContentPrevious | null; baseline: ReportContentBaseline | null
+  history: ReportContentHistory[]
+  legs?: ReportContentLeg[] | null
+  sentences: ReportContentSentences
+  gaits: ReportContentGait[]
+}
+
 // ── 호출(지금 develop 에 있는 것만) ──
 export const api = {
   login: (login_id: string, password: string) => request<TokenOut>('/auth/login', { method: 'POST', body: { login_id, password }, auth: false }),
@@ -216,10 +285,11 @@ export const api = {
   instSessions: (page = 1, size = 100) => request<{ items: { id: string; measured_on: string; status: string; dog: { id: string; name: string } }[]; total: number }>(`/sessions?page=${page}&size=${size}`),
   startSession: (dogId: string, body: { measured_on?: string; weight_kg?: number }) =>
     request<SessionOut>(`/dogs/${dogId}/sessions`, { method: 'POST', body }),
-  session: (id: string) => request<SessionDetailOut>(`/sessions/${id}`),
+  /** token: 인쇄 토큰(서버 PDF 워커). 없으면 로그인 토큰 */
+  session: (id: string, token?: string | null) => request<SessionDetailOut>(`/sessions/${id}`, { token }),
   shot: (id: string) => request<ShotDetailOut>(`/shots/${id}`),
   /** 통과별 프레임 관절 각도(15.6). 3D 보기의 측정 걸음 곡선 */
-  angles: (id: string) => request<AnglesOut>(`/shots/${id}/angles`),
+  angles: (id: string, token?: string | null) => request<AnglesOut>(`/shots/${id}/angles`, { token }),
   cancelSession: (id: string) => request<void>(`/sessions/${id}`, { method: 'DELETE' }),
   completeSession: (id: string) => request<SessionOut>(`/sessions/${id}/complete`, { method: 'POST' }),
   deleteShot: (id: string) => request<void>(`/shots/${id}`, { method: 'DELETE' }),
@@ -255,6 +325,9 @@ export const api = {
   updateNote: (id: string, body: { body?: string; category?: string; important?: boolean }) => request<NoteOut>(`/notes/${id}`, { method: 'PATCH', body }),
   noteRevisions: (id: string) => request<{ items: NoteRevisionOut[] }>(`/notes/${id}/revisions`),
   sessionReports: (sessionId: string) => request<SessionReportsOut>(`/sessions/${sessionId}/reports`),
+  /** 보고서 내용(285). token 이 있으면 인쇄 토큰으로(로그인 없이), 없으면 저장된 로그인 토큰. 404 NOT_FOUND, 409 SESSION_NOT_DONE·REPORT_CHECK_FAILED */
+  reportContent: (sessionId: string, edition: ReportEdition, token?: string | null) =>
+    request<ReportContentOut>(`/sessions/${sessionId}/report-content?edition=${edition}`, { token }),
   regenerateReport: (reportId: string) => request<ReportOut>(`/reports/${reportId}/regenerate`, { method: 'POST' }),
   institutions: () => request<{ items: InstitutionAdminOut[] }>('/admin/institutions'),
   createInstitution: (body: { name: string; code?: string; contract_ends_at?: string | null }) =>
