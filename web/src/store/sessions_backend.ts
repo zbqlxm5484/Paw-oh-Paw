@@ -84,6 +84,8 @@ export function toResult(o: SessionResultOut, dog: string): Result {
       if (Object.keys(m).length) mg[name] = m
     }
     applyMetrics(r, mg[pick[1]] ?? {})
+    // 대칭 점수는 서버 값을 그대로 쓴다(앱과 같은 숫자). 예전 서버라 필드가 없으면 위에서 화면 계산한 값
+    if (o.symmetry_score !== undefined) r.sym = o.symmetry_score ?? 0
     r.gait = pick[1]
     r.mg = mg
   }

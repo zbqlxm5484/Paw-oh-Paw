@@ -10,6 +10,7 @@ import { PetModal } from './parts/Modals'
 import { DayPicker, dayLabel } from './parts/DayPicker'
 import { VV } from './parts/Vital'
 import { link } from '../config'
+import { isRemote, syncTodayCharts } from '../store/backend'
 
 // EMR 첫 화면처럼 오늘 온 반려견부터(11-02)
 const HOME_VIEWS: [string, string][] = [['today', '오늘'], ['analyses', '분석'], ['dogs', '반려견'], ['staff', '촬영 담당자']]
@@ -34,6 +35,11 @@ export default function Home() {
   useEffect(() => {
     if (toDog) navigate(toDog, { replace: true }) // 반려견은 차트에서 본다
   }, [toDog, navigate])
+  // 서버 기관: 오늘 진료 기록·바이탈이 있는 반려견 차트를 뒤에서 읽어 '오늘' 목록을 채운다(차트를 안 열어 본 반려견도)
+  const acctId = acct?.id ?? ''
+  useEffect(() => {
+    if (acctId && isRemote(acctId)) void syncTodayCharts(acctId, isoToday()).catch(() => undefined)
+  }, [acctId])
   if (!acct || toDog) return null
 
   const q = query.get('q') || ''

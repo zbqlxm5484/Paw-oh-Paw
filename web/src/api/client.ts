@@ -146,6 +146,8 @@ export interface SessionResultOut extends SessionOut {
   exclude_summary: (ReasonOut & { count: number })[]
   notices: ReasonOut[]
   gaits: GaitResultOut[]
+  /** 대칭 점수 0~100(100 − 평균 대칭 지수, 앱과 같은 서버 값). 예전 서버면 undefined */
+  symmetry_score?: number | null
 }
 /** 보고서 판본 1개. file_url·download_url 은 status 가 DONE 일 때만 있다(서명 붙은 주소, 로그인 토큰 없이 열린다) */
 export interface ReportOut {
@@ -201,6 +203,10 @@ export const api = {
   dog: (id: string) => request<DogOut>(`/dogs/${id}`),
   createDog: (body: Record<string, unknown>) => request<DogOut>('/dogs', { method: 'POST', body }),
   updateDog: (id: string, body: Record<string, unknown>) => request<DogOut>(`/dogs/${id}`, { method: 'PATCH', body }),
+  /** 휴지통으로 보냄(서버가 정한 기간 뒤 영구 삭제). 회차·영상도 같이 숨는다 */
+  deleteDog: (id: string) => request<void>(`/dogs/${id}`, { method: 'DELETE' }),
+  /** 기관의 모든 회차, 최신순(BE-33) */
+  instSessions: (page = 1, size = 100) => request<{ items: { id: string; measured_on: string; status: string; dog: { id: string; name: string } }[]; total: number }>(`/sessions?page=${page}&size=${size}`),
   startSession: (dogId: string, body: { measured_on?: string; weight_kg?: number }) =>
     request<SessionOut>(`/dogs/${dogId}/sessions`, { method: 'POST', body }),
   session: (id: string) => request<SessionDetailOut>(`/sessions/${id}`),
