@@ -1,10 +1,15 @@
-"""모델 10개 (명세 12.2). 테이블 1개 = 파일 1개.
+"""모델 15개 (명세 12.2). 테이블 1개 = 파일 1개.
 
 Alembic이 모든 테이블을 알 수 있게 여기서 전부 import한다.
 """
 
 from app.models.device_code import DeviceCode
 from app.models.dog import Dog
+from app.models.dog_history import DogHistory
+from app.models.dog_image import DogImage
+from app.models.dog_note import DogNote
+from app.models.dog_note_revision import DogNoteRevision
+from app.models.dog_vital import DogVital
 from app.models.institution import Institution
 from app.models.measure_session import MeasureSession
 from app.models.purge_log import PurgeLog
@@ -17,6 +22,11 @@ from app.models.walk_pass import WalkPass
 __all__ = [
     "DeviceCode",
     "Dog",
+    "DogHistory",
+    "DogImage",
+    "DogNote",
+    "DogNoteRevision",
+    "DogVital",
     "Institution",
     "MeasureSession",
     "PurgeLog",

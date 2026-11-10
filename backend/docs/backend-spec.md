@@ -28,7 +28,13 @@ Oct 19, 2026 · @조영운
 | v1.33 | 2026-11-06 | 반려견 휴지통(199 후속, 조영운 결정 11-06): 삭제는 지우지 않고 휴지통에 넣는다. 12.2 `dog.deleted_at`(마이그레이션 0013), 12.4 워커의 자동 비우기, 12.5 휴지통 규칙(30일 뒤 자동 영구 삭제), 15.2 42번의 뜻 변경과 43·44번, 15.3 **DogOut**에 `deleted_at`·`purge_at`, 15.5 `GET /dogs?trash=true`·`DELETE /dogs/{dog_id}`·`POST /dogs/{dog_id}/restore`·`DELETE /dogs/{dog_id}/permanent`, 15.9, 17.6. v1.30의 '삭제하면 바로 지운다'는 이 판에서 바뀌었다 |
 | v1.34 | 2026-11-06 | 계약 종료 뒤 자동 파기(199 후속, 조영운 결정 11-06, 10절 Q27의 답): 계약 종료일에서 90일이 지나면 워커가 그 기관의 측정 자료와 가입 계정을 지운다. 기관과 디바이스 코드는 남긴다. 10절 Q27, 12.4 워커, 12.5 보관 기간, 13.6 `contract_ends_at`에 90일보다 더 지난 날짜 금지, 15.9, 17.6 |
 | v1.35 | 2026-11-06 | 회원 탈퇴와 알림 설정(192 후속, 박규원 요청 11-06): 12.2 `staff.withdrawn_at`·`notif_on`(마이그레이션 0014), 13.7, 14.1 `LAST_ACCOUNT`, 15.2 45번 `DELETE /auth/me`, 15.3 **StaffOut**에 `notif_on`, 15.4 `PATCH /auth/me`에 `notif_on`·탈퇴, 15.9 계정 목록에 `withdrawn_at`, 17.2 |
+| v1.36 | 2026-11-06 | 차트 자료(웹에만 있던 기능의 서버 구현, 통합본 1\~4절, 조영운 결정 11-05): 반려견에 동물번호·보호자·단계(4절 BE-02·03, 12.2 `dog` 5칸, 마이그레이션 0015, 13.2, 15.3 **DogOut**, 15.5 검색), 바이탈(BE-28, `dog_vital`, 0016), 진단 이력(BE-29, `dog_history`, 0017), 메모·진료 기록(BE-30, `dog_note`·`dog_note_revision`, 0018). 11.8 로그 금지 목록, 12.5 삭제 순서와 차트 자료 규칙, 13.3 회차 시작의 `vital`, 13.9, 15.1 페이지 목록, 15.2 46\~54번, 15.6, 15.9 `rows`, 15.11, 17.2. v1.12까지의 '보호자 이름·연락처는 받지 않는다'는 이 판에서 바뀌었다 |
 | v1.37 | 2026-11-06 | 199 리뷰 반영(박규원·조유진): 6절 `delete`를 부르는 곳, 7절 촬영 삭제·측정 취소·다시 분석도 분석 API 사본을 먼저 지움, 12.4 잠금(파기·휴지통은 반려견 행도 잠그고, 분석 API는 회차 행을 잠그기 전에 부름), 12.4 자동 파기의 시간 상한 `WORKER_SWEEP_MAX_SEC`과 계약 종료 뒤 파기의 첫 실행 시점, 12.5 휴지통의 보고서 생성과 `version`, 14.1 `ANALYSIS_UNAVAILABLE` 문구, 15.2·15.6 측정 취소·다시 분석·촬영 삭제에 503, 15.5, 15.9 지우는 순서, 16절, 17.3·17.6. 번호는 192 브랜치의 v1.35, 차트 자료의 v1.36 다음이다 |
+| v1.38 | 2026-11-06 | 대칭 점수와 홈 배지(웹에만 있던 기능의 서버 구현, 통합본 6절·9-2, 조영운 결정 11-05): 4절 BE-31·32, 12.3 대칭 점수 식, 12.5 홈 배지·변동 규칙, 13.4 `changed_within_days`, 15.3 **DogOut**에 `badges`·`changes`·`last_symmetry`와 **DogBadgeOut**·**DogChangeOut**, 15.5 `GET /dogs`의 `changed_within_days`, 15.7 `symmetry_score`, 15.8 **SessionHistoryItem**의 `symmetry_score`, 17.2 BE-31·32. 테이블·마이그레이션은 바뀌지 않는다. 보고서 PDF의 표기는 바꾸지 않았다(문구 확인 대기). |
+| v1.39 | 2026-11-06 | 조회 API 둘(웹에만 있던 기능의 서버 구현, 통합본 7절·9-1, 조영운 결정 11-05): 4절 BE-33, 7절 파일 키 `angles.json`, 12.4 관절 각도 파일, 13.4 `staff_id`·`status`, 15.2 17번 구현·55번 `GET /sessions`, 15.6 `GET /shots/{shot_id}/angles`(자료가 분석 결과 JSON이 아니라 관절점 파일에서 온다)와 `GET /sessions`, 17.2 BE-14·33. 테이블·마이그레이션은 바뀌지 않는다. |
+| v1.40 | 2026-11-06 | 반려견 사진(웹에만 있던 기능의 서버 구현, 통합본 5절, 조영운 결정 11-05. 얼굴은 올릴 때 가려서 저장하기로 함, 조영운 11-06): 4절 BE-34, 7절 파일 키, 12.2 `dog_image`(마이그레이션 0019), 12.5 사진·삭제 순서, 13.9, 14.1 `IMAGE_FORMAT`·`IMAGE_UNREADABLE`·`IMAGE_TOO_LARGE`, 15.2 56\~59번, 15.9 `rows`, 15.11 사진, 17.2 BE-34. |
+| v1.41 | 2026-11-09 | 차트 자료 보완(박규원 11-09 요청 중 화면 동작에 걸린 다섯 가지, 조영운 결정 11-09. 이름과 기록자 방식은 그대로 둠): ① 바이탈 부분 입력(잰 값만 적고, 같은 날 다시 보내면 보낸 값만 바꿈. 12.2 `dog_vital` 다섯 값 NULL 허용과 CHECK 둘, 마이그레이션 0020, 12.5, 13.9, 15.11) ② 가장 최근 체중을 반려견의 등록 체중에 반영(12.5, 15.11) ③ 진단 이력 수정·삭제(15.2 60·61번, 13.9, 15.11) ④ `DogOut.last_surgery`·`last_diagnosis`(12.5, 15.3) ⑤ 검색에 병명·수술명(15.5). 4절 BE-03·28·29, 17.2. |
+| v1.42 | 2026-11-09 | 관절 각도 파일 다시 만들기(271 MR 리뷰 박규원, 간격은 조영운 결정 11-09): 12.4 관절 각도 파일에 '못 쓴 촬영은 5분마다 다시 시도하고, 워커를 켤 때와 30분마다 최근 48시간의 촬영에 파일이 있는지 본다'를 더했다. 15.6 `GET /shots/{shot_id}/angles`의 빈 배열 설명, 17.2 BE-14. 테이블·마이그레이션·API는 바뀌지 않는다. |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -153,7 +159,7 @@ Oct 19, 2026 · @조영운
 
 ## 4. 기능 명세
 
-기능은 27개이며, 유저플로우의 화면 S1\~S8 순서로 묶었다. BE-22\~27은 10-30 회원가입·역할·계약 설계(팀 합의 전)다. 우선순위는 팀 시연 기준이다(필수 = 시연에 꼭 필요, 권장 = 시간이 되면).
+기능은 30개이며, 유저플로우의 화면 S1\~S8 순서로 묶었다. BE-22\~27은 10-30 회원가입·역할·계약 설계(팀 합의 전)다. 우선순위는 팀 시연 기준이다(필수 = 시연에 꼭 필요, 권장 = 시간이 되면).
 
 **최소 시연 범위**: BE-01·02·04\~09·11\~14·17·18·21. 이것만으로 "등록 → 업로드 → 판별 → 회차 결과 → 다리 비교·재활 비교"가 끝까지 돈다. 기업이 서비스보다 모델 성능 개선을 우선하라고 했으므로(2차 멘토링 Q4·Q5, 10-18), 이 범위를 먼저 끝내고 보고서 자동 생성(BE-15·16)과 나머지를 그 뒤에 붙인다.
 
@@ -162,8 +168,15 @@ Oct 19, 2026 · @조영운
 | ID | 기능 | 하는 일 | 왜 필요한가 | 근거 |
 | --- | --- | --- | --- | --- |
 | BE-01 | 로그인·기관 분리 (필수) | 아이디·비밀번호로 로그인하고, 모든 조회를 자기 기관 데이터로 제한한다. 역할은 `ADMIN`·`STAFF`(크림오프)·`CLIENT`(고객). 계정은 디바이스 코드 가입(BE-22, `CLIENT`) 또는 `scripts/seed.py`로 만든다 | 보고서는 미리 확인된 사람만 봐야 한다. 결과 화면을 만들면 기관별 데이터 분리가 조건부 필수다 | PR-F09-04, 10-15 회의, 10-30 설계 |
-| BE-02 | 반려견 등록·수정 (필수) | 이름·견종·체중, 선택으로 생년·성별, 재활 정보(재활 시작일·관심 다리·내부 메모). 체급(소·중·대)은 기업 자료에 따로 없어서 등록 체중으로 자동 분류하고(박규원 체급 기준: 10 kg 미만 소형, 25 kg 미만 중형, 25 kg 이상 대형), 담당자가 고칠 수 있다 | 보고서 설명이 이름·체중·견종·체급에 따라 바뀐다. 보호자 이름·연락처는 쓰는 곳이 없어 받지 않는다 | PR-F08-02, REQ-CM-002 |
-| BE-03 | 반려견 목록·검색 (필수) | 이름 검색, 마지막 측정일, 회차 수, 진행 중 회차 표시 | 하루 여러 마리를 재므로 바로 찾아 들어가야 한다 | 4.1 측정 담당자 |
+| BE-02 | 반려견 등록·수정 (필수) | 이름·견종·체중, 선택으로 생년·성별, 재활 정보(재활 시작일·관심 다리·내부 메모), 병원 차트 정보(동물번호·보호자 이름·연락처·단계, v1.36). 체급(소·중·대)은 기업 자료에 따로 없어서 등록 체중으로 자동 분류하고(박규원 체급 기준: 10 kg 미만 소형, 25 kg 미만 중형, 25 kg 이상 대형), 담당자가 고칠 수 있다 | 보고서 설명이 이름·체중·견종·체급에 따라 바뀐다. 병원은 "동물번호-이름 / 보호자"로 환자를 찾는다(10-28 현장 의견). 보호자 정보는 찾는 데만 쓰고 보고서에 넣지 않는다 | PR-F08-02, REQ-CM-002 |
+| BE-03 | 반려견 목록·검색 (필수) | 이름·동물번호·보호자 이름·병명·수술명 검색, 마지막 측정일, 회차 수, 진행 중 회차 표시 | 하루 여러 마리를 재므로 바로 찾아 들어가야 한다 | 4.1 측정 담당자 |
+| BE-28 | 바이탈 (권장) | 방문한 날의 체중·체온·심박·수축기·이완기 혈압을 하루 한 줄로 저장한다. 잰 값만 적을 수 있고 같은 날 다시 보내면 보낸 값만 바꾼다(v1.41). 가장 최근 체중은 반려견의 등록 체중이 된다. 회차를 시작할 때 함께 보낼 수 있다 | 병원은 방문마다 바이탈을 잰다(11-02). 지금은 체중만 회차에 남고 나머지는 버려진다 | 통합본 3절 |
+| BE-29 | 진단 이력 (권장) | 진단·수술·재활을 날짜와 함께 남기고 오래된 것부터 본다. 잘못 적은 줄은 고치거나 지운다(v1.41). 남기면서 반려견의 단계를 함께 바꿀 수 있다 | 수술 뒤 며칠째인지, 어느 다리인지가 측정 결과를 읽는 바탕이다 | 통합본 2절 |
+| BE-30 | 메모·진료 기록 (권장) | 환자에 붙는 짧은 메모(주의·보호자·예약·기타)와 방문의 진료 기록(S·O·A·P)을 남긴다. 지우지 않고, 고치면 이전 내용을 이력으로 남긴다 | 새로 고치면 사라지던 기록을 병원이 다시 볼 수 있어야 한다. 의무 기록은 고친 흔적이 남아야 한다 | 통합본 4절 |
+| BE-31 | 대칭 점수 (권장) | 회차의 좌우 균형을 0\~100의 점수 하나로 준다(100에 가까울수록 좌우가 비슷하다). 회차 결과와 측정 이력에 싣는다 | 화면마다 따로 계산하면 웹·앱·보고서의 값이 어긋난다. 한 곳에서 계산한다(10절 Q6) | 통합본 9-2 |
+| BE-32 | 홈 배지·변동 (권장) | 반려견 목록에 수술·진단·중요 메모 배지, 최근 며칠의 변동(수술, 보행이 나빠짐·좋아짐, 재촬영 필요, 중요 메모), 가장 최근 대칭 점수를 싣고, 변동이 있는 반려견만 거를 수 있다 | 반려견이 100마리를 넘으면 화면이 회차·메모를 다 읽어 계산할 수 없다 | 통합본 6절 |
+| BE-33 | 기관 회차 목록 (권장) | 기관의 모든 회차를 최신순으로 보고 담당자·상태로 거른다. 항목에 반려견과 담당자 이름이 있다 | 홈의 분석 목록과 촬영 담당자 보기가 반려견마다 이력을 따로 부르지 않게 한다 | 통합본 7절 |
+| BE-34 | 반려견 사진 (권장) | 수술 전·후 사진과 방사선 사진을 날짜·종류와 함께 올리고 모아 본다. 사람 얼굴은 올릴 때 가려서 저장하고 원본은 두지 않는다 | 수술 전·후를 나란히 보는 것이 경과 확인의 기본이다. 사진에도 보호자·직원이 찍힌다 | 통합본 5절, REQ-CM-003 |
 | BE-22 | 디바이스 코드 가입 (필수) | 디바이스 코드 확인 → 기관명 표시 → 아이디·비밀번호·이름·이메일로 가입. 코드의 기관에 `CLIENT` 계정을 만든다. 코드 하나로 만들 수 있는 계정 수에 상한은 없다(v1.32) | 밤·주말에 가입해도 관리자 없이 바로 쓸 수 있어야 한다. 기관은 코드가 정하므로 가입자가 기관을 잘못 고를 수 없다 | 10-30 설계 |
 | BE-23 | 계약 만료 차단 (필수) | 기관 계약 종료일이 지나면 그 기관 `CLIENT`는 `GUEST`로 계산되어 로그인·`/auth/me` 말고는 403 `CONTRACT_EXPIRED`. 요청마다 계산하고 60초 캐시를 둔다 | B2B 계약 기간 동안만 쓰게 한다. 역할을 자동으로 바꾸는 작업을 두지 않아 깨질 곳이 없고, 화면은 GUEST를 보고 만료 안내를 띄운다 | 10-30 설계 |
 | BE-25 | 반려견 동시 수정 보호 (권장) | 반려견 수정에 `version`을 받아 다른 담당자가 먼저 고쳤으면 409 `DOG_MODIFIED` | 같은 기관의 담당자 여럿이 같은 반려견을 고칠 수 있다 | 10-30 설계 |
@@ -319,7 +332,7 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 - AWS S3는 계정이 생기면 켠다(10절 Q20). EC2와 같은 판단이라 기업 허락은 따로 받지 않는다. 기업 환경에 설치하면 저장소는 기업이 고른다. 기업 서버 디스크나 서버에 연결한 NAS면 `local`(경로는 `STORAGE_ROOT`), AWS S3면 `s3`이다. S3 호환 저장소면 `s3`로 두고 그 주소를 `S3_ENDPOINT_URL`에 넣는다. 그 밖의 저장소는 `StorageService` 구현을 하나 더한다(10절 Q19). MinIO는 커뮤니티판 개발이 멈춰(2026년 GitHub 저장소가 보관 처리됨) 쓰지 않는다.
 - S3는 파일을 기관·반려견·회차별로 알아서 나눠 담지 않는다. S3가 스스로 하는 일은 Intelligent-Tiering 등급으로 넣은 파일을 접근이 뜸해지면 싼 층으로 옮기는 것과, 미리 만든 수명 주기 규칙대로 옮기거나 지우는 것이다. 기관·반려견·회차별 구분은 아래 키로 우리가 한다.
 - DB에는 파일이 아니라 파일 키(경로)만 저장한다. DB가 가벼워지고 파기·백업이 단순해진다.
-- 키: `{기관ID}/{반려견ID}/{회차ID}/{촬영ID}/original.{mp4|mov}` · `result.mp4` · `analysis.json`, 보고서는 `{기관ID}/{반려견ID}/{회차ID}/reports/{보고서ID}.pdf`. 서버 디스크에서는 `STORAGE_ROOT` 아래 경로이고, S3에서는 버킷 안 객체 키다. 모든 ID는 UUID로 하고, 반려견 이름이나 휴대폰의 원래 파일명이 키에 들어가지 않게 한다.
+- 키: `{기관ID}/{반려견ID}/{회차ID}/{촬영ID}/original.{mp4|mov}` · `result.mp4` · `analysis.json` · `angles.json`(관절 각도, v1.39), 보고서는 `{기관ID}/{반려견ID}/{회차ID}/reports/{보고서ID}.pdf`, 반려견 사진은 `{기관ID}/{반려견ID}/images/{사진ID}.{jpg|png}`(v1.40). 서버 디스크에서는 `STORAGE_ROOT` 아래 경로이고, S3에서는 버킷 안 객체 키다. 모든 ID는 UUID로 하고, 반려견 이름이나 휴대폰의 원래 파일명이 키에 들어가지 않게 한다.
 
 압력 매트 CSV는 받지도 저장하지도 않는다. 영상만으로 분석하기로 했기 때문이다(2차 멘토링 Q16). 중간발표 때 고려했던 "압력 CSV + 영상 저장" 구조에서 바뀐 부분이다.
 
@@ -633,10 +646,10 @@ DbSession = Annotated[Session, Depends(get_db, scope="function")]
 ### 11.8 로그와 감시
 
 - 표준 `logging`을 쓴다. 한 줄에 시각, 레벨, 요청 ID, 메시지를 남긴다. 요청 ID는 미들웨어가 만들고 응답 헤더 `X-Request-ID`로도 돌려준다.
-- 로그에 남기지 않는 것: 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로(PR-C-02), 디바이스 코드, 재설정 토큰, 이메일 주소(v1.12).
+- 로그에 남기지 않는 것: 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로(PR-C-02), 디바이스 코드, 재설정 토큰, 이메일 주소(v1.12), 보호자 이름·연락처, 메모·진료 기록의 본문, 진단 이력의 제목·수의사 이름(v1.36).
 - (선택) `/metrics`로 요청 수·처리 시간을 Prometheus 형식으로 낸다. 수집 방식은 허정원과 정한다.
 
-**로그로 새지 않게**: uvicorn 접근 로그는 끈다(`--no-access-log`). 쿼리 문자열에 반려견 이름(`q`)과 서명(`sig`)이 들어가기 때문이다. 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID(UUID4 16진수 32자)만 남긴다. SQLAlchemy 엔진은 `hide_parameters=True`로 만들어 오류 메시지에 값이 찍히지 않게 한다.
+**로그로 새지 않게**: uvicorn 접근 로그는 끈다(`--no-access-log`). 쿼리 문자열에 반려견 이름·보호자 이름(`q`)과 서명(`sig`)이 들어가기 때문이다. 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID(UUID4 16진수 32자)만 남긴다. SQLAlchemy 엔진은 `hide_parameters=True`로 만들어 오류 메시지에 값이 찍히지 않게 한다.
 
 ### 11.9 테스트
 
@@ -694,13 +707,13 @@ def get_storage() -> StorageService:
 
 ## 12. 데이터 모델
 
-테이블은 10개다. 기관 → 반려견 → 회차 → 촬영 → 통과로 한 줄로 내려가고, 회차 수치와 보고서는 회차에 붙는다. 디바이스 코드는 기관에 붙고 담당자가 어느 코드로 가입했는지 가리킨다(v1.12). 아래 DDL이 기준이다. SQLAlchemy 모델은 이 DDL과 똑같이 만들고, 실제 테이블은 Alembic으로 만든다.
+테이블은 15개다. 기관 → 반려견 → 회차 → 촬영 → 통과로 한 줄로 내려가고, 회차 수치와 보고서는 회차에 붙는다. 차트 자료 다섯(바이탈·진단 이력·메모·메모 수정 이력 v1.36, 사진 v1.40)은 반려견에 붙는다. 디바이스 코드는 기관에 붙고 담당자가 어느 코드로 가입했는지 가리킨다(v1.12). 아래 DDL이 기준이다. SQLAlchemy 모델은 이 DDL과 똑같이 만들고, 실제 테이블은 Alembic으로 만든다.
 
 ### 12.1 ERD
 
 [embedded content: 테이블 9개의 관계\]
 
-purge\_log는 파기 기록이라 다른 테이블과 연결하지 않는다. 파기 대상을 지울 때 기록까지 같이 지워지면 안 되기 때문이다. 그림에 없는 `device_code`(v1.12)는 institution → device\_code → staff(`device_code_id`, NULL 가능)로 붙는다.
+purge\_log는 파기 기록이라 다른 테이블과 연결하지 않는다. 파기 대상을 지울 때 기록까지 같이 지워지면 안 되기 때문이다. 그림에 없는 `device_code`(v1.12)는 institution → device\_code → staff(`device_code_id`, NULL 가능)로 붙는다. 차트 자료(v1.36)도 그림에 없다: dog → dog\_vital·dog\_history·dog\_note, dog\_note → dog\_note\_revision이고, 넷 모두 쓴 담당자(staff)를, dog\_vital·dog\_note는 회차(measure\_session, NULL 가능)도 가리킨다.
 
 ### 12.2 테이블 정의 (PostgreSQL DDL)
 
@@ -764,7 +777,7 @@ CREATE TABLE staff (
   CONSTRAINT fk_staff_device_code FOREIGN KEY (device_code_id) REFERENCES device_code (id)
 );
 
--- 반려견. 보호자 이름·연락처는 받지 않는다
+-- 반려견. 보호자 이름·연락처는 병원이 환자를 찾는 데만 쓰고 보고서·로그에 넣지 않는다(v1.36)
 CREATE TABLE dog (
   id                   UUID          NOT NULL,
   institution_id       UUID          NOT NULL,
@@ -779,6 +792,11 @@ CREATE TABLE dog (
   focus_limb           VARCHAR(20)   NULL,  -- 관심 다리: 왼앞·오른앞·왼뒤·오른뒤
   baseline_session_id  UUID          NULL,  -- 기준 회차
   memo                 TEXT          NULL,  -- 내부 메모. 보고서에 넣지 않는다
+  chart_no             VARCHAR(30)   NULL,  -- 동물번호(병원 차트 번호). 유일하지 않아도 된다(13.2)
+  owner_name           VARCHAR(50)   NULL,  -- 보호자 이름
+  owner_phone          VARCHAR(20)   NULL,  -- 보호자 연락처. 목록에는 뒤 4자리만 준다(15.3)
+  stage                VARCHAR(20)   NOT NULL DEFAULT 'REHAB',  -- 단계: 수술 전·재활 중·종결
+  stage_changed_on     DATE          NULL,  -- 단계가 바뀐 날(한국 날짜). 바뀐 적이 없으면 NULL
   deleted_at           TIMESTAMPTZ   NULL,  -- 휴지통에 넣은 시각(12.5). NULL이면 휴지통에 없다
   version              INTEGER       NOT NULL DEFAULT 0,  -- 낙관적 잠금(12.5). 수정할 때마다 1 는다
   created_at           TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -787,6 +805,7 @@ CREATE TABLE dog (
   CONSTRAINT ck_dog_size_class CHECK (size_class IN ('SMALL', 'MEDIUM', 'LARGE')),
   CONSTRAINT ck_dog_sex CHECK (sex IN ('MALE', 'FEMALE', 'MALE_NEUTERED', 'FEMALE_SPAYED')),
   CONSTRAINT ck_dog_focus_limb CHECK (focus_limb IN ('LF', 'RF', 'LH', 'RH')),
+  CONSTRAINT ck_dog_stage CHECK (stage IN ('PRE', 'REHAB', 'DONE')),
   CONSTRAINT fk_dog_institution FOREIGN KEY (institution_id) REFERENCES institution (id)
 );
 CREATE INDEX ix_dog_institution_name ON dog (institution_id, name);
@@ -915,6 +934,104 @@ CREATE TABLE report (
   CONSTRAINT fk_report_session FOREIGN KEY (session_id) REFERENCES measure_session (id)
 );
 
+-- 바이탈(v1.36). 반려견마다 하루 한 줄. 같은 날 다시 보내면 보낸 값만 바꾼다(12.5)
+CREATE TABLE dog_vital (
+  id           UUID          NOT NULL,
+  dog_id       UUID          NOT NULL,
+  measured_on  DATE          NOT NULL,
+  weight_kg    NUMERIC(5,2)  NULL,      -- 재지 않은 값은 NULL(v1.41, 13.9)
+  temp_c       NUMERIC(4,1)  NULL,      -- 체온(℃)
+  heart_rate   SMALLINT      NULL,      -- 심박(회/분)
+  sbp          SMALLINT      NULL,      -- 수축기 혈압(mmHg)
+  dbp          SMALLINT      NULL,      -- 이완기 혈압(mmHg)
+  staff_id     UUID          NOT NULL,  -- 마지막으로 저장한 담당자
+  session_id   UUID          NULL,      -- 회차를 시작하며 함께 보낸 값이면 그 회차. 회차를 취소하면 NULL
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (id),
+  CONSTRAINT uq_dog_vital_day UNIQUE (dog_id, measured_on),
+  -- 값이 하나는 있어야 한다. 혈압은 둘이 함께라 dbp는 따로 보지 않는다(v1.41)
+  CONSTRAINT ck_dog_vital_any_value CHECK (weight_kg IS NOT NULL OR temp_c IS NOT NULL OR heart_rate IS NOT NULL OR sbp IS NOT NULL),
+  CONSTRAINT ck_dog_vital_bp_pair CHECK ((sbp IS NULL) = (dbp IS NULL)),
+  CONSTRAINT fk_dog_vital_dog FOREIGN KEY (dog_id) REFERENCES dog (id),
+  CONSTRAINT fk_dog_vital_staff FOREIGN KEY (staff_id) REFERENCES staff (id),
+  CONSTRAINT fk_dog_vital_session FOREIGN KEY (session_id) REFERENCES measure_session (id)
+);
+
+-- 진단 이력(v1.36): 진단·수술·재활. 고치고 지울 수 있다(v1.41)
+CREATE TABLE dog_history (
+  id           UUID          NOT NULL,
+  dog_id       UUID          NOT NULL,
+  occurred_on  DATE          NOT NULL,  -- 진단·수술한 날, 재활을 시작하거나 끝낸 날
+  kind         VARCHAR(20)   NOT NULL,
+  title        VARCHAR(100)  NOT NULL,  -- 예: 앞십자인대 파열, TPLO
+  site         VARCHAR(20)   NULL,      -- 부위: 네 다리 또는 척추(SP)
+  clinician    VARCHAR(50)   NULL,      -- 진단·집도 수의사(자유 입력)
+  staff_id     UUID          NOT NULL,  -- 적은 담당자
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (id),
+  CONSTRAINT ck_dog_history_kind CHECK (kind IN ('DIAGNOSIS', 'SURGERY', 'REHAB')),
+  CONSTRAINT ck_dog_history_site CHECK (site IN ('LF', 'RF', 'LH', 'RH', 'SP')),
+  CONSTRAINT fk_dog_history_dog FOREIGN KEY (dog_id) REFERENCES dog (id),
+  CONSTRAINT fk_dog_history_staff FOREIGN KEY (staff_id) REFERENCES staff (id)
+);
+CREATE INDEX ix_dog_history_dog_date ON dog_history (dog_id, occurred_on);
+
+-- 메모·진료 기록(v1.36). 분류만 다르고 모양은 같다: 메모 CAUTION·GUARDIAN·BOOKING·OTHER, 진료 기록 S·O·A·P
+CREATE TABLE dog_note (
+  id           UUID          NOT NULL,
+  dog_id       UUID          NOT NULL,
+  session_id   UUID          NULL,      -- 회차에 단 기록이면 그 회차. 회차를 취소하면 NULL
+  category     VARCHAR(20)   NOT NULL,
+  body         TEXT          NOT NULL,  -- 최대 2,000자(13.9). 보고서·로그에 넣지 않는다
+  important    BOOLEAN       NOT NULL DEFAULT FALSE,  -- 중요 표시
+  staff_id     UUID          NOT NULL,  -- 지금 내용을 쓴 담당자(고치면 고친 사람)
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (id),
+  CONSTRAINT ck_dog_note_category CHECK (category IN ('S', 'O', 'A', 'P', 'CAUTION', 'GUARDIAN', 'BOOKING', 'OTHER')),
+  CONSTRAINT fk_dog_note_dog FOREIGN KEY (dog_id) REFERENCES dog (id),
+  CONSTRAINT fk_dog_note_session FOREIGN KEY (session_id) REFERENCES measure_session (id),
+  CONSTRAINT fk_dog_note_staff FOREIGN KEY (staff_id) REFERENCES staff (id)
+);
+CREATE INDEX ix_dog_note_dog_created ON dog_note (dog_id, created_at);
+
+-- 메모·진료 기록의 수정 이력(v1.36). 고칠 때마다 고치기 전 내용 한 줄
+CREATE TABLE dog_note_revision (
+  id          UUID          NOT NULL,
+  note_id     UUID          NOT NULL,
+  body        TEXT          NOT NULL,  -- 고치기 전 내용
+  category    VARCHAR(20)   NOT NULL,
+  important   BOOLEAN       NOT NULL,
+  staff_id    UUID          NOT NULL,  -- 그 내용을 쓴 담당자
+  revised_at  TIMESTAMPTZ   NOT NULL,  -- 그 내용이 바뀐 시각
+  PRIMARY KEY (id),
+  CONSTRAINT ck_dog_note_revision_category CHECK (category IN ('S', 'O', 'A', 'P', 'CAUTION', 'GUARDIAN', 'BOOKING', 'OTHER')),
+  CONSTRAINT fk_dog_note_revision_note FOREIGN KEY (note_id) REFERENCES dog_note (id),
+  CONSTRAINT fk_dog_note_revision_staff FOREIGN KEY (staff_id) REFERENCES staff (id)
+);
+CREATE INDEX ix_dog_note_revision_note ON dog_note_revision (note_id, revised_at);
+
+-- 반려견 사진(v1.40). 파일은 얼굴을 가린 것만 저장한다(12.5 사진)
+CREATE TABLE dog_image (
+  id            UUID          NOT NULL,
+  dog_id        UUID          NOT NULL,
+  taken_on      DATE          NOT NULL,                -- 찍은 날
+  kind          VARCHAR(20)   NOT NULL,                -- PRE_OP·POST_OP·XRAY·PHOTO
+  caption       VARCHAR(100),                          -- 짧은 설명. 로그에 남기지 않는다
+  file_key      VARCHAR(255)  NOT NULL,                -- 7절 키
+  width         INTEGER       NOT NULL,                -- 저장한 사진의 픽셀 크기
+  height        INTEGER       NOT NULL,
+  masked_faces  SMALLINT      NOT NULL DEFAULT 0,      -- 가린 얼굴 수
+  staff_id      UUID          NOT NULL,                -- 올린 담당자
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  CONSTRAINT dog_image_pkey PRIMARY KEY (id),
+  CONSTRAINT ck_dog_image_kind CHECK (kind IN ('PRE_OP', 'POST_OP', 'XRAY', 'PHOTO')),
+  CONSTRAINT fk_dog_image_dog FOREIGN KEY (dog_id) REFERENCES dog (id),
+  CONSTRAINT fk_dog_image_staff FOREIGN KEY (staff_id) REFERENCES staff (id)
+);
+CREATE INDEX ix_dog_image_dog_taken ON dog_image (dog_id, taken_on);
+
 -- 파기 기록. 파기 확인서(D-13)의 근거
 CREATE TABLE purge_log (
   id             UUID          NOT NULL,
@@ -954,6 +1071,12 @@ CREATE TABLE purge_log (
 
 - 단위 코드: `deg`(°), `pct`(%), `pct_body`(몸통 길이 대비 %), `body_per_sec`(몸통 길이/초), `count`(회).
 - 좌우 차이와 대칭 지수는 저장하지 않고, 같은 회차·보행 유형의 왼쪽·오른쪽 값으로 계산한다. 좌우 차이 = 왼쪽 − 오른쪽(원 단위), 대칭 지수 = |왼쪽 − 오른쪽| ÷ ((왼쪽 + 오른쪽) ÷ 2) × 100(%). 한쪽이 측정 불가면 "비교 불가"다. 세부명세서에 대칭 지수 식이 없어 널리 쓰는 식을 넣었다. 계산은 팀 서비스 한 곳에서 한다(10절 Q6).
+- **대칭 점수**(`symmetry_score`, v1.38): 회차 하나의 좌우 균형을 0\~100의 정수 하나로 줄인 값이다. 대칭 지수와 방향이 반대라서 **100에 가까울수록 좌우가 비슷하다**. 웹 화면이 계산하던 식을 그대로 옮겼다(통합본 9-2, `services/symmetry.py`). 저장하지 않고 조회할 때 계산한다.
+  - 식: 대칭 점수 = 100 − 평균(대상 쌍의 대칭 지수). 정수로 반올림하고(15.1), 0보다 작으면 0이다. 대칭 지수는 반올림하지 않은 값으로 평균한다.
+  - 대상 쌍은 다섯이다: `rom_stifle`(LH·RH), `rom_hip`(LH·RH), `rom_elbow`(LF·RF), `stride_length`(LH·RH), `stance_ratio`(LH·RH).
+  - 보행 유형은 하나만 쓴다. TROT → WALK → OTHER 순서로, 대상 수치의 행이 있는 첫 유형이다. 그 유형에 계산할 쌍이 없어도 다음 유형으로 넘어가지 않는다(화면이 보여 주는 수치 표와 같은 유형이어야 해서다).
+  - 두 값이 다 있고 왼쪽 + 오른쪽이 0이 아닌 쌍만 평균에 넣는다. 넣을 쌍이 하나도 없으면 `null`이다(0점이 아니다).
+  - 판단 단어를 붙이지 않는다(5절). 보고서 PDF에는 아직 싣지 않는다.
 - 코드 이름은 분석 결과 JSON v1 3절의 키와 맞춘다. 다리 넷이 다 있는 수치는 JSON에서 `_front`·`_hind`를 붙여 오고, 이 표의 코드에는 붙이지 않는다. `paw_slope_median_front`·`_hind`는 세부명세서 6.2.1의 회차 수치에 없어 저장하지 않고 `analysis.json` 원본에만 남는다(조유진, S15P31A404-191 리뷰 11-02). 기업 연동에 필요해지면 다시 정한다.
 - **회차 값**(회차 집계는 팀 서비스가 한다, 분석 결과 JSON v1 3절. 중앙값은 조영운 결정 11-02, `services/aggregation.py`): 보행 유형(WALK·TROT·OTHER)과 다리가 같은 유효 통과의 중앙값이고 `n_passes`는 측정된 통과 수다. 다리는 통과의 `camera_side` 쪽이다(RIGHT면 RF·RH). `gait_cycles`만 합이다. `stifle_cv`는 그 다리의 모든 통과에서 보행 주기별 무릎 가동 범위(`stifle_cycle_rom`)를 모아 표본 표준편차 ÷ 평균 × 100으로 계산하고, 주기가 2개 미만이거나 평균이 0이면 `NOT_ENOUGH_CYCLES`다. 이 식과 여러 통과의 주기를 모으는 방식은 조유진이 확인했다(11-02). 실제 관절점으로 내 보니 한 통과의 주기는 많아야 1개이고 유효 통과의 절반가량은 주기가 없어, 통과 하나로는 계산되지 않고 여러 통과를 모아야 값이 나온다. 최소 주기 수는 2개로 둔다(조유진, S15P31A404-183 실측, 11-04).
 - **측정 불가 행**: 잴 유효 통과가 없는 다리는 `NO_PASS_FOR_LIMB`(`n_passes` 0), 통과들이 모두 측정 불가면 가장 많은 사유(`n_passes`는 그 통과 수)다. 통과들이 그 수치를 아예 보내지 않았으면 행을 넣지 않는다(결과 조회의 `NO_DATA`). 유효 통과가 하나도 없는 회차는 오류가 아니라 수치 행 없는 DONE이고(분석은 끝났고 쓸 통과가 없었으므로 실패가 아니라 무효와 같은 판단이다, 조유진 확인 11-02), `AGGREGATION_FAILED`는 `analysis.json`을 읽을 수 없을 때다. 회차의 `model_name`·`model_version`은 DONE 촬영 중 `seq_no`가 가장 큰 것의 값이다.
@@ -982,6 +1105,7 @@ CREATE TABLE purge_log (
 * **무거운 일 나누기**: 워커의 주 반복(2초마다)은 분석 제출·상태 조회·결과 저장·회차 집계처럼 가벼운 일만 한다. 결과 영상과 보고서 PDF는 `app/worker/render.py`가 프로세스 풀 두 개에 맡기고, 끝나기를 기다리지 않는다. 결과 영상 풀은 `WORKER_RENDER_CONCURRENCY`개, 보고서 풀은 1개다. 보고서가 결과 영상 뒤에서 기다리지 않게 하기 위해서다(BE-15). 두 풀 모두 `ProcessPoolExecutor(mp_context=multiprocessing.get_context("spawn"))`로 만든다. fork로 만들면 DB 연결 풀이 자식 프로세스에 복사된다.
 * **휴지통 자동 비우기**(v1.33): 워커는 켤 때 한 번, 그 뒤 한 시간마다 휴지통에 넣은 지 30일이 지난 반려견을 찾아 영구 삭제한다(12.5, `services/trash.py`의 `purge_expired`). 한 번에 20마리까지 보고 한 마리씩 지운다. 실패한 것은 로그만 남기고 다음 차례에 다시 한다. 분석 API가 응답하지 않으면 남은 것도 같은 이유로 실패하므로 그 차례는 거기서 멈춘다. 한 마리 지울 때마다 commit해 잠금을 바로 풀고, 후보를 읽은 뒤 복원했을 수 있어 반려견 행을 잠근 뒤 아직 휴지통에 있고 기한이 지났는지 다시 본다(v1.37). **시간 상한**(v1.37): 주 반복과 같은 스레드에서 돌기 때문에 한 차례(휴지통 비우기 + 계약 종료 뒤 파기)는 `WORKER_SWEEP_MAX_SEC`(기본 60초)까지만 쓴다. 넘으면 남은 것을 두고 5분 뒤에 이어서 한다. 상한 없이 오래 돌면 상태 조회가 밀려 정상 진행 중인 촬영이 `ANALYSIS_TIMEOUT`으로 끝날 수 있다. 상한에 닿을 때까지 지운 분석 API 사본은 다시 부르면 이미 없는 것이라 이어서 끝난다. 분석 API 요청 하나(`ANALYSIS_HTTP_TIMEOUT_SEC`)는 중간에 끊지 않으므로 실제로는 상한보다 그만큼 더 걸릴 수 있다.
 * **계약 종료 뒤 자동 파기**(v1.34): 휴지통 자동 비우기와 같은 차례(한 시간마다)에 계약이 끝난 지 90일이 지난 기관을 찾아 자료와 가입 계정을 지운다(12.5, `services/retention.py`의 `purge_expired_contracts`). 한 번에 5개 기관까지 보고 기관마다 따로 지운다. 실패한 기관은 다음 차례에 다시 하고, 분석 API가 응답하지 않으면 그 차례는 거기서 멈춘다. **켜자마자 돌지 않는다**(v1.37): 워커를 켠 뒤 한 시간이 지나야 처음 돈다. 배포 직후에 기관의 자료가 지워지지 않게 하려는 것이다(되돌릴 수 없다). 켤 때 대상 기관이 있으면 그 수와 기관 ID를 경고 로그로 남기므로, 지우면 안 되는 기관은 그 사이에 `contract_ends_at`을 고친다. 배포 전에 DB에서 미리 보는 방법은 `backend/README.md`의 "워커 띄우기"에 있다. 기관마다 지울 때 commit하고, 후보를 읽은 뒤 계약을 연장했을 수 있어 기관 행을 잠근 뒤 종료일을 다시 본다. 시간 상한은 휴지통 자동 비우기와 함께 쓴다(위 줄).
+* **관절 각도 파일**(v1.39): 프레임별 관절 각도는 분석 결과 JSON이 아니라 분석 API의 관절점 파일에만 있다. 워커는 결과 영상을 맡기려고 관절점 파일을 받았을 때, 저장해 둔 `analysis.json`의 유효 통과와 맞춰 통과별 각도만 뽑아 촬영 키의 `angles.json`에 쓴다(`services/shot_angles.py`). 분석 API를 한 번 더 부르지 않는다. 파일에는 그 분석의 `job_id`를 함께 적는다. 쓴 뒤 촬영이 그대로인지(DONE이고 `job_id`가 같음) 다시 보고, 아니면 방금 쓴 파일을 지운다. 이 일이 실패해도 결과 영상은 그대로 만든다. 지울 때는 촬영·회차·반려견 접두어 삭제에 함께 지워진다(12.5). DB에 키 칸을 두지 않는다. 이 기능 전에 분석한 촬영에는 파일이 없다. **다시 만들기**(v1.42, `worker/render.py`의 `repair_angles`): 결과 영상이 READY가 되면 그 촬영은 워커의 맡기기 대상에서 빠지므로, 각도 파일은 따로 다시 만든다. ① 저장소 오류로 못 쓴 촬영은 워커가 메모리에 기억해 두고 5분마다 분석 API에서 관절점 파일을 다시 받아 만든다. ② 워커를 켤 때와 그 뒤 30분마다, 분석이 끝난 지 48시간이 안 된 촬영(DONE이고 결과 영상이 PENDING이 아닌 것, 최근 200건) 중 각도 파일이 없거나 파일의 `job_id`가 촬영의 것과 다른 촬영을 찾아 ①의 목록에 넣고 바로 만든다. 워커가 재시작되어 기억이 사라진 경우의 길이다. 한 번에 10건까지, 10초를 넘기지 않는다(주 반복과 같은 스레드다). 분석 API가 답하지 않으면 그 차례를 멈추고 다음 간격에 다시 한다. 분석 결과 JSON이 계약과 다르거나 분석 API에 그 작업이 없으면(404·410·요청 거부) 다시 해도 같으므로 그만둔다. 촬영이 지워졌거나 다시 분석에 들어갔으면(`job_id`가 바뀜) 목록에서 뺀다. 간격과 범위는 코드의 상수이고 환경 변수가 아니다.
 * **자식 프로세스**: `video/`·`report/` 함수만 부르고 DB와 저장소를 모른다(11.3). 주 반복이 작업마다 `UPLOAD_TMP_DIR/worker/{작업 ID}/` 폴더를 만들고, 입력 경로와 출력 경로를 넘긴다. 입력은 `local_copy`로 준비하고, 작업별 `ExitStack`으로 작업이 끝날 때까지 열어 둔다. 자식 프로세스는 OpenCV 스레드를 1개(`cv2.setNumThreads(1)`)로, ffmpeg를 `-threads 2`로 묶는다.
 * **맡기기와 거두기**: 빈 자리는 그 풀에서 실행 중인 작업 수가 풀 크기보다 적을 때다. 미리 줄 세워 넣지 않는다. 결과 영상은 `status='DONE' AND video_status='PENDING'`인 촬영을 `analyzed_at, id` 순으로, 보고서는 PENDING 행을 `updated_at, id` 순으로 꺼낸다. 맡긴 ID는 메모리 집합에 두어 두 번 맡기지 않는다. 주 반복은 매 바퀴 `future.done()`으로 끝난 작업을 거둔다. `add_done_callback` 안에서는 DB를 건드리지 않는다. 성공이면 출력 파일을 `put_file`로 넣고 조건을 건 UPDATE로 붙인다. 성공·실패 모두 `ExitStack`을 닫고 작업 폴더를 지운다.
 * **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 자식이 돌려준 실린 숫자 목록을 먼저 DB의 `session_metric` 값·15.7 다리 비교 계산값과 맞추고(8절 7번), 어긋나면 PDF를 저장하지 않고 `REPORT_CHECK_FAILED`로 남긴다(DB 오류가 아닌 이유로 기준을 읽지 못하면 `REPORT_FAILED`). 맞으면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
@@ -993,9 +1117,29 @@ CREATE TABLE purge_log (
 ### 12.5 데이터 규칙
 
 - **이름**: 회차 테이블은 `measure_session`, 모델 클래스는 `MeasureSession`이다. SQLAlchemy의 DB 세션(`Session`)과 이름이 겹치면 AI가 둘을 헷갈린 코드를 만들기 때문이다. API 주소와 JSON에서는 그대로 `sessions`, `session_id`를 쓴다.
-- **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`. 자료 파기는 파일 앞에 분석 API 사본을 먼저 지운다(15.9). 기관을 지우는 기능은 없으므로 `device_code`는 지우지 않고 회수(`revoked_at`)만 한다.
+- **삭제 순서**: DB의 연쇄 삭제(ON DELETE CASCADE)를 쓰지 않는다. 행을 지울 때 파일도 같이 지워야 하는데 DB는 파일을 모르기 때문이다. 서비스가 이 순서로 지운다: 파일 → `walk_pass` → `shot` → `session_metric` → `report` → `dog_note_revision` → `dog_note` → `dog_vital` → `dog_history` → `dog_image` → `dog.baseline_session_id`를 NULL로 → `measure_session` → `dog`. 차트 자료(v1.36, 사진은 v1.40)는 반려견을 지울 때(자료 파기, 영구 삭제)만 지운다. 회차 하나를 지우는 측정 취소는 차트 자료를 지우지 않고, 그 회차를 가리키던 `dog_vital.session_id`·`dog_note.session_id`만 NULL로 돌린 뒤 회차를 지운다. 자료 파기는 파일 앞에 분석 API 사본을 먼저 지운다(15.9). 기관을 지우는 기능은 없으므로 `device_code`는 지우지 않고 회수(`revoked_at`)만 한다.
 - **휴지통**(v1.33): 담당자가 반려견을 삭제하면 지우지 않고 `dog.deleted_at`에 시각을 적는다(soft delete). 파일·행·분석 API 사본은 그대로다. 휴지통의 반려견은 담당자의 모든 조회·수정에서 없는 것과 같이 404다(반려견 목록·상세·수정, 회차 시작, 회차·촬영·결과·보고서, 이력·비교·추이). 조건은 `services/dogs.in_institution` 한 곳에 두고 반려견을 거치는 조회는 모두 이것을 쓴다. 복원하면 `deleted_at`을 NULL로 돌리고 모든 것이 그대로 돌아온다. 완전히 지우는 길은 셋이다: 담당자의 영구 삭제(휴지통에 있는 것만), 워커의 자동 비우기(휴지통에 넣고 30일 뒤, 12.4), 관리자 파기(15.9). 셋 다 자료 파기의 `DOG`를 불러 위 삭제 순서·오류·`purge_log`가 같다. 분석 중인 촬영(SUBMITTED·ANALYZING)이 있는 반려견은 휴지통에 넣을 수 없다(409 `SHOT_IN_PROGRESS`). 워커는 휴지통을 보지 않고 일하므로, 휴지통에 들어간 뒤에도 아직 제출하지 않은 촬영의 분석·집계·보고서 생성은 이어진다(복원했을 때 결과가 있도록). 보고서 생성이 읽는 회차 결과도 휴지통을 거르지 않는다(v1.37. 그전에는 담당자용 조회와 같은 조건을 써서 `REPORT_FAILED`가 됐다). 넣기와 복원은 반려견 행을 고치므로 `version`이 1씩 오른다. 복원한 뒤 수정할 때는 복원 응답의 `version`을 쓴다(v1.37). 보관 기간 30일은 코드의 상수 `TRASH_RETENTION_DAYS`다(환경 변수 아님).
 - **보관 기간과 자동 파기**(v1.34): 지우는 때는 둘이다. ① 휴지통에 넣은 반려견은 30일 뒤(위 줄). ② 계약이 끝난 기관은 종료일(`institution.contract_ends_at`)에서 90일이 지난 다음 날부터, 즉 `contract_ends_at < 오늘 − 90일`이면 워커가 그 기관의 측정 자료(반려견과 그 아래 전부, 휴지통에 있는 것 포함, 파일과 분석 API 사본)와 가입 계정(`role`이 `CLIENT`인 `staff` 행. 중지한 계정 포함)을 지운다. **기관(`institution`)과 디바이스 코드(`device_code`)는 자동으로 지우지 않는다.** 크림오프 계정(`ADMIN`·`STAFF`)도 지우지 않는다. 종료일이 NULL(기한 없음)이면 대상이 아니다. 90일 안에 계약을 연장하면(종료일을 뒤로 고치면) 지워지지 않는다. 지운 뒤 계약을 다시 맺으면 남아 있는 디바이스 코드로 새로 가입한다. 자료 파기의 `INSTITUTION`과 같은 순서로 지우고, 회차가 담당자를 가리키므로(`fk_session_staff`) 계정은 회차를 지운 뒤에 지운다. `purge_log`에 1행(`scope`는 `INSTITUTION`, `executed_by`는 NULL, `rows_deleted`에 지운 계정 수 포함)을 남긴다. 분석 중인 촬영이 있거나 분석 API가 응답하지 않으면 그 기관은 아무것도 지우지 않고 다음 차례에 다시 한다. 지울 것이 남은 기관만 고르므로 다 지운 기관에는 기록을 다시 남기지 않는다. 보관 기간 90일은 코드의 상수 `CONTRACT_RETENTION_DAYS`다(환경 변수 아님). 워커와 API는 프로세스가 달라, 지운 계정의 인증 캐시는 API 쪽에서 TTL(60초)이 지나야 사라진다(그 계정은 이미 계약 만료라 자료 API는 403이다).
+- **차트 자료**(v1.36): 바이탈·진단 이력·메모·진료 기록은 반려견에 붙고, 반려견과 같은 조건(`services/dogs.in_institution`)으로 거른다. 다른 기관이거나 휴지통에 있는 반려견의 것은 404다. 쓴 담당자는 입력값이 아니라 로그인한 담당자다. 넷 모두 보고서에 넣지 않는다. ① **단계**: `dog.stage`는 `PRE`(수술 전)·`REHAB`(재활 중)·`DONE`(종결)이고 등록 때 기본값은 `REHAB`다. 값이 실제로 바뀔 때만 `stage_changed_on`에 오늘(한국 날짜)을 적는다. 담당자가 이 날짜를 직접 보낼 수는 없다. ② **바이탈**: 반려견마다 하루 한 줄이다(`uq_dog_vital_day`). 잰 값만 적는다(v1.41): 값이 하나는 있어야 하고(`ck_dog_vital_any_value`) 혈압은 수축기·이완기가 함께 있어야 한다(`ck_dog_vital_bp_pair`). 같은 날 다시 보내면 보낸 값과 `staff_id`만 바꾸고 보내지 않은 값과 `session_id`는 그대로 둔다. `null`을 보내면 그 값을 비운다. 규칙은 저장된 값과 합친 줄로 보고, 어긋나면 아무것도 바꾸지 않는다. **체중 반영**(v1.41): 체중을 적은 날보다 뒤에 체중이 적힌 줄이 없으면 반려견의 등록 체중(`dog.weight_kg`)을 그 값으로 바꾸고, 체급을 직접 지정하지 않았으면 다시 분류한다. 값이 실제로 바뀌면 반려견의 `version`이 1 는다. 지난 날짜의 체중을 뒤늦게 적거나 체중을 비워도 등록 체중은 그대로다. 회차 시작의 `vital`도 같은 규칙을 따른다. 동시에 보내도 한 줄만 남도록 반려견 행을 잠근 뒤 찾아서 넣거나 바꾼다. ③ **메모·진료 기록**: 지우는 API가 없다. 고치면 고치기 전 내용(본문·분류·중요 표시·쓴 담당자)을 `dog_note_revision`에 한 줄 남기고(`revised_at`은 고친 시각), `dog_note`에는 새 내용과 고친 담당자를 적는다. 그래서 처음 쓴 사람은 가장 오래된 이력 줄에 있다. 바뀐 값이 없으면 이력을 남기지 않는다. 분류는 같은 종류 안에서만 바꾼다(메모는 메모끼리, 진료 기록은 S·O·A·P끼리). ④ **진단 이력**: 한 줄씩 더하고, 잘못 적은 줄은 고치거나 지운다(v1.41, 바로 아래 '진단 이력의 수정·삭제'). v1.36에는 고치거나 지우는 API가 없었다.
+- **진단 이력의 수정·삭제**(v1.41, `services/dog_history.py`): 한 줄을 고치거나 지울 수 있다. 고쳐도 적은 담당자(`staff_id`)와 적은 시각은 그대로 두고, 누가 고치거나 지웠는지는 로그에 ID로만 남긴다(이름·수의사는 남기지 않는다, 11.8). 수정 이력 테이블은 두지 않는다. 반려견의 단계는 건드리지 않는다: 이력을 더하며 함께 바꾼 단계는 그 줄을 지워도 되돌리지 않는다. 주소의 반려견과 줄의 반려견이 다르면 404다.
+- **홈 배지·변동**(v1.38, `services/dog_home.py`): 반려견 목록·상세의 `badges`·`changes`·`last_symmetry`는 저장하지 않고 조회할 때 계산한다. 반려견 수와 상관없이 정해진 수의 쿼리로 끝낸다(15.1). 날짜는 모두 한국 날짜(`APP_TIMEZONE`)다. 문구는 서버가 만들지 않고 코드와 재료만 준다.
+  - **배지**: ① 가장 최근 수술(`dog_history`의 `SURGERY` 중 `occurred_on`이 가장 늦은 것)이 있으면 `SURGERY`, 없고 진단이 있으면 가장 최근 `DIAGNOSIS` 하나. 둘을 함께 주지 않는다. ② 중요 표시(`dog_note.important`)가 켜진 메모·진료 기록이 하나라도 있으면 `IMPORTANT_NOTE`(`on`은 가장 최근 것을 쓴 날). 메모 본문은 싣지 않는다.
+  - **최근 수술·진단**(v1.41): `last_surgery`·`last_diagnosis`는 종류별로 `occurred_on`이 가장 늦은 한 줄(같으면 나중에 적은 것)의 날짜·이름·부위다. 배지와 달리 수술이 있어도 진단을 함께 준다. 배지를 읽는 쿼리의 결과를 그대로 쓰므로 쿼리가 늘지 않는다.
+  - **변동**: 오늘에서 N일 전(그날 포함)부터의 일만 본다. N은 `changed_within_days`이고 보내지 않으면 7이다.
+    - `SURGERY_ADDED`: 가장 최근 수술의 `occurred_on`이 기간 안이다. `on`은 그 날짜다.
+    - `IMPORTANT_NOTE`: 중요 표시가 켜진 메모·진료 기록을 기간 안에 썼다(`created_at`). `on`은 쓴 날이다.
+    - 아래 셋은 **가장 최근에 끝난 회차**(DONE·FAILED 중 12.5 순서로 맨 뒤) 하나만 보고, 그 회차의 `measured_on`이 기간 안일 때만 넣는다. `on`은 그 `measured_on`이다.
+    - `RESHOOT_NEEDED`: 그 회차가 FAILED이거나, DONE인데 유효 통과가 0개이거나, `validity`가 INVALID인 촬영이 있다.
+    - `GAIT_BETTER`·`GAIT_WORSE`: 그 회차가 DONE이고 대칭 점수가 있으며, 바로 앞의 대칭 점수가 있는 DONE 회차보다 3점 이상 높다·낮다. `delta`는 점수 차(이번 − 앞)다. 앞 회차가 없으면 넣지 않는다.
+  - `changes`는 `on`이 늦은 순서이고, 같으면 `RESHOOT_NEEDED`, `GAIT_WORSE`, `GAIT_BETTER`, `SURGERY_ADDED`, `IMPORTANT_NOTE` 순서다. 같은 코드는 한 번만 나온다.
+  - `last_symmetry`는 대칭 점수가 있는 DONE 회차 중 가장 최근 것의 점수다. 없으면 `null`이다.
+  - 휴지통 목록(`trash=true`)에서는 계산하지 않는다(`badges`·`changes`는 빈 배열, `last_symmetry`는 `null`).
+- **사진**(v1.40, `services/dog_images.py`, `video/photo.py`): 반려견에 붙는 수술 전·후 사진, 방사선 사진, 그 밖의 사진이다. 보고서에 넣지 않는다.
+  - **얼굴 가리기**(조영운 결정 11-06, REQ-CM-003): 올릴 때 결과 영상과 같은 검출기(7절 BlazeFace)로 사람 얼굴을 찾아 같은 방식으로 가린 사진만 저장한다. **원본은 저장하지 않는다.** `XRAY`는 얼굴이 없고 잘못 가리면 판독할 자리가 지워지므로 가리지 않는다. 가린 수를 `masked_faces`에 적는다. 검출기를 쓸 수 없으면 저장하지 않고 500으로 끝낸다(가리지 않은 사진을 남기지 않는다). 검출기가 놓친 얼굴은 남을 수 있으므로 담당자가 사진을 지울 수 있게 한다.
+  - **다시 저장**: 종류와 상관없이 픽셀만 다시 써서(JPEG는 품질 92, PNG는 무손실) 저장한다. 위치·기기 같은 사진 속 부가 정보(EXIF)가 빠지고, 사진에 적힌 방향대로 세운 뒤 저장한다. 채널당 8비트가 된다.
+  - 형식은 파일 이름이 아니라 내용의 첫 바이트로 가린다(JPEG, PNG). 휴대폰의 원래 파일 이름은 저장하지 않는다.
+  - 지울 때는 파일을 먼저, 그다음 행을 지운다. 반려견을 지울 때(자료 파기, 영구 삭제)는 반려견 접두어 삭제에 파일이 함께 지워진다.
+  - 얼굴 찾기는 API 프로세스 안에서 한다(사진 한 장, 수백 ms). 검출기는 프로세스마다 하나를 처음 쓸 때 만들고, 한 번에 한 요청만 쓰게 잠근다.
 - **측정 불가**: `value`는 NULL, `measurable`은 FALSE, 사유는 `unmeasurable_reason`에 넣는다. 0을 넣지 않는다. 0은 측정값으로 오해되기 때문이다(PR-F02-05).
 - **체급 분류**: 체급은 등록 체중만으로 나눈다(박규원의 체급 기준 자료, 10-22. v1.3까지는 견종 기준이었다). 세부명세서가 체급을 쓰는 곳은 소형견이 화면에 작게 찍히는 문제(RK-09), 체급별 권장 통과 수(D-14), 보고서 맞춤 설명(PR-F08-02)인데, 분석 쪽의 체급별 KPI 집계(KPI-08·25·26)와 개 보행 임상 연구(압력 매트)가 같은 체중 경계를 쓴다. 백엔드가 견종으로 나누면 분석 쪽 집계와 보고서의 체급이 어긋나므로 같은 규칙을 쓴다. 규칙은 다음과 같다.
   1. 등록 체중이 10 kg 미만이면 SMALL, 25 kg 미만이면 MEDIUM, 25 kg 이상이면 LARGE다. 경계값은 설정값(16절)이고, 경계에 있는 값은 위 구간에 든다(10.00 kg은 MEDIUM, 25.00 kg은 LARGE).
@@ -1068,14 +1212,18 @@ CREATE TABLE purge_log (
 | `focus_limb` | 선택 | `LF`·`RF`·`LH`·`RH` |
 | `baseline_session_id` | 선택(수정 때만) | 같은 반려견의 DONE 회차. 아니면 400 `BASELINE_INVALID` |
 | `memo` | 선택 | 최대 1,000자 |
+| `chart_no` | 선택 | 1\~30자. 앞뒤 공백은 지운다. 같은 기관에 같은 번호가 있어도 받는다(막지 않는다) |
+| `owner_name` | 선택 | 1\~50자. 앞뒤 공백은 지운다 |
+| `owner_phone` | 선택 | 7\~20자. 숫자와 `-`·`+`·공백만. 앞뒤 공백은 지운다 |
+| `stage` | 선택 | `PRE`·`REHAB`·`DONE`. 등록 때 빼면 `REHAB`. 수정 때 `null`은 안 된다 |
 
-수정(PATCH)은 보낸 필드만 바꾼다. 값을 비우려면 `null`을 보낸다. `name`·`breed`·`weight_kg`은 비울 수 없다.
+수정(PATCH)은 보낸 필드만 바꾼다. 값을 비우려면 `null`을 보낸다. `name`·`breed`·`weight_kg`·`stage`는 비울 수 없다. 빈 문자열은 받지 않으므로 동물번호·보호자 정보를 지우려면 `null`을 보낸다. `stage_changed_on`은 서버가 적는 값이라 받지 않는다(12.5).
 
 ### 13.3 동작별 조건
 
 | 동작 | 조건 | 어기면 |
 | --- | --- | --- |
-| 회차 시작 | 같은 반려견에 MEASURING 회차가 없다. `measured_on`은 선택(기본 오늘), 미래 날짜 불가. `weight_kg`은 선택, 0.5\~100.0. 회차 체급은 서버가 정한다(12.5 6번) | 409 `SESSION_ALREADY_OPEN`(`detail.session_id`에 열려 있는 회차) |
+| 회차 시작 | 같은 반려견에 MEASURING 회차가 없다. `measured_on`은 선택(기본 오늘), 미래 날짜 불가. `weight_kg`은 선택, 0.5\~100.0. `vital`은 선택이고 규칙은 13.9(같이 보낸 `weight_kg`와 `vital.weight_kg`가 다르면 422). 회차 체급은 서버가 정한다(12.5 6번) | 409 `SESSION_ALREADY_OPEN`(`detail.session_id`에 열려 있는 회차) |
 | 측정 종료 | 회차가 MEASURING이고 촬영이 1건 이상 있다 | 409 `SESSION_CLOSED` 또는 `SESSION_EMPTY` |
 | 측정 취소 | 회차가 MEASURING이고 SUBMITTED·ANALYZING 촬영이 없다 | 409 `SESSION_CLOSED` 또는 `SHOT_IN_PROGRESS` |
 | 촬영 다시 분석 | 촬영이 FAILED이고 회차가 MEASURING이다 | 409 `SHOT_NOT_FAILED` 또는 `SESSION_CLOSED` |
@@ -1095,7 +1243,10 @@ CREATE TABLE purge_log (
 | `password` | 8자 이상, UTF-8로 72바이트 이하(한글 한 글자는 3바이트). bcrypt 5.0은 72바이트를 넘으면 오류를 낸다. 이 규칙은 seed.py로 계정을 만들 때 검사한다. 로그인에서는 길이를 검사하지 않고, 72바이트를 넘으면 bcrypt를 부르지 않고 401 LOGIN\_FAILED로 답한다 |
 | `page` | 1 이상 |
 | `size` | 1\~100 (기본 20) |
-| `q`(검색어) | 최대 50자. 반려견 이름에 포함되면 찾는다 |
+| `q`(검색어) | 최대 50자. 이름·동물번호·보호자 이름·병명·수술명 중 하나에 포함되면 찾는다(15.5) |
+| `changed_within_days` | 1\~30의 정수. 보내지 않으면 거르지 않는다(15.5) |
+| `staff_id`(회차 목록) | UUID. 그 담당자가 측정한 회차만(15.6) |
+| `status`(회차 목록) | `MEASURING`·`AGGREGATING`·`DONE`·`FAILED` 중 하나 |
 
 로그인이 틀리면 아이디·비밀번호 중 무엇이 틀렸는지 알려 주지 않고 항상 401 `LOGIN_FAILED` 하나로 답한다. 어느 쪽이 맞았는지 힌트를 주지 않기 위해서다. 아이디는 대소문자를 구분해 입력 그대로 비교한다. 요청에 `institution_code`가 있어도 무시한다(v1.11까지의 화면).
 
@@ -1138,6 +1289,38 @@ CREATE TABLE purge_log (
 | `token`(confirm) | 1\~100자. 해시가 맞고 `password_reset_expires_at`이 지나지 않아야 한다. 아니면 400 `RESET_TOKEN_INVALID` |
 | `new_password`(confirm) | 13.4 규칙 |
 
+### 13.9 차트 자료
+
+바이탈·진단 이력·메모·진료 기록의 입력 규칙이다(v1.36). 바이탈의 범위는 통합본에 없어 조영운이 제안한 값이고, 병원 의견을 받으면 고친다.
+
+| 대상 | 필드 | 필수 | 규칙 |
+| --- | --- | --- | --- |
+| 바이탈 | `measured_on`(주소) | 필수 | 날짜(`YYYY-MM-DD`). 미래 날짜는 422. 날짜 형식이 아니면 주소의 ID처럼 404(15.1) |
+| 바이탈 | `weight_kg` | 선택 | 0.5\~100.0, 소수 둘째 자리까지(13.2와 같다) |
+| 바이탈 | `temp_c` | 선택 | 30.0\~45.0, 소수 첫째 자리까지 |
+| 바이탈 | `heart_rate` | 선택 | 정수 20\~300 |
+| 바이탈 | `sbp`, `dbp` | 선택 | 정수. `sbp`는 30\~300, `dbp`는 10\~250, `dbp`가 `sbp`보다 작아야 한다. 둘은 함께 있거나 함께 없다 |
+| 진단 이력 | `occurred_on` | 필수 | 오늘(한국 날짜) 이전 |
+| 진단 이력 | `kind` | 필수 | `DIAGNOSIS`·`SURGERY`·`REHAB` |
+| 진단 이력 | `title` | 필수 | 1\~100자. 앞뒤 공백은 지운다 |
+| 진단 이력 | `site` | 선택 | `LF`·`RF`·`LH`·`RH`·`SP`(척추) |
+| 진단 이력 | `clinician` | 선택 | 1\~50자 |
+| 진단 이력 | `stage` | 선택 | `PRE`·`REHAB`·`DONE`. 보내면 반려견의 단계를 함께 바꾼다(15.11) |
+| 메모·진료 기록 | `category` | 필수 | 메모 `CAUTION`·`GUARDIAN`·`BOOKING`·`OTHER`, 진료 기록 `S`·`O`·`A`·`P` |
+| 메모·진료 기록 | `body` | 필수 | 1\~2,000자. 앞뒤 공백은 지운다 |
+| 메모·진료 기록 | `important` | 선택 | 기본 false |
+| 메모·진료 기록 | `session_id` | 선택 | 같은 반려견의 회차. 아니면 422(`field`는 `session_id`) |
+| 묶음 작성 | `notes` | 필수 | 1\~8건. 같은 `category`가 두 번 있으면 422 |
+| 사진 | `file` | 필수 | JPEG 또는 PNG(내용으로 가림). 20 MB 이하, 4,000만 화소 이하. 순서대로 413 `IMAGE_TOO_LARGE`, 400 `IMAGE_FORMAT`, 413 `IMAGE_TOO_LARGE`(화소), 400 `IMAGE_UNREADABLE` |
+| 사진 | `kind` | 필수 | `PRE_OP`·`POST_OP`·`XRAY`·`PHOTO` |
+| 사진 | `taken_on` | 선택 | 기본 오늘(한국 날짜). 미래 날짜 불가 |
+| 사진 | `caption` | 선택 | 1\~100자. 앞뒤 공백은 지운다. 빈 값은 없는 것으로 본다 |
+
+- 바이탈 저장(PUT)은 다섯 값이 모두 선택이지만(v1.41) 하나는 보내야 한다. 하나도 보내지 않으면 422(`field`는 `body`)다. `null`은 그 값을 비운다는 뜻이다. 저장된 값과 합친 그날 줄에 값이 하나도 남지 않으면 422(`field` `body`, `type` `vital_empty`), 혈압이 한쪽만 남으면 422(`field`는 빠진 쪽 `sbp` 또는 `dbp`, `type` `blood_pressure_pair`), 이완기가 수축기보다 작지 않으면 422(`field` `dbp`, `type` `dbp_not_below_sbp`)다. **회차 시작의 `vital`은 다섯 값이 모두 필수다**(15.6).
+- 진단 이력 수정(PATCH, v1.41)은 `occurred_on`·`kind`·`title`·`site`·`clinician` 중 보낸 것만 바꾼다. 규칙은 위 표와 같다. `occurred_on`·`kind`·`title`은 `null`로 비울 수 없고 `site`·`clinician`은 `null`로 비운다. 하나도 보내지 않으면 422(`field`는 `body`)다. `stage`는 받지 않는다(보내도 무시한다).
+- 메모·진료 기록 수정(PATCH)은 `body`·`category`·`important` 중 보낸 것만 바꾼다. 셋 다 `null`은 안 된다. `category`는 같은 종류 안에서만 바꿀 수 있고(12.5) 아니면 422(`field`는 `category`)다. `session_id`는 바꿀 수 없다.
+- 진료 기록은 오늘 방문에 쓰는 것이라 날짜를 받지 않는다(지난 날짜로 쓰는 `visit_date`는 두지 않았다, 통합본 결정 6번).
+
 ## 14. 오류 코드
 
 코드는 네 종류다. API가 바로 돌려주는 응답 오류, 뒤에서 처리하다 실패해 DB에 남는 실패 사유, 분석이 내는 판정·제외 사유, 받아들이되 알려 주는 경고·안내다. 표의 문구는 기본 문구이고, 실제 문구는 `messages/ko.yaml`이 기준이다. 김지윤이 코드를 건드리지 않고 문구를 다듬는다.
@@ -1150,6 +1333,8 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | --- | --- | --- | --- |
 | `VIDEO_FORMAT` | 400 | MP4 또는 MOV 영상만 올릴 수 있습니다. | 13.1 |
 | `VIDEO_UNREADABLE` | 400 | 영상을 읽을 수 없습니다. 다시 촬영해 주세요. | 13.1 |
+| `IMAGE_FORMAT` | 400 | JPG 또는 PNG 사진만 올릴 수 있습니다. | 13.9 |
+| `IMAGE_UNREADABLE` | 400 | 사진을 읽을 수 없습니다. 다른 파일로 다시 올려 주세요. | 13.9 |
 | `VIDEO_CODEC` | 400 | H.264 또는 H.265로 찍은 영상만 올릴 수 있습니다. | 13.1 |
 | `VIDEO_PORTRAIT` | 400 | 가로로 촬영한 영상만 올릴 수 있습니다. | 13.1 |
 | `VIDEO_DURATION` | 400 | 영상 길이는 {min\_sec}\~{max\_sec}초여야 합니다. | 13.1 |
@@ -1179,6 +1364,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `SELF_DISABLE` | 409 | 자기 계정은 중지할 수 없습니다. | `ADMIN`이 자기 `is_active`를 false로 |
 | `LAST_ACCOUNT` | 409 | 기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요. | 기관에 다른 활성 계정이 없는데 탈퇴(15.4) |
 | `VIDEO_TOO_LARGE` | 413 | 영상 파일이 너무 큽니다. 최대 {max\_mb} MB까지 올릴 수 있습니다. | 13.1 |
+| `IMAGE_TOO_LARGE` | 413 | 사진이 너무 큽니다. {max\_mb} MB, {max\_mp}백만 화소까지 올릴 수 있습니다. | 13.9 |
 | `VALIDATION_ERROR` | 422 | 입력값을 확인해 주세요. | 필드 형식·범위 오류. `detail.fields`에 필드별 사유 |
 | `INTERNAL_ERROR` | 500 | 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. | 예상하지 못한 오류 |
 | `MAIL_UNAVAILABLE` | 503 | 지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요. | SMTP 미설정 또는 발송 실패(15.4) |
@@ -1260,15 +1446,15 @@ STOPPED: "중간에 멈췄습니다."
 
 ## 15. API 상세
 
-엔드포인트는 45개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42\~44는 반려견 휴지통(v1.30·v1.33), 45는 회원 탈퇴(v1.35)). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
+엔드포인트는 54개이고 주소는 모두 `/api/v1`로 시작한다(27\~41은 v1.12 회원가입·역할·계약, 42\~44는 반려견 휴지통(v1.30·v1.33), 45는 회원 탈퇴(v1.35)). 요청·응답의 필드 이름과 모양은 이 절이 기준이고, 굵게 쓴 객체 이름(**DogOut** 등)을 `schemas/`의 Pydantic 모델 이름으로 그대로 쓴다. 개발 환경(16절 `API_DOCS_ENABLED=true`)에서는 FastAPI가 `/docs`에 시험 화면(Swagger)을 만들어 장준환이 바로 불러 볼 수 있다. 배포에서는 끄고, 기업에 주는 공식 명세는 `docs/openapi.yaml` 하나다.
 
 ### 15.1 공통 약속
 
 - **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF), 디바이스 코드 확인·가입(27·28), 비밀번호 재설정 둘(40·41)을 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). `GUEST`(계약이 끝난 `CLIENT`)가 부를 수 있는 것은 1·2뿐이다. `/admin/*`(29\~37) 중 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만이다. `/health`와 `/metrics`도 다른 API처럼 `/api/v1` 아래에 둔다(`/api/v1/health`, `/api/v1/metrics`).
 - **공통 오류**: 아래 오류는 인증이 필요한 모든 API에서 날 수 있어 엔드포인트마다 다시 적지 않는다. 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED`(로그인 뒤에 계정이 막힘), 403 `CONTRACT_EXPIRED`(기관 계약이 끝난 `CLIENT`, `/auth/me` 제외), 404 `NOT_FOUND`(ID가 없거나 다른 기관의 것), 422 `VALIDATION_ERROR`, 500 `INTERNAL_ERROR`.
-- **ID로 찾기**: 주소에 든 ID뿐 아니라 쿼리·본문으로 받은 ID(`base`, `target`, `baseline_session_id`, `target_id`)도 자기 기관 안에서만 찾는다. 반려견에 딸린 회차는 `WHERE id = :id AND dog_id = :dog_id`로 찾는다. 없는 ID와 다른 기관·다른 반려견의 ID는 똑같이 404 `NOT_FOUND`로 답해, 다른 기관에 그 자료가 있는지 알 수 없게 한다. `baseline_session_id`만 예외로 400 `BASELINE_INVALID`다(13.2).
+- **ID로 찾기**: 주소에 든 ID뿐 아니라 쿼리·본문으로 받은 ID(`base`, `target`, `baseline_session_id`, `target_id`, 메모의 `session_id`)도 자기 기관 안에서만 찾는다. 반려견에 딸린 회차는 `WHERE id = :id AND dog_id = :dog_id`로 찾는다. 없는 ID와 다른 기관·다른 반려견의 ID는 똑같이 404 `NOT_FOUND`로 답해, 다른 기관에 그 자료가 있는지 알 수 없게 한다. `baseline_session_id`만 예외로 400 `BASELINE_INVALID`다(13.2).
 - **ID 형식**: 주소·쿼리·본문의 ID는 `uuid.UUID`로 받는다. 주소(경로)의 ID가 UUID 형식이 아니면 404 NOT\_FOUND(11.5), 쿼리·본문의 ID는 DB까지 가지 않고 422 `VALIDATION_ERROR`다. PostgreSQL은 UUID 컬럼을 UUID 형식이 아닌 문자열과 비교하면 오류를 내므로(그대로 두면 500), 문자열로 받은 ID를 그대로 쿼리에 넣지 않는다.
-- **페이지 목록**: 11.5의 `{items, total, page, size}` 모양은 반려견 목록과 측정 이력 두 곳에만 쓴다. 회차의 촬영, 보고서 판본처럼 수가 정해진 묶음은 객체 안의 배열로 준다.
+- **페이지 목록**: 11.5의 `{items, total, page, size}` 모양은 반려견 목록, 측정 이력, 메모·진료 기록 목록(v1.36) 세 곳에만 쓴다. 바이탈과 진단 이력 목록은 `{"items": […]}`만 준다. 회차의 촬영, 보고서 판본처럼 수가 정해진 묶음은 객체 안의 배열로 준다.
 - **사유 객체 Reason**: 사유가 들어가는 자리는 `{"code": "STOPPED", "message": "중간에 멈췄습니다."}` 모양이고(fail\_reason, validity\_reason, exclude\_reason, unmeasurable\_reason, reason, note 모두 같다), 사유가 없으면 `null`이다. `code`는 14절의 값이고 `message`는 `messages/ko.yaml`에서 찾는다. `ANALYZING` 같은 상태 값을 "분석 중"으로 보여 주는 일은 화면이 맡는다.
 - **숫자**: DB의 NUMERIC 값은 JSON 숫자로 보낸다. Pydantic v2는 `Decimal`을 문자열로 내보내므로 응답 모델 필드는 `float`로 선언한다. 저장된 값은 반올림하지 않는다. 서버가 계산하는 값(`diff`, `symmetry_index`)과 오차 범위 비교는 float가 아니라 `Decimal`로 한 뒤 내보낸다. float로 빼면 42.0 − 38.2가 3.7999…가 되어 예시·테스트와 어긋난다. `diff`는 소수 넷째 자리, `symmetry_index`는 소수 둘째 자리까지 반올림(`ROUND_HALF_UP`)한다. 표시 자릿수는 화면이 정한다.
 - **파일 주소**: `*_url` 필드는 화면이 `src`·`href`에 그대로 넣는 주소다. 저장소가 서버 디스크면 `/api/v1`부터 쓴 상대 주소에 5분짜리 서명이 붙고(11.6), AWS S3면 절대 주소(`http://` 또는 `https://`로 시작)다(11.11). 화면은 상대 주소면 API 주소를 앞에 붙이고, 절대 주소면 그대로 쓴다. 그 밖에는 주소를 고치지 않는다. 함께 오는 `url_expires_at`이 지나면 조회 API를 다시 불러 새 주소를 받는다. 파일이 아직 없으면 `null`이다.
@@ -1280,7 +1466,7 @@ STOPPED: "중간에 멈췄습니다."
 | --- | --- | --- | --- | --- | --- |
 | 1 | `POST /auth/login` | 로그인(아이디·비밀번호), 토큰 발급 | BE-01 | 200 | 401 `LOGIN_FAILED`, 403 `ACCOUNT_DISABLED` |
 | 2 | `GET /auth/me` | 내 정보(`effective_role` 포함. `GUEST`도 된다) | BE-01 | 200 | — |
-| 3 | `GET /dogs` | 반려견 목록·검색 (S1) | BE-03 | 200 | — |
+| 3 | `GET /dogs` | 반려견 목록·검색(이름·동물번호·보호자·병명) (S1) | BE-03 | 200 | — |
 | 4 | `POST /dogs` | 반려견 등록 (S2) | BE-02 | 201 | — |
 | 5 | `GET /dogs/{dog_id}` | 반려견 상세 (S2·S7) | BE-02 | 200 | — |
 | 6 | `PATCH /dogs/{dog_id}` | 반려견 수정, 기준 회차 지정(`version` 필수) | BE-02·25 | 200 | 400 `BASELINE_INVALID`, 409 `DOG_MODIFIED` |
@@ -1294,7 +1480,7 @@ STOPPED: "중간에 멈췄습니다."
 | 14 | `POST /shots/{shot_id}/retry` | 실패한 촬영 다시 분석 | BE-10 | 200 | 409 `SHOT_NOT_FAILED`, `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 15 | `DELETE /shots/{shot_id}` | 촬영 삭제 | BE-10 | 204 | 409 `SESSION_CLOSED`, `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 16 | `GET /shots/{shot_id}/video` | 결과 영상 재생 (서명 URL) | BE-12 | 200·206 | 403 `FILE_LINK_EXPIRED` |
-| 17 | `GET /shots/{shot_id}/angles` | 프레임별 관절 각도 (S5 그래프, 권장) | BE-14 | 200 | — |
+| 17 | `GET /shots/{shot_id}/angles` | 통과별 프레임 관절 각도 (S5 그래프, 권장) | BE-14 | 200 | — |
 | 18 | `GET /sessions/{session_id}/result` | 회차 수치·다리 비교 요약 (S5) | BE-14·21 | 200 | 409 `SESSION_NOT_DONE` |
 | 19 | `GET /sessions/{session_id}/reports` | 판본별 보고서 상태 (S6) | BE-15·16 | 200 | — |
 | 20 | `POST /reports/{report_id}/regenerate` | 보고서 다시 만들기 | BE-15 | 200 | 409 `REPORT_IN_PROGRESS` |
@@ -1323,6 +1509,22 @@ STOPPED: "중간에 멈췄습니다."
 | 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | BE-19 | 200 | — |
 | 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제 | BE-19 | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 45 | `DELETE /auth/me` | 회원 탈퇴(`GUEST`도 된다) | BE-26 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
+| 46 | `GET /dogs/{dog_id}/vitals` | 바이탈 목록(최신이 앞) | BE-28 | 200 | — |
+| 47 | `PUT /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 저장(있으면 보낸 값만 바꿈) | BE-28 | 200 | — |
+| 48 | `GET /dogs/{dog_id}/history` | 진단 이력(오래된 것부터) | BE-29 | 200 | — |
+| 49 | `POST /dogs/{dog_id}/history` | 진단·수술·재활 추가, 단계 변경 | BE-29 | 201 | — |
+| 50 | `GET /dogs/{dog_id}/notes` | 메모·진료 기록 목록(최신이 앞) | BE-30 | 200 | — |
+| 51 | `POST /dogs/{dog_id}/notes` | 메모·진료 기록 한 건 쓰기 | BE-30 | 201 | — |
+| 52 | `POST /dogs/{dog_id}/notes/batch` | 여러 건을 같은 시각으로 쓰기(SOAP) | BE-30 | 201 | — |
+| 53 | `PATCH /notes/{note_id}` | 메모·진료 기록 고치기(이전 내용은 이력으로) | BE-30 | 200 | — |
+| 54 | `GET /notes/{note_id}/revisions` | 수정 이력(최신이 앞) | BE-30 | 200 | — |
+| 55 | `GET /sessions` | 기관 회차 목록(최신순, 담당자·상태로 거름) | BE-33 | 200 | — |
+| 56 | `GET /dogs/{dog_id}/images` | 반려견 사진 목록(찍은 날 순) | BE-34 | 200 | — |
+| 57 | `POST /dogs/{dog_id}/images` | 사진 올리기(얼굴을 가려 저장) | BE-34 | 201 | 400 `IMAGE_FORMAT`, `IMAGE_UNREADABLE`, 413 `IMAGE_TOO_LARGE` |
+| 58 | `GET /images/{image_id}/file` | 사진 열기 (서명 URL) | BE-34 | 200 | 403 `FILE_LINK_EXPIRED` |
+| 59 | `DELETE /images/{image_id}` | 사진 지우기 | BE-34 | 204 | — |
+| 60 | `PATCH /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 고치기 | BE-29 | 200 | — |
+| 61 | `DELETE /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 지우기 | BE-29 | 204 | — |
 
 ### 15.3 공통 객체
 
@@ -1382,6 +1584,18 @@ STOPPED: "중간에 멈췄습니다."
   "focus_limb": "RH",
   "baseline_session_id": null,
   "memo": null,
+  "chart_no": "A-1024",
+  "owner_name": "김보호",
+  "owner_phone": "010-1234-5678",
+  "owner_phone_last4": "5678",
+  "stage": "REHAB",
+  "stage_changed_on": null,
+  "latest_vital": null,
+  "badges": [{"code": "SURGERY", "title": "TPLO", "site": "RH", "on": "2026-08-27"}],
+  "changes": [{"code": "GAIT_BETTER", "on": "2026-11-05", "delta": 4}],
+  "last_symmetry": 91,
+  "last_surgery": {"occurred_on": "2026-08-27", "title": "TPLO", "site": "RH"},
+  "last_diagnosis": {"occurred_on": "2026-08-14", "title": "앞십자인대 파열", "site": "RH"},
   "version": 0,
   "session_count": 3,
   "last_measured_on": "2026-10-20",
@@ -1395,6 +1609,63 @@ STOPPED: "중간에 멈췄습니다."
 
 - `session_count`는 상태에 상관없이 이 반려견의 회차 수, `last_measured_on`은 가장 최근 회차의 `measured_on`, `open_session_id`는 MEASURING 회차의 ID다. 없으면 0 또는 `null`이다.
 - `baseline_session_id`는 저장된 값 그대로다. `null`이면 12.5 규칙(가장 이른 DONE 회차)을 따른다.
+
+- `owner_phone`은 상세·등록·수정 응답에만 값이 있고 **목록에서는 `null`**이다(v1.36). 목록은 `owner_phone_last4`(연락처의 숫자 중 뒤 4자리, 숫자가 4개보다 적으면 있는 만큼)만 준다. 연락처가 없으면 둘 다 `null`이다.
+- `stage`는 `PRE`·`REHAB`·`DONE`, `stage_changed_on`은 단계가 바뀐 날이고 바뀐 적이 없으면 `null`이다(12.5).
+- `latest_vital`은 가장 최근 날짜의 바이탈 **VitalOut**이고 없으면 `null`이다. 목록에서도 준다(반려견마다 쿼리를 따로 날리지 않는다). 그날 재지 않은 값은 `null`이다(v1.41). 값별로 가장 최근 것을 모아 주지는 않는다.
+- `badges`·`changes`·`last_symmetry`(v1.38)는 홈 화면의 배지·변동·가장 최근 대칭 점수다. 규칙은 12.5 홈 배지·변동에 있다. 목록과 상세 모두에서 주고, 없으면 빈 배열·`null`이다. 휴지통 목록에서는 늘 비어 있다.
+- `last_surgery`·`last_diagnosis`(v1.41)는 가장 최근 수술과 가장 최근 진단이다. 각각 `{"occurred_on", "title", "site"}`이고 없으면 `null`이다. `badges`는 수술이 있으면 진단을 주지 않지만 이 둘은 함께 준다(12.5). 목록과 상세 모두에서 주고 휴지통 목록에서는 `null`이다.
+
+**DogBadgeOut** — 홈 배지 하나(v1.38)
+
+| 필드 | 뜻 |
+| --- | --- |
+| `code` | `SURGERY`, `DIAGNOSIS`, `IMPORTANT_NOTE` |
+| `title` | 수술·진단 이름(`dog_history.title`). `IMPORTANT_NOTE`는 `null` |
+| `site` | 부위 `LF`·`RF`·`LH`·`RH`·`SP`. 없으면 `null` |
+| `on` | 수술·진단한 날, 중요 메모를 쓴 날 |
+
+화면이 "TPLO · 오른뒤 · D+71" 같은 글을 이 값으로 만든다. 서버는 글을 만들지 않는다.
+
+**DogChangeOut** — 변동 하나(v1.38)
+
+| 필드 | 뜻 |
+| --- | --- |
+| `code` | `SURGERY_ADDED`, `GAIT_WORSE`, `GAIT_BETTER`, `RESHOOT_NEEDED`, `IMPORTANT_NOTE` |
+| `on` | 그 일이 있은 날(12.5) |
+| `delta` | `GAIT_WORSE`·`GAIT_BETTER`에서만 대칭 점수 차(이번 − 앞, 정수). 그 밖에는 `null` |
+
+**VitalOut** — 바이탈 하루치(v1.36). 재지 않은 값은 `null`이다(v1.41).
+
+```json
+{
+  "id": "…", "measured_on": "2026-11-06",
+  "weight_kg": 28.1, "temp_c": 38.6, "heart_rate": 92, "sbp": 132, "dbp": 84,
+  "staff": {"id": "…", "name": "김담당"}, "session_id": null,
+  "created_at": "2026-11-06T01:10:00Z", "updated_at": "2026-11-06T01:10:00Z"
+}
+```
+
+**DogHistoryOut** — 진단 이력 한 줄(v1.36)
+
+```json
+{
+  "id": "…", "occurred_on": "2026-08-27", "kind": "SURGERY", "title": "TPLO",
+  "site": "RH", "clinician": "박수의", "staff": {"id": "…", "name": "김담당"},
+  "created_at": "2026-08-27T05:00:00Z"
+}
+```
+
+**NoteOut** — 메모·진료 기록 한 건(v1.36). `staff`는 지금 내용을 쓴 담당자, `revision_count`는 고친 횟수다.
+
+```json
+{
+  "id": "…", "dog_id": "…", "session_id": null, "category": "CAUTION",
+  "body": "입질 있음. 입마개 필요", "important": true,
+  "staff": {"id": "…", "name": "김담당"}, "revision_count": 0,
+  "created_at": "2026-11-06T01:10:00Z", "updated_at": "2026-11-06T01:10:00Z"
+}
+```
 
 **SessionOut** — 회차
 
@@ -1599,11 +1870,12 @@ STOPPED: "중간에 멈췄습니다."
 
 ### 15.5 반려견
 
-**`GET /dogs?q=보리&page=1&size=20`** — 반려견 목록·검색 (BE-03)
+**`GET /dogs?q=보리&page=1&size=20`** — 반려견 목록·검색 (BE-03, 홈 배지·변동은 BE-32)
 
 - 응답 200: `{"items": [DogOut, …], "total": 45, "page": 1, "size": 20}`
-- `q`는 이름에 포함되면 찾는다. 대소문자를 무시하고(`ILIKE`), 검색어 안의 `%`·`_`는 이스케이프한다. SQLAlchemy로는 `Dog.name.icontains(q, autoescape=True)`다.
+- `q`는 이름·동물번호(`chart_no`)·보호자 이름(`owner_name`)·진단 이력의 이름(`dog_history.title`, 병명·수술명. v1.41) 중 하나에 포함되면 찾는다(v1.36). 진단 이력은 `EXISTS`로 보므로 이력이 여러 줄 맞아도 반려견은 한 번만 나온다. 대소문자를 무시하고(`ILIKE`), 검색어 안의 `%`·`_`는 이스케이프한다. SQLAlchemy로는 `Dog.name.icontains(q, autoescape=True)`와 같은 조건 셋을 OR로 잇는다. 연락처로는 찾지 않는다.
 - `trash=true`를 붙이면 휴지통 목록이다(12.5). 휴지통에 있는 반려견만, 최근에 넣은 것부터 준다. 항목의 `deleted_at`은 휴지통에 넣은 시각, `purge_at`은 영구 삭제 예정 시각(`deleted_at` + 30일)이다. 기본(`trash` 없음)은 휴지통에 없는 반려견만 주고 두 값은 `null`이다. `q`·`page`·`size`는 똑같이 쓴다.
+- `changed_within_days=7`을 붙이면 최근 7일 안에 변동(12.5 홈 배지·변동)이 있는 반려견만 준다(v1.38). `total`도 그 수다. 항목의 `changes`도 그 기간으로 계산한다. 보내지 않으면 거르지 않고 `changes`는 7일로 계산한다. `q`와 함께 쓸 수 있고 정렬·페이지는 그대로다. `trash=true`와 함께 보내면 무시한다.
 - 정렬: `last_measured_on` 내림차순(한 번도 안 잰 반려견은 뒤. PostgreSQL은 내림차순에서 NULL을 맨 앞에 두므로 NULLS LAST를 붙인다), 같으면 `created_at` 내림차순.
 
 **`POST /dogs`** — 반려견 등록 (BE-02)
@@ -1618,13 +1890,18 @@ STOPPED: "중간에 멈췄습니다."
   "sex": "FEMALE_SPAYED",
   "rehab_start_date": "2026-10-01",
   "focus_limb": "RH",
-  "memo": null
+  "memo": null,
+  "chart_no": "A-1024",
+  "owner_name": "김보호",
+  "owner_phone": "010-1234-5678",
+  "stage": "PRE"
 }
 ```
 
 - 응답 201 **DogOut**.
 - `size_class`를 보내지 않으면 `classify_size(weight_kg)`로 정한다(12.5). 보내면 그 값을 쓰고 `size_class_manual`을 TRUE로 한다.
 - `baseline_session_id`는 등록 때 받지 않는다. 회차가 아직 없기 때문이다.
+- `chart_no`·`owner_name`·`owner_phone`·`stage`는 선택이다(13.2). `stage`를 빼면 `REHAB`이고 `stage_changed_on`은 `null`이다.
 
 **`GET /dogs/{dog_id}`** — 반려견 상세. 응답 200 **DogOut**.
 
@@ -1640,6 +1917,7 @@ STOPPED: "중간에 멈췄습니다."
 - `weight_kg`를 바꾸면 `size_class_manual`이 FALSE일 때만 새 체중으로 체급을 다시 정한다. `breed`를 바꿔도 체급은 그대로다(12.5).
 - `size_class`에 값을 보내면 `size_class_manual`이 TRUE가 되고, `null`을 보내면 FALSE로 돌아가 자동 분류로 다시 정한다.
 - `baseline_session_id`가 이 반려견의 DONE 회차가 아니면 400 `BASELINE_INVALID`다. `null`을 보내면 지정을 풀고 12.5 규칙을 따른다.
+- `stage`를 지금과 다른 값으로 보내면 `stage_changed_on`이 오늘(한국 날짜)이 된다. 같은 값이면 그대로다(12.5).
 
 **`DELETE /dogs/{dog_id}`** — 반려견을 휴지통에 넣기 (BE-19)
 
@@ -1667,13 +1945,15 @@ STOPPED: "중간에 멈췄습니다."
 **`POST /dogs/{dog_id}/sessions`** — 회차 시작 (BE-04)
 
 ```json
-// 요청: 두 필드 모두 선택
-{"measured_on": "2026-10-20", "weight_kg": 28.1}
+// 요청: 모든 필드가 선택
+{"measured_on": "2026-10-20", "weight_kg": 28.1,
+ "vital": {"weight_kg": 28.1, "temp_c": 38.6, "heart_rate": 92, "sbp": 132, "dbp": 84}}
 ```
 
 - 응답 201 **SessionOut**(`status`는 MEASURING).
 - `measured_on`을 빼면 오늘(한국 날짜)이다. `weight_kg`를 빼면 `null`로 두고, 보고서는 반려견의 등록 체중을 쓴다.
 - `size_class`는 회차 시점 체급이다(12.5 6번): 담당자가 직접 지정한 반려견 체급이 있으면 그 값, 아니면 `weight_kg`(없으면 등록 체중)으로 계산해 저장한다. 이후 반려견 체급이 바뀌어도 회차의 값은 그대로다.
+- `vital`(v1.36)을 보내면 그날(`measured_on`)의 바이탈로 저장하고 `session_id`에 이 회차를 적는다. 그날 바이탈이 이미 있으면 바꾼다(47번과 같은 규칙). 다섯 값이 모두 있어야 한다(13.9). `weight_kg`를 빼고 `vital`만 보내면 회차의 체중은 `vital.weight_kg`다. 둘을 다 보냈는데 값이 다르면 422(`field`는 `vital.weight_kg`)다. 회차를 취소해도 바이탈은 남는다(12.5).
 - 이미 MEASURING 회차가 있으면 409 `SESSION_ALREADY_OPEN`이고, `detail.session_id`에 그 회차를 넣는다. 화면은 그 회차로 이동한다.
 
 **`GET /sessions/{session_id}`** — 회차 상태·진행·촬영 목록 (BE-07·09)
@@ -1755,7 +2035,7 @@ S3 화면이 측정하는 내내 2\~3초마다 부르는 API다. 한 번에 화�
 
 **`GET /shots/{shot_id}/angles`** — 프레임별 관절 각도 (BE-14, 권장)
 
-S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래프"). DB가 아니라 분석 결과 JSON 파일(`analysis_key`)에서 읽는다.
+S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래프"). DB가 아니라 워커가 만들어 둔 촬영 키의 `angles.json`에서 읽는다(12.4 관절 각도 파일, v1.39). 분석 API를 부르지 않는다.
 
 ```json
 // 응답 200
@@ -1777,9 +2057,36 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
 }
 ```
 
-- 유효 통과의 유효 구간만 담는다. 배열의 i번째 값은 `start_frame + i` 프레임의 각도(°)이고, 관절점을 못 찾은 프레임은 `null`이다. 다리는 `camera_side` 쪽(RIGHT면 RF·RH)이다.
-- 촬영이 DONE이 아니면 `passes`는 빈 배열이다.
-- 분석 결과에 프레임별 각도가 들어와야 한다. 조유진과 맞출 계약(6절)에 넣었다.
+- 유효 통과의 유효 구간만 담는다. 유효 구간은 분석 결과 JSON의 `measure_start`\~`measure_end`이고, 없으면 통과의 `start_frame`\~`end_frame`이다. 응답의 `start_frame`은 그 구간의 첫 프레임이다. 배열의 i번째 값은 `start_frame + i` 프레임의 각도(°)이고, 관절점을 못 찾은 프레임은 `null`이다. 다리는 `camera_side` 쪽(RIGHT면 RF·RH)이다. `pass_no`·`camera_side`·`gait_type`은 **PassOut**과 같은 값이다.
+- `fps`는 관절점 파일의 값이고, 각도 파일이 없으면 촬영의 `fps`다.
+- `passes`가 빈 배열인 경우: 촬영이 DONE이 아니다. 유효 통과가 없다. 각도 파일이 아직 없다(DONE 직후 결과 영상을 맡기기 전의 잠깐, 관절점 파일을 받지 못한 촬영, 이 기능 전에 분석한 촬영, 저장소 오류로 쓰지 못해 워커가 다시 만드는 중인 촬영. 마지막 경우는 저장소가 돌아오면 5분 안팎, 워커가 재시작됐으면 켤 때 채워진다. 12.4, v1.42). 파일에 적힌 `job_id`가 촬영의 것과 다르다(다시 분석한 뒤 새 파일이 쓰이기 전). 오류로 답하지 않는다.
+- 없거나 다른 기관·휴지통의 촬영은 404 `NOT_FOUND`다.
+- 웹의 무릎 곡선은 한 걸음(보행 주기)으로 자른 곡선이라 이 응답만으로는 그릴 수 없다. 걸음 경계는 분석 API가 내야 한다(통합본 9-1, 조유진 확인 대기).
+
+**`GET /sessions?staff_id=…&status=DONE&page=1&size=20`** — 기관 회차 목록 (BE-33, v1.39)
+
+- 기관의 모든 회차를 `measured_on` 내림차순, 같으면 `created_at` 내림차순으로 준다. 휴지통에 있는 반려견의 회차는 빠진다.
+- `staff_id`를 보내면 그 담당자가 측정한 회차만, `status`를 보내면 그 상태만 준다. 둘 다 선택이고 함께 쓸 수 있다. 다른 기관의 담당자 ID를 보내면 빈 목록이다.
+- 응답 200: `{"items": [SessionListItem, …], "total": 132, "page": 1, "size": 20}`(11.5)
+
+```json
+// SessionListItem
+{
+  "id": "…",
+  "measured_on": "2026-10-20",
+  "status": "DONE",
+  "fail_reason": null,
+  "dog": {"id": "…", "name": "보리"},
+  "staff": {"id": "…", "name": "김담당"},
+  "weight_kg": 28.1,
+  "model_version": "v1",
+  "symmetry_score": 87,
+  "completed_at": "2026-10-20T01:12:00Z",
+  "created_at": "2026-10-20T01:00:00Z"
+}
+```
+
+- `symmetry_score`는 12.3의 대칭 점수이고 DONE이 아니거나 계산할 쌍이 없으면 `null`이다. 반려견·담당자·점수를 회차마다 따로 읽지 않는다(15.1).
 
 ### 15.7 회차 결과·보고서
 
@@ -1796,6 +2103,7 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
     {"code": "STOPPED", "message": "중간에 멈췄습니다.", "count": 2}
   ],
   "notices": [],
+  "symmetry_score": 87,
   "gaits": [
     {
       "gait_type": "TROT",
@@ -1827,6 +2135,7 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
 - `limb_compare`(다리 비교 요약, BE-21): 다리별 값이 있는 수치(`walk_speed`·`gait_cycles` 제외)마다 앞다리 쌍(FORE: LF·RF)과 뒷다리 쌍(HIND: LH·RH)을 비교한다. `diff`(왼쪽 − 오른쪽)와 `symmetry_index`는 12.3의 식으로 계산한다(반올림은 15.1).
 - 비교할 수 없는 경우: 한쪽 행이 없으면 `reason`은 `NO_DATA`, 한쪽이 측정 불가면 그쪽의 `unmeasurable_reason`(둘 다면 왼쪽)이다. 이때 `comparable`은 false이고, 없는 쪽 값과 `diff`·`symmetry_index`는 `null`이다. 왼쪽 + 오른쪽이 0이면 `comparable`은 true이고 `symmetry_index`만 `null`이다.
 - 정렬: `symmetry_index`가 있는 항목을 큰 순서로 먼저, 그다음 `symmetry_index`가 `null`인 비교 가능 항목, 마지막에 비교할 수 없는 항목을 둔다. 같은 값끼리는 12.3 표 순서, 그다음 FORE가 HIND보다 앞이다. 맨 위 항목이 "차이가 가장 큰 다리"다. 백엔드는 아픔·좋아짐 같은 판단 단어를 넣지 않는다(5절).
+- `symmetry_score`(v1.38, BE-31): 12.3의 대칭 점수다. 0\~100의 정수이고 100에 가까울수록 좌우가 비슷하다. 계산할 쌍이 없으면 `null`이다. `limb_compare`의 `symmetry_index`(0에 가까울수록 비슷함)와 방향이 반대다.
 - `notices`: 15.6과 같은 기준(DONE 촬영의 유효 통과를 보행 유형 구분 없이 `camera_side`별로 셈)으로 `ONE_SIDE_ONLY`를 넣는다(BE-09). `RECOMMENDED_MET`은 넣지 않는다.
 
 **`GET /sessions/{session_id}/reports`** — 판본별 보고서 상태 (BE-15·16)
@@ -1872,11 +2181,13 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
   "is_baseline": true,
   "valid_passes": {"LEFT": 8, "RIGHT": 8},
   "model_version": "v1",
+  "symmetry_score": 87,
   "reports": {"OWNER": "DONE", "VET": "FAILED"}
 }
 ```
 
 - `is_baseline`은 12.5 규칙으로 정한 기준 회차인지다. `reports`는 판본별 `status`이고 행이 없으면 `null`이다.
+- `symmetry_score`(v1.38)는 12.3의 대칭 점수다. DONE이 아니거나 계산할 쌍이 없으면 `null`이다.
 
 **`GET /dogs/{dog_id}/compare?target=…&base=BASELINE&gait_type=TROT`** — 회차 비교 (BE-18)
 
@@ -1998,7 +2309,7 @@ stance_ratio: 5.0 # pct
 - 대상에 SUBMITTED·ANALYZING 촬영이 있으면 409 `SHOT_IN_PROGRESS`다. `role`이 ADMIN이 아니면 403 `FORBIDDEN`이다. 실제로 지울 때는 대상 회차 행을 모두 `SELECT … FOR UPDATE`로 잠근 뒤 이 검사를 하고 파일·행을 지운다(12.4 잠금. 워커가 그사이 UPLOADED 촬영을 가져가 분석 API로 보내는 틈을 막는다). 워커가 먼저 잠갔으면 파기는 기다렸다가 SUBMITTED를 보고 409를 내고, 파기가 먼저면 워커는 지워진 행을 보고 건너뛴다. `dry_run`은 세기만 하므로 잠그지 않는다.
 - `INSTITUTION`에 `target_id`를 보내면 422 `VALIDATION_ERROR`(`detail.fields`의 `field`는 `target_id`)다. `DOG`의 `target_id`가 그 기관의 반려견이 아니면 404 `NOT_FOUND`(15.1). 409 `SHOT_IN_PROGRESS`는 `dry_run`에도 같다(지금은 지울 수 없다는 뜻).
 - `institution_id`는 관리자(`ADMIN`, 크림오프 계정)가 병원의 자료를 지울 때 쓴다. 없는 기관이면 404 `NOT_FOUND`, UUID가 아니면 422 `VALIDATION_ERROR`(`field`는 `institution_id`)다. `DOG`는 그 기관에서만 찾으므로 다른 기관의 반려견 ID를 넣으면 404다. 응답은 개수뿐이고 반려견 이름 같은 고객 자료를 돌려주지 않는다. 고객 자료 열람(10절 Q31)은 여전히 열지 않아서, 관리자는 반려견 목록을 볼 수 없고 `DOG`의 반려견 ID는 병원에서 받아야 한다. `purge_log.executed_by`에는 부른 관리자가 남는다.
-- `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
+- `rows`는 지운(또는 지울) 반려견·회차·촬영·통과·수치·보고서 행과 차트 자료(바이탈·진단 이력·메모·메모 수정 이력 v1.36, 사진 v1.40) 행 수의 합이다. `purge_log.target_id`는 `DOG`면 반려견 ID, `INSTITUTION`이면 기관 ID, `ALL`이면 NULL이고, `executed_by`는 API면 부른 담당자 ID, 스크립트면 NULL이다.
 - 휴지통에 있는 반려견도 파기 대상이다(12.5). `DOG`는 휴지통에 있든 없든 그 기관의 반려견이면 지우고, `INSTITUTION`·`ALL`은 휴지통의 반려견까지 센다.
 - 이 API의 `INSTITUTION`은 계정을 지우지 않는다. 가입 계정까지 지우는 것은 계약 종료 90일 뒤의 자동 파기뿐이다(12.5).
 - `analysis_jobs`는 분석 API에서 지운(또는 지울) 작업 수이고 `purge_log.analysis_jobs_deleted`에도 남긴다. 지울 촬영 중 `job_id`가 있는 것만 세고, 이미 없던 작업(404·410)도 센다. `dry_run`은 세기만 하고 분석 API를 부르지 않는다.
@@ -2032,6 +2343,143 @@ stance_ratio: 5.0 # pct
 5절의 선택 기능(재분석, 영상 나란히 보기, 경과 요약)과 유저플로우의 후순위 화면(S9 기관 선택, S10 운영 설정)은 API가 없다. 모델 전환과 판정 기준은 설정 파일로 대신한다(PR-F07-04, PR-F03-07). 만들기로 하면 이 절에 먼저 추가하고 문서 버전을 올린 뒤 구현한다.
 
 회원가입·역할·계약(v1.12)에서 일부러 뺀 것: 가입 이메일 인증(디바이스 코드가 이미 고객 증명이다), 계약 만료 알림 메일, 메일 재발송 횟수 제한(토큰 30분 만료로 대신), 관리자 계정을 만드는 API(`seed.py`), 관리자가 비밀번호를 재설정하는 경로, 역할 변경 API, 병원 측 관리자 역할, 크림오프 쪽의 고객 자료 열람(10절 Q31), 휴대폰 인증, 코드 재발급(회수 + 새 발급으로 대신), 자동 역할 변경·스케줄러, 등급(`plan`), refresh token, 토큰 무효화(로그아웃은 화면이 토큰을 버리는 것), 요청 횟수 제한(코드 길이 100비트로 대신).
+
+### 15.11 차트 자료
+
+바이탈·진단 이력·메모·진료 기록이다(v1.36, BE-28\~30). 모두 자기 기관의 반려견에만 되고, 다른 기관이거나 없거나 휴지통에 있는 반려견은 404 `NOT_FOUND`다(12.5). 역할 제한은 다른 `/dogs` API와 같다. 입력 규칙은 13.9다.
+
+**`GET /dogs/{dog_id}/vitals`** — 바이탈 목록 (BE-28)
+
+- 응답 200 `{"items": [VitalOut, …]}`. `measured_on` 내림차순(최신이 앞)이고 전부 준다(하루 한 줄이라 페이지를 두지 않는다).
+
+**`PUT /dogs/{dog_id}/vitals/{measured_on}`** — 그날 바이탈 저장 (BE-28)
+
+```json
+// 요청: 잰 값만 보낸다(v1.41). 하나는 있어야 한다
+{"weight_kg": 28.1, "temp_c": 38.6}
+```
+
+- 응답 200 **VitalOut**. 그날 줄이 없으면 만들고, 있으면 **보낸 값만** 바꾼다. 보내지 않은 값은 그대로이고 `null`을 보내면 그 값을 비운다. 어느 쪽이든 200이다.
+- 그날 줄에 값이 하나는 남아야 하고 혈압은 둘이 함께 있어야 한다(13.9). 어긋나면 422이고 아무것도 바뀌지 않는다.
+- 바꾸면 `staff`는 바꾼 담당자가 되고 `session_id`는 그대로다. `session_id`는 이 API로 넣을 수 없고 회차 시작의 `vital`만 넣는다(15.6).
+- 체중을 보냈고 그날보다 뒤에 체중이 적힌 줄이 없으면 반려견의 등록 체중(`dog.weight_kg`)도 그 값이 된다(v1.41, 12.5). 그때 반려견의 `version`이 1 늘어나므로 화면은 반려견을 다시 읽는다. 회차의 체중은 바꾸지 않는다.
+
+**`GET /dogs/{dog_id}/history`** — 진단 이력 (BE-29)
+
+- 응답 200 `{"items": [DogHistoryOut, …]}`. `occurred_on` 오름차순(오래된 것부터), 같으면 적은 순서다. 전부 준다.
+- 주소의 `history`는 진단 이력이다. 측정 이력은 `GET /dogs/{dog_id}/sessions`다(15.8).
+
+**`POST /dogs/{dog_id}/history`** — 진단·수술·재활 추가 (BE-29)
+
+```json
+// 요청
+{"occurred_on": "2026-08-27", "kind": "SURGERY", "title": "TPLO", "site": "RH", "clinician": "박수의", "stage": "REHAB"}
+```
+
+- 응답 201 **DogHistoryOut**.
+- `stage`를 보내면 반려견의 단계를 함께 바꾼다. 지금과 다른 값이면 `dog.stage`와 `stage_changed_on`(오늘)이 바뀌고 반려견의 `version`이 1 는다. 화면은 그 뒤 반려견을 다시 읽는다. 같은 값이면 반려견은 그대로다.
+
+**`PATCH /dogs/{dog_id}/history/{history_id}`** — 진단 이력 한 줄 고치기 (BE-29, v1.41)
+
+```json
+// 요청: 바꿀 것만
+{"title": "TPLO (경골 고원 수평화 절골술)", "site": null}
+```
+
+- 응답 200 **DogHistoryOut**. `occurred_on`·`kind`·`title`·`site`·`clinician` 중 보낸 것만 바꾼다(13.9). `staff`(적은 담당자)와 `created_at`은 그대로다.
+- 반려견의 단계는 바꾸지 않는다. `stage`는 받지 않는다.
+- 그 반려견의 줄이 아니면 404 `NOT_FOUND`다(다른 반려견·다른 기관·휴지통·없는 ID 모두 같다).
+
+**`DELETE /dogs/{dog_id}/history/{history_id}`** — 진단 이력 한 줄 지우기 (BE-29, v1.41)
+
+- 응답 204, 본문 없음. 되돌릴 수 없다.
+- 반려견의 단계는 되돌리지 않는다(12.5). 404 조건은 수정과 같다.
+
+**`GET /dogs/{dog_id}/notes?kind=memo&session_id=…&page=1&size=50`** — 메모·진료 기록 목록 (BE-30)
+
+- 응답 200 `{"items": [NoteOut, …], "total": 12, "page": 1, "size": 50}`. 쓴 시각(`created_at`) 내림차순이다. `size`는 1\~200, 기본 50이다.
+- `kind`는 `memo`(분류가 `CAUTION`·`GUARDIAN`·`BOOKING`·`OTHER`) 또는 `chart`(`S`·`O`·`A`·`P`)다. 빼면 둘 다 준다. 그 밖의 값은 422다.
+- `session_id`를 주면 그 회차에 단 것만 준다. 이 반려견의 회차가 아니면 빈 목록이다.
+- 같은 방문의 S·O·A·P 묶기는 화면이 한다(쓴 시각과 `staff`가 같은 것).
+
+**`POST /dogs/{dog_id}/notes`** — 한 건 쓰기 (BE-30)
+
+```json
+// 요청: category와 body는 필수
+{"category": "CAUTION", "body": "입질 있음. 입마개 필요", "important": true, "session_id": null}
+```
+
+- 응답 201 **NoteOut**. 쓴 사람은 로그인한 담당자다(요청으로 받지 않는다).
+
+**`POST /dogs/{dog_id}/notes/batch`** — 여러 건을 같은 시각으로 쓰기 (BE-30)
+
+```json
+// 요청: SOAP에서 채운 칸만 보낸다
+{"session_id": null,
+ "notes": [{"category": "S", "body": "산책 뒤 오른뒤 절뚝임"}, {"category": "A", "body": "CCL 부분 파열 의심"}]}
+```
+
+- 응답 201 `{"items": [NoteOut, …]}`(보낸 순서). 모두 `created_at`이 같아 화면이 한 기록으로 묶기 쉽다.
+- 하나라도 규칙에 어긋나면 아무것도 저장하지 않는다. `session_id`는 묶음 전체에 하나다.
+
+**`PATCH /notes/{note_id}`** — 고치기 (BE-30)
+
+```json
+// 요청: 바꿀 것만 보낸다
+{"body": "입질 있음. 입마개 필요. 뒷다리 만질 때 특히"}
+```
+
+- 응답 200 **NoteOut**(`revision_count`가 1 늘고 `staff`는 고친 담당자).
+- 고치기 전 내용을 이력에 한 줄 남긴다(12.5). 바뀐 값이 없으면 이력도 남기지 않고 지금 내용을 그대로 돌려준다.
+- 지우는 API는 없다.
+
+**`GET /notes/{note_id}/revisions`** — 수정 이력 (BE-30)
+
+```json
+// 응답 200
+{"items": [{"id": "…", "body": "입질 있음. 입마개 필요", "category": "CAUTION", "important": true,
+            "staff": {"id": "…", "name": "김담당"}, "revised_at": "2026-11-06T02:00:00Z"}]}
+```
+
+- 고치기 전 내용들이고 최근에 바뀐 것부터다. `staff`는 그 내용을 쓴 담당자, `revised_at`은 그 내용이 바뀐 시각이다. 고친 적이 없으면 빈 배열이다.
+
+**`GET /dogs/{dog_id}/images`** — 반려견 사진 목록 (BE-34, v1.40)
+
+- 응답 200: `{"items": [ImageOut, …]}`. `taken_on` 오름차순, 같으면 올린 순서다. 페이지는 없다.
+
+```json
+// ImageOut
+{
+  "id": "…",
+  "taken_on": "2026-08-27",
+  "kind": "POST_OP",
+  "caption": "수술 직후",
+  "width": 1600,
+  "height": 1200,
+  "masked_faces": 0,
+  "staff": {"id": "…", "name": "김담당"},
+  "created_at": "2026-08-27T05:10:00Z",
+  "file_url": "/api/v1/images/…/file?exp=1790000000&sig=…",
+  "url_expires_at": "2026-08-27T05:25:00Z"
+}
+```
+
+- `file_url`은 서명 URL이고 `url_expires_at`까지 쓸 수 있다(11.6, 결과 영상과 같은 방식). 저장소가 S3면 S3의 서명 주소다(11.11).
+- `masked_faces`는 올릴 때 가린 얼굴 수다. 0보다 크면 사진의 일부가 모자이크되어 있다.
+
+**`POST /dogs/{dog_id}/images`** — 사진 올리기 (BE-34, v1.40)
+
+- `multipart/form-data`: `file`, `kind`, `taken_on`(선택), `caption`(선택). 규칙은 13.9다.
+- 응답 201 **ImageOut**. 얼굴을 가리고 다시 저장한 사진의 크기·가린 수가 온다(12.5 사진).
+- 검사에 걸리면 아무것도 저장하지 않는다. 저장한 뒤 commit이 실패하면 파일을 지운다(12.4 API가 만든 파일).
+
+**`GET /images/{image_id}/file?exp=…&sig=…`** — 사진 열기 (BE-34, v1.40)
+
+- 로그인 토큰 없이 서명으로 연다. 서명이 없거나 틀리거나 `exp`가 지났으면 403 `FILE_LINK_EXPIRED`, 사진이 없으면 404 `NOT_FOUND`다. `Content-Type`은 `image/jpeg` 또는 `image/png`이고, `Cache-Control`은 `private, max-age=`(서명 URL의 유효 시간)다. 저장소가 S3면 이 API는 쓰이지 않고 404다.
+
+**`DELETE /images/{image_id}`** — 사진 지우기 (BE-34, v1.40)
+
+- 파일을 지우고 행을 지운다. 응답 204. 없거나 다른 기관·휴지통의 반려견의 사진이면 404 `NOT_FOUND`다. 얼굴이 가려지지 않은 사진을 담당자가 바로 지울 수 있게 둔 것이다(12.5 사진).
 
 ## 16. 환경 변수
 
@@ -2159,8 +2607,24 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-02: 체급을 직접 고치면 이후 체중을 바꿔도 체급이 그대로고, `size_class`에 `null`을 보내면 저장된 체중으로 자동 분류로 돌아간다.
 - [ ] BE-02: 체급을 직접 고친 적이 없으면 체중을 바꿀 때 체급이 새 체중으로 다시 정해지고, 견종을 바꿔도 체급은 바뀌지 않는다.
 - [ ] BE-02: 다른 반려견의 회차나 DONE이 아닌 회차를 기준 회차로 지정하면 400 `BASELINE_INVALID`다.
+- [ ] BE-02: 동물번호·보호자 이름·연락처·단계를 등록·수정할 수 있고, 목록의 `owner_phone`은 `null`이며 `owner_phone_last4`만 온다. 단계를 바꾸면 `stage_changed_on`이 오늘이 되고 같은 값을 보내면 그대로다. 보호자 정보는 보고서 입력과 로그에 없다.
 - [ ] BE-03: `q`로 이름 일부를 검색하면 그 글자가 들어간 반려견만 나오고, `%`를 넣어도 전체가 나오지 않는다.
 - [ ] BE-03: 목록이 최근 측정일 내림차순이고 측정이 없는 반려견은 뒤에 있으며, `total`·`page`·`size`가 맞다.
+
+- [ ] BE-03: `q`로 동물번호나 보호자 이름 일부를 넣어도 찾고, 연락처로는 찾지 않는다.
+- [ ] BE-28: 같은 날 바이탈을 두 번 저장하면 한 줄만 남고 값이 바뀐다. 범위를 벗어난 값, 미래 날짜, `dbp` ≥ `sbp`는 422다. 회차 시작에 `vital`을 보내면 그날 바이탈이 그 회차와 묶여 저장되고, 회차를 취소해도 바이탈은 남는다. `DogOut.latest_vital`이 가장 최근 날짜의 값이다.
+- [ ] BE-29: 진단 이력이 오래된 것부터 나오고, `stage`를 함께 보내면 반려견의 단계와 `stage_changed_on`이 바뀐다.
+- [ ] BE-28(v1.41): 값 하나만 보내도 저장되고, 같은 날 다른 값을 보내면 앞의 값이 남는다. `null`로 값을 비울 수 있지만 다 비우거나 혈압을 한쪽만 남기면 422이고 줄은 그대로다. 가장 최근 날짜의 체중을 적으면 반려견의 `weight_kg`·`size_class`가 바뀌고 `version`이 1 늘며, 지난 날짜의 체중으로는 바뀌지 않는다.
+- [ ] BE-29(v1.41): 이력 한 줄을 고치면 보낸 값만 바뀌고 적은 담당자는 그대로다. 지우면 목록에서 사라지고 반려견의 단계는 그대로다. 다른 반려견의 주소로는 404다.
+- [ ] BE-03(v1.41): `q`로 수술명 일부를 넣으면 그 이력이 있는 반려견이 한 번만 나오고, 다른 기관의 이력으로는 나오지 않는다. `DogOut.last_surgery`·`last_diagnosis`가 함께 온다.
+- [ ] BE-30: 메모·진료 기록을 쓰고 `kind`·`session_id`로 거를 수 있다. 고치면 `revision_count`가 늘고 이력에 고치기 전 내용이 남으며, 바뀐 값이 없으면 늘지 않는다. 메모를 진료 기록 분류로 바꾸면 422다. 묶음으로 쓴 것은 `created_at`이 같다.
+- [ ] BE-28\~30: 다른 기관의 반려견·메모는 404다. 반려견을 파기하면 차트 자료 행도 함께 지워진다(12.5).
+- [ ] BE-31: 무릎 가동 범위가 왼쪽 31.0·오른쪽 38.2뿐이면 대칭 점수는 79다(100 − 20.81). 계산할 쌍이 없으면 `null`이고, 회차 결과·측정 이력·반려견 목록의 값이 같다.
+- [ ] BE-32: 변동 코드 다섯이 12.5 규칙대로 나오고, `changed_within_days`를 붙이면 변동이 있는 반려견만 나온다. 반려견이 늘어도 목록의 쿼리 수가 늘지 않는다.
+- [ ] BE-14: 관절 각도 API가 유효 통과의 유효 구간만 주고, 관절점을 못 찾은 프레임은 `null`이다. DONE이 아니거나 각도 파일이 없으면 빈 배열이고, 다른 기관의 촬영은 404다. 다시 분석하면 앞 분석의 각도가 나오지 않는다.
+- [ ] BE-14(v1.42): 각도 파일을 쓰다 저장소 오류가 나도 결과 영상은 만들어지고, 간격이 지나면 워커가 관절점 파일을 다시 받아 각도 파일을 만든다. 워커를 새로 켜면 최근 촬영 중 각도 파일이 없거나 앞 분석의 것인 촬영을 찾아 만든다. 분석 결과가 깨졌거나 분석 API에 작업이 없는 촬영은 다시 시도하지 않는다.
+- [ ] BE-33: 기관 회차 목록이 최신순이고 `staff_id`·`status`로 걸러지며, 다른 기관과 휴지통의 회차는 나오지 않는다. 회차가 늘어도 쿼리 수가 늘지 않는다.
+- [ ] BE-34: 사진을 올리면 얼굴이 가려진 사진만 저장되고 원본 바이트와 EXIF는 남지 않는다. `XRAY`는 가리지 않는다. 형식·크기·화소 오류가 13.9 순서로 나고, 서명이 지난 주소는 403이며, 반려견을 파기하면 파일과 행이 함께 지워진다.
 
 ### 17.3 회차 측정
 

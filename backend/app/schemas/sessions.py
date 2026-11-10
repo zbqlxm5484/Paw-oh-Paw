@@ -8,15 +8,20 @@ from datetime import date
 from pydantic import BaseModel, field_validator
 
 from app.core.dates import today_local
-from app.schemas.common import OutModel, ReasonOut, UtcDateTime, Weight
+from app.schemas.chart import VitalIn
+from app.schemas.common import OutModel, ReasonOut, StaffBriefOut, UtcDateTime, Weight
 from app.schemas.shots import ShotOut
 
 
 class SessionCreate(BaseModel):
-    """POST /dogs/{dog_id}/sessions 요청. 둘 다 선택이다. measured_on 기본값은 오늘(한국 날짜), 미래 날짜 불가(13.3)."""
+    """POST /dogs/{dog_id}/sessions 요청. 모두 선택이다. measured_on 기본값은 오늘(한국 날짜), 미래 날짜 불가(13.3).
+
+    vital을 보내면 그날 바이탈로 함께 저장한다(15.6, v1.36).
+    """
 
     measured_on: date | None = None
     weight_kg: Weight | None = None
+    vital: VitalIn | None = None
 
     @field_validator("measured_on")
     @classmethod
@@ -24,11 +29,6 @@ class SessionCreate(BaseModel):
         if value is not None and value > today_local():
             raise ValueError("미래 날짜는 쓸 수 없습니다")
         return value
-
-
-class StaffBriefOut(OutModel):
-    id: uuid.UUID
-    name: str
 
 
 class DogBriefOut(OutModel):
@@ -68,6 +68,38 @@ class SessionOut(BaseModel):
     completed_at: UtcDateTime | None
     aggregated_at: UtcDateTime | None
     created_at: UtcDateTime
+
+
+class DogNameOut(OutModel):
+    """반려견의 ID와 이름만(기관 회차 목록)."""
+
+    id: uuid.UUID
+    name: str
+
+
+class SessionListItem(BaseModel):
+    """기관 회차 목록의 한 줄(15.6 GET /sessions). symmetry_score는 12.3의 대칭 점수다."""
+
+    id: uuid.UUID
+    measured_on: date
+    status: str
+    fail_reason: ReasonOut | None
+    dog: DogNameOut
+    staff: StaffBriefOut
+    weight_kg: float | None
+    model_version: str | None
+    symmetry_score: int | None
+    completed_at: UtcDateTime | None
+    created_at: UtcDateTime
+
+
+class SessionListOut(BaseModel):
+    """페이지 목록(11.5): items, total, page, size."""
+
+    items: list[SessionListItem]
+    total: int
+    page: int
+    size: int
 
 
 class SessionDetailOut(SessionOut):
@@ -130,10 +162,14 @@ class GaitResultOut(BaseModel):
 
 
 class SessionResultOut(SessionOut):
-    """GET /sessions/{id}/result(15.7): SessionOut + 통과·촬영 수, 제외 사유, 안내, 보행 유형별 수치."""
+    """GET /sessions/{id}/result(15.7): SessionOut + 통과·촬영 수, 제외 사유, 안내, 보행 유형별 수치.
+
+    symmetry_score는 12.3의 대칭 점수(0~100, 100에 가까울수록 좌우가 비슷함)이고 계산할 쌍이 없으면 null이다.
+    """
 
     pass_counts: PassCountsOut
     shot_counts: ShotCountsOut
     exclude_summary: list[ExcludeSummaryOut]
     notices: list[ReasonOut]
+    symmetry_score: int | None = None
     gaits: list[GaitResultOut]

@@ -22,9 +22,21 @@ def list_dogs(
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
     trash: bool = False,
+    changed_within_days: Annotated[int | None, Query(ge=1, le=30)] = None,
 ) -> DogListOut:
-    """trash=true면 휴지통 목록이다(최근에 넣은 것부터). 기본은 휴지통에 없는 반려견이다."""
-    items, total = dog_service.list_dogs(db, staff.institution_id, q=q, page=page, size=size, trash=trash)
+    """trash=true면 휴지통 목록이다(최근에 넣은 것부터). 기본은 휴지통에 없는 반려견이다.
+
+    changed_within_days를 주면 그 기간에 변동이 있는 반려견만 준다(15.5).
+    """
+    items, total = dog_service.list_dogs(
+        db,
+        staff.institution_id,
+        q=q,
+        page=page,
+        size=size,
+        trash=trash,
+        changed_within_days=changed_within_days,
+    )
     return DogListOut(items=items, total=total, page=page, size=size)
 
 
