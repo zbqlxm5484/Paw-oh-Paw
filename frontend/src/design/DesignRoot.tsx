@@ -137,7 +137,7 @@ export function DesignRoot() {
   const cmpDog = route.screen === 'compare' ? data.dogs.find((d) => d.id === route.params.dogId) : undefined
   const cmpTarget = cmpDog ? data.results.find((r) => r.dog === cmpDog.id && r.st !== 'fail')?.id : undefined
   const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null, cmpTarget)
-  const reportsQ = useReportData(route.screen === 'report' ? route.params.sessionId : undefined)
+  const reportsQ = useReportData(route.screen === 'report' || route.screen === 'detail' ? route.params.sessionId : undefined) // 회차 결과에서도 PDF 를 바로 받는다(11-06)
   // 보고서 수의사용 탭: 이 회차를 직전 회차와 비교(서버 판정)하고 무릎 가동 범위 추이를 읽는다(웹 수의사용 보고서와 같은 구성)
   // 회차 결과 화면도 보고서와 같은 본문을 쓴다
   const repR = route.screen === 'report' || route.screen === 'detail' ? data.results.find((r) => r.id === route.params.sessionId) : undefined
