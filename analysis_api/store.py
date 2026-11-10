@@ -49,14 +49,23 @@ def save_job(root: Path, job: dict) -> None:
     _write_json(folder / JOB_FILE, state)
 
 
-def load_job(root: Path, job_id: str) -> Optional[dict]:
-    """디스크의 작업 하나. 없으면 None. 작업 ID를 경로로 쓰므로 폴더 이름으로 쓸 수 없는 값은 바로 None"""
+def load_state(root: Path, job_id: str) -> Optional[dict]:
+    """작업 상태(job.json)만. 없으면 None. 여러 작업을 훑을 때 쓴다: 결과·관절점 파일(작업마다 수백 KB)은 읽지 않는다.
+    작업 ID를 경로로 쓰므로 폴더 이름으로 쓸 수 없는 값은 바로 None"""
     if not job_id or Path(job_id).name != job_id or job_id.startswith("."):
         return None
-    folder = Path(root) / job_id
-    job = _read_json(folder / JOB_FILE)
+    job = _read_json(Path(root) / job_id / JOB_FILE)
     if not isinstance(job, dict) or job.get("id") != job_id:
         return None
+    return job
+
+
+def load_job(root: Path, job_id: str) -> Optional[dict]:
+    """디스크의 작업 하나(끝났으면 결과·관절점까지). 없으면 None"""
+    job = load_state(root, job_id)
+    if job is None:
+        return None
+    folder = Path(root) / job_id
     job["result"] = _read_json(folder / RESULT_FILE) if job.get("status") == "done" else None
     job["keypoints"] = _read_json(folder / KEYPOINTS_FILE) if job.get("status") == "done" else None
     return job
@@ -66,7 +75,7 @@ def unfinished_jobs(root: Path) -> list:
     """queued·running으로 남아 있는 작업. 분석 중에 서버가 꺼졌던 것들이다"""
     out = []
     for path in sorted(Path(root).glob(f"*/{JOB_FILE}")):
-        job = load_job(root, path.parent.name)
+        job = load_state(root, path.parent.name)
         if job and job.get("status") in UNFINISHED:
             out.append(job)
     return out
@@ -181,10 +190,11 @@ def purge_all(root: Path) -> dict:
 
 
 def jobs_of_shot(root: Path, shot_id: str) -> list:
-    """그 촬영(shot_id)으로 만든 작업들. 다시 분석하면 같은 촬영에 작업이 여러 개 생긴다"""
+    """그 촬영(shot_id)으로 만든 작업들의 상태(job.json). 다시 분석하면 같은 촬영에 작업이 여러 개 생긴다.
+    결과·관절점 파일은 읽지 않는다: 작업 300개에서 1.8초 걸리던 훑기가 0.07초가 된다(조영운 측정, 팀 서비스 호출 한도 30초)"""
     out = []
     for folder in _job_dirs(root):
-        job = load_job(root, folder.name)
+        job = load_state(root, folder.name)
         if job and job.get("shot_id") == shot_id:
             out.append(job)
     return out
