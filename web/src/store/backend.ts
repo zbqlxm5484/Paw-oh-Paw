@@ -161,6 +161,12 @@ function toStaff(s: StaffOut): Staff {
 }
 
 /** 로그인한 담당자와 그 기관·반려견을 백엔드에서 읽어 db 에 넣는다. 돌려주는 값 = 담당자 id */
+/** 서버 PDF 인쇄 화면(285): 그 회차의 반려견 하나만 읽는다(기관 크기와 상관없이 몇 초 안에 그리게). null = 전부 */
+let onlyDog: string | null = null
+export function limitToDog(dogId: string | null): void {
+  onlyDog = dogId
+}
+
 export async function syncFromBackend(me?: StaffOut): Promise<string> {
   const s = me ?? (await api.me())
   const inst = s.institution
@@ -182,7 +188,7 @@ export async function syncFromBackend(me?: StaffOut): Promise<string> {
       dogs.push(...r.items)
       if (dogs.length >= r.total || !r.items.length) break
     }
-    acct.dogs = dogs.map((o) => toDog(o, acct.dogs.find((d) => d.id === o.id)))
+    acct.dogs = dogs.filter((o) => !onlyDog || o.id === onlyDog).map((o) => toDog(o, acct.dogs.find((d) => d.id === o.id)))
     await syncSessions(acct, true).catch(() => undefined)   // 측정 이력의 끝난 회차, 이 브라우저에서 연 회차·측정 중 회차의 상태·결과
   }
   changed()
