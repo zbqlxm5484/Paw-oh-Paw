@@ -240,6 +240,8 @@ def test_other_reads_and_every_write_are_closed(client: TestClient, db: Session,
         ("GET", f"{DOGS}/{dog.id}/history"),
         ("GET", f"{DOGS}/{dog.id}/images"),
         ("GET", "/api/v1/admin/institutions"),
+        ("GET", "/api/v1/daily-records"),  # 그날 기록(65번)
+        ("GET", f"{ME}/device"),  # 기기 정보(66번). 내 정보(2번)는 열리지만 이것은 아니다
         # 쓰기
         ("POST", DOGS),
         ("PATCH", f"{DOGS}/{dog.id}"),
@@ -250,7 +252,9 @@ def test_other_reads_and_every_write_are_closed(client: TestClient, db: Session,
         ("POST", f"/api/v1/shots/{shot.id}/retry"),
         ("DELETE", SHOT.format(shot.id)),
         ("PUT", f"{DOGS}/{dog.id}/vitals/2026-10-15"),
+        ("DELETE", f"{DOGS}/{dog.id}/vitals/2026-10-15"),  # 63번
         ("POST", f"{DOGS}/{dog.id}/notes"),
+        ("DELETE", f"/api/v1/notes/{uuid.uuid4()}"),  # 64번
         ("PATCH", ME),
         ("DELETE", ME),
         ("PATCH", "/api/v1/auth/password"),
