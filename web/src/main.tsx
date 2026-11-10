@@ -5,8 +5,16 @@ import './store/actions_backend' // 백엔드에 있는 기능은 먼저 백엔�
 import './store/actions_impl' // 폼 처리 함수 등록(시제품 main.py 의 POST 주소)
 import { setLogin } from './app/session'
 import { MOCK, restore } from './store/backend'
+import { tokenStore } from './api/client'
 import { startPolling } from './store/sessions_backend'
 import { current } from './app/session'
+
+// 서버 PDF(285): 워커의 headless Chrome 이 인쇄 화면을 인쇄 토큰과 함께 연다(/print/reports/:rid?token=…).
+// 그 토큰으로 로그인한 것처럼 기관 자료를 읽어, 보고서 화면과 같은 종이(ReportPaper)를 그린다. 토큰은 5분짜리(읽기 전용)
+{
+  const token = new URLSearchParams(location.search).get('token')
+  if (!MOCK && token && location.pathname.includes('/print/reports/')) tokenStore.set(token, new Date(Date.now() + 5 * 60_000).toISOString())
+}
 
 // 백엔드 모드: 저장된 토큰이 살아 있으면 로그인 상태와 반려견 목록을 먼저 읽는다
 // 가짜 서버 모드: 백엔드에만 있는 API(보고서 내용 285)를 시연 데이터로 흉내 내는 처리 함수를 먼저 등록한다
