@@ -2,13 +2,15 @@
 
 import logging
 import re
-from datetime import date, timedelta
+import uuid
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, update
 from sqlalchemy.orm import Session
 
 from app.core.dates import today_local
+from app.models import DogVital
 from tests.conftest import bearer
 from tests.history_fixtures import another_dog, make_session
 
@@ -90,6 +92,20 @@ def test_gives_the_vitals_notes_and_sessions_of_that_day(
     assert past["vitals"] == [old_vital]
     assert past["notes"] == [late_note]  # 방문일로 거른다. 쓴 날이 아니다
     assert [item["id"] for item in past["sessions"]] == [str(old_session.id)]
+
+
+def test_vitals_come_in_the_order_they_were_written(client: TestClient, db: Session, dog, staff, auth_headers) -> None:
+    today = today_local()
+    dogs = [dog, *(another_dog(db, staff.institution_id, name=f"개 {index}") for index in range(3))]
+    ids = [_vital(client, target, auth_headers, today, heart_rate=90)["id"] for target in dogs]
+    # 시험은 한 트랜잭션이라 적은 시각이 모두 같다. 적은 시각을 거꾸로 벌려 놓고 그 순서로 오는지 본다
+    for minutes, vital_id in enumerate(reversed(ids)):
+        db.execute(
+            update(DogVital)
+            .where(DogVital.id == uuid.UUID(vital_id))
+            .values(created_at=datetime(2026, 11, 1, tzinfo=UTC) + timedelta(minutes=minutes))
+        )
+    assert [item["id"] for item in _get(client, auth_headers)["vitals"]] == list(reversed(ids))
 
 
 def test_empty_day_and_future_day_are_empty_lists(client: TestClient, dog, auth_headers: dict) -> None:
@@ -183,7 +199,7 @@ def test_query_count_does_not_grow_with_dogs(client: TestClient, db: Session, do
 
 
 def test_date_rules_token_and_contract(client: TestClient, db: Session, staff, dog, auth_headers: dict) -> None:
-    for bad in ("어제", "2026-13-01", "20261110"):
+    for bad in ("어제", "2026-13-01", "20261110", "0", "86400", "2026-11-10T00:00:00", "2026-11-10T00:00:00Z"):
         response = client.get(URL, params={"date": bad}, headers=auth_headers)
         assert response.status_code == 422, bad
         assert [item["field"] for item in response.json()["error"]["detail"]["fields"]] == ["date"]

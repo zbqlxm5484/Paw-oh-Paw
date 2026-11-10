@@ -15,7 +15,7 @@ from app.core.dates import today_local
 from app.core.errors import AppError, ErrorCode
 from app.models import DeviceCode, Staff
 
-# 13.5: 혼동되는 0·O·1·I·L을 뺀 32종. 20자 = 100비트라 요청 횟수 제한 없이도 추측이 안 된다(15.10)
+# 13.5: 혼동되는 0·O·1·I·L을 뺀 31종. 20자 = 약 99비트라 요청 횟수 제한 없이도 추측이 안 된다(15.10)
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 20
 # 화면 표시 XXXXX-XXXXX-XXXXX-XXXXX

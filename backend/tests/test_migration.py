@@ -8,8 +8,9 @@ from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import Connection, Engine, text
 
+from app.core.dates import today_local
 from app.core.db import Base
-from tests.conftest import TABLES, alembic_config
+from tests.conftest import ROOT, TABLES, alembic_config
 
 # 명세 12.2 DDL의 제약 이름. 오류 처리에서 이 이름으로 어느 규칙을 어겼는지 가린다.
 EXPECTED_CONSTRAINTS = {
@@ -286,7 +287,12 @@ def test_0012_keeps_one_usable_code_per_institution(engine: Engine, clean_tables
 
 
 def test_0021_fills_the_visit_date_from_the_written_day(engine: Engine, clean_tables: None) -> None:
-    """0021(v1.46): 있던 메모의 방문일은 쓴 날(한국 날짜)이다. UTC로는 전날 밤이어도 한국 날짜로 채운다."""
+    """0021(v1.46): 있던 메모의 방문일은 쓴 날(한국 날짜)이다. UTC로는 전날 밤이어도 한국 날짜로 채운다.
+
+    API 서버의 비밀값(JWT_SECRET 등) 없이 DB 주소만으로 돈다(설정을 읽지 않는다).
+    """
+    source = (ROOT / "alembic" / "versions" / "0021_dog_note_visited_on.py").read_text(encoding="utf-8")
+    assert "get_settings" not in source
     config = alembic_config()
     ids = {name: uuid.uuid4() for name in ("inst", "staff", "dog", "night", "noon")}
     command.downgrade(config, "0020")
@@ -321,5 +327,15 @@ def test_0021_fills_the_visit_date_from_the_written_day(engine: Engine, clean_ta
             rows = conn.execute(text("SELECT id, visited_on FROM dog_note")).all()
             days = {str(note_id): day.isoformat() for note_id, day in rows}
             assert days == {str(ids["night"]): "2026-11-06", str(ids["noon"]): "2026-11-05"}
+        # 이 칸을 모르는 앞 판 앱의 INSERT(배포 중에 잠깐 같은 DB에 쓴다)도 오늘의 한국 날짜로 들어간다
+        with engine.begin() as conn:
+            late = conn.execute(
+                text(
+                    "INSERT INTO dog_note (id, dog_id, category, body, staff_id) "
+                    "VALUES (:late, :dog, 'S', '다', :staff) RETURNING visited_on"
+                ),
+                {**ids, "late": uuid.uuid4()},
+            ).scalar_one()
+            assert late == today_local()
     finally:
         command.upgrade(config, "head")

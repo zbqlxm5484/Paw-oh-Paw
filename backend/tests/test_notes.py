@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -378,6 +378,32 @@ def test_future_visit_date_is_422(client: TestClient, db: Session, dog, auth_hea
     assert _count(db, DogNote) == 0
 
 
+@pytest.mark.parametrize(
+    "value", [0, 86400, -86400, "0", "2026-11-01T00:00:00Z", "2026-11-01T00:00:00", "20261101", ""]
+)
+def test_visit_date_takes_only_a_plain_date(client: TestClient, db: Session, dog, auth_headers, value) -> None:
+    """숫자(1970년부터의 초로 읽힌다)나 시각이 붙은 값은 날짜로 받지 않는다(13.9)."""
+    single = _post(client, dog, auth_headers, visited_on=value)
+    assert single.status_code == 422 and _fields(single) == ["visited_on"]
+    batch = _batch(client, dog, auth_headers, [{"category": "S", "body": "가"}], visited_on=value)
+    assert batch.status_code == 422 and _fields(batch) == ["visited_on"]
+    assert _count(db, DogNote) == 0
+
+
+def test_today_is_the_korean_date(client: TestClient, dog, auth_headers, monkeypatch: pytest.MonkeyPatch) -> None:
+    """UTC로는 11-10 15:30이어도 한국은 11-11 00:30이다. 기본값과 미래 검사가 한국 날짜를 쓴다."""
+
+    class _Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 10, 15, 30, tzinfo=UTC).astimezone(tz)
+
+    monkeypatch.setattr("app.core.dates.datetime", _Clock)
+    assert _post(client, dog, auth_headers).json()["visited_on"] == "2026-11-11"
+    assert _post(client, dog, auth_headers, visited_on="2026-11-11").status_code == 201
+    assert _post(client, dog, auth_headers, visited_on="2026-11-12").status_code == 422
+
+
 def test_batch_takes_one_visit_date_for_all(client: TestClient, dog, auth_headers: dict) -> None:
     day = (today_local() - timedelta(days=3)).isoformat()
     soap = [{"category": "S", "body": "가", "visited_on": "2020-01-01"}, {"category": "O", "body": "나"}]
@@ -421,6 +447,37 @@ def test_delete_removes_the_note_and_its_revisions(client: TestClient, db: Sessi
     assert _delete(client, note_id, auth_headers).status_code == 404  # 이미 없다
     assert _patch(client, note_id, auth_headers, body="지운 뒤 고치기").status_code == 404
     assert client.get(f"{API}/notes/{note_id}/revisions", headers=auth_headers).status_code == 404
+
+
+def _locks_and_deletes(db: Session, call) -> list[str]:
+    """call이 도는 동안 나간 SQL 중 잠금(FOR UPDATE)과 DELETE·INSERT가 건드린 테이블을 순서대로 돌려준다."""
+    seen: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        text = " ".join(statement.split())
+        if "FOR UPDATE" in text:
+            seen.append("lock " + text.split(" FROM ")[1].split()[0])
+        elif text.startswith("DELETE FROM "):
+            seen.append("delete " + text.split()[2])
+        elif text.startswith("INSERT INTO "):
+            seen.append("insert " + text.split()[2])
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        call()
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    return seen
+
+
+def test_edit_and_delete_lock_the_dog_before_the_note(client: TestClient, db: Session, dog, auth_headers) -> None:
+    """자료 파기와 같은 순서로 잠근다(12.4: 반려견 → 그 아래). 메모 행만 잠그면 파기와 서로 기다리다 멈춘다."""
+    note_id = _post(client, dog, auth_headers).json()["id"]
+    edited = _locks_and_deletes(db, lambda: _patch(client, note_id, auth_headers, body="고친 내용"))
+    assert edited == ["lock dog", "lock dog_note", "insert dog_note_revision"]
+    deleted = _locks_and_deletes(db, lambda: _delete(client, note_id, auth_headers))
+    assert deleted == ["lock dog", "lock dog_note", "delete dog_note_revision", "delete dog_note"]
 
 
 def test_delete_takes_one_of_a_batch(client: TestClient, dog, auth_headers: dict) -> None:

@@ -138,15 +138,29 @@ def _get_note(db: Session, institution_id: uuid.UUID, note_id: uuid.UUID, *, for
     return note
 
 
+def _lock_note(db: Session, institution_id: uuid.UUID, note_id: uuid.UUID) -> DogNote:
+    """반려견 행 → 메모 행 순서로 잠그고 메모를 돌려준다(12.4의 잠금 순서: 기관 → 반려견 → 그 아래).
+
+    자료 파기는 반려견 행을 쥔 채 수정 이력 → 메모 순서로 지운다. 메모 행만 잠그면 메모 → 이력 순서인 지우기와
+    서로 기다리다 멈추고(deadlock), 고치기가 그사이 넣은 이력 줄 때문에 파기가 FK 오류로 실패한다.
+    반려견 행을 먼저 잡으면 파기와 차례로 돈다. 파기가 먼저 끝났으면 반려견이 없어 404다.
+    """
+    dog_id = _get_note(db, institution_id, note_id).dog_id
+    locked = db.scalar(select(Dog.id).where(Dog.id == dog_id, in_institution(institution_id)).with_for_update())
+    if locked is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return _get_note(db, institution_id, note_id, for_update=True)
+
+
 def update_note(
     db: Session, *, institution_id: uuid.UUID, staff_id: uuid.UUID, note_id: uuid.UUID, data: NoteUpdate
 ) -> NoteOut:
     """보낸 것만 바꾼다(13.9). 고치기 전 내용을 이력에 한 줄 남기고, 바뀐 값이 없으면 아무것도 하지 않는다(12.5).
 
     분류는 같은 종류 안에서만 바꾼다(메모는 메모끼리, 진료 기록은 S·O·A·P끼리). 아니면 422.
-    행을 잠그고 읽어, 두 사람이 동시에 고쳐도 이력이 한 줄씩 순서대로 남는다.
+    행을 잠그고 읽어, 두 사람이 동시에 고쳐도 이력이 한 줄씩 순서대로 남는다(_lock_note).
     """
-    note = _get_note(db, institution_id, note_id, for_update=True)
+    note = _lock_note(db, institution_id, note_id)
     changes = data.model_dump(exclude_unset=True)
     body = changes.get("body", note.body)
     category = changes["category"].value if "category" in changes else note.category
@@ -189,10 +203,10 @@ def list_revisions(db: Session, institution_id: uuid.UUID, note_id: uuid.UUID) -
 def delete_note(db: Session, *, institution_id: uuid.UUID, staff_id: uuid.UUID, note_id: uuid.UUID) -> None:
     """DELETE /notes/{note_id}(v1.46). 그 한 건과 수정 이력을 함께 지운다. 되돌릴 수 없다(12.5).
 
-    행을 잠그고 읽어 동시에 고치는 요청과 겹치지 않는다: 고치기가 먼저면 그 이력까지 지우고, 지우기가 먼저면
-    고치기는 404다. 연쇄 삭제를 쓰지 않으므로 이력 → 메모 순서로 지운다. 본문은 로그에 남기지 않는다(11.8).
+    행을 잠그고 읽어(_lock_note) 동시에 고치는 요청과 겹치지 않는다: 고치기가 먼저면 그 이력까지 지우고, 지우기가
+    먼저면 고치기는 404다. 연쇄 삭제를 쓰지 않으므로 이력 → 메모 순서로 지운다. 본문은 로그에 남기지 않는다(11.8).
     """
-    note = _get_note(db, institution_id, note_id, for_update=True)
+    note = _lock_note(db, institution_id, note_id)
     db.execute(delete(DogNoteRevision).where(DogNoteRevision.note_id == note.id))
     db.delete(note)
     db.flush()

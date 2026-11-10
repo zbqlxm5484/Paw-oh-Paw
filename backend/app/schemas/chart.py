@@ -13,6 +13,7 @@ from typing import Annotated
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     Field,
     StringConstraints,
     ValidationInfo,
@@ -22,7 +23,7 @@ from pydantic import (
 
 from app.core.dates import today_local
 from app.models.enums import DogStage, HistoryKind, HistorySite, NoteCategory
-from app.schemas.common import OutModel, StaffBriefOut, UtcDateTime, Weight
+from app.schemas.common import OutModel, StaffBriefOut, UtcDateTime, Weight, iso_date_text
 
 # 13.9. 범위는 통합본에 없어 제안한 값이다(병원 의견을 받으면 고친다)
 TempC = Annotated[Decimal, Field(ge=Decimal("30.0"), le=Decimal("45.0"), decimal_places=1)]
@@ -180,7 +181,7 @@ def _visit_not_future(value: date | None) -> date | None:
     return value
 
 
-VisitedOn = Annotated[date | None, AfterValidator(_visit_not_future)]
+VisitedOn = Annotated[date | None, BeforeValidator(iso_date_text), AfterValidator(_visit_not_future)]
 
 
 class NoteCreate(NoteItemIn):

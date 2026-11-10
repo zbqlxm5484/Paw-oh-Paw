@@ -8,6 +8,7 @@ from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Response, status
+from pydantic import BeforeValidator
 
 from app.api.deps import CurrentStaff, DbSession
 from app.core.dates import today_local
@@ -27,6 +28,7 @@ from app.schemas.chart import (
     VitalOut,
     VitalPut,
 )
+from app.schemas.common import iso_date_text
 from app.schemas.daily_records import DailyRecordsOut
 from app.services import daily_records as daily_service
 from app.services import dog_history as history_service
@@ -158,7 +160,7 @@ def delete_note(note_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> Respo
 def daily_records(
     staff: CurrentStaff,
     db: DbSession,
-    day: Annotated[date | None, Query(alias="date")] = None,
+    day: Annotated[date | None, BeforeValidator(iso_date_text), Query(alias="date")] = None,
 ) -> DailyRecordsOut:
     """기관의 그날 바이탈·메모·진료 기록·회차(BE-35). date를 빼면 오늘(한국 날짜)이다."""
     return daily_service.daily_records(db, staff.institution_id, day or today_local())

@@ -19,12 +19,6 @@ if TYPE_CHECKING:
     from app.models.staff import Staff
 
 
-def _today() -> date:
-    from app.core.dates import today_local  # core.dates가 models.enums를 쓰므로 여기서 import한다
-
-    return today_local()
-
-
 class DogNote(Base):
     __tablename__ = "dog_note"
     __table_args__ = (
@@ -43,8 +37,9 @@ class DogNote(Base):
     body: Mapped[str] = mapped_column(Text)
     # 중요 표시
     important: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
-    # 방문일(v1.46). 그 기록이 어느 날 방문의 것인지. 주지 않으면 쓴 날(한국 날짜)이고 쓴 뒤에는 바꾸지 않는다
-    visited_on: Mapped[date] = mapped_column(Date, default=_today)
+    # 방문일(v1.46). 그 기록이 어느 날 방문의 것인지. 쓴 뒤에는 바꾸지 않는다. 서비스가 늘 값을 넣는다. 서버 기본값
+    # (오늘의 한국 날짜)은 이 칸을 모르는 앞 판 앱이 배포 중에 쓰는 줄을 위한 것이다(마이그레이션 0021)
+    visited_on: Mapped[date] = mapped_column(Date, server_default=text("(now() AT TIME ZONE 'Asia/Seoul')::date"))
     # 지금 내용을 쓴 담당자(고치면 고친 사람). 처음 쓴 사람은 가장 오래된 수정 이력에 있다
     staff_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("staff.id", name="fk_dog_note_staff"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

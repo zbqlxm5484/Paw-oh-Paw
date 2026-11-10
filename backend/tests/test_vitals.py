@@ -432,6 +432,27 @@ def test_delete_is_404_without_a_row_and_for_others(
     assert _count(db, dog) == 1
 
 
+def test_delete_locks_the_dog_first(client: TestClient, db: Session, dog, auth_headers: dict) -> None:
+    """저장과 같이 반려견 행을 잠근 뒤에 찾아 지운다(같은 날의 저장·자료 파기와 겹치지 않게)."""
+    _put(client, dog, auth_headers)
+    seen: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:
+        text = " ".join(statement.split())
+        if "FOR UPDATE" in text:
+            seen.append("lock " + text.split(" FROM ")[1].split()[0])
+        elif text.startswith("DELETE FROM "):
+            seen.append("delete " + text.split()[2])
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        assert _delete(client, dog, auth_headers).status_code == 204
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert seen == ["lock dog", "delete dog_vital"]
+
+
 def test_delete_logs_ids_only(client: TestClient, db: Session, dog, staff, auth_headers, caplog) -> None:
     vital_id = _put(client, dog, auth_headers).json()["id"]
     with caplog.at_level(logging.INFO, logger="app.services.vitals"):
