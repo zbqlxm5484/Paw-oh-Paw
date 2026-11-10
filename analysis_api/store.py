@@ -180,6 +180,16 @@ def purge_all(root: Path) -> dict:
     return stats
 
 
+def jobs_of_shot(root: Path, shot_id: str) -> list:
+    """그 촬영(shot_id)으로 만든 작업들. 다시 분석하면 같은 촬영에 작업이 여러 개 생긴다"""
+    out = []
+    for folder in _job_dirs(root):
+        job = load_job(root, folder.name)
+        if job and job.get("shot_id") == shot_id:
+            out.append(job)
+    return out
+
+
 def read_log(root: Path) -> list:
     path = Path(root) / LOG_FILE
     if not path.exists():
