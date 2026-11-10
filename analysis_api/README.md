@@ -87,6 +87,7 @@ ANALYSIS_API_KEY=
 | `ANALYSIS_MODEL` | `models.yaml`의 `default` | 쓸 모델 이름. 결과 `model.name`이 된다 |
 | `ANALYSIS_TRACK_FILE` | 고른 모델의 `track_file` | `track`일 때 읽을 관절점 파일. 주면 `models.yaml` 값보다 먼저 쓴다 |
 | `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256` | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.6.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
+| `ANALYSIS_JOB_TIMEOUT_SEC` | 660 | 분석이 이보다 오래 `running`이면 `failed` + `TIMEOUT`. 팀 서비스 `ANALYSIS_TIMEOUT_SEC`(600)보다 60초 길게 둔다: 팀 서비스가 먼저 실패로 처리하고, 그 뒤 다시 분석·지우기가 409로 막히는 시간이 1분을 넘지 않게 한다. GPU 추론이 멈춰도 작업이 계속 running으로 남아 지우기·다시 분석이 막히지 않게 하려는 것이다 |
 
 `/health`는 Docker 상태 확인용이라 인증 없이 열려 있다. 지금 모델(`model`), 관절점 출처(`pose_source`), 모델이 `models.yaml`에 있는지(`model_known`)를 함께 준다.
 
@@ -115,6 +116,7 @@ data/analysis_api/
 | 무엇을 | 방법 |
 | --- | --- |
 | 작업 하나 | `DELETE /analyses/{id}`: 올린 영상·작업 상태·결과·관절점 파일(폴더째)과 `analyses.jsonl`의 그 줄. 성공 204. 분석 중(queued·running)이면 409 `JOB_IN_PROGRESS`, 없으면 404(부르는 쪽은 "이미 없음"으로 본다), 폴더를 다 지우지 못하면 500 `DELETE_FAILED`(기록 줄은 남기고 다시 시도) |
+| 촬영 하나 | `DELETE /analyses?shot_id=...`: 그 촬영(등록 때 `meta.shot_id`)으로 만든 작업을 모두 지운다. 다시 분석하면 한 촬영에 작업이 여러 개 생기므로, 예전 작업까지 지우려는 것이다. 200 `{"shot_id", "deleted": [작업 ID]}`(없으면 빈 목록). 하나라도 분석 중이면 아무것도 지우지 않고 409 `JOB_IN_PROGRESS` |
 | 전체 | `python purge.py --all`은 지울 양만 센다. `python purge.py --all --execute`는 확인 문구 `PURGE`를 받고 저장소 아래 작업 폴더(이름이 작업 ID인 UUID 모양인 폴더. `job.json`이 없는, 업로드 도중 끊긴 폴더도)와 `analyses.jsonl`을 지운다(`--yes`면 묻지 않음). 이름이 UUID가 아닌 폴더·파일은 지우지 않고 개수만 알린다(`ANALYSIS_STORAGE_DIR`를 `data/`처럼 넓게 잘못 줘도 `data/tracks/`가 남는다). 분석 중인 작업이 있으면 지우지 않는다. 분석 API를 끈 뒤 돌린다 |
 
 관절점 파일(`data/tracks/`)과 `models.yaml`은 지우지 않는다. 관절점 파일도 기업 데이터에서 나온 것이라 과제 종료 때는 따로 지운다.
@@ -134,6 +136,7 @@ data/analysis_api/
 | `DECODE_FAILED` | 영상을 읽을 수 없음 |
 | `POSE_UNAVAILABLE` | 이 영상의 관절점을 얻지 못함 (`track`에서 관절점 파일이 없거나, 영상을 못 찾거나, 관절점 파일의 모델이 다름) |
 | `INTERRUPTED` | 분석 중에 분석 API가 다시 시작됨 |
+| `TIMEOUT` | 분석이 `ANALYSIS_JOB_TIMEOUT_SEC` 안에 끝나지 않음. 상태 조회·지우기 때 판단한다. 시간 초과 뒤에 늦게 끝난 분석의 결과는 버리고, 그사이 지운 작업의 폴더를 다시 만들지 않는다. 멈춘 GPU 추론 자체를 끊지는 못하므로, 계속 멈춰 있으면 분석 API를 다시 켠다 |
 
 등록·조회 말고 지우기에서 나는 오류: 409 `JOB_IN_PROGRESS`(분석 중인 작업은 지울 수 없음), 500 `DELETE_FAILED`(폴더를 다 지우지 못함).
 
@@ -149,6 +152,20 @@ python -m pytest -q
 ```
 
 `test_pipeline.py`는 가상 개 한 마리의 관절점 파일을 만들어 `track` 경로를 확인한다(결과 v1 필드, 카메라 쪽 다리 각도만, `POSE_UNAVAILABLE`). `test_store.py`는 메모리를 비워 다시 켠 것처럼 만든 뒤 작업이 남는지, 끊긴 작업이 `INTERRUPTED`가 되는지, `analyses.jsonl`, 모델 고르기를 확인한다.
+
+## 떠 있는 서버 점검 (`check_server.py`)
+
+GPU 서버에 배포한 분석 API를 팀 서비스 워커와 같은 순서(등록 → 2초마다 상태 조회 → 결과·관절점 파일 → 지우기)로 불러, 결과가 결과 JSON v1 모양인지와 걸린 시간을 본다. 표준 라이브러리만 쓴다.
+
+```
+ANALYSIS_API_KEY=... python check_server.py --url http://127.0.0.1:8010 --video a.mp4 --video b.mp4
+python check_server.py --url ... --video a.mp4 --track ../data/tracks/fs-v4.track.json   # 미리 뽑은 관절점과 비교
+```
+
+- 키는 환경변수 `ANALYSIS_API_KEY`로만 받는다(명령 줄에 남지 않게)
+- 점검한 작업은 끝나면 지운다(`--keep`이면 남김). 점검 영상의 사본이 서버에 남지 않게 하려는 것이다
+- `--track`을 주면 같은 영상의 미리 뽑은 관절점과 프레임 수·개를 찾은 프레임 수·관절점 위치 차이(px)를 비교한다. model 모드가 오프라인 추론과 같은 관절점을 내는지 보는 것이다
+- 하나라도 걸리면 끝 코드 1. 점검 기록은 `docs/analysisApi/gpuCheck.md`
 
 ## 아직 남은 것
 
