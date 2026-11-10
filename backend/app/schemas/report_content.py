@@ -18,6 +18,7 @@ class ContentSession(BaseModel):
     weight_kg: float | None
     size_class: str | None
     symmetry_score: int | None  # 12.3 대칭 점수. 계산할 쌍이 없으면 null
+    symmetry_level: str | None  # 100 − 대칭 점수의 차이 단계(SIMILAR·SLIGHT·LARGE). 점수가 없으면 null
 
 
 class ContentDog(BaseModel):
@@ -44,6 +45,7 @@ class ContentBaseline(BaseModel):
     measured_on: str
     round: int
     symmetry_score: int | None
+    diff: int | None  # 이 회차의 대칭 점수 − 기준 회차의 대칭 점수. 한쪽이라도 없으면 null
 
 
 class ContentHistoryItem(BaseModel):
@@ -103,6 +105,19 @@ class ContentCompare(BaseModel):
     reason: str | None
 
 
+class ContentLeg(BaseModel):
+    """다리 한 쌍에서 좌우 차이가 가장 큰 수치(몸 그림용). weak_limb는 값이 작은 쪽이고 SIMILAR면 null이다."""
+
+    pair: str
+    gait_type: str
+    metric_code: str
+    label: str
+    symmetry_index: str
+    symmetry_value: float
+    weak_limb: str | None
+    level: str
+
+
 class ContentChangeCell(BaseModel):
     """직전 회차 비교의 한 칸. diff는 이번 − 직전, change는 INCREASE·DECREASE·WITHIN_RANGE 또는 null."""
 
@@ -141,5 +156,6 @@ class ReportContentOut(BaseModel):
     previous: ContentPrevious | None
     baseline: ContentBaseline | None
     history: list[ContentHistoryItem]
+    legs: list[ContentLeg]
     sentences: ContentSentences
     gaits: list[ContentGait]

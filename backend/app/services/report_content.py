@@ -21,7 +21,7 @@ from app.models import Dog, MeasureSession, Report
 from app.models.enums import SessionStatus
 from app.report import TEMPLATE_VERSION, ReportCheckError, ReportInputError
 from app.report.checks import ensure_checked
-from app.report.content import ReportContent, compose_content
+from app.report.content import ReportContent, compose_content, difference_level, leg_summaries
 from app.report.numbers import GaitTable
 from app.report.verify import compare_numbers, summarize
 from app.schemas.report_content import (
@@ -33,6 +33,7 @@ from app.schemas.report_content import (
     ContentDog,
     ContentGait,
     ContentHistoryItem,
+    ContentLeg,
     ContentPrevious,
     ContentRow,
     ContentSentences,
@@ -92,7 +93,7 @@ def _timeline(db: Session, dog_id: uuid.UUID) -> _Timeline:
 
 
 def _baseline(dog: Dog, session: MeasureSession, timeline: _Timeline) -> ContentBaseline | None:
-    """12.5 기준 회차. 없거나 이 회차 자신이면 None."""
+    """12.5 기준 회차. 없거나 이 회차 자신이면 None. diff는 이 회차 점수 − 기준 회차 점수다."""
     baseline_id = dog.baseline_session_id
     if baseline_id is None:
         first_done = next((row for row in timeline.sessions if row.status == SessionStatus.DONE.value), None)
@@ -100,11 +101,13 @@ def _baseline(dog: Dog, session: MeasureSession, timeline: _Timeline) -> Content
     base = timeline.find(baseline_id) if baseline_id else None
     if base is None or base.id == session.id:
         return None
+    score, base_score = timeline.scores.get(session.id), timeline.scores.get(base.id)
     return ContentBaseline(
         session_id=base.id,
         measured_on=base.measured_on.isoformat(),
         round=timeline.round_of(base.id),
-        symmetry_score=timeline.scores.get(base.id),
+        symmetry_score=base_score,
+        diff=None if score is None or base_score is None else score - base_score,
     )
 
 
@@ -171,6 +174,7 @@ def _gait(table: GaitTable, notes: list[str]) -> ContentGait:
 
 def _to_out(content: ReportContent, session: MeasureSession, dog: Dog, timeline: _Timeline) -> ReportContentOut:
     inp, sentences = content.inp, content.sentences
+    score = timeline.scores.get(session.id)
     previous = None
     if inp.previous:
         previous_id = uuid.UUID(str(inp.previous["id"]))
@@ -191,7 +195,8 @@ def _to_out(content: ReportContent, session: MeasureSession, dog: Dog, timeline:
             model_version=inp.session.model_version,
             weight_kg=inp.session.weight_kg,
             size_class=inp.session.size_class,
-            symmetry_score=timeline.scores.get(session.id),
+            symmetry_score=score,
+            symmetry_level=None if score is None else difference_level(100 - score),
         ),
         dog=ContentDog(
             name=inp.dog.name,
@@ -209,6 +214,19 @@ def _to_out(content: ReportContent, session: MeasureSession, dog: Dog, timeline:
                 symmetry_score=timeline.scores.get(row.id),
             )
             for row in timeline.until(session.id)[-HISTORY_SIZE:]
+        ],
+        legs=[
+            ContentLeg(
+                pair=leg.pair,
+                gait_type=leg.gait_type,
+                metric_code=leg.metric_code,
+                label=leg.label,
+                symmetry_index=leg.symmetry_index,
+                symmetry_value=leg.symmetry_value,
+                weak_limb=leg.weak_limb,
+                level=leg.level,
+            )
+            for leg in leg_summaries(content.tables)
         ],
         sentences=ContentSentences(
             title=sentences.title,
@@ -261,4 +279,9 @@ def report_content(
             "report content numbers mismatch session=%s edition=%s: %s", session.id, edition, summarize(verification)
         )
         raise AppError(ErrorCode.REPORT_CHECK_FAILED)
-    return _to_out(content, session, report.session.dog, _timeline(db, session.dog_id))
+    timeline = _timeline(db, session.dog_id)
+    # 대칭 점수는 두 길로 계산해 맞춘다: 회차 결과가 읽은 행으로 낸 값과, 여기서 쿼리로 다시 낸 값(12.3)
+    if data["result"].get("symmetry_score") != timeline.scores.get(session.id):
+        logger.error("report content symmetry score mismatch session=%s edition=%s", session.id, edition)
+        raise AppError(ErrorCode.REPORT_CHECK_FAILED)
+    return _to_out(content, session, report.session.dog, timeline)

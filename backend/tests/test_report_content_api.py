@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import create_print_token
 from app.report import TEMPLATE_VERSION, ReportCheckError
-from app.report.content import compose_content
+from app.report.content import LEG_CODES, LEG_GAITS, compose_content, difference_level
 from app.services import report_content as content_service
 from app.services.report_input import build_report_input
+from app.services.symmetry import SCORE_GAITS, SCORE_PAIRS
 from app.services.tolerance import get_tolerance
 from tests.conftest import bearer
 from tests.history_fixtures import add_metric, add_report, make_session
@@ -226,6 +227,7 @@ def test_symmetry_score_baseline_and_history_come_from_the_server(client: TestCl
         "measured_on": "2026-10-01",
         "round": 1,
         "symmetry_score": first_result["symmetry_score"],
+        "diff": result["symmetry_score"] - first_result["symmetry_score"],
     }
     assert body["history"] == [
         {"measured_on": "2026-10-01", "round": 1, "symmetry_score": first_result["symmetry_score"]},
@@ -271,3 +273,67 @@ def test_history_keeps_the_latest_eight(client: TestClient, db: Session, staff, 
     body = _get(client, sessions[-1], bearer(staff)).json()
     assert [item["round"] for item in body["history"]] == list(range(3, 11))
     assert body["session"]["round"] == 10
+
+
+# ---- 화면이 계산하던 값(박규원 11-10): 다리 쌍 요약, 차이 단계 ----
+
+
+def test_legs_pick_the_metric_with_the_largest_difference_of_each_pair(
+    client: TestClient, db: Session, staff, dog
+) -> None:
+    session, _ = _done_session(db, dog, staff, date(2026, 10, 15), 47.0, 42.0)  # 무릎: 대칭 지수 11.2
+    add_metric(db, session, "rom_hip", "LH", 30.0)
+    add_metric(db, session, "rom_hip", "RH", 36.0)  # 고관절: 18.2 → 뒷다리에서 가장 크다
+    add_metric(db, session, "rom_elbow", "LF", 50.0)
+    add_metric(db, session, "rom_elbow", "RF", 51.0)  # 팔꿈치: 2.0 → 비슷
+
+    body = _get(client, session, bearer(staff)).json()
+    legs = {leg["pair"]: leg for leg in body["legs"]}
+
+    assert set(legs) == {"FORE", "HIND"}
+    hind = legs["HIND"]
+    assert (hind["metric_code"], hind["gait_type"], hind["level"], hind["weak_limb"]) == (
+        "rom_hip",
+        "TROT",
+        "LARGE",
+        "LH",
+    )
+    assert hind["symmetry_index"] == f"{hind['symmetry_value']:.1f}%" == "18.2%"
+    fore = legs["FORE"]
+    assert (fore["metric_code"], fore["level"], fore["weak_limb"]) == ("rom_elbow", "SIMILAR", None)
+    # 요약의 숫자는 좌우 비교 줄의 것이다(수치 대조를 지난 값)
+    lines = {(line["pair"], line["metric_code"]): line for line in body["gaits"][0]["compare"]}
+    assert lines[("HIND", "rom_hip")]["symmetry_value"] == hind["symmetry_value"]
+
+
+def test_legs_skip_a_pair_without_a_comparable_target_metric(client: TestClient, staff, two_sessions) -> None:
+    _, second, _ = two_sessions  # 뒷다리 무릎만 있다
+    assert [leg["pair"] for leg in _get(client, second, bearer(staff)).json()["legs"]] == ["HIND"]
+
+
+def test_symmetry_level_uses_the_same_bounds_on_100_minus_the_score(client: TestClient, staff, two_sessions) -> None:
+    _, second, _ = two_sessions
+    session = _get(client, second, bearer(staff)).json()["session"]
+    assert session["symmetry_level"] == difference_level(100 - session["symmetry_score"])
+    assert [difference_level(value) for value in (0, 4.9, 5, 9.9, 10, 40)] == [
+        "SIMILAR",
+        "SIMILAR",
+        "SLIGHT",
+        "SLIGHT",
+        "LARGE",
+        "LARGE",
+    ]
+
+
+def test_leg_targets_and_gait_order_follow_the_symmetry_score() -> None:
+    """다리 쌍 요약은 대칭 점수(12.3)와 같은 수치·같은 보행 유형 순서를 본다."""
+    assert {code for codes in LEG_CODES.values() for code in codes} == {code for code, _, _ in SCORE_PAIRS}
+    assert LEG_GAITS == SCORE_GAITS
+
+
+def test_symmetry_score_that_differs_between_the_two_paths_is_409(
+    client: TestClient, staff, two_sessions, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, second, _ = two_sessions
+    monkeypatch.setattr(content_service, "session_scores", lambda db, ids: {session_id: 1 for session_id in ids})
+    assert _code(_get(client, second, bearer(staff))) == (409, "REPORT_CHECK_FAILED")

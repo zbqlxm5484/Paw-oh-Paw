@@ -120,7 +120,9 @@ class CompareLine:
     symmetry_index: str
     comparable: bool
     reason: str | None
-    symmetry_value: float | None = None  # 비교할 수 있을 때의 대칭 지수(%). 화면이 그림 색을 정할 때 쓴다
+    symmetry_value: float | None = None  # 비교할 수 있을 때의 대칭 지수(%). 다리 쌍 요약(content.leg_summaries)이 쓴다
+    left_value: float | None = None  # 왼쪽·오른쪽 값의 숫자. 어느 쪽이 작은지 볼 때 쓴다
+    right_value: float | None = None
 
 
 @dataclass(frozen=True)
@@ -351,6 +353,8 @@ def build_tables(
                     comparable=comparable,
                     reason=_reason_text(item.get("reason")),
                     symmetry_value=symmetry if comparable else None,
+                    left_value=left,
+                    right_value=right,
                 )
             )
             for kind, number in (("left", left), ("right", right), ("diff", diff), ("symmetry_index", symmetry)):

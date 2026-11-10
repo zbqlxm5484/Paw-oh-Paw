@@ -10,8 +10,84 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.report.inputs import ReportInput, parse_input
-from app.report.numbers import NOT_COMPARABLE_LABEL, GaitTable, ListedNumber, build_tables
+from app.report.numbers import NOT_COMPARABLE_LABEL, PAIR_LIMBS, GaitTable, ListedNumber, build_tables
 from app.report.sentences import Sentences, compose
+
+# 다리 쌍 요약이 보는 수치(쌍 → 수치 코드, 이 순서). 대칭 점수(12.3, services/symmetry.SCORE_PAIRS)와 같은 수치다
+LEG_CODES: dict[str, tuple[str, ...]] = {
+    "FORE": ("rom_elbow",),
+    "HIND": ("rom_stifle", "rom_hip", "stride_length", "stance_ratio"),
+}
+# 보행 유형 하나만 본다. 이 순서로, 대상 수치를 비교할 수 있는 첫 유형이다(12.3 대칭 점수와 같은 순서)
+LEG_GAITS = ("TROT", "WALK", "OTHER")
+# 차이 단계: 대칭 지수(%)가 5 미만, 10 미만, 그 이상(화면의 몸 그림 색과 같은 경계, 박규원 11-10)
+LEVEL_SIMILAR, LEVEL_SLIGHT, LEVEL_LARGE = "SIMILAR", "SLIGHT", "LARGE"
+LEVEL_BOUNDS = (5.0, 10.0)
+
+
+def difference_level(index: float) -> str:
+    """대칭 지수(또는 100 − 대칭 점수) → 차이 단계. 화면에 찍히는 값(소수 첫째 자리)으로 가른다."""
+    if index < LEVEL_BOUNDS[0]:
+        return LEVEL_SIMILAR
+    return LEVEL_SLIGHT if index < LEVEL_BOUNDS[1] else LEVEL_LARGE
+
+
+@dataclass(frozen=True)
+class LegSummary:
+    """다리 한 쌍(앞·뒤)에서 좌우 차이가 가장 큰 수치. weak_limb는 값이 작은 쪽 다리이고 단계가 SIMILAR면 None이다."""
+
+    pair: str
+    gait_type: str
+    metric_code: str
+    label: str
+    symmetry_index: str
+    symmetry_value: float
+    weak_limb: str | None
+    level: str
+
+
+def leg_summaries(tables: list[GaitTable]) -> list[LegSummary]:
+    """보행 유형 하나에서 다리 쌍마다 대칭 지수가 가장 큰 수치를 고른다. 비교할 수 있는 대상 수치가 없는 쌍은 뺀다.
+
+    값은 모두 좌우 비교 줄(GaitTable.compare)의 것이라 수치 대조(8절 7번)를 지난 숫자다. 같은 값이면 LEG_CODES의
+    앞 수치를 고른다.
+    """
+    by_gait = {table.gait_type: table for table in tables}
+    for gait in LEG_GAITS:
+        table = by_gait.get(gait)
+        if table is None:
+            continue
+        found: list[LegSummary] = []
+        for pair, codes in LEG_CODES.items():
+            lines = [
+                line
+                for code in codes
+                for line in table.compare
+                if line.pair == pair and line.code == code and line.comparable and line.symmetry_value is not None
+            ]
+            if not lines:
+                continue
+            worst = max(lines, key=lambda line: line.symmetry_value)  # 같으면 앞의 것(max는 처음 만난 최댓값을 준다)
+            level = difference_level(worst.symmetry_value)
+            weak = None
+            if level != LEVEL_SIMILAR and worst.left_value is not None and worst.right_value is not None:
+                left_limb, right_limb = PAIR_LIMBS[pair]
+                weak = left_limb if worst.left_value < worst.right_value else right_limb
+            found.append(
+                LegSummary(
+                    pair=pair,
+                    gait_type=gait,
+                    metric_code=worst.code,
+                    label=worst.label,
+                    symmetry_index=worst.symmetry_index,
+                    symmetry_value=worst.symmetry_value,
+                    weak_limb=weak,
+                    level=level,
+                )
+            )
+        if found:
+            return found
+    return []
 
 
 @dataclass(frozen=True)
