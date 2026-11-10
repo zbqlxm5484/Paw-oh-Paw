@@ -1,7 +1,11 @@
 // 앱 보고서 · 수의사용 탭(웹 수의사용 보고서와 같은 구성, S15P31A404-210·103):
 // 왼쪽과 오른쪽 비교(관절별 위아래 막대), 뒷무릎 각도·보행 주기, 지난 측정과 비교(서버 비교 API), 무릎 가동 범위 변화(서버 추이 API).
 import type { CompareItem, CompareOut, SessionResultOut, TrendsOut } from '../../api/types'
+import { useEffect, useState } from 'react'
 import kneeCycle from './knee_cycle.json'
+import { clipFromAngles, pickShots, type ClipInfo, type GaitClip } from './gaitClip'
+import { getAngles } from '../../api/results'
+import { getSession } from '../../api/sessions'
 
 const BLUE = '#3B6FE0'
 const ORANGE = '#D2601A'
@@ -103,31 +107,51 @@ function CmpList({ cmp }: { cmp: CompareOut | undefined }) {
   )
 }
 
-/** 이 회차 무릎 가동 범위·입각기 비율에 맞춰 늘이고 줄인 한 걸음 곡선(웹 knee_chart·fit_curve 와 같은 계산) */
-const TEMPLATE_STANCE = 60.0
-function fitCurve(base: number[], rom: number | null, stance: number | null): number[] {
-  const n = base.length
-  const mean = base.reduce((a, b) => a + b, 0) / n
-  const amp = Math.max(...base) - Math.min(...base) || 1
-  const k = rom ? rom / amp : 1
-  const c = base.map((v) => mean + (v - mean) * k)
-  if (!stance) return c
-  const a = TEMPLATE_STANCE / 100
-  const b = Math.min(0.8, Math.max(0.35, stance / 100))
-  return c.map((_, i) => {
-    const p = i / n
-    const x = (p < b ? (p / b) * a : a + ((p - b) / (1 - b)) * (1 - a)) * n
-    const j = Math.trunc(x) % n
-    const f = x - Math.trunc(x)
-    return c[j] * (1 - f) + c[(j + 1) % n] * f
-  })
+/** 실제 무릎 곡선: 한쪽이 촬영이 없어 반대쪽을 비춰 쓴(mirrored) 다리, 반대쪽 무릎을 빌린(borrowed) 다리는 뺀다(웹 kneeFromClip 과 같은 규칙) */
+function kneeFromClip(clip: GaitClip, info: ClipInfo): { L: number[] | null; R: number[] | null } | null {
+  const l = clip.legs.LH?.joint['무릎'] ?? null
+  const r = clip.legs.RH?.joint['무릎'] ?? null
+  const realSide = (s: 'L' | 'R') => info.sides.includes(s) && !info.mirrored.includes(s)
+  let L = l && realSide('L') ? l : null
+  let R = r && realSide('R') ? r : null
+  if (L && R && L === R) {
+    const bl = info.borrowed.includes('L'), br = info.borrowed.includes('R')
+    if (bl && !br) L = null
+    else if (br && !bl) R = null
+    else L = R = null
+  }
+  return L || R ? { L, R } : null
 }
 
+/** 이 회차 영상의 실제 관절 각도(GET /sessions/{id} → /shots/{id}/angles)로 만든 뒷무릎 곡선. undefined = 읽는 중, null = 못 만듦 */
+function useRealKnee(sessionId: string): { L: number[] | null; R: number[] | null } | null | undefined {
+  const [state, setState] = useState<{ id: string; v: { L: number[] | null; R: number[] | null } | null }>({ id: '', v: null })
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const s = await getSession(sessionId)
+        const pick = pickShots(s.shots ?? [], null)
+        if (!pick) return null
+        const resps = (await Promise.all([...pick.L, ...pick.R].map((id) => getAngles(id).catch(() => null)))).filter((x): x is NonNullable<typeof x> => !!x && Array.isArray(x.passes))
+        const got = clipFromAngles(resps, pick.gait)
+        return got ? kneeFromClip(got.clip, got.info) : null
+      } catch {
+        return null
+      }
+    })().then((v) => alive && setState({ id: sessionId, v }))
+    return () => {
+      alive = false
+    }
+  }, [sessionId])
+  return state.id === sessionId ? state.v : undefined
+}
+
+/** 뒷무릎 각도 · 보행 주기: 이 회차의 실제 관절 각도로만 그린다. 못 만들면 칸을 뺀다(측정값이 아닌 합성 곡선은 싣지 않는다, 11-10) */
 function KneeCycle({ result }: { result: SessionResultOut }) {
-  const g = result.gaits.find((x) => x.gait_type === mainGaitOf(result))
-  const val = (code: string, limb: string) => g?.metrics.find((m) => m.metric_code === code && m.limb === limb && m.measurable)?.value ?? null
-  if (!g || val('rom_stifle', 'LH') == null || val('rom_stifle', 'RH') == null) return null
-  const [L, R] = (['LH', 'RH'] as const).map((leg) => fitCurve(kneeCycle.base, val('rom_stifle', leg), val('stance_ratio', leg)))
+  const knee = useRealKnee(result.id)
+  if (!knee) return null
+  const L = knee.L ?? [], R = knee.R ?? []
   const ref = kneeCycle.ref
   const all = [...L, ...R, ...ref.min, ...ref.max]
   const lo = Math.floor(Math.min(...all) / 10) * 10, hi = Math.ceil(Math.max(...all) / 10) * 10
@@ -149,8 +173,8 @@ function KneeCycle({ result }: { result: SessionResultOut }) {
         </g>
         <polygon points={[...pt(ref.max), ...pt(ref.min).reverse()].join(' ')} fill="#E9E6E1" opacity=".75" />
         <polyline points={line(ref.mean)} fill="none" stroke="#A0A7B2" strokeWidth="1.3" strokeDasharray="2 3" />
-        <polyline points={line(L)} fill="none" stroke={BLUE} strokeWidth="2" />
-        <polyline points={line(R)} fill="none" stroke="#E5604D" strokeWidth="2" strokeDasharray="5 4" />
+        {L.length ? <polyline points={line(L)} fill="none" stroke={BLUE} strokeWidth="2" /> : null}
+        {R.length ? <polyline points={line(R)} fill="none" stroke="#E5604D" strokeWidth="2" strokeDasharray="5 4" /> : null}
       </svg>
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '11.5px', color: '#5B6472' }}>
         <span><span style={{ display: 'inline-block', width: 16, borderTop: `2px solid ${BLUE}`, verticalAlign: 'middle', marginRight: 5 }} />왼쪽</span>

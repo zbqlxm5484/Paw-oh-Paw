@@ -1,5 +1,5 @@
 // report.html + main.py result_detail()·report(): 회차 결과 = 보고서(보호자용·수의사용), 실패 회차는 다시 찍기 안내
-import { Fragment, useEffect, type MouseEvent } from 'react'
+import { Fragment, useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
@@ -14,6 +14,8 @@ import { MOCK, isRemote, syncDogChart } from '../store/backend'
 import type { Account, Result } from '../store/types'
 import { PrintPdf } from './parts/ServerPdf'
 import { VetSections } from './parts/VetSections'
+import { api } from '../api/client'
+import { kneeChartView, loadKneeCurve, type KneeChartView } from '../views/reportContent'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -174,10 +176,38 @@ export default function Report() {
   )
 }
 
+/** 수의사용 뒷무릎 곡선(백엔드 회차): 이 회차 영상의 실제 관절 각도(GET /sessions/{id} → /shots/{id}/angles)로만 그린다.
+ *  undefined = 읽는 중, null = 못 만듦(그 칸을 뺀다). 측정값이 아닌 합성 곡선은 싣지 않는다(11-10) */
+function useRealKnee(sessionId: string | null): KneeChartView | null | undefined {
+  const [state, setState] = useState<{ id: string; v: KneeChartView | null }>({ id: '', v: null })
+  useEffect(() => {
+    if (!sessionId) return
+    let alive = true
+    loadKneeCurve({ session: (id) => api.session(id), angles: (id) => api.angles(id) }, sessionId, null)
+      .then((k) => alive && setState({ id: sessionId, v: k ? kneeChartView(k) : null }))
+      .catch(() => alive && setState({ id: sessionId, v: null }))
+    return () => {
+      alive = false
+    }
+  }, [sessionId])
+  if (!sessionId) return null
+  return state.id === sessionId ? state.v : undefined
+}
+
 /** 보고서 종이 한 장(화면·인쇄 공용). 회차 결과 화면과 인쇄 전용 화면(/print/reports/:rid)이 같이 쓴다 */
 export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: {
   acct: Account; r: Result; rd: ResultView['rd']; rp: ResultView['rp']; bm: BM; kind: string; fromServer: boolean; onReady?: () => void
 }) {
+  // 백엔드 회차의 무릎 곡선은 실제 각도로만. 시연 데이터 회차는 회차에 붙은 곡선(rd.kc)
+  const sid = fromServer && kind === 'v' ? ((r.src ?? '').split(':')[1] || r.id) : null
+  const realKnee = useRealKnee(sid)
+  const kneeEl = !fromServer ? <div className="rep-sec"><KneeChart kc={rd.kc} /></div> : realKnee ? <div className="rep-sec"><KneeChart kc={realKnee} /></div> : null
+  // 인쇄 준비 완료: 지난 측정 비교(VetSections)와 무릎 곡선을 모두 받은 뒤
+  const [vetReady, setVetReady] = useState(false)
+  const vetDone = useCallback(() => setVetReady(true), [])
+  useEffect(() => {
+    if (vetReady && realKnee !== undefined) onReady?.()
+  }, [vetReady, realKnee, onReady])
   return (
     <div className="print-paper" style={css('background:#fff;border-radius:6px;box-shadow:0 18px 50px rgba(27,36,51,.1);padding:48px 52px;display:flex;flex-direction:column;gap:22px;min-height:960px')}>
       <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{kind === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용'}</span></div>
@@ -263,7 +293,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       ) : (
         <>
           {/* 백엔드 보고서 시안 반영: 좌우 비교·지난 측정과 비교·무릎 가동 범위 변화·그 밖의 수치 */}
-          <VetSections acct={acct} r={r} fromServer={fromServer} onReady={onReady} knee={<div className="rep-sec"><KneeChart kc={rd.kc} /></div>} />
+          <VetSections acct={acct} r={r} fromServer={fromServer} onReady={vetDone} knee={kneeEl} />
         </>
       )}
       <div style={css('flex:1')}></div>
