@@ -4,7 +4,7 @@
 import { ApiError } from '../api/client'
 import { redirect, need_login, setLogin, current, currentStaff, type Go } from '../app/session'
 import * as config from '../config'
-import { on, f, BACKEND, type Handler } from './actions'
+import { on, f, petInputError, BACKEND, type Handler } from './actions'
 import { api, MOCK, SEX_OUT, SIZE_OUT, syncFromBackend, tokenStore, isRemote, syncAdmin } from './backend'
 import { db, dogOf, resultOf } from './db'
 import { remember } from './sessions_backend'
@@ -124,6 +124,8 @@ if (!MOCK) {
     const name = f(fd, 'name').trim(), breed = f(fd, 'breed').trim(), kg = f(fd, 'kg').trim()
     if (!(name && breed && kg)) return redirect(next_url, '이름·견종·체중을 입력해 주세요')
     const size = f(fd, 'size'), sex = f(fd, 'sex') || 'm', focus = f(fd, 'focus'), birth = f(fd, 'birth').trim()
+    const bad = petInputError(kg, birth)
+    if (bad) return redirect(next_url, bad)
     const body: Record<string, unknown> = {
       name, breed, weight_kg: Number(kg), size_class: size in config.SIZE ? SIZE_OUT[size] : null,
       birth_year: birth ? Number(birth) : null, sex: SEX_OUT[sex] ?? null, rehab_start_date: f(fd, 'rehab') || null,

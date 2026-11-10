@@ -36,6 +36,14 @@ export async function dispatch(path: string, fd: FormData): Promise<Go> {
   return { to: herePath() + window.location.search, toast: `처리할 수 없는 요청: ${path}` }
 }
 
+/** 반려견 폼 값 검사(11-09 QA: 체중 -3kg·2099년생이 등록됐다). 문제가 없으면 '' */
+export function petInputError(kg: string, birth: string, thisYear = new Date().getFullYear()): string {
+  const w = Number(kg)
+  if (!/^\d+(\.\d+)?$/.test(kg) || !(w >= 0.5 && w <= 100)) return '체중은 0.5~100kg 사이 숫자로 입력해 주세요'
+  if (birth && !(/^\d{4}$/.test(birth) && +birth >= 1990 && +birth <= thisYear)) return `출생 연도는 1990~${thisYear} 사이 네 자리로 입력해 주세요`
+  return ''
+}
+
 /** FormData 에서 문자열 하나(시제품의 Form("")) */
 export const f = (fd: FormData, k: string, dflt = ''): string => {
   const v = fd.get(k)

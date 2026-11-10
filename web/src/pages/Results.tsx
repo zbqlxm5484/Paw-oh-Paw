@@ -1,4 +1,5 @@
 // results.html + main.py results(): 분석 결과 목록(반려견 칩으로 거르기)
+// 11-09 QA: 반려견이 백 마리를 넘으면 칩만으로는 못 고른다 → 이름·견종·동물번호 검색으로 칩과 목록을 좁힌다. 칩은 분석이 있는 반려견만
 import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { usePage, useTitle } from '../app/page'
@@ -16,10 +17,14 @@ export default function Results() {
   if (!acct) return null
   const dog = query.get('dog') ?? 'all'
   const [shown, setShown] = useState(PAGE)
+  const [dq, setDq] = useState('')
   const filt = dogOf(acct, dog) ? dog : 'all'
+  const kw = dq.trim()
+  const hit = (id: string) => { const d = dogOf(acct, id); return !!d && (!kw || `${d.name} ${d.breed} ${d.no}`.includes(kw)) }
+  const hasRes = new Set(acct.results.map((r) => r.dog))
   const chips = [{ id: 'all', init: '전체', name: '전체', breed: '', ...avatar(filt === 'all') }]
-  chips.push(...acct.dogs.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name, breed: d.breed || '견종 미입력', ...avatar(filt === d.id) })))
-  const all = acct.results.filter((r) => dogOf(acct, r.dog) && (filt === 'all' || r.dog === filt))
+  chips.push(...acct.dogs.filter((d) => hasRes.has(d.id) && (hit(d.id) || d.id === filt)).map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name, breed: d.breed || '견종 미입력', ...avatar(filt === d.id) })))
+  const all = acct.results.filter((r) => dogOf(acct, r.dog) && (filt === 'all' ? hit(r.dog) : r.dog === filt))
   const rows = all
     .slice(0, shown)
     .map((r, i) => ({
@@ -31,7 +36,13 @@ export default function Results() {
   return (
     <Base acct={acct} me={me} nav="results" toast={toast}>
       <main style={css('max-width:none;margin:0;padding:32px 80px 96px;display:flex;flex-direction:column;gap:20px')}>
-        <h1 style={css('margin:0;font-size:34px;font-weight:800;letter-spacing:-0.9px')}>분석 결과</h1>
+        <div style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
+          <h1 style={css('margin:0;font-size:34px;font-weight:800;letter-spacing:-0.9px')}>분석 결과</h1>
+          <label style={css('width:360px;max-width:100%;height:44px;border-radius:22px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;gap:8px;padding:0 16px;color:#8E949C')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" style={{ flex: 'none' }}><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8"></circle><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"></path></svg>
+            <input value={dq} onChange={(e) => { setDq(e.target.value); setShown(PAGE) }} placeholder="반려견 이름 · 견종 · 동물번호로 찾기" style={css('flex:1;min-width:0;border:none;outline:none;font-size:15px;background:transparent;color:#1B2433;font-family:inherit')} />
+          </label>
+        </div>
         <div style={css('display:flex;gap:28px;overflow-x:auto;padding:8px 6px 6px;align-items:flex-start')}>
           {chips.map((d) => (
             <a key={d.id} className="lk" href={link(`/results?dog=${d.id}`)} style={css('flex:none;width:96px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center')}>

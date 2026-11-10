@@ -65,7 +65,7 @@ function fromFixture(only?: string): Db {
     for (const r of a.results) r.date = r.day ? kdate(r.day) : r.date
     accounts[a.id] = {
       ...a,
-      jobs: a.jobs.map(({ started_ago, ...j }) => ({ ...j, started: now - started_ago * 1000 })),
+      jobs: a.jobs.map(({ started_ago, ...j }) => ({ ...j, started: now - started_ago * 1000, hold: true })),
     } as Account
   }
   return {
@@ -111,7 +111,23 @@ export const resultOf = (a: Account, id: string | null | undefined): Result | un
 export const jobOf = (a: Account, id: string | null | undefined): Job | undefined => a.jobs.find((j) => j.id === id)
 export const activeJobs = (a: Account): Job[] => a.jobs.filter((j) => j.result_id == null)
 export const contractStatus = (a: Account): string => (a.contract_ends && a.contract_ends < isoToday() ? 'EXPIRED' : 'ACTIVE')
-export const jobProgress = (j: Job): number => Math.min(j.remote ? 4.9 : 5, ((Date.now() - j.started) / 1000 / ANALYSIS_SEC) * 5)   // 백엔드 회차는 서버 완료 전까지 마지막 단계에서 기다린다
+/** 분석 진행(0~5). 가짜 서버 모드는 시간으로, 백엔드 회차는 서버의 촬영·회차 상태로(11-09: 시간으로 98% 까지 채운 뒤 1분 넘게 멈춰 보이던 문제) */
+export const jobProgress = (j: Job): number => {
+  if (j.hold) return 2.6 // 시연 데이터의 분석 중 견본: '관절점 찾는 중' 에 머문다(결과를 지어내지 않는다)
+  if (!j.remote) return Math.min(5, ((Date.now() - j.started) / 1000 / ANALYSIS_SEC) * 5)
+  const s = j.srv
+  if (!s || !s.total) return 0.3
+  if (s.done < s.total) return 0.5 + (s.done / s.total) * 3.4   // 영상마다 GPU 관절점 분석: 막대 대부분
+  return s.status === 'AGGREGATING' ? 4.2 : s.status === 'DONE' ? 4.8 : 3.9
+}
+/** 진행 막대 옆 문구. 백엔드 회차는 서버가 지금 하는 일 */
+export const jobStep = (j: Job, steps: string[]): string => {
+  if (!j.remote) return steps[Math.min(4, Math.trunc(jobProgress(j)))]
+  const s = j.srv
+  if (!s || !s.total) return '분석을 시작하는 중'
+  if (s.done < s.total) return `영상 분석 중 ${s.done}/${s.total}`
+  return s.status === 'DONE' ? '결과 정리 중' : '회차 결과 계산 중'
+}
 
 // ── Store 메서드 ──
 export const getAccount = (id: string | null | undefined): Account | undefined => (id ? db.accounts[id] : undefined)
