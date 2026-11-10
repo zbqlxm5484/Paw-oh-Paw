@@ -2,6 +2,7 @@
 
 import shutil
 import tempfile
+import threading
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -113,3 +114,65 @@ def test_delete_prefix_never_removes_the_root(storage: LocalStorage) -> None:
         with pytest.raises(StorageError):
             storage.delete_prefix(prefix)
     assert storage.root.is_dir() and storage.read_bytes("k/a.txt") == b"x"
+
+
+# ---- 동시에 쓰고 지우기(S15P31A404-274) ----
+
+
+def test_prune_goes_on_when_another_request_removed_the_folder_first(storage: LocalStorage) -> None:
+    # 두 요청이 같은 빈 폴더를 정리하면 늦은 쪽은 이미 없는 폴더를 만난다. 오류 없이 위 폴더로 넘어가야 한다
+    (storage.root / "e" / "a").mkdir(parents=True)  # e/a/b는 다른 요청이 먼저 지웠다
+    storage._prune_empty_dirs(storage.root / "e" / "a" / "b")
+    assert not (storage.root / "e").exists()
+
+    storage.write_bytes("i/d/s/keep.txt", b"x")
+    storage._prune_empty_dirs(storage.root / "i" / "d" / "gone")
+    assert storage.read_bytes("i/d/s/keep.txt") == b"x"  # 비어 있지 않은 폴더에서 멈춘다
+    assert storage.root.is_dir()
+
+
+def test_delete_of_a_file_removed_meanwhile_is_not_an_error(storage: LocalStorage, monkeypatch) -> None:
+    storage.write_bytes("i/d/a.txt", b"x")
+    path = storage.path("i/d/a.txt")
+    original = Path.stat
+
+    def stat_after_removal(self: Path, *args, **kwargs):  # is_file()과 stat() 사이에 다른 요청이 지운 경우
+        if self == path and not kwargs:
+            self.unlink(missing_ok=True)
+        return original(self, *args, **kwargs)
+
+    assert path.is_file()
+    monkeypatch.setattr(Path, "stat", stat_after_removal)
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    assert storage.delete("i/d/a.txt") == 0
+
+
+def test_many_threads_write_and_delete_under_one_folder(storage: LocalStorage) -> None:
+    # 같은 기관 폴더 아래에서 올리기·지우기가 겹친다. 빈 폴더 정리가 다른 요청의 쓰기·지우기를 깨뜨리면 안 된다
+    errors: list[Exception] = []
+    gate = threading.Barrier(8)
+
+    def work(n: int) -> None:
+        try:
+            gate.wait()
+            for i in range(150):
+                key = f"inst/dog{n % 2}/s{n}/{i}/analysis.json"
+                storage.write_bytes(key, b"{}")
+                src = storage.root / f"src-{n}-{i}.bin"
+                src.write_bytes(b"v")
+                storage.put_file(src, f"inst/dog{n % 2}/s{n}/{i}/original.mp4")
+                if i % 2:
+                    storage.delete_prefix(f"inst/dog{n % 2}/s{n}/{i}/")
+                else:
+                    storage.delete(key)
+                    storage.delete(f"inst/dog{n % 2}/s{n}/{i}/original.mp4")
+        except Exception as error:  # 스레드의 오류를 모아서 본다
+            errors.append(error)
+
+    threads = [threading.Thread(target=work, args=(n,)) for n in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert not (storage.root / "inst").exists()
