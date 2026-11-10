@@ -21,3 +21,13 @@
 | 10-28 | 기업 정답(260820, 제니 한 마리)·와우와우가 오토라벨에서 관절을 어느 방향으로 옮겼나: 통계, 겹쳐 보기, 나란히 보기 | `labels/direction_stats.py`, `gt_overlays.py`, `gt_side_by_side.py`, `ww_overlays.py`, `ww_compare.py` | 무릎은 반대 방향(기업 머리 쪽, 와우와우 꼬리 쪽), 기업은 몸통 점을 0~5%만 고침 |
 | 10-28 | 와우와우 30장을 기업 방식으로 다시 라벨링할 표본 (CVAT 태스크 18) | `labels/select30.py` | 라벨링 중 |
 | 10-29 | 비스듬한 통과 처리 방법별 KPI-01·02 (S15P31A404-102): 정규화 없음, v0, 비스듬한 통과만 기울기 보정, 비스듬한 통과 제외, 가로 늘리기 없이 거리만 보정(iso). 실제 26·72개, 합성 카메라 | `normalize/oblique_fix.py` | iso 만 KPI-01 을 줄임(실제 +7%·+4%, 합성 yaw +21%), v0 는 −14%·−7% 로 키움. KPI-02 는 모두 그대로. 정규화 v1 기본을 iso 로 바꿈(docs/normalize/oblique.md) |
+| 10-22 | flip test 비교와 정답 부분 집합 재채점 | `run/flip_test.sh`, `make_gt_subsets.py`, `rescore_split.sh` | 위키 작업 기록 261022 flip test |
+| 10-27~11-02 | 라벨러 맞추기 키트(제니 20장)와 기업 정답 비교, 6명 결과, 관절점 예시 그림 | `calib/make_kit.py`, `compare.py`, `pair.py`, `kpi.py`, `fig213.py` | 위키 05-보고 261102 라벨러 맞추기 6명 결과 |
+| 10-27 | 의사 라벨 학습(뒷다리 비터비 적용, 미적용) | `pl/run_pl2.sh`, `prep_pl.py`, `make_queue4.py` | 제니 9.2~10.9°로 기각(위키 실험 결과 종합 10-27 저녁) |
+| 10-29 | 탐지 간격 K와 fp16 스윕, 빈 구간 확인(probe), TTA 켠 구성 시간, 시드 재현성, 머리만 학습의 백본 변화 | `run/run_sweep_speed.sh`, `make_probe_models.py`, `patch_probe.py`, `run_probe_speed.sh`, `run_probe_server.sh`, `make_tta_models.py`, `run_tta_speed.sh`, `tta_check.py`, `run_seed_check.sh`, `seed_compare.py`, `backbone_check.py`, `eval_runs/box_motion.py`, `gap_sim.py` | 위키 05-보고 261029 AI 주간 실험 정리 |
+| 11-02 | G3 백본 완전 고정(`_fz`) | `cv/run_fz.sh`, `run/backbone_check_fz.py` | 시트 E-589, 590 (6.71°에서 7.60°로 기각) |
+| 11-02 | 오토라벨의 틀린 점을 빼거나 TTA 재예측, 정답으로 바꾼 학습(교정 상한) | `cv/run_orc.sh`, `oracle_tta.py`, `oracle_make.py`, `make_queue_orc.py` | 결과 위치 확인 필요 |
+| 11-03 | 팀 라벨 93장 학습, 기준이 갈린 관절이나 사진 빼기 (S15P31A404-212) | `cv/run_212.sh`, `make_212.py` | 시트 E-765~E-782 |
+| 11-03 | 가중치 5개와 추론 증강 7가지 선별, 뒷다리 바로잡기 강도 (기업 점검 후보) | `cv/screen/run_screen.sh`, `screen.py`, `tta_eval.py`, `lr_pass.py`, `queue_team.jsonl` | 시트 E-807~E-822, 기업 점검 4번 가중치(`wise_0.5.pth`)가 여기서 나옴 |
+| 11-03 | 가벼운 TTA(t2) 구성의 처리 시간 | `run/make_t2_models.py`, `run_t2_speed.sh` | 시트 E-823~E-828 |
+| 11-09 | 탐지기 상자 기준 TTA 비교(S15P31A404-216), 혼합 가중치 t0, t2, t4 비교와 영상 추론 시간(S15P31A404-297) | `eval_runs/detbox_tta.py`, `tta_compare.py`, `tta_video_timing.py` | Jira S15P31A404-216, 297 |
