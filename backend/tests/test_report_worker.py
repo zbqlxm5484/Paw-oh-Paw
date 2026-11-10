@@ -329,6 +329,49 @@ def test_a_number_that_differs_from_the_session_metric_fails_the_check_without_a
     assert not get_storage().path(report_key(dog.institution_id, dog.id, session.id, row.id)).exists()
 
 
+def _generate_with_previous(input_path: Path, output: Path) -> ReportResult:
+    """실제 모듈처럼 직전 회차 비교 표의 직전 값·차이까지 싣는 생성 함수(272)."""
+    data = json.loads(input_path.read_text(encoding="utf-8"))
+    numbers = tuple(build_tables(data["result"], data.get("previous"))[1])
+    return replace(fake_generate(input_path, output), numbers=numbers)
+
+
+def _with_older_session(db: Session, dog, staff) -> MeasureSession:
+    older = _done_session(db, dog, staff, reports=False)
+    older.measured_on = today_local().replace(day=1) if today_local().day > 1 else today_local()
+    db.flush()
+    db.commit()
+    return _done_session(db, dog, staff)
+
+
+def test_previous_values_and_changes_are_verified_against_the_previous_session(db: Session, dog, staff, caplog) -> None:
+    session = _with_older_session(db, dog, staff)
+    settings = _settings()
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=FakeExecutor, generate=_generate_with_previous)
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        _run(db, reporter, settings)
+        _run(db, reporter, settings)
+    assert _reports(db, session)["OWNER"].status == "DONE"
+    # 이번 회차 6개 + 직전 값 2개(LH·RH) + 차이 2개 = 10
+    assert any("numbers=10 omitted=0" in message for message in caplog.messages)
+
+
+def test_a_previous_value_that_differs_from_the_previous_session_fails_the_check(db: Session, dog, staff) -> None:
+    session = _with_older_session(db, dog, staff)
+    settings = _settings()
+
+    def generate(input_path: Path, output: Path) -> ReportResult:
+        result = _generate_with_previous(input_path, output)
+        numbers = tuple(replace(n, value=n.value + 0.5) if n.kind == "previous" else n for n in result.numbers)
+        return replace(result, numbers=numbers)
+
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=FakeExecutor, generate=generate)
+    _run(db, reporter, settings)
+    _run(db, reporter, settings)
+    row = _reports(db, session)["OWNER"]
+    assert (row.status, row.fail_reason, row.file_key) == ("FAILED", "REPORT_CHECK_FAILED", None)
+
+
 def test_a_number_the_session_does_not_have_fails_the_check(db: Session, dog, staff) -> None:
     session = _done_session(db, dog, staff)
     settings = _settings()

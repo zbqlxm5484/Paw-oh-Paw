@@ -28,6 +28,7 @@ from pathlib import Path
 from app.report import ReportCheckError, ReportError
 from app.report.checks import ensure_checked, summarize
 from app.report.generate import generate_report, render
+from app.report.inputs import parse_input
 from app.report.samples import EDITIONS, case_names, sample_input
 from app.report.verify import compare_numbers, reference_from_result
 from app.report.verify import summarize as summarize_numbers
@@ -62,7 +63,10 @@ def _write_input(out_dir: Path, case: str, edition: str, tolerance: dict[str, fl
 def _verify(input_path: Path, numbers) -> None:
     """실린 숫자를 입력의 회차 결과로 만든 기준값과 대조한다(기업 서버가 하는 것과 같은 방식)."""
     data = json.loads(input_path.read_text(encoding="utf-8"))
-    verification = compare_numbers(numbers, reference_from_result(data["result"]))
+    reference = reference_from_result(
+        data["result"], data.get("previous"), model_changed=parse_input(data).previous_model_changed
+    )
+    verification = compare_numbers(numbers, reference)
     if not verification.ok or verification.omitted:
         raise ReportError(f"실린 숫자 대조 실패: {summarize_numbers(verification)}")
 

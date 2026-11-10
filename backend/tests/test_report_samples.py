@@ -35,7 +35,8 @@ def test_every_case_renders_passes_the_checks_and_matches_its_own_numbers(case: 
     data = sample_input(case, edition)
     rendered = render(data)
     ensure_checked(rendered.texts, edition=edition)  # 금지 표현 0건, 보호자용 용어 설명, 고정 문구
-    verification = compare_numbers(rendered.numbers, reference_from_result(data["result"]))
+    reference = reference_from_result(data["result"], data["previous"], model_changed=case == "model_changed")
+    verification = compare_numbers(rendered.numbers, reference)
     assert verification.ok, verification.mismatches
     assert verification.omitted == ()
     assert "보행 평가 보조 자료" in rendered.html
@@ -60,14 +61,16 @@ def test_first_session_has_no_previous_note_but_both_gaits() -> None:
 def test_follow_up_shows_all_three_change_labels() -> None:
     for edition in EDITIONS:
         html = _html("follow_up", edition)
-        assert ", 증가)" in html and ", 감소)" in html and ", 범위 안)" in html
+        assert " 증가</span>" in html and " 감소</span>" in html and " 범위 안</span>" in html
+        assert "<h2>직전 회차와 비교</h2>" in html
         assert "2026-10-14" in html  # 직전 회차 날짜
 
 
 def test_model_change_keeps_values_but_no_change_labels() -> None:
     html = _html("model_changed", "VET")
     assert "분석 방식이 달라" in html
-    assert ", 증가)" not in html and ", 감소)" not in html and ", 범위 안)" not in html
+    assert " 증가</span>" not in html and " 감소</span>" not in html and " 범위 안</span>" not in html
+    assert 'class="delta"' not in html and 'class="pair"' in html  # 값은 나란히, 차이와 변화는 없다
 
 
 def test_unmeasurable_and_one_side_cases_carry_the_reason_texts() -> None:
@@ -168,15 +171,15 @@ def test_pass_counts_fit_the_aggregation_rule(case: str) -> None:
 def test_follow_up_keeps_labels_and_both_value_only_kinds() -> None:
     """정직한 통과 수로도 증가·감소·범위 안이 남고, 기준 없음·통과 부족은 값만 나온다."""
     (walk, trot) = render(sample_input("follow_up", "VET")).tables
-    rows = {row.code: row for row in trot.rows}
+    rows = {row.code: row for row in trot.changes}
     labels = {rows["rom_stifle"].cells["LH"].change, rows["rom_hip"].cells["LH"].change}
     labels.add(rows["rom_stifle"].cells["RH"].change)
     assert labels == {"INCREASE", "DECREASE", "WITHIN_RANGE"}
     too_few, no_range = rows["rom_hip"].cells["RH"], rows["rom_elbow"].cells["LF"]
-    assert too_few.previous and too_few.change is None
-    assert no_range.previous and no_range.change is None
-    # 평보는 좌우 3회씩이고 직전 회차에 평보가 없어 변화가 하나도 붙지 않는다
-    assert all(cell.change is None for row in walk.rows for cell in row.cells.values())
+    assert too_few.diff and too_few.change is None
+    assert no_range.diff and no_range.change is None
+    # 직전 회차에 평보가 없어 평보는 비교 표가 없다
+    assert walk.changes == []
 
 
 def test_unmeasurable_top_item_is_not_held_against_the_tolerance() -> None:
@@ -191,7 +194,7 @@ def test_unmeasurable_top_item_is_not_held_against_the_tolerance() -> None:
 
 
 def _verified(data: dict):
-    return compare_numbers(render(data).numbers, reference_from_result(data["result"]))
+    return compare_numbers(render(data).numbers, reference_from_result(data["result"], data.get("previous")))
 
 
 def _top_trot_line(data: dict) -> dict:
