@@ -112,3 +112,15 @@ a.memo-card[href]:hover { border-color:#E2C9B4; }
 
 /* 분석 결과 오른쪽 칸의 메모: 세로로 쌓을 때는 가로 줄용 폭(210px)이 높이로 바뀌지 않게 */
 .memo-col > .memo-card { flex: none; }
+
+/* 목록 표(홈·분석 결과): 칸 너비는 style 의 --tc, 최소 폭은 --tw. 좁은 창(1000px 이하)에서는 --tc-n·--tw-n 으로 바꾸고
+   덜 중요한 칸(.tbl-opt)을 숨겨 800px 에서도 칸이 잘리지 않게 한다(11-07 QA 10). .tbl-n 은 좁은 창에서만 보인다 */
+.tbl { min-width: var(--tw); }
+.tbl-r { grid-template-columns: var(--tc); }
+.tbl-n { display: none; }
+@media (max-width: 1000px) {
+  .tbl { min-width: var(--tw-n, var(--tw)); }
+  .tbl-r { grid-template-columns: var(--tc-n, var(--tc)); }
+  .tbl-opt { display: none !important; }
+  .tbl-n { display: inline; }
+}

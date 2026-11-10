@@ -10,7 +10,7 @@ import { body_map, memo_panel, owner_guide, result_view, seg } from '../views/vi
 import { pystr } from '../views/pyfmt'
 import { DogPanel } from './parts/DogPanel'
 import { link } from '../config'
-import { MOCK } from '../store/backend'
+import { MOCK, isRemote, syncDogChart } from '../store/backend'
 import { PrintPdf, ServerPdf } from './parts/ServerPdf'
 import { VetSections } from './parts/VetSections'
 
@@ -104,6 +104,11 @@ export default function Report() {
   const d = acct && r ? dogOf(acct, r.dog) : undefined
   const v = acct && r ? result_view(acct, r) : null
   useTitle(`${v ? v.rd.name : ''} 분석 결과 · Paw oh Paw`)
+  // 오른쪽 칸 메모·진료 기록: 백엔드 기관이면 그 반려견 차트를 서버에서 읽는다(271)
+  const acctId = acct?.id ?? '', dogId = d?.id ?? ''
+  useEffect(() => {
+    if (acctId && dogId && isRemote(acctId)) void syncDogChart(acctId, dogId).catch(() => undefined)
+  }, [acctId, dogId])
   // PDF 저장 파일명: "261108 콩이 분석 결과 (보호자용)" — 회차 측정일 YYMMDD
   const pdfName = r ? `${r.day.replace(/-/g, '').slice(2)} ${v ? v.rd.name : ''} 분석 결과 (${type === 'v' ? '수의사용' : '보호자용'})` : undefined
   let go: Go | null = null

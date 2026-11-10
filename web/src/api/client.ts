@@ -89,7 +89,39 @@ export interface DogOut {
   birth_year: number | null; sex: string | null; rehab_start_date: string | null; focus_limb: string | null
   baseline_session_id: string | null; memo: string | null; version: number
   session_count: number; last_measured_on: string | null; open_session_id: string | null; created_at: string; updated_at: string
+  // 271(!130) 뒤 칸. 예전 서버면 undefined
+  /** 동물번호·보호자. owner_phone 은 상세·등록·수정 응답에만 있고 목록은 null(뒤 4자리는 owner_phone_last4) */
+  chart_no?: string | null; owner_name?: string | null; owner_phone?: string | null; owner_phone_last4?: string | null
+  /** PRE·REHAB·DONE. stage_changed_on 은 서버가 적는다 */
+  stage?: 'PRE' | 'REHAB' | 'DONE'; stage_changed_on?: string | null
+  latest_vital?: VitalOut | null
+  last_surgery?: HistorySummaryOut | null; last_diagnosis?: HistorySummaryOut | null
+  badges?: DogBadgeOut[]; changes?: DogChangeOut[]; last_symmetry?: number | null
 }
+export interface HistorySummaryOut { occurred_on: string; title: string; site: string | null }
+/** 홈 특이사항 배지. 글은 화면이 만든다 */
+export interface DogBadgeOut { code: 'SURGERY' | 'DIAGNOSIS' | 'IMPORTANT_NOTE' | string; title: string | null; site: string | null; on: string }
+/** 최근 변동(기본 7일). delta 는 GAIT_* 에서만 */
+export interface DogChangeOut { code: 'SURGERY_ADDED' | 'IMPORTANT_NOTE' | 'RESHOOT_NEEDED' | 'GAIT_BETTER' | 'GAIT_WORSE' | string; on: string; delta: number | null }
+export interface StaffRef { id: string; name: string }
+/** 바이탈(하루 한 줄). 재지 않은 값은 null */
+export interface VitalOut {
+  id: string; measured_on: string; weight_kg: number | null; temp_c: number | null; heart_rate: number | null; sbp: number | null; dbp: number | null
+  staff: StaffRef | null; session_id: string | null; created_at: string; updated_at: string
+}
+export interface VitalIn { weight_kg?: number | null; temp_c?: number | null; heart_rate?: number | null; sbp?: number | null; dbp?: number | null }
+/** 진단 이력(진단·수술·재활) */
+export interface DogHistoryOut {
+  id: string; occurred_on: string; kind: 'DIAGNOSIS' | 'SURGERY' | 'REHAB'; title: string; site: string | null; clinician: string | null
+  staff: StaffRef | null; created_at: string
+}
+export interface HistoryIn { occurred_on?: string; kind?: string; title?: string; site?: string | null; clinician?: string | null; stage?: string }
+/** 메모(CAUTION·GUARDIAN·BOOKING·OTHER)·진료 기록(S·O·A·P) */
+export interface NoteOut {
+  id: string; dog_id: string; session_id: string | null; category: string; body: string; important: boolean
+  staff: StaffRef | null; revision_count: number; created_at: string; updated_at: string
+}
+export interface NoteRevisionOut { id: string; body: string; category: string; important: boolean; staff: StaffRef | null; revised_at: string }
 export interface Paged<T> { items: T[]; total: number; page: number; size: number }
 export interface ReasonOut { code: string; message: string }
 export interface ShotOut { id: string; seq_no: number; status: string; fail_reason: ReasonOut | null; validity: string | null; uploaded_at: string; analyzed_at: string | null; video_status?: string }
@@ -188,6 +220,25 @@ export const api = {
   /** 회차 비교(15.8). base = BASELINE·PREVIOUS·회차 id, target 을 빼면 최근 DONE 회차 */
   compare: (dogId: string, base: string, target?: string, gait?: string) =>
     request<CompareOut>(`/dogs/${dogId}/compare?base=${encodeURIComponent(base)}${target ? `&target=${target}` : ''}${gait ? `&gait_type=${gait}` : ''}`),
+  // ── 차트 자료(271): 바이탈·진단 이력·메모·진료 기록 ──
+  /** 바이탈 목록(최신 날짜가 앞, 전부) */
+  vitals: (dogId: string) => request<{ items: VitalOut[] }>(`/dogs/${dogId}/vitals`),
+  /** 그날 바이탈 저장. 있으면 보낸 값만 바꾼다(지우는 API 는 없다) */
+  putVital: (dogId: string, day: string, body: VitalIn) => request<VitalOut>(`/dogs/${dogId}/vitals/${day}`, { method: 'PUT', body }),
+  /** 진단 이력(오래된 것부터) */
+  history: (dogId: string) => request<{ items: DogHistoryOut[] }>(`/dogs/${dogId}/history`),
+  addHistory: (dogId: string, body: HistoryIn) => request<DogHistoryOut>(`/dogs/${dogId}/history`, { method: 'POST', body }),
+  updateHistory: (dogId: string, id: string, body: HistoryIn) => request<DogHistoryOut>(`/dogs/${dogId}/history/${id}`, { method: 'PATCH', body }),
+  deleteHistory: (dogId: string, id: string) => request<void>(`/dogs/${dogId}/history/${id}`, { method: 'DELETE' }),
+  /** 메모·진료 기록(쓴 시각이 늦은 것부터). size 는 1~200 */
+  notes: (dogId: string, page = 1, size = 200) => request<Paged<NoteOut>>(`/dogs/${dogId}/notes?page=${page}&size=${size}`),
+  addNote: (dogId: string, body: { category: string; body: string; important?: boolean; session_id?: string }) =>
+    request<NoteOut>(`/dogs/${dogId}/notes`, { method: 'POST', body }),
+  /** SOAP 여러 칸을 같은 시각으로(1~8건) */
+  addNotes: (dogId: string, body: { session_id?: string; notes: { category: string; body: string; important?: boolean }[] }) =>
+    request<{ items: NoteOut[] }>(`/dogs/${dogId}/notes/batch`, { method: 'POST', body }),
+  updateNote: (id: string, body: { body?: string; category?: string; important?: boolean }) => request<NoteOut>(`/notes/${id}`, { method: 'PATCH', body }),
+  noteRevisions: (id: string) => request<{ items: NoteRevisionOut[] }>(`/notes/${id}/revisions`),
   sessionReports: (sessionId: string) => request<SessionReportsOut>(`/sessions/${sessionId}/reports`),
   regenerateReport: (reportId: string) => request<ReportOut>(`/reports/${reportId}/regenerate`, { method: 'POST' }),
   institutions: () => request<{ items: InstitutionAdminOut[] }>('/admin/institutions'),

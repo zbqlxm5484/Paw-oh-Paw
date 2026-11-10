@@ -359,16 +359,21 @@ function _vital_from_form(day: string, kg: string, temp: string, hr: string, sbp
 post('/dogs/:dog_id/vitals', (p, fd) => {
   const acct = current()
   if (!acct) return need_login()
-  const day = f(fd, 'day'), author = f(fd, 'author')
+  const day = f(fd, 'day'), author = f(fd, 'author'), next_url = f(fd, 'next_url')
   const d = dogOf(acct, p.dog_id)
-  const back = `/dogs/${p.dog_id}?v=${day || isoToday()}`
+  const back = next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}?v=${day || isoToday()}`
   if (!d) return redirect('/home')
   if (!author.trim()) return redirect(back, '작성자를 적어 주세요')
   const v = _vital_from_form(day, f(fd, 'kg'), f(fd, 'temp'), f(fd, 'hr'), f(fd, 'sbp'), f(fd, 'dbp'), author)
   if (!v) return redirect(back, '값을 하나 이상 적어 주세요')
-  d.vitals.unshift(v)
+  const same = d.vitals.find((x) => x.day === v.day)
+  if (same) {
+    // 그날 줄이 이미 있으면 적은 값만 바꾼다(서버 PUT /vitals/{날짜} 와 같게)
+    for (const k of ['kg', 'temp', 'hr', 'sbp', 'dbp'] as const) if (v[k]) same[k] = v[k]
+    same.author = v.author
+  } else d.vitals.unshift(v)
   d.vitals.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
-  if (v.kg) d.kg = v.kg
+  if (v.kg && d.vitals[0].day === v.day) d.kg = v.kg
   return redirect(back, '바이탈을 기록했습니다')
 })
 
@@ -395,6 +400,29 @@ post('/dogs/:dog_id/history', (p, fd) => {
   return redirect(back, '진단 이력에 남겼습니다')
 })
 
+post('/dogs/:dog_id/history/:hid', (p, fd) => {
+  const acct = current()
+  if (!acct) return need_login()
+  const d = dogOf(acct, p.dog_id)
+  const back = `/dogs/${p.dog_id}?tab=dx`
+  if (!d) return redirect('/home')
+  const i = d.history.findIndex((h, k) => (h.id || `i${k}`) === p.hid)
+  if (i < 0) return redirect(back, '기록을 찾을 수 없습니다')
+  if (f(fd, 'delete')) {
+    d.history.splice(i, 1)
+    return redirect(back, '진단 이력에서 지웠습니다')
+  }
+  const title = f(fd, 'title').trim()
+  if (!title) return redirect(`${back}&hedit=${encodeURIComponent(p.hid)}`, '내용을 적어 주세요')
+  const kind = f(fd, 'kind'), site = f(fd, 'site')
+  Object.assign(d.history[i], {
+    day: f(fd, 'day') || d.history[i].day, kind: ['진단', '수술', '재활'].includes(kind) ? kind : d.history[i].kind,
+    title, site: site in config.SITE ? site : '', by: f(fd, 'by').trim(),
+  })
+  d.history.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+  return redirect(back, '진단 이력을 고쳤습니다')
+})
+
 // ── 반려견 등록·수정·삭제·기준 회차 ──
 function _pet_from_form(fd: FormData) {
   const sex = F(fd, 'sex', 'm'), size = f(fd, 'size'), focus = f(fd, 'focus')
@@ -403,6 +431,20 @@ function _pet_from_form(fd: FormData) {
     sex: sex in config.SEX ? sex : 'm', size: size in config.SIZE ? size : '',
     rehab: f(fd, 'rehab'), focus: focus in config.LIMB ? focus : null, memo: f(fd, 'memo').trim(),
   }
+}
+
+/** 동물번호·보호자·단계: 폼에 칸이 있을 때만 바꾼다. 단계가 바뀌면 바뀐 날을 오늘로 */
+function _chart_from_form(fd: FormData, d?: Dog): Partial<Dog> {
+  const out: Partial<Dog> = {}
+  if (fd.has('no')) out.no = f(fd, 'no').trim()
+  if (fd.has('owner')) out.owner = f(fd, 'owner').trim()
+  if (fd.has('phone')) out.phone = f(fd, 'phone').trim()
+  const stage = f(fd, 'stage')
+  if (stage in config.STAGE && (!d || stage !== d.stage)) {
+    out.stage = stage
+    out.stage_day = isoToday()
+  }
+  return out
 }
 
 post('/dogs', (_p, fd) => {
@@ -420,7 +462,7 @@ post('/dogs', (_p, fd) => {
     if (version && /^\d+$/.test(version) && parseInt(version, 10) !== d.version)
       // 다른 담당자가 먼저 고쳤다
       return redirect(next_url, '다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.')
-    Object.assign(d, data)
+    Object.assign(d, data, _chart_from_form(fd, d))
     d.version += 1
     return redirect(next_url, '저장했습니다')
   }
@@ -428,6 +470,8 @@ post('/dogs', (_p, fd) => {
     id: new_id('p'), ...data, base: null, no: '', owner: '', phone: '', stage: 'rehab', stage_day: '',
     history: [], vitals: [], notes: [], images: [], version: 0,
   }
+  Object.assign(nd, _chart_from_form(fd))
+  nd.stage_day = '' // 등록할 때 고른 단계는 바뀐 것이 아니다(서버도 stage_changed_on = null)
   d = nd
   acct.dogs.push(d)
   const sep = next_url.includes('?') ? '&' : '?'

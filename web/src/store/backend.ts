@@ -1,10 +1,10 @@
 // 백엔드 연결. 화면은 저장소(db)만 보고, 여기서 백엔드 응답을 db 모양으로 바꿔 넣는다.
 // - 가짜 서버 모드(vite --mode mock): 백엔드 없이 시연 데이터(fixture)만 쓴다. 웹 시제품과 픽셀 비교할 때 쓴다.
 // - 기본 모드: 로그인·가입·내 정보·반려견·회차 시작·영상 올리기·관리자는 백엔드 develop API 를 부른다.
-//   백엔드에 아직 없는 메모·바이탈·진단 이력·영상·회차 결과는 이 브라우저 저장소에만 둔다(백엔드 요청 문서 1~9절).
-import { api, tokenStore, type DogOut, type StaffOut } from '../api/client'
+//   바이탈·진단 이력·메모·진료 기록(271)은 반려견 차트를 열 때 syncDogChart 가 서버에서 읽는다.
+import { api, tokenStore, type DogHistoryOut, type DogOut, type NoteOut, type NoteRevisionOut, type StaffOut, type VitalOut } from '../api/client'
 import { db, changed } from './db'
-import type { Account, Dog, Staff } from './types'
+import type { Account, Dog, History, Note, Staff, Vital } from './types'
 import { syncSessions } from './sessions_backend'
 
 /** 백엔드에서 읽어 온 기관 id(시연 기관 demo 와 구분) */
@@ -18,11 +18,57 @@ export const SEX_OUT: Record<string, string> = { m: 'MALE', f: 'FEMALE', mn: 'MA
 const SIZE_IN: Record<string, string> = { SMALL: 'S', MEDIUM: 'M', LARGE: 'L' }
 export const SIZE_OUT: Record<string, string> = { S: 'SMALL', M: 'MEDIUM', L: 'LARGE' }
 
-/** DogOut → 화면용 Dog. 백엔드에 없는 칸(동물번호·보호자·단계·기록들)은 이미 이 브라우저에 있던 값을 그대로 둔다 */
-export function toDog(o: DogOut, prev?: Dog): Dog {
+export const STAGE_IN: Record<string, string> = { PRE: 'pre', REHAB: 'rehab', DONE: 'done' }
+export const STAGE_OUT: Record<string, string> = { pre: 'PRE', rehab: 'REHAB', done: 'DONE' }
+const KIND_IN: Record<string, string> = { DIAGNOSIS: '진단', SURGERY: '수술', REHAB: '재활' }
+export const KIND_OUT: Record<string, string> = { 진단: 'DIAGNOSIS', 수술: 'SURGERY', 재활: 'REHAB' }
+/** 메모 분류: 서버 영문 코드 ↔ 화면 이름. S·O·A·P 는 그대로 */
+const CAT_IN: Record<string, string> = { CAUTION: '주의', GUARDIAN: '보호자', BOOKING: '예약', OTHER: '기타' }
+export const CAT_OUT: Record<string, string> = { 주의: 'CAUTION', 보호자: 'GUARDIAN', 예약: 'BOOKING', 기타: 'OTHER', S: 'S', O: 'O', A: 'A', P: 'P' }
+
+const s = (v: number | null | undefined): string => (v == null ? '' : String(v))
+const last4 = (p: string): string => p.replace(/\D/g, '').slice(-4)
+const pad2 = (n: number) => String(n).padStart(2, '0')
+/** 서버 시각(UTC ISO) → 이 브라우저 시각 "YYYY-MM-DD HH:MM"(화면의 Note.at 모양) */
+export function localAt(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace('T', ' ')
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+export function toVital(v: VitalOut): Vital {
+  return { day: v.measured_on, kg: s(v.weight_kg), temp: s(v.temp_c), hr: s(v.heart_rate), sbp: s(v.sbp), dbp: s(v.dbp), author: v.staff?.name ?? '' }
+}
+function toHistory(h: DogHistoryOut): History {
+  return { id: h.id, day: h.occurred_on, kind: KIND_IN[h.kind] ?? h.kind, title: h.title, site: h.site ?? '', by: h.clinician ?? '', author: h.staff?.name ?? '' }
+}
+/** NoteOut → 화면 Note. revs = 고치기 전 내용들(오래된 것부터, [쓴 시각, 쓴 사람, 내용]) */
+function toNote(n: NoteOut, revs: NoteRevisionOut[] = []): Note {
+  const old = [...revs].reverse() // 서버는 최근 것부터
+  const r: [string, string, string][] = old.map((x, i) => [localAt(i ? old[i - 1].revised_at : n.created_at), x.staff?.name ?? '', x.body])
   return {
+    id: n.id, at: localAt(n.created_at), author: n.staff?.name ?? '', cat: CAT_IN[n.category] ?? n.category, text: n.body,
+    important: n.important, revs: r, rid: n.session_id ?? '',
+  }
+}
+
+/** DogOut → 화면용 Dog. 271 이전 서버라 칸이 없으면(동물번호·보호자·단계) 이미 이 브라우저에 있던 값을 그대로 둔다.
+ *  바이탈·진단 이력·메모는 syncDogChart 가 채운다. 아직 안 읽었으면 목록의 최근 바이탈 한 줄만 둔다 */
+export function toDog(o: DogOut, prev?: Dog): Dog {
+  const base: Dog = {
     no: '', owner: '', phone: '', stage: 'rehab', stage_day: '', history: [], vitals: [], notes: [], images: [],
     ...prev,
+  } as Dog
+  const phone4 = o.owner_phone_last4 ?? undefined
+  // 목록 응답은 전체 번호가 null. 이전에 상세로 읽은 번호가 뒤 4자리와 맞으면 그대로 둔다
+  const phone = o.owner_phone != null ? o.owner_phone
+    : o.owner_phone_last4 === undefined ? base.phone
+      : base.phone && phone4 && last4(base.phone) === phone4 ? base.phone : ''
+  const srv = o.badges !== undefined || o.changes !== undefined || o.last_symmetry !== undefined
+    ? { badges: o.badges, changes: o.changes, last_symmetry: o.last_symmetry, dx_text: [o.last_surgery?.title, o.last_diagnosis?.title].filter(Boolean).join(' '), diag: o.last_diagnosis?.title }
+    : base.srv
+  return {
+    ...base,
     id: o.id,
     name: o.name,
     breed: o.breed,
@@ -37,7 +83,50 @@ export function toDog(o: DogOut, prev?: Dog): Dog {
     base: o.baseline_session_id,
     version: o.version,
     open_session_id: o.open_session_id,
+    no: o.chart_no !== undefined ? o.chart_no ?? '' : base.no,
+    owner: o.owner_name !== undefined ? o.owner_name ?? '' : base.owner,
+    phone,
+    phone4: phone ? undefined : phone4 || undefined,
+    stage: o.stage ? STAGE_IN[o.stage] ?? 'rehab' : base.stage,
+    stage_day: o.stage !== undefined ? o.stage_changed_on ?? '' : base.stage_day,
+    vitals: base.chart_loaded ? base.vitals : o.latest_vital ? [toVital(o.latest_vital)] : base.vitals,
+    srv,
   }
+}
+
+/** 반려견 차트를 열 때: 상세(전체 연락처)·바이탈·진단 이력·메모를 서버에서 읽어 db 에 넣는다.
+ *  예전 서버라 API 가 없으면(404 등) 그 칸은 그대로 둔다 */
+export async function syncDogChart(acctId: string, dogId: string): Promise<void> {
+  if (MOCK || !isRemote(acctId)) return
+  const opt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null)
+  const [o, vs, hs, ns] = await Promise.all([
+    opt(api.dog(dogId)), opt(api.vitals(dogId)), opt(api.history(dogId)), opt(listAllNotes(dogId)),
+  ])
+  const acct = db.accounts[acctId] // 읽는 사이 syncFromBackend 가 기관 객체를 바꿨을 수 있어 다시 찾는다
+  const i = acct ? acct.dogs.findIndex((d) => d.id === dogId) : -1
+  if (i < 0) return
+  let d = acct.dogs[i]
+  if (o) d = toDog(o, d)
+  if (vs) d = { ...d, vitals: vs.items.map(toVital) }
+  if (hs) d = { ...d, history: hs.items.map(toHistory) }
+  if (ns) {
+    // 고친 적 있는 기록만 이력을 따로 읽는다
+    const revs = await Promise.all(ns.map((n) => (n.revision_count ? api.noteRevisions(n.id).then((r) => r.items).catch(() => []) : Promise.resolve([]))))
+    d = { ...d, notes: ns.map((n, k) => toNote(n, revs[k])) }
+  }
+  d.chart_loaded = !!(vs && hs && ns)
+  acct.dogs[i] = d
+  changed()
+}
+
+async function listAllNotes(dogId: string): Promise<NoteOut[]> {
+  const out: NoteOut[] = []
+  for (let page = 1; page < 50; page++) {
+    const r = await api.notes(dogId, page, 200)
+    out.push(...r.items)
+    if (out.length >= r.total || !r.items.length) break
+  }
+  return out
 }
 
 function toStaff(s: StaffOut): Staff {
