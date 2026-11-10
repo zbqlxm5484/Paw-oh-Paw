@@ -104,3 +104,15 @@ def test_shot_delete_with_nothing_is_ok_and_needs_key(monkeypatch):
     assert client.delete("/analyses").status_code == 400
     monkeypatch.setattr(main, "API_KEY", "secret")
     assert client.delete("/analyses", params={"shot_id": "none"}).status_code == 401
+
+
+def test_shot_scan_reads_only_job_json(storage, monkeypatch):
+    """촬영 단위 훑기는 job.json만 읽는다. 끝난 작업의 결과·관절점 파일(작업마다 수백 KB)까지 읽으면 작업 수에 비례해 느려진다"""
+    job_id = upload()
+    assert client.get(f"/analyses/{job_id}").json()["status"] == "done"
+    main.JOBS.clear()
+    read = []
+    real = store._read_json
+    monkeypatch.setattr(store, "_read_json", lambda path: read.append(path.name) or real(path))
+    assert [job["id"] for job in store.jobs_of_shot(storage, "s-1")] == [job_id]
+    assert read == [store.JOB_FILE]
