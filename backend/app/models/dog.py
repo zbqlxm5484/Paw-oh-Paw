@@ -1,4 +1,4 @@
-"""반려견. 보호자 이름·연락처는 받지 않는다. 명세 12.2 dog."""
+"""반려견. 보호자 이름·연락처는 병원이 환자를 찾는 데만 쓰고 보고서·로그에 넣지 않는다. 명세 12.2 dog."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
-from app.models.enums import FocusLimb, Sex, SizeClass, check_in
+from app.models.enums import DogStage, FocusLimb, Sex, SizeClass, check_in
 from app.models.institution import Institution
 
 if TYPE_CHECKING:
@@ -43,6 +43,7 @@ class Dog(Base):
         check_in("size_class", SizeClass, name="ck_dog_size_class"),
         check_in("sex", Sex, name="ck_dog_sex"),
         check_in("focus_limb", FocusLimb, name="ck_dog_focus_limb"),
+        check_in("stage", DogStage, name="ck_dog_stage"),
         Index("ix_dog_institution_name", "institution_id", "name"),
     )
 
@@ -68,6 +69,15 @@ class Dog(Base):
     )
     # 내부 메모. 보고서에 넣지 않는다
     memo: Mapped[str | None] = mapped_column(Text)
+    # 동물번호(병원 차트 번호). 같은 기관에 같은 번호가 있어도 받는다(13.2)
+    chart_no: Mapped[str | None] = mapped_column(String(30))
+    owner_name: Mapped[str | None] = mapped_column(String(50))
+    # 보호자 연락처. 목록 응답에는 뒤 4자리만 준다(15.3)
+    owner_phone: Mapped[str | None] = mapped_column(String(20))
+    # 단계: 수술 전·재활 중·종결(12.5 차트 자료)
+    stage: Mapped[str] = mapped_column(String(20), default=DogStage.REHAB, server_default=DogStage.REHAB.value)
+    # 단계가 바뀐 날(한국 날짜). 바뀐 적이 없으면 NULL. 서버만 적는다
+    stage_changed_on: Mapped[date | None] = mapped_column(Date)
     # 휴지통에 넣은 시각(12.5). NULL이면 휴지통에 없다. 30일이 지나면 워커가 영구 삭제한다
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 낙관적 잠금(12.5). 수정할 때마다 1 는다. JPA @Version과 같다

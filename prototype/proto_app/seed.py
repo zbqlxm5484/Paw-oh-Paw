@@ -61,7 +61,7 @@ def _res(rid, dog, days_ago, hm, st, w, by, **kw) -> Result:
 def _design_dogs() -> tuple[list, list]:
     dogs = [
         Dog("d1", "보리", "골든 리트리버", "2019", "28.4", "fs", rehab=iso(64), focus="RH",
-            memo="TPLO 수술 후 재활 9주차. 오른뒤 체중 부하 관찰 중", no="20190412", owner="김하은", phone="010-2481-7730",
+            memo="TPLO 수술 후 재활 9주차. 오른뒤 체중 부하 관찰 중", no="20194412", owner="김하은", phone="010-2481-7730",
             stage="rehab", stage_day=iso(64),
             history=[History(iso(80), "진단", "앞십자인대 파열", "RH", "이서연 원장", "이서연 원장"),
                      History(iso(71), "수술", "TPLO (경골 고원 수평화 절골술)", "RH", "이서연 원장", "이서연 원장"),
@@ -85,7 +85,7 @@ def _design_dogs() -> tuple[list, list]:
                    Note("n9", f"{iso(3)} 15:05", "박민준 테크니션", "예약", "다음 측정 2주 뒤 오후, 수중 재활 직후 말고 쉬고 나서")],
             images=[Image("i1", iso(80), "pre", "골반·뒷다리 VD", "assets/xray_demo/pelvis_vd.jpg", "이서연 원장"),
                     Image("i2", iso(71), "post", "전신 측면 (참고 그림)", "assets/xray_demo/body_lateral.jpg", "이서연 원장")]),
-        Dog("d2", "콩이", "말티즈", "2022", "3.2", "f", no="20220715", owner="이도윤", phone="010-5532-1048",
+        Dog("d2", "콩이", "말티즈", "2022", "3.2", "f", no="20225718", owner="이도윤", phone="010-5532-1048",
             stage="pre", stage_day=iso(30),
             history=[History(iso(30), "진단", "슬개골 내측 탈구 2기", "LH", "한도윤 수의사", "한도윤 수의사")],
             vitals=[Vital(iso(30), "3.2", "38.8", "128", "", "", "정하늘 테크니션")],
@@ -93,7 +93,7 @@ def _design_dogs() -> tuple[list, list]:
                    *_soap("n10", f"{iso(30)} 16:20", "한도윤 수의사", "",
                           "왼뒤를 가끔 들고 깡충 뜀", "슬개골 내측 탈구 2기, 신전 시 통증 반응 약함",
                           "슬개골 내측 탈구 2기", "체중 관리, 4주 보존 치료 후 재평가")]),
-        Dog("d3", "두부", "비글", "2021", "11.2", "mn", rehab=iso(27), focus="LF", no="20210303", owner="박서윤",
+        Dog("d3", "두부", "비글", "2021", "11.2", "mn", rehab=iso(27), focus="LF", no="20216303", owner="박서윤",
             phone="010-7714-2295", stage="rehab", stage_day=iso(27),
             history=[History(iso(35), "진단", "요척골 원위 골절", "LF", "최지우 수의사", "최지우 수의사"),
                      History(iso(33), "수술", "골절 정복술 (플레이트 고정)", "LF", "최지우 수의사", "최지우 수의사"),
@@ -103,7 +103,7 @@ def _design_dogs() -> tuple[list, list]:
             notes=[Note("n4", f"{iso(2)} 17:55", "박민준 테크니션", "P",
                         "오늘 촬영 중 4번 영상에서 다리 가려짐. 다음 측정 때 오른쪽에서 다시 찍기", False, rid="r2"),
                    Note("n11", f"{iso(2)} 17:58", "박민준 테크니션", "기타", "촬영 때 바닥 미끄러워함, 매트 깔고 찍기")]),
-        Dog("d4", "탄이", "진돗개", "2017", "19.8", "m", no="20170921", owner="최지호", phone="010-3390-6621",
+        Dog("d4", "탄이", "진돗개", "2017", "19.8", "m", no="20178921", owner="최지호", phone="010-3390-6621",
             stage="rehab", stage_day=iso(9), focus="LH",
             history=[History(iso(12), "진단", "퇴행성 관절염 (양측 고관절)", "LH", "이서연 원장", "이서연 원장"),
                      History(iso(9), "재활", "보존 치료 · 수중 재활 시작", "LH", "", "이서연 원장")],
@@ -170,6 +170,14 @@ WEIGHTS = {"S": (2.5, 9.5), "M": (10, 24), "L": (25, 38)}
 HR = {"S": (100, 150), "M": (80, 125), "L": (60, 100)}
 
 
+def _animal_no(rng: random.Random) -> str:
+    """동물번호: 연도 4자리 + 일련 4자리. 일련이 월·일(10~12월)처럼 읽히면 날짜로 보이므로 피한다(11-09 QA). 난수는 예전과 같은 두 번만 쓴다"""
+    y, n = rng.randint(2016, 2026), rng.randint(1000, 9999)
+    if 10 <= n // 100 <= 12:
+        n += 1300
+    return f"{y}{n}"
+
+
 def _gen_dog(rng: random.Random, i: int, recent: bool) -> tuple[Dog, list]:
     """가상 환자 한 마리와 그 회차들. recent=False 면 모든 기록이 8일 이상 전이라 '변동 있음'에 안 걸린다."""
     diag, surg, sites, sizes = rng.choice(CONDITIONS)
@@ -186,6 +194,9 @@ def _gen_dog(rng: random.Random, i: int, recent: bool) -> tuple[Dog, list]:
     born = date.today().year - {"자견": rng.randint(0, 1), "노령견": rng.randint(8, 14)}.get(age, rng.randint(2, 7))
     lo, hi = WEIGHTS[size]
     kg = round(rng.uniform(lo, hi), 1)
+    if age == "자견":   # 11-09 QA: '0살 20kg' 이 안 나오게 자견은 한 살, 몸무게는 성견 범위의 3/4
+        born = min(born, date.today().year - 1)
+        kg = round(kg * 0.75, 1)
     site = rng.choice(sites)
     stage = rng.choices(["pre", "rehab", "done"], [15, 65, 20])[0]
     if not surg and stage == "pre":
@@ -194,7 +205,7 @@ def _gen_dog(rng: random.Random, i: int, recent: bool) -> tuple[Dog, list]:
     dr = rng.choice(STAFF[:3])              # 담당 수의사
     d = Dog(f"g{i:03d}", rng.choice(NAMES), breed, str(born), str(kg),
             rng.choice(list(config.SEX)), size=size, focus=site if site in config.LIMB else None,
-            no=f"{rng.randint(2016, 2026)}{rng.randint(1000, 9999)}",
+            no=_animal_no(rng),
             owner=rng.choice(SURNAMES) + rng.choice(GIVEN), phone=f"010-{rng.randint(1000, 9999)}-{rng.randint(1000, 9999)}",
             stage=stage)
 

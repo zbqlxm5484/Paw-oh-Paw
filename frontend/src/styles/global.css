@@ -12,6 +12,20 @@
 /* 디자인 템플릿의 body 규칙 그대로. 화면 자체의 스타일은 생성된 AppView(인라인)에 있다 */
 * {
   box-sizing: border-box;
+  /* 안드로이드 WebView 가 onClick 요소를 누를 때 덮는 파란 눌림 표시를 끈다(11-06 실기기) */
+  -webkit-tap-highlight-color: transparent;
+}
+/* 화면 글자를 길게 눌러도 선택·복사 메뉴가 안 뜨게. 입력칸만 선택을 살린다 */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 html,
 body,

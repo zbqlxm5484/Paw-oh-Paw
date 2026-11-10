@@ -637,10 +637,11 @@ export function diagnosis(d: Dog): string {
 
 /** 홈 '오늘' 탭(EMR 의 오늘 접수 목록): 오늘 바이탈·진료 기록·메모·보행 측정이 있거나 지금 분석 중인 반려견.
  *  시각 = 오늘 처음 남긴 기록 시각. 진료 기록(SOAP)이 아직 없으면 '기록 전'. */
-export function today_rows(acct: Account, dogs: Dog[]) {
-  const today = isoToday()
+/** 그날(기본 오늘) 진료·측정이 있었던 반려견. 진행 중 분석은 오늘에만 붙는다 */
+export function today_rows(acct: Account, dogs: Dog[], day = isoToday()) {
+  const today = day
   const live = new Map<string, Job>()
-  for (const j of activeJobs(acct)) live.set(j.dog, j)
+  if (day === isoToday()) for (const j of activeJobs(acct)) live.set(j.dog, j)
   const out = []
   for (const d of dogs) {
     const notes = d.notes.filter((n) => n.at.startsWith(today))
@@ -682,21 +683,31 @@ export function staff_rows(acct: Account, rs: Result[]) {
   return sorted(by.values(), (x) => -x.n).map((x) => ({ ...x, dogs: x.dogs.size, last: x.last ? short_day(x.last) : '—' }))
 }
 
-export function home_view(acct: Account, view: string, q: string, dog: string, by: string, changed: boolean, stage: string, page: number) {
+/** changed: false·'' = 전체, true·'1' = 일주일 간 변동, 'retake' = 재촬영 필요만(홈 요약 카드) */
+/** 진료 기록·측정·바이탈이 있는 날짜(홈 달력의 점) */
+export function activity_days(acct: Account): Set<string> {
+  const s = new Set<string>()
+  for (const d of acct.dogs) { for (const n of d.notes) s.add(n.at.slice(0, 10)); for (const v of d.vitals) s.add(v.day) }
+  for (const r of acct.results) if (r.day) s.add(r.day)
+  return s
+}
+
+export function home_view(acct: Account, view: string, q: string, dog: string, by: string, changed: boolean | string, stage: string, page: number, day = isoToday()) {
   q = q.trim()
   const ch = new Map(acct.dogs.map((d) => [d.id, changes(acct, d)] as const))
-  const dogs = acct.dogs.filter((d) => (!q || dog_text(d).includes(q)) && (!changed || ch.get(d.id)![0].length)
+  const retakeOf = (v: ReturnType<typeof changes>) => v[0].some((c) => c.t.includes('재촬영') && c.tone === 'bad')
+  const dogs = acct.dogs.filter((d) => (!q || dog_text(d).includes(q)) && (!changed || (changed === 'retake' ? retakeOf(ch.get(d.id)!) : ch.get(d.id)![0].length))
     && (!(stage in STAGE) || d.stage === stage))
   const keep = new Set(dogs.map((d) => d.id))
   const rs = acct.results.filter((r) => dogOf(acct, r.dog))
   const counts = {
     dogs: acct.dogs.length, changed: [...ch.values()].filter((v) => v[0].length).length,
-    retake: [...ch.values()].filter((v) => v[0].some((c) => c.t.includes('재촬영') && c.tone === 'bad')).length,
+    retake: [...ch.values()].filter(retakeOf).length,
     today: today_rows(acct, acct.dogs).length,
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rows: any[]
-  if (view === 'today') rows = today_rows(acct, dogs)
+  if (view === 'today') rows = today_rows(acct, dogs, day)
   else if (view === 'dogs') {
     rows = dogs.map((d) => ({ ...patient_row(acct, d, new Set()), n: rs.filter((r) => r.dog === d.id).length }))
     if (changed) rows = sorted(rows, (r) => r.ch_day, true)

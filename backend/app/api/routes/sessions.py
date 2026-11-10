@@ -1,13 +1,14 @@
-"""회차 API(15.6, 15.7): 시작, 상태·진행·촬영 목록, 측정 취소, 영상 업로드, 측정 종료, 회차 결과."""
+"""회차 API(15.6, 15.7): 시작, 기관 회차 목록, 상태·진행·촬영 목록, 측정 취소, 영상 업로드, 측정 종료, 회차 결과."""
 
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, File, Response, UploadFile, status
+from fastapi import APIRouter, File, Query, Response, UploadFile, status
 
 from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession
+from app.models.enums import SessionStatus
 from app.schemas.common import reason_out
-from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionOut, SessionResultOut
+from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionListOut, SessionOut, SessionResultOut
 from app.schemas.shots import ShotUploadOut
 from app.services import session_results as result_service
 from app.services import sessions as session_service
@@ -23,6 +24,27 @@ def start_session(dog_id: uuid.UUID, body: SessionCreate, staff: CurrentStaff, d
         db, institution_id=staff.institution_id, staff_id=staff.id, dog_id=dog_id, data=body
     )
     return session_service.to_session_out(session)
+
+
+@router.get("/sessions", response_model=SessionListOut)
+def list_sessions(
+    staff: CurrentStaff,
+    db: DbSession,
+    staff_id: uuid.UUID | None = None,
+    status: SessionStatus | None = None,  # noqa: A002 - 쿼리 이름이 명세(15.6)의 status다
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> SessionListOut:
+    """기관의 모든 회차를 최신순으로(BE-33). staff_id·status로 거른다."""
+    items, total = session_service.list_sessions(
+        db,
+        staff.institution_id,
+        staff_id=staff_id,
+        status=status.value if status is not None else None,
+        page=page,
+        size=size,
+    )
+    return SessionListOut(items=items, total=total, page=page, size=size)
 
 
 @router.get("/sessions/{session_id}", response_model=SessionDetailOut)
