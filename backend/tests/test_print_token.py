@@ -1,4 +1,4 @@
-"""인쇄 토큰(명세 11.6, 15.2의 18·62번, S15P31A404-276).
+"""인쇄 토큰(명세 11.6, 15.2의 9·17·18·62번, S15P31A404-276).
 
 웹의 보고서 인쇄 화면이 로그인 없이 회차 하나를 읽을 때 쓰는 토큰이다. 토큰 자체(만들기·풀기)와, 받는 API 둘이
 그 회차만 여는지, 그 밖의 API는 받지 않는지를 본다. 보고서 내용(62번)은 test_report_content_api.py가 본다.
@@ -26,9 +26,12 @@ from app.core.security import (
 )
 from app.models import Institution
 from tests.conftest import bearer
-from tests.history_fixtures import add_metric, make_session
+from tests.history_fixtures import add_metric, add_shot, make_session
 
 RESULT = "/api/v1/sessions/{}/result"
+SESSION = "/api/v1/sessions/{}"
+ANGLES = "/api/v1/shots/{}/angles"
+SHOT = "/api/v1/shots/{}"
 DOGS = "/api/v1/dogs"
 
 
@@ -144,3 +147,52 @@ def test_print_token_ignores_contract_state(client: TestClient, db: Session, sta
 def test_print_token_is_not_a_login_for_other_apis(client: TestClient, staff, two_sessions) -> None:
     _, second = two_sessions
     assert _code(client.get(DOGS, headers=_print_headers(second, staff))) == (401, "AUTH_REQUIRED")
+
+
+# ---- 회차 조회(9번)와 관절 각도(17번): 수의사용 각도 곡선을 실제 각도로 그리려고 연다 ----
+
+
+def test_session_detail_opens_for_its_session_without_video_addresses(
+    client: TestClient, db: Session, staff, two_sessions
+) -> None:
+    first, second = two_sessions
+    shot = add_shot(db, second, 1, passes={"LEFT": (2, 0)})
+    shot.video_status, shot.result_key = "READY", "some/result.mp4"
+    db.flush()
+    headers = _print_headers(second, staff)
+
+    by_print = client.get(SESSION.format(second.id), headers=headers)
+    assert by_print.status_code == 200
+    assert by_print.json() == client.get(SESSION.format(second.id), headers=bearer(staff)).json()
+    (listed,) = by_print.json()["shots"]
+    assert listed["id"] == str(shot.id)
+    # 결과 영상이 READY여도 이 응답에는 영상 주소가 없다(주소는 촬영 한 건 조회에만 있고, 그 API는 토큰을 안 받는다)
+    assert "video_url" not in listed and "/video?" not in by_print.text
+    assert _code(client.get(SESSION.format(first.id), headers=headers)) == (404, "NOT_FOUND")
+
+
+def test_angles_open_only_for_shots_of_the_token_session(client: TestClient, db: Session, staff, two_sessions) -> None:
+    first, second = two_sessions
+    mine = add_shot(db, second, 1, passes={"LEFT": (1, 0)})
+    other = add_shot(db, first, 1, passes={"LEFT": (1, 0)})
+    headers = _print_headers(second, staff)
+
+    opened = client.get(ANGLES.format(mine.id), headers=headers)
+    assert opened.status_code == 200 and opened.json()["shot_id"] == str(mine.id)
+    assert _code(client.get(ANGLES.format(other.id), headers=headers)) == (404, "NOT_FOUND")
+    # 같은 촬영이라도 각도 말고 촬영 조회는 인쇄 토큰을 받지 않는다
+    assert _code(client.get(SHOT.format(mine.id), headers=headers)) == (401, "AUTH_REQUIRED")
+
+
+def test_print_token_reads_session_and_angles_of_a_trashed_dog(
+    client: TestClient, db: Session, staff, dog, two_sessions
+) -> None:
+    _, second = two_sessions
+    shot = add_shot(db, second, 1, passes={"LEFT": (1, 0)})
+    dog.deleted_at = datetime.now(UTC)
+    db.flush()
+    headers = _print_headers(second, staff)
+
+    assert _code(client.get(ANGLES.format(shot.id), headers=bearer(staff))) == (404, "NOT_FOUND")
+    assert client.get(SESSION.format(second.id), headers=headers).status_code == 200
+    assert client.get(ANGLES.format(shot.id), headers=headers).status_code == 200

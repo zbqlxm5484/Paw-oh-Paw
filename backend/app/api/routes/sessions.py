@@ -48,8 +48,10 @@ def list_sessions(
 
 
 @router.get("/sessions/{session_id}", response_model=SessionDetailOut)
-def get_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionDetailOut:
-    return session_service.session_detail(db, staff.institution_id, session_id)
+def get_session(session_id: uuid.UUID, reader: SessionReader, db: DbSession) -> SessionDetailOut:
+    """회차 상태·진행·촬영 목록(BE-07·09). 인쇄 토큰이면 그 토큰의 회차만 열린다(11.6)."""
+    reader.require_session(session_id)
+    return session_service.session_detail(db, reader.institution_id, session_id, for_print=reader.is_print)
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

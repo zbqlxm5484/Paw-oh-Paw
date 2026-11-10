@@ -95,17 +95,30 @@ def dump_angles(doc: dict[str, Any]) -> bytes:
     return json.dumps(doc, separators=(",", ":")).encode("utf-8")
 
 
-def shot_angles(db: Session, storage: StorageService, institution_id: uuid.UUID, shot_id: uuid.UUID) -> ShotAnglesOut:
+def shot_angles(
+    db: Session,
+    storage: StorageService,
+    institution_id: uuid.UUID,
+    shot_id: uuid.UUID,
+    *,
+    print_session_id: uuid.UUID | None = None,
+) -> ShotAnglesOut:
     """GET /shots/{id}/angles. 없거나 다른 기관·휴지통의 촬영이면 404, 줄 것이 없으면 passes가 빈 배열이다(15.6)."""
     row = db.execute(
         select(Shot, MeasureSession.dog_id)
         .join(MeasureSession, Shot.session_id == MeasureSession.id)
         .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(Shot.id == shot_id, in_institution(institution_id))
+        # 인쇄 토큰이면 휴지통에 든 반려견의 촬영도 읽는다(워커가 그런 보고서도 만든다, 12.5)
+        .where(
+            Shot.id == shot_id,
+            in_institution(institution_id) if print_session_id is None else Dog.institution_id == institution_id,
+        )
     ).one_or_none()
     if row is None:
         raise AppError(ErrorCode.NOT_FOUND)
     shot, dog_id = row
+    if print_session_id is not None and shot.session_id != print_session_id:
+        raise AppError(ErrorCode.NOT_FOUND)  # 인쇄 토큰은 그 회차의 촬영만 연다(11.6)
     empty = ShotAnglesOut(shot_id=shot.id, fps=float(shot.fps), passes=[])
     if shot.status != ShotStatus.DONE or not shot.job_id:
         return empty
