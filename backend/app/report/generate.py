@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -61,8 +62,18 @@ def render(data: Any) -> Rendered:
     return Rendered(html=html, texts=content.texts, numbers=content.numbers, tables=tables, sentences=sentences)
 
 
-def generate_report(input_path: Path, output_path: Path, *, keep_html: bool = False) -> ReportResult:
-    """입력 JSON 파일 → output_path에 PDF. keep_html이면 같은 자리에 .html도 남긴다(미리보기용)."""
+def generate_report(
+    input_path: Path,
+    output_path: Path,
+    *,
+    keep_html: bool = False,
+    to_pdf: Callable[[str, Path], int] | None = None,
+) -> ReportResult:
+    """입력 JSON 파일 → output_path에 PDF. keep_html이면 같은 자리에 .html도 남긴다(미리보기용).
+
+    to_pdf는 PDF 단계를 바꿔 끼우는 자리다(8절 6번). 워커가 화면 인쇄(clients/renderer.screen_pdf)를 넣는다.
+    글 검사는 그 앞에서 하므로 어느 길로 만들든 검사에 걸린 보고서는 PDF가 되지 않는다.
+    """
     started = time.perf_counter()
     try:
         data = json.loads(Path(input_path).read_text(encoding="utf-8"))
@@ -73,7 +84,7 @@ def generate_report(input_path: Path, output_path: Path, *, keep_html: bool = Fa
     ensure_checked(rendered.texts, edition=edition)
     if keep_html:
         output_path.with_suffix(".html").write_text(rendered.html, encoding="utf-8")
-    size = html_to_pdf(rendered.html, output_path)
+    size = (to_pdf or html_to_pdf)(rendered.html, output_path)
     return ReportResult(
         pdf_bytes=size,
         generation_ms=int((time.perf_counter() - started) * 1000),

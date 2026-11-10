@@ -3,6 +3,9 @@
 PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
 
 - 풀: ProcessPoolExecutor(mp_context=spawn) 1개(결과 영상 풀과 따로 두어 보고서가 결과 영상 뒤에서 기다리지 않는다).
+- PDF를 만드는 길(8절 6번): REPORT_RENDERER_URL·REPORT_PRINT_URL이 있으면 화면 인쇄다. 맡길 때 그 회차의 인쇄 토큰을
+  만들어 인쇄 화면 주소에 붙이고, 자식은 그 주소를 렌더러에 넘겨 PDF를 받는다. 렌더러가 안 되면 기본 템플릿으로 만든다.
+  설정이 없으면 늘 기본 템플릿이다. 어느 길이든 글 검사와 수치 대조는 같다. 주소(토큰)는 로그에 남기지 않는다.
 - 가져가기: UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING' → commit → 입력 dict(report_input)를
   UPLOAD_TMP_DIR/worker/report-{id}/input.json으로 쓰고 generate_report(입력, 출력)를 맡긴다.
   자식은 DB·저장소를 모른다(11.3). 입력의 settings.tolerance는 시작할 때 읽은 config/tolerance.yaml 값이다(197).
@@ -22,6 +25,7 @@ VideoRenderer와 같은 모양이다. Spring에 빗대면 @Async 큐 소비자 �
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import multiprocessing
@@ -39,8 +43,10 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.clients.renderer import ScreenPrint, screen_pdf
 from app.core.config import Settings
 from app.core.errors import AppError, FailReason
+from app.core.security import create_print_token
 from app.models import Dog, MeasureSession, Report
 from app.models.enums import ReportStatus
 from app.report import ReportCheckError, ReportInputError
@@ -108,6 +114,11 @@ class ReportGenerator:
         self.storage = storage
         # 오차 범위(5절·15.8)는 시작할 때 한 번 읽는다. 파일 모양이 틀리면 ToleranceFileError로 바로 멈춘다(197)
         self.tolerance = get_tolerance(settings.TOLERANCE_FILE)
+        # 화면 인쇄(8절 6번)는 두 주소가 다 있을 때만 켠다. 하나만 있으면 잘못 적은 것이라 시작을 멈춘다
+        self.renderer_url = settings.REPORT_RENDERER_URL.strip()
+        self.print_url = settings.REPORT_PRINT_URL.strip().rstrip("/")
+        if bool(self.renderer_url) != bool(self.print_url):
+            raise ValueError("REPORT_RENDERER_URL과 REPORT_PRINT_URL은 둘 다 채우거나 둘 다 비워야 합니다")
         self.concurrency = REPORT_CONCURRENCY
         self.tmp_root = Path(settings.UPLOAD_TMP_DIR) / "worker"
         self._executor_factory = executor_factory or self._spawn_pool
@@ -260,7 +271,12 @@ class ReportGenerator:
             input_path = job_dir / "input.json"
             input_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
             output = job_dir / "report.pdf"
-            future = self._executor().submit(self._generate, input_path, output)
+            screen = self._screen_print(report)
+            if screen is None:
+                future = self._executor().submit(self._generate, input_path, output)
+            else:
+                to_pdf = functools.partial(screen_pdf, screen)
+                future = self._executor().submit(self._generate, input_path, output, to_pdf=to_pdf)
         except BrokenProcessPool as error:
             shutil.rmtree(job_dir, ignore_errors=True)
             self._release(db, report_id)
@@ -284,6 +300,17 @@ class ReportGenerator:
         )
         stats.report_started += 1
         logger.info("report generation started report=%s edition=%s", report_id, report.edition)
+
+    def _screen_print(self, report: Report) -> ScreenPrint | None:
+        """화면 인쇄 한 건: 이 회차만 읽는 인쇄 토큰을 붙인 인쇄 화면 주소. 설정이 없으면 None(기본 템플릿)."""
+        if not self.renderer_url:
+            return None
+        session = report.session
+        token, _ = create_print_token(session_id=session.id, institution_id=session.dog.institution_id)
+        page_url = f"{self.print_url}/print/reports/{session.id}?edition={report.edition}&token={token}"
+        return ScreenPrint(
+            renderer_url=self.renderer_url, page_url=page_url, timeout_sec=self.settings.REPORT_RENDER_TIMEOUT_SEC
+        )
 
     # ---- 거두기 ----
 
