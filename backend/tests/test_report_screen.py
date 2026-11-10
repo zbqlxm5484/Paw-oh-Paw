@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 from pathlib import Path
@@ -21,6 +22,7 @@ from app.core.security import decode_print_token
 from app.report import ReportCheckError, samples
 from app.report import generate as generate_module
 from app.report.generate import generate_report
+from app.report.pdf import PdfSize
 from app.storage.base import get_storage
 from app.worker.report import ReportGenerator
 from tests.report_fixtures import FakeExecutor
@@ -98,6 +100,7 @@ def test_screen_pdf_falls_back_to_the_built_in_template(
         size = screen_pdf(JOB, "<p>본문</p>", output)
 
     assert size == 99 and output.read_bytes().startswith(b"%PDF-built-in")
+    assert size.made_by == "template"  # 어느 길로 만들었는지 함께 돌려준다
     assert "screen print failed" in caplog.text
     assert TOKEN not in caplog.text and "web.test" not in caplog.text  # 주소(토큰)는 로그에 남기지 않는다(11.8)
 
@@ -113,7 +116,8 @@ def test_screen_pdf_uses_the_renderer_when_it_answers(tmp_path: Path, monkeypatc
     monkeypatch.setattr(renderer, "print_page", answer)
     monkeypatch.setattr("app.report.pdf.html_to_pdf", built_in)
     output = tmp_path / "report.pdf"
-    assert screen_pdf(JOB, "<p>본문</p>", output) == len(PDF)
+    size = screen_pdf(JOB, "<p>본문</p>", output)
+    assert size == len(PDF) and size.made_by == "screen"
     assert output.read_bytes() == PDF
 
 
@@ -139,6 +143,17 @@ def test_generate_report_hands_the_pdf_step_to_to_pdf(tmp_path: Path) -> None:
 
     assert "<html" in called["html"] and output.read_bytes() == PDF
     assert result.pdf_bytes == len(PDF) and result.numbers  # 실린 숫자 목록은 그대로 돌려준다(워커가 대조한다)
+    assert result.made_by == "template"  # 그냥 바이트 수를 돌려주는 PDF 단계는 기본 템플릿으로 본다
+
+
+@pytest.mark.parametrize("made_by", ["screen", "template"])
+def test_generate_report_carries_how_the_pdf_was_made(tmp_path: Path, made_by: str) -> None:
+    def to_pdf(html: str, output: Path) -> PdfSize:
+        Path(output).write_bytes(PDF)
+        return PdfSize(len(PDF), made_by)
+
+    result = generate_report(_input_file(tmp_path), tmp_path / "report.pdf", to_pdf=to_pdf)
+    assert (result.pdf_bytes, result.made_by) == (len(PDF), made_by)
 
 
 def test_text_check_runs_before_the_pdf_step(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -193,6 +208,31 @@ def test_worker_passes_a_page_address_with_the_print_token_of_that_session(
         claims = decode_print_token(token)
         assert (claims.session_id, claims.institution_id) == (session.id, dog.institution_id)
     assert editions == ["OWNER", "VET"]
+
+
+@pytest.mark.parametrize("made_by", ["screen", "template"])
+def test_worker_logs_how_each_report_was_made(
+    db: Session, dog, staff, tmp_path: Path, caplog: pytest.LogCaptureFixture, made_by: str
+) -> None:
+    """화면과 다르다는 문의가 오면 완료 로그로 어느 길이었는지 본다(276 리뷰)."""
+    _done_session(db, dog, staff)
+    settings = _settings(
+        REPORT_RENDERER_URL="http://renderer.test:3000",
+        REPORT_PRINT_URL="http://web.test/web/",
+        UPLOAD_TMP_DIR=str(tmp_path),
+    )
+
+    def generate(input_path: Path, output: Path, **kwargs: Any):
+        return dataclasses.replace(fake_generate(input_path, output), made_by=made_by)
+
+    executor = FakeExecutor()
+    reporter = ReportGenerator(settings, get_storage(), executor_factory=lambda: executor, generate=generate)
+    with caplog.at_level(logging.INFO, logger="app.worker"):
+        for _ in range(3):
+            _run(db, reporter, settings)
+    ready = [message for message in caplog.messages if message.startswith("report ready")]
+    assert len(ready) == 2 and all(f"made_by={made_by} " in message for message in ready)
+    assert "token=" not in caplog.text  # 인쇄 화면 주소는 여전히 로그에 없다
 
 
 def test_worker_uses_the_built_in_template_without_the_settings(db: Session, dog, staff, tmp_path: Path) -> None:

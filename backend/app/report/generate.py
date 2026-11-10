@@ -19,7 +19,7 @@ from app.report.checks import ensure_checked
 from app.report.content import compose_content
 from app.report.html import render_html
 from app.report.numbers import GaitTable, ListedNumber
-from app.report.pdf import html_to_pdf
+from app.report.pdf import MADE_BY_TEMPLATE, html_to_pdf
 from app.report.sentences import Sentences
 
 
@@ -41,6 +41,8 @@ class ReportResult:
     template_version: str
     numbers: tuple[ListedNumber, ...]
     edition: str
+    # PDF를 만든 길(8절 6번): template 또는 screen. 워커의 완료 로그에 남는다
+    made_by: str = MADE_BY_TEMPLATE
 
 
 def render(data: Any) -> Rendered:
@@ -73,6 +75,7 @@ def generate_report(
 
     to_pdf는 PDF 단계를 바꿔 끼우는 자리다(8절 6번). 워커가 화면 인쇄(clients/renderer.screen_pdf)를 넣는다.
     글 검사는 그 앞에서 하므로 어느 길로 만들든 검사에 걸린 보고서는 PDF가 되지 않는다.
+    to_pdf가 PdfSize를 돌려주면 그 made_by를, 그냥 바이트 수를 돌려주면 template을 결과에 적는다.
     """
     started = time.perf_counter()
     try:
@@ -91,4 +94,5 @@ def generate_report(
         template_version=TEMPLATE_VERSION,
         numbers=rendered.numbers,
         edition=edition,
+        made_by=getattr(size, "made_by", MADE_BY_TEMPLATE),
     )

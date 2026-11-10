@@ -367,8 +367,9 @@ class ReportGenerator:
         if changed:
             stats.reported += 1
             logger.info(
-                "report ready report=%s bytes=%d generation_ms=%d numbers=%d omitted=%d in %.1fs",
+                "report ready report=%s made_by=%s bytes=%d generation_ms=%d numbers=%d omitted=%d in %.1fs",
                 report_id,
+                result.made_by,
                 result.pdf_bytes,
                 result.generation_ms,
                 verification.checked,

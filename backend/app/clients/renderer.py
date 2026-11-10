@@ -18,6 +18,8 @@ from pathlib import Path
 
 import httpx
 
+from app.report.pdf import MADE_BY_SCREEN, MADE_BY_TEMPLATE, PdfSize
+
 logger = logging.getLogger(__name__)
 
 CONVERT_PATH = "/forms/chromium/convert/url"
@@ -64,12 +66,16 @@ def print_page(job: ScreenPrint, output: Path, *, transport: httpx.BaseTransport
     return len(body)
 
 
-def screen_pdf(job: ScreenPrint, html: str, output: Path) -> int:
-    """generate_report의 PDF 단계 자리에 끼우는 함수. 화면 인쇄가 안 되면 같은 내용의 기본 템플릿으로 만든다."""
+def screen_pdf(job: ScreenPrint, html: str, output: Path) -> PdfSize:
+    """generate_report의 PDF 단계 자리에 끼우는 함수. 화면 인쇄가 안 되면 같은 내용의 기본 템플릿으로 만든다.
+
+    어느 길로 만들었는지를 바이트 수에 붙여 돌려준다(PdfSize.made_by). 두 PDF는 모양이 달라, 화면과 다르다는
+    문의가 오면 워커의 완료 로그(made_by)로 어느 길이었는지 본다(276 리뷰, 박규원).
+    """
     try:
-        return print_page(job, output)
+        return PdfSize(print_page(job, output), MADE_BY_SCREEN)
     except RendererError as error:
         logger.warning("screen print failed; using the built-in template instead: %s", error)
     from app.report.pdf import html_to_pdf
 
-    return html_to_pdf(html, output)
+    return PdfSize(html_to_pdf(html, output), MADE_BY_TEMPLATE)
