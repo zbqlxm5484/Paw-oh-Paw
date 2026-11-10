@@ -8,6 +8,7 @@ import { PostForm, staticUrl, usePage, useTitle } from '../app/page'
 import { setToast } from '../app/session'
 import { MEMO_CAT, SITE, SOAP, STAGE_NAMES, link } from '../config'
 import { activeJobs, dogOf, isoToday } from '../store/db'
+import { isRemote, syncDogChart } from '../store/backend'
 import { care_team, chart_summary, dog_detail, dx_history, image_list, kg_trend, memos as memos_of, patient_row, valid, visits, vital_rows } from '../views/views'
 import { MemoCard, MemoForm, type MemoX } from './parts/DogPanel'
 import { PetModal } from './parts/Modals'
@@ -19,6 +20,7 @@ const _OLD_TABS: Record<string, string> = { summary: 'progress', gait: 'progress
 const tone: Record<string, [string, string]> = { surg: ['#FCEEE3', '#A8481A'], diag: ['#EEF1F6', '#4A5A78'], warn: ['#FAF1DF', '#9A6A12'] }
 type VK = 'kg' | 'temp' | 'hr' | 'bp'
 const VKEYS: [string, VK][] = [['체중', 'kg'], ['체온', 'temp'], ['심박', 'hr'], ['혈압', 'bp']]
+const VIN = 'height:36px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;padding:0 10px;font-size:14px;font-family:inherit;outline:none;min-width:0;width:100%;font-variant-numeric:tabular-nums'
 const FI = 'height:44px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 12px;font-size:14.5px;font-family:inherit;outline:none;min-width:0'
 
 export default function DogPage() {
@@ -29,6 +31,11 @@ export default function DogPage() {
   const cur = acct ? dogOf(acct, dog_id) : undefined
   const missing = !!acct && !cur
   useTitle(cur ? `${cur.name} · Paw oh Paw` : 'Paw oh Paw')
+  // 백엔드 기관이면 차트를 열 때 바이탈·진단 이력·메모·상세(연락처 전체)를 서버에서 읽는다(271)
+  const acctId = acct?.id ?? ''
+  useEffect(() => {
+    if (acctId && dog_id && isRemote(acctId)) void syncDogChart(acctId, dog_id).catch(() => undefined)
+  }, [acctId, dog_id])
   useEffect(() => {
     if (missing) {
       setToast('반려견을 찾을 수 없습니다')
@@ -66,6 +73,13 @@ export default function DogPage() {
   const edit_memo = edit ? memos.find((x) => x.id === edit) || null : null
   const here = `/dogs/${cur.id}` + (tab !== 'visits' ? `?tab=${tab}` : `?v=${v}`)
   const tv = cur.vitals.find((x) => x.day === today_iso)
+  const remote = isRemote(acct.id)
+  const vedit = query.get('vedit') || ''
+  const hedit = query.get('hedit') || ''
+  // 진단 이력 한 줄마다 고치기·지우기에 쓸 키: 서버 id, 시연 데이터는 순번
+  const hrows = cur.history.map((h, i) => ({ h, key: h.id || `i${i}` })).reverse()
+  // QA 4: 진료 기록(SOAP)의 A(평가)를 진단 이력 탭에서도 본다. 최신순
+  const assess = cur.notes.filter((n) => n.cat === 'A').sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
 
   let body
   if (tab === 'visits') {
@@ -263,12 +277,21 @@ export default function DogPage() {
           </div>
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:14px')}>
-          <b style={css('font-size:16px')}>바이탈 기록</b>
+          <span style={css('display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap')}><b style={css('font-size:16px')}>바이탈 기록</b><a className="lk" href={link(`/dogs/${cur.id}?tab=progress&vedit=new`)} style={css('font-size:13px;font-weight:700;color:#B4501A')}>+ 날짜 골라 기록</a></span>
+          {vedit === 'new' ? <VitalForm dog_id={cur.id} day={today_iso} today={today_iso} author={me?.name ?? ''} /> : null}
           {vt.kg_spark ? <div style={css('display:flex;align-items:center;gap:12px')}><span style={css('font-size:13px;color:#5B6472')}>체중 추이</span><svg width="200" height="40" viewBox="0 0 200 40"><polyline points={vt.kg_spark} fill="none" stroke="#D2601A" strokeWidth="2"></polyline></svg><b style={css('font-size:14px')}>{vt.kg_range}</b></div> : null}
-          <div style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:13px;font-weight:700;color:#7A808A;padding-bottom:8px;border-bottom:1px solid #ECE8E2')}><span>날짜</span><span>체중</span><span>체온</span><span>심박</span><span>혈압</span><span>기록</span></div>
-          {vt.rows.map((x, i) => (
-            <div key={i} style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums')}><span style={css('color:#7A808A')}>{x.day}</span>{(['kg', 'temp', 'hr', 'bp'] as VK[]).map((key) => <span key={key}><VV value={x[key]} f={x.f[key]} size={14.5} /></span>)}<span style={css('font-size:13px;color:#8E949C')}>{x.author}</span></div>
-          ))}
+          {/* 좁은 창(800px)에서 칸이 잘리지 않게 표만 가로로 민다(QA 10) */}
+          <div style={css('overflow-x:auto')}>
+            <div style={css('min-width:640px;display:flex;flex-direction:column;gap:14px')}>
+              <div style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px 52px;gap:12px;font-size:13px;font-weight:700;color:#7A808A;padding-bottom:8px;border-bottom:1px solid #ECE8E2')}><span>날짜</span><span>체중</span><span>체온</span><span>심박</span><span>혈압</span><span>기록</span><span></span></div>
+              {vt.rows.map((x, i) => {
+                const raw = cur.vitals[i]
+                return vedit === raw.day ? <VitalForm key={i} dog_id={cur.id} day={raw.day} today={today_iso} author={me?.name ?? ''} v={raw} /> : (
+                  <div key={i} style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px 52px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums')}><span style={css('color:#7A808A')}>{x.day}</span>{(['kg', 'temp', 'hr', 'bp'] as VK[]).map((key) => <span key={key}><VV value={x[key]} f={x.f[key]} size={14.5} /></span>)}<span style={css('font-size:13px;color:#8E949C')}>{x.author}</span><a className="lk" href={link(`/dogs/${cur.id}?tab=progress&vedit=${raw.day}`)} style={css('font-size:12.5px;font-weight:600;color:#B4501A;text-align:right')}>고치기</a></div>
+                )
+              })}
+            </div>
+          </div>
           {!vt.rows.length ? <span style={css('font-size:14px;color:#A0A7B2')}>기록이 없습니다.</span> : null}
         </div>
       </>
@@ -285,7 +308,7 @@ export default function DogPage() {
             <label style={css('display:flex;flex-direction:column;gap:4px')}><span style={css('font-size:12.5px;color:#5B6472')}>부위</span><select name="site" style={css(FI)}><option value="">없음</option>{Object.entries(SITE).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></label>
             <label style={css('display:flex;flex-direction:column;gap:4px;min-width:0')}><span style={css('font-size:12.5px;color:#5B6472')}>담당 수의사 <span style={css('color:#A0A7B2')}>선택</span></span><input className="inp" name="by" style={css(FI)} /></label>
             <label style={css('display:flex;flex-direction:column;gap:4px')}><span style={css('font-size:12.5px;color:#5B6472')}>단계 바꾸기</span><select name="stage" style={css(FI)}><option value="">그대로 ({row.stage})</option>{Object.entries(STAGE_NAMES).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></label>
-            <label style={css('display:flex;flex-direction:column;gap:4px;min-width:0')}><span style={css('font-size:12.5px;color:#5B6472')}>작성자</span><input className="inp author-inp" name="author" placeholder="예) 최지우 수의사" style={css(FI)} /></label>
+            {remote ? null : <label style={css('display:flex;flex-direction:column;gap:4px;min-width:0')}><span style={css('font-size:12.5px;color:#5B6472')}>작성자</span><input className="inp author-inp" name="author" placeholder="예) 최지우 수의사" style={css(FI)} /></label>}
           </div>
           <button className="bt" type="submit" style={css('align-self:flex-start;height:44px;padding:0 18px;border-radius:10px;background:#1B2433;color:#fff;font-size:14.5px;font-weight:700')}>기록하기</button>
         </PostForm>
@@ -297,6 +320,45 @@ export default function DogPage() {
             </div>
           ))}
           {!dx.length ? <span style={css('font-size:14px;color:#A0A7B2')}>기록이 없습니다.</span> : null}
+        </div>
+        {/* 한 줄씩 고치기·지우기(!130) */}
+        {hrows.length ? (
+          <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:10px')}>
+            <b style={css('font-size:16px')}>기록 고치기 <span style={css('color:#A0A7B2;font-weight:600;font-size:14px')}>{hrows.length}</span></b>
+            {hrows.map(({ h, key }) => hedit === key ? (
+              <PostForm key={key} action={`/dogs/${cur.id}/history/${encodeURIComponent(key)}`} style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-items:end;padding:12px;border-radius:12px;background:#FAF8F5;margin:0')}>
+                <label style={css('display:flex;flex-direction:column;gap:4px')}><span style={css('font-size:12.5px;color:#5B6472')}>날짜</span><input className="inp" type="date" name="day" defaultValue={h.day} max={today_iso} style={css(FI)} /></label>
+                <label style={css('display:flex;flex-direction:column;gap:4px')}><span style={css('font-size:12.5px;color:#5B6472')}>종류</span><select name="kind" defaultValue={h.kind} style={css(FI)}>{['진단', '수술', '재활'].map((k) => <option key={k}>{k}</option>)}</select></label>
+                <label style={css('display:flex;flex-direction:column;gap:4px;min-width:0;grid-column:span 2')}><span style={css('font-size:12.5px;color:#5B6472')}>내용</span><input className="inp" name="title" defaultValue={h.title} style={css(FI)} /></label>
+                <label style={css('display:flex;flex-direction:column;gap:4px')}><span style={css('font-size:12.5px;color:#5B6472')}>부위</span><select name="site" defaultValue={h.site} style={css(FI)}><option value="">없음</option>{Object.entries(SITE).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></label>
+                <label style={css('display:flex;flex-direction:column;gap:4px;min-width:0')}><span style={css('font-size:12.5px;color:#5B6472')}>담당 수의사</span><input className="inp" name="by" defaultValue={h.by} style={css(FI)} /></label>
+                <span style={css('display:flex;gap:10px;align-items:center;height:44px')}><button className="bt" type="submit" style={css('height:40px;padding:0 14px;border-radius:9px;background:#1B2433;color:#fff;font-size:13.5px;font-weight:700')}>저장</button><a className="lk" href={link(`/dogs/${cur.id}?tab=dx`)} style={css('font-size:13.5px;color:#7A808A')}>취소</a></span>
+              </PostForm>
+            ) : (
+              <div key={key} style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;padding-top:8px;border-top:1px solid #F2EFEA')}>
+                <span style={css('color:#8E949C;font-variant-numeric:tabular-nums')}>{h.day.slice(2).replaceAll('-', '.')}</span>
+                <b style={css(`color:${h.kind === '수술' ? '#A8481A' : '#3A4250'}`)}>{h.kind}</b>
+                <span style={css('flex:1;min-width:160px')}>{h.title}{h.site ? ` · ${SITE[h.site] ?? ''}` : ''}{h.by ? <span style={css('color:#8E949C')}> · {h.by}</span> : null}</span>
+                <a className="lk" href={link(`/dogs/${cur.id}?tab=dx&hedit=${encodeURIComponent(key)}`)} style={css('font-size:12.5px;font-weight:600;color:#B4501A')}>고치기</a>
+                <PostForm action={`/dogs/${cur.id}/history/${encodeURIComponent(key)}`} style={css('display:inline;margin:0')} onBefore={() => window.confirm('이 기록을 지울까요? 되돌릴 수 없습니다.')}>
+                  <input type="hidden" name="delete" value="1" />
+                  <button className="bt" type="submit" style={css('background:none;font-size:12.5px;font-weight:600;color:#C2412D;padding:0')}>지우기</button>
+                </PostForm>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {/* QA 4: 진료 기록의 A(평가)도 진단 이력에서 본다. 고치기는 그 방문의 진료 기록에서 */}
+        <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:10px')}>
+          <b style={css('font-size:16px')}>진료 기록의 평가(A) <span style={css('color:#A0A7B2;font-weight:600;font-size:14px')}>{assess.length}</span></b>
+          {assess.map((n) => (
+            <a key={n.id} className="lk" href={link(`/dogs/${cur.id}?v=${n.at.slice(0, 10)}#${n.id}`)} style={css('display:flex;gap:10px;align-items:flex-start;font-size:14px;padding-top:8px;border-top:1px solid #F2EFEA')}>
+              <span style={css('color:#8E949C;font-variant-numeric:tabular-nums;white-space:nowrap')}>{n.at.slice(2, 10).replaceAll('-', '.')}</span>
+              <span style={css('flex:1;min-width:0;white-space:pre-line;line-height:1.55')}>{n.text}</span>
+              <span style={css('font-size:12.5px;color:#8E949C;white-space:nowrap')}>{n.author ? `${n.author.split(' ')[0]} · ` : ''}방문 ›</span>
+            </a>
+          ))}
+          {!assess.length ? <span style={css('font-size:14px;color:#A0A7B2')}>진료 기록에 남긴 평가가 없습니다.</span> : null}
         </div>
       </>
     )
@@ -339,7 +401,7 @@ export default function DogPage() {
           </section>
         </div>
 
-        <div style={css('display:flex;gap:4px;border-bottom:1px solid #E2DCD3;overflow-x:auto')}>
+        <div style={css('display:flex;gap:4px;border-bottom:1px solid #E2DCD3;overflow-x:auto;overflow-y:hidden')}>
           {CHART_TABS.map(([key, label]) => (
             <a key={key} className="lk" href={link(`/dogs/${cur.id}?tab=${key}`)} style={css(`padding:12px 16px;font-size:15px;white-space:nowrap;font-weight:${tab == key ? 700 : 500};color:${tab == key ? '#B4501A' : '#5B6472'};border-bottom:2.5px solid ${tab == key ? '#D2601A' : 'transparent'};margin-bottom:-1px`)}>{label}{key === 'visits' ? <>{' '}<span style={css('font-size:12.5px;color:#8E949C')}>{vis.length}</span></> : null}</a>
           ))}
@@ -348,5 +410,21 @@ export default function DogPage() {
         {body}
       </main>
     </Base>
+  )
+}
+
+/** 바이탈 한 날짜 쓰기·고치기(진행 탭 표 안). 백엔드는 PUT /dogs/{id}/vitals/{날짜}: 적은 값만 바뀐다. 지우는 API 는 없다 */
+function VitalForm({ dog_id, day, today, author, v }: { dog_id: string; day: string; today: string; author: string; v?: { kg: string; temp: string; hr: string; sbp: string; dbp: string } }) {
+  const back = `/dogs/${dog_id}?tab=progress`
+  return (
+    <PostForm action={`/dogs/${dog_id}/vitals`} style={css('display:grid;grid-template-columns:130px repeat(5,minmax(0,1fr)) auto;gap:8px;align-items:end;padding:10px 12px;border-radius:12px;background:#FAF8F5;margin:0')}>
+      <input type="hidden" name="next_url" value={back} />
+      <input type="hidden" className="author-inp" name="author" defaultValue={author} />
+      <label style={css('display:flex;flex-direction:column;gap:4px;font-size:12px;color:#5B6472;font-weight:600')}>날짜{v ? <><input type="hidden" name="day" value={day} /><b style={css('height:36px;display:flex;align-items:center;font-size:14px;color:#1B2433')}>{day.slice(2).replaceAll('-', '.')}</b></> : <input className="inp" type="date" name="day" defaultValue={day} max={today} style={css(VIN)} />}</label>
+      {([['kg', '체중 kg'], ['temp', '체온 ℃'], ['hr', '심박 bpm'], ['sbp', '수축기'], ['dbp', '이완기']] as const).map(([nm, label]) => (
+        <label key={nm} style={css('display:flex;flex-direction:column;gap:4px;min-width:0;font-size:12px;color:#5B6472;font-weight:600')}>{label}<input className="inp" name={nm} inputMode="decimal" defaultValue={v ? v[nm] : ''} style={css(VIN)} /></label>
+      ))}
+      <span style={css('display:flex;gap:8px;align-items:center;height:36px')}><button className="bt" type="submit" style={css('height:36px;padding:0 12px;border-radius:9px;background:#1B2433;color:#fff;font-size:13px;font-weight:700;white-space:nowrap')}>저장</button><a className="lk" href={link(back)} style={css('font-size:13px;color:#7A808A;white-space:nowrap')}>취소</a></span>
+    </PostForm>
   )
 }
