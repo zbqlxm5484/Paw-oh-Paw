@@ -1,4 +1,4 @@
-"""보고서 API(15.7의 19~21, BE-15·16)."""
+"""보고서 API(15.7의 19~21·62, BE-15·16)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,12 @@ import uuid
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentStaff, DbSession, check_file_link
+from app.api.deps import CurrentStaff, DbSession, SessionReader, check_file_link
 from app.core.config import get_settings
+from app.models.enums import ReportEdition
+from app.schemas.report_content import ReportContentOut
 from app.schemas.reports import ReportOut, SessionReportsOut
+from app.services import report_content as content_service
 from app.services import reports as report_service
 
 router = APIRouter(tags=["보고서"])
@@ -19,6 +22,17 @@ router = APIRouter(tags=["보고서"])
 def list_session_reports(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionReportsOut:
     """판본별 보고서 상태(S6). 화면은 PENDING·GENERATING인 판본이 있는 동안 3초마다 부른다."""
     return report_service.list_reports(db, staff.institution_id, session_id)
+
+
+@router.get("/sessions/{session_id}/report-content", response_model=ReportContentOut)
+def get_report_content(
+    session_id: uuid.UUID, reader: SessionReader, db: DbSession, edition: ReportEdition
+) -> ReportContentOut:
+    """판본 하나의 글·표·숫자(BE-15). 검사에 걸리면 409 REPORT_CHECK_FAILED. 인쇄 토큰이면 그 토큰의 회차만 열린다."""
+    reader.require_session(session_id)
+    return content_service.report_content(
+        db, reader.institution_id, session_id, edition.value, include_trashed=reader.is_print
+    )
 
 
 @router.post("/reports/{report_id}/regenerate", response_model=ReportOut)

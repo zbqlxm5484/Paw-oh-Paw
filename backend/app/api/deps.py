@@ -135,7 +135,7 @@ AdminStaff = Annotated[AuthStaff, Depends(require_admin)]
 CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
 
 
-# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 18·22번) ----
+# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 18·62번) ----
 
 
 @dataclass(frozen=True)
@@ -145,9 +145,14 @@ class Reader:
     institution_id: uuid.UUID
     print_session_id: uuid.UUID | None = None
 
-    def require_session(self, session_id: uuid.UUID | None) -> None:
-        """인쇄 토큰이면 그 회차만 연다. 다른 회차(또는 회차를 안 준 요청)는 있는지도 알려 주지 않는다(404)."""
-        if self.print_session_id is not None and session_id != self.print_session_id:
+    @property
+    def is_print(self) -> bool:
+        """인쇄 토큰으로 불렀다. 워커가 만드는 보고서와 같이 휴지통에 든 반려견의 회차도 읽는다(12.5)."""
+        return self.print_session_id is not None
+
+    def require_session(self, session_id: uuid.UUID) -> None:
+        """인쇄 토큰이면 그 회차만 연다. 다른 회차는 있는지도 알려 주지 않는다(404)."""
+        if self.is_print and session_id != self.print_session_id:
             raise AppError(ErrorCode.NOT_FOUND)
 
 

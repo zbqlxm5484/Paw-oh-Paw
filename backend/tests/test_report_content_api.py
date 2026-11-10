@@ -1,0 +1,205 @@
+"""보고서 내용 API(명세 15.7의 62번, 8절 7번, S15P31A404-276).
+
+웹의 보고서 인쇄 화면이 그릴 글·표·숫자를 낸다. PDF와 같은 함수로 만든 값인지, 검사에 걸리면 내지 않는지,
+인쇄 토큰으로는 그 회차만 열리는지를 본다. 문장·표 자체의 규칙은 test_report_module.py가 본다.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.core.security import create_print_token
+from app.report import TEMPLATE_VERSION, ReportCheckError
+from app.report.content import compose_content
+from app.services import report_content as content_service
+from app.services.report_input import build_report_input
+from app.services.tolerance import get_tolerance
+from tests.conftest import bearer
+from tests.history_fixtures import add_metric, add_report, make_session
+
+CONTENT = "/api/v1/sessions/{}/report-content"
+COMPARE = "/api/v1/dogs/{}/compare"
+
+
+def _print_headers(session, staff) -> dict[str, str]:
+    token, _ = create_print_token(session_id=session.id, institution_id=staff.institution_id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _get(client: TestClient, session, headers: dict, edition: str | None = "OWNER"):
+    params = {} if edition is None else {"edition": edition}
+    return client.get(CONTENT.format(session.id), params=params, headers=headers)
+
+
+def _code(response) -> tuple[int, str]:
+    return response.status_code, response.json()["error"]["code"]
+
+
+def _done_session(db: Session, dog, staff, measured_on: date, left: float, right: float):
+    """DONE 회차 하나: 속보 뒷다리 무릎 가동 범위 두 줄과 판본 두 행."""
+    session = make_session(db, dog, staff, measured_on)
+    add_metric(db, session, "rom_stifle", "LH", left)
+    add_metric(db, session, "rom_stifle", "RH", right)
+    reports = {edition: add_report(db, session, edition, "DONE") for edition in ("OWNER", "VET")}
+    return session, reports
+
+
+@pytest.fixture
+def two_sessions(db: Session, dog, staff):
+    first, _ = _done_session(db, dog, staff, date(2026, 10, 1), 40.0, 41.0)
+    second, reports = _done_session(db, dog, staff, date(2026, 10, 15), 47.0, 42.0)
+    return first, second, reports
+
+
+# ---- 내용 ----
+
+
+def test_content_has_the_header_sentences_and_tables(client: TestClient, staff, dog, two_sessions) -> None:
+    first, second, _ = two_sessions
+    response = _get(client, second, bearer(staff))
+    assert response.status_code == 200
+    body = response.json()
+
+    assert (body["session_id"], body["edition"], body["template_version"]) == (
+        str(second.id),
+        "OWNER",
+        TEMPLATE_VERSION,
+    )
+    assert body["session"]["measured_on"] == "2026-10-15"
+    assert body["session"]["round"] == 2
+    assert body["dog"]["name"] == dog.name
+    assert body["previous"] == {
+        "session_id": str(first.id),
+        "measured_on": "2026-10-01",
+        "round": 1,
+        "model_changed": False,
+    }
+    sentences = body["sentences"]
+    assert sentences["edition_label"] == "보호자용"
+    assert dog.name in sentences["title"]
+    assert "보행 평가 보조 자료" in sentences["disclaimer"]
+    assert sentences["previous_note"]
+
+    (gait,) = body["gaits"]
+    assert gait["gait_type"] == "TROT"
+    (row,) = gait["rows"]
+    assert row["metric_code"] == "rom_stifle"
+    assert row["cells"]["LH"] == {"value": 47.0, "text": "47.0°", "reason": None}
+    (line,) = gait["compare"]
+    assert (line["left"], line["right"], line["comparable"]) == ("47.0°", "42.0°", True)
+    (change,) = gait["changes"]
+    left = change["cells"]["LH"]
+    assert (left["previous"], left["current"], left["diff"]) == ("40.0°", "47.0°", "+7.0°")
+
+
+def test_content_is_what_the_pdf_is_made_from(client: TestClient, db: Session, staff, two_sessions) -> None:
+    """같은 입력으로 PDF가 쓰는 함수(compose_content)를 불러 글과 표가 같은지 본다(화면과 PDF가 어긋나지 않는다)."""
+    _, second, reports = two_sessions
+    body = _get(client, second, bearer(staff), "VET").json()
+
+    data = build_report_input(db, reports["VET"], tolerance=get_tolerance(get_settings().TOLERANCE_FILE))
+    content = compose_content(data)
+    assert body["sentences"]["intro"] == content.sentences.intro
+    assert body["sentences"]["summary"] == content.sentences.summary
+    assert body["sentences"]["caution"] == content.sentences.caution
+    assert body["sentences"]["edition_label"] == "수의사용"
+    table = content.tables[0]
+    assert [row["label"] for row in body["gaits"][0]["rows"]] == [row.label for row in table.rows]
+    assert body["gaits"][0]["rows"][0]["cells"]["RH"]["text"] == table.rows[0].cells["RH"].text
+
+
+def test_first_session_has_no_previous_and_no_changes(client: TestClient, staff, two_sessions) -> None:
+    first, _, _ = two_sessions
+    body = _get(client, first, bearer(staff)).json()
+
+    assert body["session"]["round"] == 1
+    assert body["previous"] is None
+    assert body["sentences"]["previous_note"] is None
+    assert [gait["changes"] for gait in body["gaits"]] == [[]]
+
+
+# ---- 요청 검사 ----
+
+
+@pytest.mark.parametrize("edition", [None, "PET", "owner"])
+def test_edition_is_required_and_must_be_owner_or_vet(client: TestClient, staff, two_sessions, edition) -> None:
+    _, second, _ = two_sessions
+    assert _get(client, second, bearer(staff), edition).status_code == 422
+
+
+def test_session_of_another_institution_is_404(client: TestClient, other_staff, two_sessions) -> None:
+    _, second, _ = two_sessions
+    assert _code(_get(client, second, bearer(other_staff))) == (404, "NOT_FOUND")
+
+
+def test_session_that_is_not_done_is_409(client: TestClient, db: Session, staff, dog) -> None:
+    session = make_session(db, dog, staff, date(2026, 10, 20), status="MEASURING")
+    assert _code(_get(client, session, bearer(staff))) == (409, "SESSION_NOT_DONE")
+
+
+# ---- 검사에 걸리면 내지 않는다 ----
+
+
+def test_number_mismatch_is_409_and_gives_no_content(
+    client: TestClient, staff, two_sessions, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """기준값이 실린 숫자와 다르면(여기서는 기준을 비워 '기준에 없는 숫자'로 만든다) 내용을 내지 않는다."""
+    _, second, _ = two_sessions
+    monkeypatch.setattr(content_service, "reference_numbers", lambda *args, **kwargs: {})
+
+    response = _get(client, second, bearer(staff))
+    assert _code(response) == (409, "REPORT_CHECK_FAILED")
+    assert "sentences" not in response.text
+
+
+def test_text_check_failure_is_409(client: TestClient, staff, two_sessions, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, second, _ = two_sessions
+
+    def refuse(texts, *, edition, rules=None):
+        raise ReportCheckError("forbidden=1")
+
+    monkeypatch.setattr(content_service, "ensure_checked", refuse)
+    assert _code(_get(client, second, bearer(staff))) == (409, "REPORT_CHECK_FAILED")
+
+
+# ---- 인쇄 토큰 ----
+
+
+def test_print_token_opens_the_content_of_its_session_only(client: TestClient, staff, two_sessions) -> None:
+    first, second, _ = two_sessions
+    headers = _print_headers(second, staff)
+
+    by_print = _get(client, second, headers, "VET")
+    assert by_print.status_code == 200
+    assert by_print.json() == _get(client, second, bearer(staff), "VET").json()
+    assert _code(_get(client, first, headers)) == (404, "NOT_FOUND")
+
+
+def test_print_token_does_not_open_the_compare_api(client: TestClient, staff, dog, two_sessions) -> None:
+    """직전 회차 비교는 내용 API의 changes로 받는다. 비교 API는 인쇄 토큰을 받지 않는다(11.6)."""
+    _, second, _ = two_sessions
+    response = client.get(
+        COMPARE.format(dog.id),
+        params={"target": str(second.id), "base": "PREVIOUS"},
+        headers=_print_headers(second, staff),
+    )
+    assert _code(response) == (401, "AUTH_REQUIRED")
+
+
+def test_print_token_reads_a_trashed_dog_but_login_does_not(
+    client: TestClient, db: Session, staff, dog, two_sessions
+) -> None:
+    """휴지통에 든 반려견: 담당자에게는 404지만, 워커가 그 보고서도 만들므로 인쇄 토큰은 읽는다(12.5)."""
+    _, second, _ = two_sessions
+    dog.deleted_at = datetime.now(UTC)
+    db.flush()
+
+    assert _code(_get(client, second, bearer(staff))) == (404, "NOT_FOUND")
+    headers = _print_headers(second, staff)
+    assert _get(client, second, headers).status_code == 200
+    assert client.get(f"/api/v1/sessions/{second.id}/result", headers=headers).status_code == 200

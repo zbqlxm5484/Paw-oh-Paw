@@ -1,7 +1,7 @@
-"""인쇄 토큰(명세 11.6, 15.2의 18·22번, S15P31A404-276).
+"""인쇄 토큰(명세 11.6, 15.2의 18·62번, S15P31A404-276).
 
 웹의 보고서 인쇄 화면이 로그인 없이 회차 하나를 읽을 때 쓰는 토큰이다. 토큰 자체(만들기·풀기)와, 받는 API 둘이
-그 회차만 여는지, 그 밖의 API는 받지 않는지를 본다.
+그 회차만 여는지, 그 밖의 API는 받지 않는지를 본다. 보고서 내용(62번)은 test_report_content_api.py가 본다.
 """
 
 from __future__ import annotations
@@ -26,10 +26,9 @@ from app.core.security import (
 )
 from app.models import Institution
 from tests.conftest import bearer
-from tests.history_fixtures import add_metric, another_dog, make_session
+from tests.history_fixtures import add_metric, make_session
 
 RESULT = "/api/v1/sessions/{}/result"
-COMPARE = "/api/v1/dogs/{}/compare"
 DOGS = "/api/v1/dogs"
 
 
@@ -145,38 +144,3 @@ def test_print_token_ignores_contract_state(client: TestClient, db: Session, sta
 def test_print_token_is_not_a_login_for_other_apis(client: TestClient, staff, two_sessions) -> None:
     _, second = two_sessions
     assert _code(client.get(DOGS, headers=_print_headers(second, staff))) == (401, "AUTH_REQUIRED")
-
-
-# ---- 회차 비교(22번) ----
-
-
-def test_compare_opens_for_the_token_session_as_target(client: TestClient, staff, dog, two_sessions) -> None:
-    first, second = two_sessions
-    params = {"target": str(second.id), "base": "PREVIOUS"}
-    by_login = client.get(COMPARE.format(dog.id), params=params, headers=bearer(staff))
-    by_print = client.get(COMPARE.format(dog.id), params=params, headers=_print_headers(second, staff))
-
-    assert by_login.status_code == by_print.status_code == 200
-    assert by_print.json() == by_login.json()
-    assert by_print.json()["base"]["session_id"] == str(first.id)
-
-
-def test_compare_needs_the_token_session_as_target(client: TestClient, staff, dog, two_sessions) -> None:
-    first, second = two_sessions
-    headers = _print_headers(second, staff)
-
-    # target을 안 주면 "가장 최근 회차"인데, 그것이 토큰의 회차라는 보장이 없어 막는다
-    assert _code(client.get(COMPARE.format(dog.id), headers=headers)) == (404, "NOT_FOUND")
-    other = client.get(COMPARE.format(dog.id), params={"target": str(first.id)}, headers=headers)
-    assert _code(other) == (404, "NOT_FOUND")
-
-
-def test_compare_of_another_dog_is_404_with_print_token(
-    client: TestClient, db: Session, staff, dog, two_sessions
-) -> None:
-    _, second = two_sessions
-    stranger = another_dog(db, staff.institution_id)
-    response = client.get(
-        COMPARE.format(stranger.id), params={"target": str(second.id)}, headers=_print_headers(second, staff)
-    )
-    assert _code(response) == (404, "NOT_FOUND")

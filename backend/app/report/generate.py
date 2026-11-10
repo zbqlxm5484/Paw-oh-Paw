@@ -1,6 +1,6 @@
 """보고서 만들기(8절 만드는 순서 전체). 자식 프로세스는 generate_report 하나만 부른다(12.4).
 
-입력 JSON 파일 → parse_input → 수치 표(numbers) → 문장(sentences) → 차트(charts) → HTML(html) → 검사(checks) → PDF(pdf).
+입력 JSON 파일 → 수치 표·문장(content.compose_content) → 차트(charts) → HTML(html) → 검사(checks) → PDF(pdf).
 출력은 PDF 파일과 ReportResult(실린 숫자 목록·생성 시간·템플릿 판). 검사 실패는 ReportCheckError, 그 밖은 ReportError다.
 """
 
@@ -15,11 +15,11 @@ from typing import Any
 from app.report import TEMPLATE_VERSION, ReportError
 from app.report.charts import rom_chart
 from app.report.checks import ensure_checked
+from app.report.content import compose_content
 from app.report.html import render_html
-from app.report.inputs import ReportInput, parse_input
-from app.report.numbers import NOT_COMPARABLE_LABEL, GaitTable, ListedNumber, build_tables
+from app.report.numbers import GaitTable, ListedNumber
 from app.report.pdf import html_to_pdf
-from app.report.sentences import Sentences, compose
+from app.report.sentences import Sentences
 
 
 @dataclass(frozen=True)
@@ -42,35 +42,10 @@ class ReportResult:
     edition: str
 
 
-def _table_texts(tables: list[GaitTable]) -> dict[str, str]:
-    """표에 찍히는 글(수치 이름, 측정 불가 사유, 비교 사유, 직전 회차 비교의 변화·사유)도 검사 대상이다."""
-    parts: list[str] = []
-    for table in tables:
-        parts.append(table.label)
-        for row in table.rows:
-            parts.append(row.label)
-            parts.extend(cell.reason for cell in row.cells.values() if cell.reason)
-        for line in table.compare:
-            parts.append(f"{line.pair_label} {line.label}")
-            if line.reason:
-                parts.append(line.reason)
-        for change in table.changes:
-            parts.append(change.label)
-            for pair in change.cells.values():
-                if pair.change_label:
-                    parts.append(pair.change_label)
-                if pair.note:
-                    parts.append(f"{NOT_COMPARABLE_LABEL}. {pair.note}")
-    return {"tables": " ".join(parts)} if parts else {}
-
-
 def render(data: Any) -> Rendered:
     """입력 dict → HTML과 검사용 문장. 검사는 하지 않는다(generate_report가 한다)."""
-    inp: ReportInput = parse_input(data)
-    tables, numbers = build_tables(
-        inp.result, inp.previous, tolerance=inp.tolerance, model_changed=inp.previous_model_changed
-    )
-    sentences = compose(inp, tables)
+    content = compose_content(data)
+    inp, tables, sentences = content.inp, content.tables, content.sentences
     charts = {table.gait_type: chart for table in tables if (chart := rom_chart(table))}
     html = render_html(
         edition=inp.edition,
@@ -83,8 +58,7 @@ def render(data: Any) -> Rendered:
             "model_version": inp.session.model_version,
         },
     )
-    texts = {**sentences.texts(), **_table_texts(tables)}
-    return Rendered(html=html, texts=texts, numbers=tuple(numbers), tables=tables, sentences=sentences)
+    return Rendered(html=html, texts=content.texts, numbers=content.numbers, tables=tables, sentences=sentences)
 
 
 def generate_report(input_path: Path, output_path: Path, *, keep_html: bool = False) -> ReportResult:
