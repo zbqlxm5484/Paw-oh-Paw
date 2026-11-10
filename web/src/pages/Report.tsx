@@ -278,7 +278,7 @@ type Tick = { y: number; x: number; t: string }
 type KC = { y: Tick[]; x: Tick[]; x0: number; x1: number; ref_band: string; ref_mean: string; L: string; R: string }
 
 /** 수의사용: 뒷무릎 각도 · 보행 주기 */
-function KneeChart({ kc }: { kc: KC }) {
+export function KneeChart({ kc }: { kc: KC }) {
   return (
     <div>
       <b style={css('font-size:15px')}>뒷무릎 각도 · 보행 주기</b>

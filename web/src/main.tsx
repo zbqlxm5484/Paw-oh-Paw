@@ -9,7 +9,8 @@ import { startPolling } from './store/sessions_backend'
 import { current } from './app/session'
 
 // 백엔드 모드: 저장된 토큰이 살아 있으면 로그인 상태와 반려견 목록을 먼저 읽는다
-const start = MOCK ? Promise.resolve(null) : restore()
+// 가짜 서버 모드: 백엔드에만 있는 API(보고서 내용 285)를 시연 데이터로 흉내 내는 처리 함수를 먼저 등록한다
+const start = MOCK ? import('./mocks/reportContent').then(() => null) : restore()
 start.then((sid) => {
   if (sid) setLogin(sid)
   if (!MOCK) startPolling(current)   // 백엔드 분석 작업이 끝났는지 서버를 읽는다
