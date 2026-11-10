@@ -132,6 +132,17 @@ export function symOf(rows: DRow[]): number | null {
   return Math.max(0, Math.min(100, Math.round(100 - top)))
 }
 
+/** 서버 대칭 점수(271: 100 − 평균 대칭 지수, 웹과 같은 값). 서버가 이 필드를 안 주면(예전 서버) undefined → 화면 계산(symOf)으로 */
+function serverSym(h: SessionHistoryItem, result: SessionResultOut | null | undefined): number | null | undefined {
+  if (result && result.symmetry_score !== undefined) return result.symmetry_score
+  return h.symmetry_score
+}
+
+/** 회차의 촬영이 전부 분석 서버에서 실패(FAILED)했는지. 영상 문제(무효)가 아니라 서버 문제라 다시 찍으라고 하면 안 된다 */
+export function allShotsFailed(result: SessionResultOut | null | undefined): boolean {
+  return !!result && result.pass_counts.used === 0 && result.shot_counts.total > 0 && result.shot_counts.failed === result.shot_counts.total
+}
+
 export function toResult(h: SessionHistoryItem, dogId: string, result: SessionResultOut | null | undefined): DRes {
   const trot = result ? rowsOf(result, 'trot') : []
   const walk = result ? rowsOf(result, 'walk') : []
@@ -142,6 +153,7 @@ export function toResult(h: SessionHistoryItem, dogId: string, result: SessionRe
   // 실패: 분석 실패이거나, 분석은 끝났지만 쓸 수 있는 통과가 0건(gaits 빈 배열·used 0)일 때 → 다시 촬영 안내
   // 일부 유효: 무효 촬영이 있거나 유효 통과가 일부뿐(FEW_VALID_PASSES)일 때
   const st: DSt = h.status === 'FAILED' || (result && result.pass_counts.used === 0) ? 'fail' : result && (result.shot_counts.invalid > 0 || result.notices.some((n) => n.code === 'FEW_VALID_PASSES')) ? 'part' : 'ok'
+  const ss = serverSym(h, result)
   const vp = h.valid_passes ? h.valid_passes.LEFT + h.valid_passes.RIGHT : 0
   return {
     id: h.id, dog: dogId, date: fmtMonthDay(h.measured_on), time: timeOf(result?.completed_at ?? null), st,
@@ -150,7 +162,7 @@ export function toResult(h: SessionHistoryItem, dogId: string, result: SessionRe
     ex: result ? result.exclude_summary.map((e) => [e.message, e.count] as [string, number]) : [],
     model: h.model_version ?? result?.model_version ?? '-', rep: h.reports?.OWNER === 'DONE',
     loaded: !!result || h.status === 'FAILED',
-    sym: symOf(main), rom: stifle ? Math.round((stifle.l + stifle.r) / 2) : null,
+    sym: ss !== undefined ? ss : symOf(main), rom: stifle ? Math.round((stifle.l + stifle.r) / 2) : null,
     sL: stride ? stride.l : null, sR: stride ? stride.r : null,
     rowsBy: { trot, walk, other }, measured_on: h.measured_on, status: h.status, isBaseline: h.is_baseline, raw: h, result: result ?? null,
   }

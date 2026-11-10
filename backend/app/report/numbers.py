@@ -59,7 +59,9 @@ LIMB_LABELS: dict[str, str] = {
 LIMB_ORDER = ("LF", "RF", "LH", "RH", "NONE")
 PAIR_LABELS: dict[str, str] = {"FORE": "앞다리", "HIND": "뒷다리"}
 PAIR_LIMBS: dict[str, tuple[str, str]] = {"FORE": ("LF", "RF"), "HIND": ("LH", "RH")}
-GAIT_LABELS: dict[str, str] = {"WALK": "평보", "TROT": "속보", "PACE": "측대보", "OTHER": "기타"}
+# OTHER 묶음에 든 유효 통과는 분석 API가 보행 유형을 아직 가르지 않은 통과다(gait null, 15.7). 평보·속보가 아닌 걸음은
+# GAIT_OTHER로 빠져 수치에 들지 않으므로 '기타'가 아니다. 이름은 화면(웹·앱)과 같게 쓴다
+GAIT_LABELS: dict[str, str] = {"WALK": "평보", "TROT": "속보", "PACE": "측대보", "OTHER": "보행 유형 미판별"}
 
 
 @dataclass(frozen=True)

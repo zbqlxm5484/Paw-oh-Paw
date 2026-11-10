@@ -6,6 +6,7 @@
 <style>
   @page {
     size: A4; margin: 18mm 16mm 20mm 16mm;
+    font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif;  /* 여백 상자(쪽 번호)는 body가 아니라 여기서 글꼴을 물려받는다. body와 같은 목록을 쓴다 */
     @bottom-left { content: element(footer); }
     @bottom-right { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #555; }
   }
