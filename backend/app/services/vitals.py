@@ -1,4 +1,5 @@
 """바이탈(BE-28, 12.5 차트 자료, 13.9, 15.11). 반려견마다 하루 한 줄이고 같은 날 다시 보내면 보낸 값만 바꾼다.
+그날 줄을 통째로 지울 수 있다(v1.46). 지워도 반려견의 등록 체중과 회차의 체중은 그대로다.
 
 반려견은 services/dogs.in_institution으로 거른다(다른 기관·휴지통은 404). flush()까지만 한다.
 체중을 적은 날이 체중이 적힌 날 중 가장 최근이면 반려견의 등록 체중도 그 값으로 바꾼다(12.5, v1.41).
@@ -6,6 +7,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -18,6 +20,8 @@ from app.core.errors import AppError, ErrorCode
 from app.models import Dog, DogVital
 from app.schemas.chart import VitalOut, VitalPut
 from app.services.dogs import classify, get_dog, in_institution
+
+logger = logging.getLogger(__name__)
 
 _KEEP = object()  # save_vital의 session_id 기본값: 이미 있는 값을 그대로 둔다
 VITAL_FIELDS = ("weight_kg", "temp_c", "heart_rate", "sbp", "dbp")
@@ -126,3 +130,39 @@ def put_vital(
         db, dog=dog, measured_on=measured_on, values=data.model_dump(exclude_unset=True), staff_id=staff_id
     )
     return VitalOut.model_validate(vital)
+
+
+def delete_vital(
+    db: Session, *, institution_id: uuid.UUID, staff_id: uuid.UUID, dog_id: uuid.UUID, measured_on: date
+) -> None:
+    """DELETE /dogs/{dog_id}/vitals/{measured_on}(v1.46). 그날 줄을 통째로 지운다. 없으면 404다.
+
+    반려견의 등록 체중은 되돌리지 않는다(체중을 비워도 그대로인 것과 같다, 12.5). 회차를 시작하며 적은 줄도 지울 수
+    있고 회차의 체중은 그대로다. 저장과 같이 반려견 행을 잠근 뒤에 찾는다(같은 날의 저장과 겹치지 않게).
+    """
+    dog = db.scalars(
+        select(Dog).where(Dog.id == dog_id, in_institution(institution_id)).with_for_update()
+    ).one_or_none()
+    if dog is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    vital = db.scalars(
+        select(DogVital).where(DogVital.dog_id == dog.id, DogVital.measured_on == measured_on)
+    ).one_or_none()
+    if vital is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    vital_id = vital.id
+    db.delete(vital)
+    db.flush()
+    logger.info("dog vital deleted vital=%s staff=%s", vital_id, staff_id)
+
+
+def vitals_on(db: Session, institution_id: uuid.UUID, day: date) -> list[VitalOut]:
+    """기관의 그날 바이탈(15.11 그날 기록). 휴지통의 반려견은 빼고, 적은 순서로 준다."""
+    rows = db.scalars(
+        select(DogVital)
+        .join(Dog, DogVital.dog_id == Dog.id)
+        .options(joinedload(DogVital.staff))
+        .where(in_institution(institution_id), DogVital.measured_on == day)
+        .order_by(DogVital.created_at, DogVital.id)
+    ).all()
+    return [VitalOut.model_validate(row) for row in rows]

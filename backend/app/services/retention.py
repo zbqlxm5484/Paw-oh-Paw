@@ -23,7 +23,7 @@ from app.core.dates import CONTRACT_RETENTION_DAYS, today_local
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog, Institution, Staff
 from app.models.enums import PurgeScope, StaffRole
-from app.services.analysis_copies import OutOfTime
+from app.services.analysis_copies import Cleared, OutOfTime
 from app.services.purge import SweepResult, purge
 from app.storage.base import StorageService
 
@@ -63,6 +63,7 @@ def purge_expired_contracts(
     today: date | None = None,
     limit: int = SWEEP_BATCH,
     deadline: float | None = None,
+    cleared: Cleared | None = None,
 ) -> SweepResult:
     """계약이 끝난 지 90일이 지난 기관의 자료와 가입 계정을 지운다(워커). 지운 기관 수, 못 지운 기관 수, 시간 상한에
     닿았는지를 돌려준다.
@@ -72,7 +73,8 @@ def purge_expired_contracts(
     실패해도 앞에서 지운 것은 남는다. 후보를 읽은 뒤 계약을 연장했을 수 있으므로, 기관 행을 잠근 뒤 종료일을 다시
     본다(연장은 그 commit을 기다린다). 그동안 그 기관의 가입·등록까지 막지 않게 FOR NO KEY UPDATE로 잠근다.
     분석 API가 응답하지 않으면 남은 기관도 같은 이유로 실패할 테니 거기서 멈춘다. deadline(time.monotonic() 기준)을
-    넘기면 남은 것을 다음 차례로 미룬다.
+    넘기면 남은 것을 다음 차례로 미룬다. cleared는 분석 API 사본을 끝낸 촬영을 적어 두는 곳이고, 이어서 할 때
+    끝낸 촬영을 다시 부르지 않게 한다(services/analysis_copies.py).
     """
     institution_ids = due_institution_ids(db, today=today, limit=limit)
     purged = failed = 0
@@ -102,6 +104,7 @@ def purge_expired_contracts(
                     executed_by=None,
                     include_accounts=True,
                     deadline=deadline,
+                    cleared=cleared,
                 )
             db.commit()  # 기관 하나 지울 때마다 잠금을 푼다
             purged += 1

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import UTC, date, datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Row, delete, func, select, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.clients.analysis import AnalysisClient
@@ -26,7 +27,7 @@ from app.schemas.sessions import (
     SideProgressOut,
     StaffBriefOut,
 )
-from app.services.analysis_copies import delete_copies
+from app.services.analysis_copies import delete_shot_copies, read_shot_copies
 from app.services.dogs import classify, in_institution
 from app.services.shots import to_shot_out
 from app.services.symmetry import session_scores
@@ -150,8 +151,26 @@ def list_sessions(
         )
         or 0
     )
+    return _list_items(db, rows), total
+
+
+def sessions_on(db: Session, institution_id: uuid.UUID, day: date) -> list[SessionListItem]:
+    """기관의 그날(measured_on) 회차 전부, 만든 순서로(15.11 그날 기록). 휴지통의 반려견은 뺀다."""
+    rows = db.execute(
+        select(MeasureSession, Dog.name)
+        .join(Dog, MeasureSession.dog_id == Dog.id)
+        .where(in_institution(institution_id), MeasureSession.measured_on == day)
+        .options(joinedload(MeasureSession.staff))
+        .order_by(MeasureSession.created_at, MeasureSession.id)
+        .execution_options(populate_existing=True)
+    ).all()
+    return _list_items(db, rows)
+
+
+def _list_items(db: Session, rows: Sequence[Row[tuple[MeasureSession, str]]]) -> list[SessionListItem]:
+    """(회차, 반려견 이름) 줄들 → SessionListItem. 대칭 점수는 DONE 회차만 쿼리 한 번으로 읽는다(15.1)."""
     scores = session_scores(db, [session.id for session, _ in rows if session.status == SessionStatus.DONE.value])
-    items = [
+    return [
         SessionListItem(
             id=session.id,
             measured_on=session.measured_on,
@@ -167,7 +186,6 @@ def list_sessions(
         )
         for session, dog_name in rows
     ]
-    return items, total
 
 
 def get_session(
@@ -291,12 +309,6 @@ def complete_session(db: Session, institution_id: uuid.UUID, session_id: uuid.UU
     return session
 
 
-def _job_ids(db: Session, session_id: uuid.UUID) -> list[str]:
-    """회차의 촬영 중 분석 API에 제출한 적이 있는 것의 작업 ID."""
-    query = select(Shot.job_id).where(Shot.session_id == session_id, Shot.job_id.is_not(None))
-    return [job_id for job_id in db.scalars(query) if job_id]
-
-
 def _require_cancellable(db: Session, session: MeasureSession) -> None:
     if session.status != SessionStatus.MEASURING:
         raise AppError(ErrorCode.SESSION_CLOSED)
@@ -311,15 +323,17 @@ def cancel_session(
 
     촬영 행을 지우면 분석 API 사본을 다시 찾을 수 없으므로 먼저 지운다(199 리뷰 조유진). 못 지우면 503
     ANALYSIS_UNAVAILABLE이고 회차는 그대로다. 분석 API는 HTTP라 회차 행을 잠그기 전에 부르고(조건은 미리 본다),
-    잠근 뒤 조건을 다시 보고 그사이 생긴 작업만 마저 지운다(12.4 잠금).
+    잠근 뒤 조건을 다시 보고 그사이 달라진 촬영(새 촬영, 워커가 가져가거나 보낸 촬영)만 마저 지운다(12.4 잠금).
+    작업 ID가 없는 촬영도 부른다. 분석 API에 팀 서비스가 모르는 작업이 있을 수 있다(services/analysis_copies.py).
     """
     session = get_session(db, institution_id, session_id)
     _require_cancellable(db, session)
-    first_jobs = _job_ids(db, session.id)
-    delete_copies(analysis, first_jobs)
+    first = read_shot_copies(db, Shot.session_id == session.id)
+    delete_shot_copies(analysis, first)
     session = get_session(db, institution_id, session_id, for_update=True)
     db.refresh(session)  # 잠근 뒤의 상태로 다시 본다
     _require_cancellable(db, session)
-    already = set(first_jobs)
-    delete_copies(analysis, [job_id for job_id in _job_ids(db, session.id) if job_id not in already])
+    already = set(first)
+    late = [shot for shot in read_shot_copies(db, Shot.session_id == session.id) if shot not in already]
+    delete_shot_copies(analysis, late)
     delete_session_tree(db, session, institution_id)
