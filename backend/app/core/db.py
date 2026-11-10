@@ -17,6 +17,14 @@ from app.core.config import get_db_settings
 # 나머지 제약·인덱스 이름(uq_·ck_·fk_·ix_)은 각 모델에 12.2 DDL과 같은 이름으로 직접 적는다.
 NAMING_CONVENTION = {"pk": "%(table_name)s_pkey"}
 
+# DB 연결 수(S15P31A404-274). API는 요청을 스레드 40개(FastAPI·anyio 기본값)에서 처리하고 요청 하나가 연결 하나를 쓴다.
+# SQLAlchemy 기본값(5 + 10 = 15)이면 느린 요청 15개가 연결을 다 쥐었을 때 나머지 요청이 연결을 기다리며 멈춘다
+# (분석 API가 느릴 때 촬영 삭제가 몰린 경우를 실제로 재현했다). 그래서 스레드 수와 같게 둔다. 평소에는 20개까지만
+# 열어 두고, 넘친 20개는 쓰고 나면 닫는다. PostgreSQL 기본 max_connections(100) 안에서 API 두 벌(배포 전환 중)과
+# 워커가 함께 쓸 수 있는 수다.
+POOL_SIZE = 20
+POOL_MAX_OVERFLOW = 20
+
 # SQLSTATE 코드 (11.7 오류 종류)
 UNIQUE_VIOLATION = "23505"
 FOREIGN_KEY_VIOLATION = "23503"
@@ -31,7 +39,9 @@ class Base(DeclarativeBase):
 def get_engine() -> Engine:
     url = get_db_settings().DATABASE_URL.get_secret_value()
     # hide_parameters: 오류 메시지에 값(반려견 이름 등)이 찍히지 않게 한다(11.8).
-    return create_engine(url, hide_parameters=True, pool_pre_ping=True)
+    return create_engine(
+        url, hide_parameters=True, pool_pre_ping=True, pool_size=POOL_SIZE, max_overflow=POOL_MAX_OVERFLOW
+    )
 
 
 class _LazySessionmaker:
