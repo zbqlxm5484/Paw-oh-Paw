@@ -176,7 +176,9 @@ class PurgeRequest(BaseModel):
 class PurgeOut(BaseModel):
     """파기 결과 또는 dry_run 집계(15.9). rows는 반려견·회차·촬영·통과·수치·보고서 행 수의 합.
 
-    analysis_jobs는 분석 API에서 지운(또는 지울) 작업 수이고 이미 없던 작업도 센다. ALL은 작업마다 부르지 않아 0이다.
+    analysis_jobs는 분석 API에서 지운(또는 지울) 작업 수다. dry_run은 팀 서비스가 작업 ID를 아는 것만 세고, 실제
+    파기는 분석 API가 지웠다고 답한 작업(팀 서비스가 모르던 것 포함)과 아는 작업 중 이미 없던 것을 센다. 그래서
+    실제 값이 dry_run보다 클 수 있다. ALL은 촬영마다 부르지 않아 0이다.
     """
 
     scope: str

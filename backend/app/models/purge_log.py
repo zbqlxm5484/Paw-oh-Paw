@@ -24,7 +24,7 @@ class PurgeLog(Base):
     rows_deleted: Mapped[int] = mapped_column(Integer)
     files_deleted: Mapped[int] = mapped_column(Integer)
     bytes_deleted: Mapped[int] = mapped_column(BigInteger)
-    # 분석 API에 지우기를 부른 작업 수(15.9). ALL은 작업마다 부르지 않아 0이다
+    # 분석 API에서 지운 작업 수(15.9 analysis_jobs). ALL은 촬영마다 부르지 않아 0이다
     analysis_jobs_deleted: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     # 실행한 담당자 ID. 외래키 없음
     executed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)

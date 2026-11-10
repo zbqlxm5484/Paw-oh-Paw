@@ -6,6 +6,7 @@
 - 사유 객체 Reason은 {"code", "message"}이고 사유가 없으면 null이다(15.1).
 """
 
+import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -27,6 +28,8 @@ UtcDateTime = Annotated[datetime, PlainSerializer(to_utc_z, return_type=str, whe
 
 # 체중(13.2, 13.3): 0.5~100.0, 소수 둘째 자리까지
 Weight = Annotated[Decimal, Field(ge=Decimal("0.5"), le=Decimal("100.0"), decimal_places=2)]
+
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class OutModel(BaseModel):
@@ -51,3 +54,13 @@ class ReasonOut(BaseModel):
 
 def reason_out(code: str | None) -> ReasonOut | None:
     return None if code is None else ReasonOut(**reason_payload(code))
+
+
+def iso_date_text(value: object) -> object:
+    """날짜 입력은 YYYY-MM-DD 글자만 받는다(13.9, v1.46). 검증 앞에 건다.
+
+    그냥 두면 숫자는 1970년부터의 초로, 시각이 붙은 글자는 그 날짜로 읽혀 통과한다. None은 그대로 둔다.
+    """
+    if value is None or (isinstance(value, str) and _ISO_DATE.fullmatch(value)):
+        return value
+    raise ValueError("날짜는 YYYY-MM-DD 모양이어야 합니다")

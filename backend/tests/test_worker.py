@@ -97,6 +97,7 @@ class FakeClient:
         self.result_hook = None
         self.submits: list[tuple[Path, SubmitInfo]] = []
         self.deleted: list[str] = []
+        self.shot_deletes: list[uuid.UUID] = []
         self.delete_error: Exception | None = None
         self.status_calls: list[str] = []
         self.result_calls: list[str] = []
@@ -132,6 +133,12 @@ class FakeClient:
         if self.delete_error:
             raise self.delete_error
         self.deleted.append(job_id)
+
+    def delete_shot(self, shot_id: uuid.UUID) -> list[str]:
+        if self.delete_error:
+            raise self.delete_error
+        self.shot_deletes.append(shot_id)
+        return []  # 이 가짜는 촬영의 작업을 모른다. 아는 작업은 delete로 온다
 
 
 class HookedStorage:

@@ -28,7 +28,7 @@ from app.clients.analysis import AnalysisClient
 from app.core.errors import AppError, ErrorCode
 from app.models import Dog
 from app.models.enums import PurgeScope
-from app.services.analysis_copies import OutOfTime
+from app.services.analysis_copies import Cleared, OutOfTime
 from app.services.dogs import TRASH_RETENTION_DAYS, get_dog
 from app.services.purge import SweepResult, has_shot_in_progress, purge
 from app.storage.base import StorageService
@@ -101,6 +101,7 @@ def purge_expired(
     now: datetime | None = None,
     limit: int = SWEEP_BATCH,
     deadline: float | None = None,
+    cleared: Cleared | None = None,
 ) -> SweepResult:
     """휴지통에 넣은 지 30일이 지난 반려견을 영구 삭제한다(워커). 지운 수, 못 지운 수, 시간 상한에 닿았는지를 돌려준다.
 
@@ -109,6 +110,8 @@ def purge_expired(
     분석 API가 응답하지 않으면 남은 것도 같은 이유로 실패할 테니 거기서 멈춘다(작업마다 시간 한도를 기다리지 않게).
     deadline(time.monotonic() 기준)을 넘기면 남은 것을 다음 차례로 미룬다. 주 반복과 같은 스레드에서 돌기 때문이다
     (12.4). 못 지운 것은 다음 차례에 다시 한다. purge_log.executed_by는 NULL이다(사람이 누른 것이 아니다).
+    cleared는 분석 API 사본을 끝낸 촬영을 적어 두는 곳이다. 워커가 차례마다 같은 것을 넘겨, 이어서 할 때 끝낸
+    촬영을 다시 부르지 않는다(services/analysis_copies.py).
     """
     cutoff = (now or datetime.now(UTC)) - timedelta(days=TRASH_RETENTION_DAYS)
     expired = (Dog.deleted_at.is_not(None), Dog.deleted_at <= cutoff)
@@ -134,6 +137,7 @@ def purge_expired(
                     dry_run=False,
                     executed_by=None,
                     deadline=deadline,
+                    cleared=cleared,
                 )
             db.commit()  # 한 마리 지울 때마다 잠금을 푼다
             purged += 1
