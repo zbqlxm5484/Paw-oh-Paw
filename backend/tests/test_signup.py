@@ -5,11 +5,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.dates import today_local
 from app.models import DeviceCode, Staff
+from app.services import signup as signup_service
 from app.services.device_codes import CODE_ALPHABET, format_code, generate_code, normalize_code
 from tests.conftest import GOOD_PASSWORD
 
@@ -88,11 +89,11 @@ def test_contract_ending_today_is_still_usable(client: TestClient, db: Session, 
     assert client.post(VERIFY, json={"code": PRETTY}).status_code == 200
 
 
-@pytest.mark.parametrize("case", ["unknown", "revoked", "expired", "nineteen_chars", "letter_o"])
-def test_unusable_codes_are_404_with_identical_body(
-    client: TestClient, db: Session, device_code: DeviceCode, case: str
-) -> None:
-    """없음·회수됨·기관 계약 만료·형식 오류는 모두 404 DEVICE_CODE_INVALID이고 본문이 같다. 가입도 같은 답이다."""
+UNUSABLE_CASES = ["unknown", "revoked", "expired", "nineteen_chars", "letter_o"]
+
+
+def _unusable_code(db: Session, device_code: DeviceCode, case: str) -> str:
+    """쓸 수 없는 코드의 다섯 경우를 만들고, 요청에 넣을 코드 글자를 돌려준다."""
     code = PRETTY
     if case == "unknown":
         code = UNKNOWN
@@ -105,6 +106,15 @@ def test_unusable_codes_are_404_with_identical_body(
     elif case == "letter_o":
         code = PRETTY[:-1] + "O"
     db.flush()
+    return code
+
+
+@pytest.mark.parametrize("case", UNUSABLE_CASES)
+def test_unusable_codes_are_404_with_identical_body(
+    client: TestClient, db: Session, device_code: DeviceCode, case: str
+) -> None:
+    """없음·회수됨·기관 계약 만료·형식 오류는 모두 404 DEVICE_CODE_INVALID이고 본문이 같다. 가입도 같은 답이다."""
+    code = _unusable_code(db, device_code, case)
 
     verify = client.post(VERIFY, json={"code": code})
     assert verify.status_code == 404
@@ -114,6 +124,42 @@ def test_unusable_codes_are_404_with_identical_body(
     signup = _signup(client, code=code)
     assert signup.status_code == 404
     assert signup.json() == verify.json()
+    assert _count(db, "kim01") == 0
+
+
+@pytest.mark.parametrize("case", UNUSABLE_CASES)
+def test_unusable_code_is_refused_before_bcrypt(
+    client: TestClient, db: Session, device_code: DeviceCode, case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """v1.48(15.4): 쓸 수 없는 코드로 온 가입 요청은 비밀번호 해시를 계산하지 않는다(서버 CPU를 쓰게 하지 못한다)."""
+    code = _unusable_code(db, device_code, case)
+    hashed: list[str] = []
+    monkeypatch.setattr(signup_service, "hash_password", lambda password: hashed.append(password) or "x" * 60)
+
+    response = _signup(client, code=code)
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "DEVICE_CODE_INVALID"
+    assert hashed == []
+
+
+def test_usable_code_is_hashed_once_and_checked_again_after_the_hash(
+    client: TestClient, db: Session, device_code: DeviceCode, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """해시를 계산하는 사이에 회수된 코드로는 가입되지 않는다(해시 뒤에 코드를 다시 확인한다, 15.4)."""
+    real_hash = signup_service.hash_password
+    code_id = device_code.id
+    hashed: list[str] = []
+
+    def hash_then_revoke(password: str) -> str:
+        hashed.append(password)
+        db.execute(update(DeviceCode).where(DeviceCode.id == code_id).values(revoked_at=datetime.now(UTC)))
+        return real_hash(password)
+
+    monkeypatch.setattr(signup_service, "hash_password", hash_then_revoke)
+    db.expunge_all()  # 실제 요청처럼 코드 행이 세션에 올라 있지 않게 한다(올라 있으면 먼저 읽은 값을 본다)
+    response = _signup(client)
+    assert response.status_code == 404
+    assert hashed == [GOOD_PASSWORD]
     assert _count(db, "kim01") == 0
 
 

@@ -82,6 +82,8 @@ def get_current_staff(db: DbSession, authorization: Annotated[str | None, Header
     """Authorization: Bearer <token>에서 담당자 스냅샷을 꺼낸다(11.6 요청마다 하는 검사 ①~③).
 
     토큰이 없거나 잘못되면 401 AUTH_REQUIRED, 만료면 401 AUTH_EXPIRED, 계정이 막혔으면 403 ACCOUNT_DISABLED.
+    비밀번호를 바꾸기 전에 받은 토큰도 401 AUTH_EXPIRED다(v1.48): 토큰의 iat가 스냅샷의 password_changed_at보다
+    이르면 돌려보낸다. 스냅샷이 캐시에서 오면 다른 프로세스에서 바꾼 비밀번호는 최대 TTL 뒤에 반영된다.
     기관 ID·역할은 토큰이 아니라 스냅샷(캐시, 없으면 DB의 담당자 + 기관 행)에서 가져온다.
     캐시에 있으면 DB를 읽지 않는다.
     계약 검사(④)는 require_contract가 한다. GET /auth/me만 이 함수를 그대로(CurrentStaffAny) 쓴다.
@@ -99,6 +101,10 @@ def get_current_staff(db: DbSession, authorization: Annotated[str | None, Header
         if snapshot is None:
             raise AppError(ErrorCode.AUTH_REQUIRED)
         auth_cache.put(snapshot)
+    changed_at = snapshot.password_changed_at
+    if changed_at is not None and (claims.issued_at is None or claims.issued_at < changed_at):
+        # 비밀번호를 바꾸기 전에 받은 토큰(12.5). 다시 로그인해야 한다
+        raise AppError(ErrorCode.AUTH_EXPIRED)
     if not snapshot.is_active:
         raise AppError(ErrorCode.ACCOUNT_DISABLED)
     return snapshot

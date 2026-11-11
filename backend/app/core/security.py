@@ -68,18 +68,26 @@ class TokenExpiredError(TokenError):
 
 @dataclass(frozen=True)
 class TokenClaims:
-    """토큰 안의 값(11.6): sub(담당자 ID), inst(기관 ID), role, exp."""
+    """토큰 안의 값(11.6): sub(담당자 ID), inst(기관 ID), role, iat(발급 시각), exp.
+
+    issued_at은 비밀번호를 바꾼 시각과 견주는 값이다(deps.get_current_staff). iat가 없는 토큰이면 None이다.
+    """
 
     staff_id: uuid.UUID
     institution_id: uuid.UUID
     role: str
     expires_at: datetime
+    issued_at: datetime | None = None
 
 
 def create_access_token(
     *, staff_id: uuid.UUID, institution_id: uuid.UUID, role: str, now: datetime | None = None
 ) -> tuple[str, datetime]:
-    """로그인 토큰과 만료 시각. 만료는 JWT_EXPIRE_HOURS(기본 12시간) 뒤이고, 새로 받는 기능은 없다(16절)."""
+    """로그인 토큰과 만료 시각. 만료는 JWT_EXPIRE_HOURS(기본 12시간) 뒤이고, 새로 받는 기능은 없다(16절).
+
+    iat는 소수점 아래까지 적는다(11.6, v1.48). 초로 자르면 비밀번호를 바꾼 것과 같은 초에 받은 옛 토큰을 가릴 수 없다.
+    JWT의 시각 값은 정수가 아니어도 된다(RFC 7519 NumericDate).
+    """
     settings = get_settings()
     now = now or datetime.now(UTC)
     expires_at = (now + timedelta(hours=settings.JWT_EXPIRE_HOURS)).replace(microsecond=0)
@@ -87,7 +95,7 @@ def create_access_token(
         "sub": str(staff_id),
         "inst": str(institution_id),
         "role": role,
-        "iat": int(now.timestamp()),
+        "iat": now.timestamp(),
         "exp": int(expires_at.timestamp()),
     }
     token = jwt.encode(payload, settings.JWT_SECRET.get_secret_value(), algorithm=JWT_ALGORITHM)
@@ -109,13 +117,15 @@ def decode_access_token(token: str) -> TokenClaims:
     except jwt.InvalidTokenError as error:
         raise TokenError("invalid token") from error
     try:
+        issued = payload.get("iat")
         return TokenClaims(
             staff_id=uuid.UUID(str(payload["sub"])),
             institution_id=uuid.UUID(str(payload["inst"])),
             role=str(payload["role"]),
             expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
+            issued_at=None if issued is None else datetime.fromtimestamp(float(issued), tz=UTC),
         )
-    except (KeyError, ValueError, TypeError) as error:
+    except (KeyError, ValueError, TypeError, OverflowError, OSError) as error:
         raise TokenError("invalid claims") from error
 
 

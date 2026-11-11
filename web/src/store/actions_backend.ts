@@ -109,7 +109,10 @@ if (!MOCK) {
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/account', '새 비밀번호는 8자 이상, 현재와 다르게 입력해 주세요')
     try {
       await api.changePassword(f(fd, 'current_pw'), f(fd, 'pw'))
-      return redirect('/account', '비밀번호를 바꿨습니다')
+      // 서버가 그전에 받은 토큰을 이 요청에 쓴 것까지 끊는다(백엔드 명세 15.4 v1.48). 탈퇴처럼 토큰을 버리고 다시 로그인하게 한다
+      tokenStore.clear()
+      setLogin(null)
+      return redirect('/login', '비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요')
     } catch (e) {
       return redirect('/account', msg(e))
     }
