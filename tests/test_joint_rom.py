@@ -9,6 +9,12 @@ MEAN, AMP = 120.0, 20.0                      # 무릎 각도 = 120 + 20 sin(주�
 TRUE_ROM = 2 * AMP * math.sin(math.pi / 2 * 0.9)   # 사인파의 5에서 95백분위 폭 (약 39.5)
 
 
+def missing(item: dict) -> str:
+    """측정 불가 수치의 사유 코드. 값은 null, 문장(reason_detail)이 꼭 붙는다"""
+    assert item["value"] is None and item["reason_detail"], item
+    return item["reason"]
+
+
 def with_stifle(frames, side="right"):
     """무릎(꼭짓점)·고관절(근위)·뒷발목(원위)을 정해진 각도로 놓는다"""
     hip, knee, hock = (18, 19, 20) if side == "right" else (14, 15, 16)
@@ -51,7 +57,8 @@ def test_keys_follow_result_format_v1():
 
 def test_unseen_joint_is_low_confidence_not_zero():
     m = joint_metrics(with_stifle(make_frames()), FPS, "right")
-    assert m["rom_shoulder"] == {"value": None, "reason": "LOW_CONFIDENCE"}   # 어깨 점을 넣지 않았다
+    assert missing(m["rom_shoulder"]) == "LOW_CONFIDENCE"   # 어깨 점을 넣지 않았다
+    assert m["rom_shoulder"]["reason_detail"].startswith("어깨 각도를 잴 세 관절점")
     assert m["angle_median_elbow"]["reason"] == "LOW_CONFIDENCE"
 
 
@@ -59,7 +66,7 @@ def test_short_pass_has_rom_but_no_cycle_rom():
     """가동 범위는 몸이 보인 프레임 전부로 재므로 주기가 없어도 나온다. 주기별 가동 범위만 NOT_ENOUGH_CYCLES"""
     m = joint_metrics(with_stifle(make_frames(n=20)), FPS, "right")     # 0.33초: 주기 없음
     assert m["rom_stifle"]["value"] is not None
-    assert m["stifle_cycle_rom"] == {"value": None, "reason": "NOT_ENOUGH_CYCLES"}
+    assert missing(m["stifle_cycle_rom"]) == "NOT_ENOUGH_CYCLES"
 
 
 def test_no_body_length_is_low_confidence_everywhere():
@@ -68,5 +75,5 @@ def test_no_body_length_is_low_confidence_everywhere():
     for kp in frames:
         kp[2][2] = kp[13][2] = 0.1                    # T13·장골능 확신도가 바닥 아래
     m = joint_metrics(frames, FPS, "right")
-    assert m["stifle_cycle_rom"] == {"value": None, "reason": "LOW_CONFIDENCE"}
+    assert missing(m["stifle_cycle_rom"]) == "LOW_CONFIDENCE"
     assert m["rom_stifle"]["value"] is not None       # 무릎 세 점은 보여서 가동 범위는 잰다
