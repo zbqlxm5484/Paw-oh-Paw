@@ -15,6 +15,7 @@ import type { Account, Result } from '../store/types'
 import { PrintPdf } from './parts/ServerPdf'
 import { mainGait, VetSections } from './parts/VetSections'
 import { OwnerAdvice, OwnerChangeStrip } from './parts/OwnerSummary'
+import { QualityCard, QualityLine } from './parts/MeasureQuality'
 import { api } from '../api/client'
 import { kneeChartView, loadKneeCurve, type KneeChartView } from '../views/reportContent'
 
@@ -142,6 +143,7 @@ export default function Report() {
                 <span style={css('display:flex;align-items:center;gap:6px;font-size:13.5px;color:#5B6472;font-variant-numeric:tabular-nums')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>{status}</span>
               </div>
 
+              {!fail ? <QualityCard r={r} /> : null}
               <ReportPaper acct={acct} r={r} rd={rd} rp={rp} bm={bm} kind={kind} fromServer={fromServer} />
             </>
           )}
@@ -251,6 +253,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
         <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
         {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
         {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있습니다</span> : null}
+        <QualityLine r={r} kind={kind} />
         {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#8E949C')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
       </div>
 
