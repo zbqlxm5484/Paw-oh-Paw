@@ -17,7 +17,7 @@
 - 무릎 주기별 가동 범위: 뒷발 주기(착지에서 다음 착지까지, engine/gait_events.py) 안 프레임
 - 화면 끝에 걸린 프레임은 쓰지 않는다. 상자가 잘리면 각도가 크게 흔들린다(박규원 비교: 고관절 4.5 → 6.6°)
 
-측정 불가는 0이 아니라 {"value": null, "reason"}로 낸다(PR-F02-05).
+측정 불가는 0이 아니라 {"value": null, "reason", "reason_detail"}로 낸다(PR-F02-05, 문장은 S15P31A404-259).
 - LOW_CONFIDENCE: 몸이 보인 프레임 중 세 점(꼭짓점·근위·원위)을 모두 믿을 만한 프레임이 절반이 안 됨.
   몸통 길이를 못 재 착지를 검출하지 못한 통과의 stifle_cycle_rom도 이 사유다(보행 수치와 같게)
 - NOT_ENOUGH_CYCLES: stifle_cycle_rom에서 뒷발 주기가 없음
@@ -27,6 +27,7 @@ from typing import Optional, Sequence
 
 from engine.angles import FLEX_SIDE, JOINTS, flexion_angle
 from engine.gait_events import CONF, Frame, detect_pass
+from engine.reasons import metric_reason_detail
 
 ROM_VERSION = "v1"
 LOW_PCT, HIGH_PCT = 5, 95       # 가동 범위 백분위 (결과 형식 3절)
@@ -70,8 +71,8 @@ def percentile_width(values: Sequence[float], low: float = LOW_PCT, high: float 
     return q[high - 1] - q[low - 1]
 
 
-def _missing(reason: str) -> dict:
-    return {"value": None, "reason": reason}
+def _missing(reason: str, facts: dict) -> dict:
+    return {"value": None, "reason": reason, "reason_detail": metric_reason_detail(facts)}
 
 
 def joint_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
@@ -89,7 +90,10 @@ def joint_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
         series = [angles[i][joint] for i in body if joint in angles[i]]
         width = percentile_width(series)
         if width is None or len(series) < MIN_ANGLE_SEEN * len(body):
-            out[f"rom_{joint}"] = out[f"angle_median_{joint}"] = _missing("LOW_CONFIDENCE")
+            facts = {"kind": "joint_hidden", "joint": joint, "ratio": len(series) / len(body) if body else 0.0,
+                     "min": MIN_ANGLE_SEEN}
+            out[f"rom_{joint}"] = _missing("LOW_CONFIDENCE", facts)
+            out[f"angle_median_{joint}"] = _missing("LOW_CONFIDENCE", facts)
             continue
         out[f"rom_{joint}"] = {"value": round(width, 1), "unit": "deg"}
         out[f"angle_median_{joint}"] = {"value": round(statistics.median(series), 1), "unit": "deg"}
@@ -106,7 +110,19 @@ def joint_metrics(frames: Sequence[Frame], fps: float, camera_side: str,
     else:
         # 착지 검출이 비었으면(몸통 길이를 못 잼) 관절점 문제라 LOW_CONFIDENCE, 검출은 됐는데 주기가 없으면 NOT_ENOUGH_CYCLES
         enough = hind is not None and bool(hind.strides)
-        out["stifle_cycle_rom"] = _missing("LOW_CONFIDENCE" if not events or enough else "NOT_ENOUGH_CYCLES")
+        if not events or enough:
+            if not events:
+                facts = {"kind": "no_body_length"}
+            else:   # 주기는 있는데 주기 안에서 무릎 세 점이 절반 넘게 안 보임
+                inside = [i for st in hind.strides for i in range(st.start, st.end)]
+                seen = sum("stifle" in angles[i] for i in inside) / len(inside) if inside else 0.0
+                facts = {"kind": "joint_hidden", "joint": "stifle", "ratio": seen, "min": MIN_ANGLE_SEEN}
+            out["stifle_cycle_rom"] = _missing("LOW_CONFIDENCE", facts)
+        else:
+            out["stifle_cycle_rom"] = _missing("NOT_ENOUGH_CYCLES", {
+                "kind": "few_touchdowns", "paw": "hind", "metric": "stifle_cycle_rom",
+                "seen_s": sum(f is not None for f in frames) / fps if fps > 0 else 0.0,
+                "touchdowns": len(hind.touchdowns()) if hind else 0})
     return out
 
 

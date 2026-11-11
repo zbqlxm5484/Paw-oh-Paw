@@ -1,7 +1,7 @@
 """유효 판별(engine/validity.py) 테스트. 화면을 가로지르는 가상 개로 사유마다 하나씩 확인한다."""
 import pytest
 
-pytest.importorskip("yaml")   # 기준값 파일을 읽는 데 필요 (CI는 backend/requirements.txt로 설치됨)
+pytest.importorskip("yaml")   # 기준값 파일을 읽는 데 필요 (루트 requirements-dev.txt에 있음, CI reproduce 잡이 설치)
 
 from engine.validity import judge_shot, load_config  # noqa: E402
 
