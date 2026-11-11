@@ -10,7 +10,7 @@ import { link } from '../../config'
 export default function AuthBar() {
   return (
     <header style={css('padding:25px 25px 0;display:flex;align-items:center;justify-content:space-between')}>
-      <a className="lk" href={link('/')} style={css('display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
+      <a className="lk" href={link('/')} style={css('display:flex;align-items:center;min-height:44px;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
     </header>
   )
 }

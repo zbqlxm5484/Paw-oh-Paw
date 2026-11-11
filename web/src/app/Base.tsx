@@ -174,12 +174,12 @@ export function Base({ acct, me, nav = '', q = '', toast = '', jobId = '', topba
 
       {modals}
 
-      <div id="toast" className="no-print" style={{ position: 'fixed', left: 0, right: 0, bottom: 40, zIndex: 60, display: show ? 'flex' : 'none', justifyContent: 'center', pointerEvents: 'none' }}><span id="toastMsg" style={{ padding: '13px 20px', borderRadius: 12, background: 'rgba(27,36,51,.94)', color: '#fff', fontSize: 14.5, fontWeight: 600 }}>{msg}</span></div>
+      <div id="toast" className="no-print" style={{ position: 'fixed', left: 0, right: 0, bottom: 40, zIndex: 60, display: show ? 'flex' : 'none', justifyContent: 'center', pointerEvents: 'none' }}><span id="toastMsg" style={{ padding: '13px 20px', borderRadius: 12, background: 'rgba(27,36,51,.94)', color: '#fff', fontSize: 15, fontWeight: 600 }}>{msg}</span></div>
 
       {SHOW_JUMPS && (
         <div className="no-print" style={{ position: 'fixed', left: 20, bottom: 20, zIndex: 70, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
           <div id="jumpMenu" style={{ width: 220, maxHeight: '60vh', overflow: 'auto', background: '#fff', border: '1px solid #E2DCD3', borderRadius: 14, boxShadow: '0 16px 40px rgba(27,36,51,.16)', padding: 6, display: jumpOpen ? 'flex' : 'none', flexDirection: 'column' }}>
-            {JUMPS.map(([label], i) => <a key={i} className="lk hv-menu" href={link(`/jump/${i}`)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 8, display: 'flex', alignItems: 'center', fontSize: 13.5 }}>{label}</a>)}
+            {JUMPS.map(([label], i) => <a key={i} className="lk hv-menu" href={link(`/jump/${i}`)} style={{ minHeight: 44, padding: '0 12px', borderRadius: 8, display: 'flex', alignItems: 'center', fontSize: 14 }}>{label}</a>)}
           </div>
           <div id="jumpBtn" onClick={() => setJumpOpen(!jumpOpen)} style={{ height: 40, padding: '0 14px', borderRadius: 20, background: '#1B2433', color: '#fff', display: 'flex', alignItems: 'center', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 6px 18px rgba(27,36,51,.25)' }}>화면 바로가기</div>
         </div>
@@ -189,7 +189,7 @@ export function Base({ acct, me, nav = '', q = '', toast = '', jobId = '', topba
         <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 'min(1100px,94vw)', maxHeight: '92vh' }}>
           <img src={undefined} alt="" style={{ maxWidth: '100%', maxHeight: 'calc(92vh - 60px)', objectFit: 'contain', borderRadius: 12, background: '#0E1217', display: 'block', margin: '0 auto' }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, color: '#fff' }}><b className="lb-cap" style={{ fontSize: 15 }}></b>
-            <span style={{ display: 'flex', gap: 8 }}><a className="lb-orig lk" target="_blank" rel="noopener" style={{ height: 36, padding: '0 14px', borderRadius: 9, border: '1px solid rgba(255,255,255,.4)', color: '#fff', display: 'flex', alignItems: 'center', fontSize: 13.5, fontWeight: 600 }}>원본 열기</a><button type="button" className="bt" data-close="" style={{ height: 36, padding: '0 16px', borderRadius: 9, background: '#fff', color: '#1B2433', fontSize: 13.5, fontWeight: 700 }}>닫기</button></span>
+            <span style={{ display: 'flex', gap: 8 }}><a className="lb-orig lk" target="_blank" rel="noopener" style={{ height: 44, padding: '0 14px', borderRadius: 9, border: '1px solid rgba(255,255,255,.4)', color: '#fff', display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 600 }}>원본 열기</a><button type="button" className="bt" data-close="" style={{ height: 44, padding: '0 16px', borderRadius: 9, background: '#fff', color: '#1B2433', fontSize: 14, fontWeight: 700 }}>닫기</button></span>
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
   return (
     <header className="no-print" style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(250,243,231,.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #ECE8E2' }}>
       <div style={{ padding: '0 25px', height: 74, display: 'flex', alignItems: 'center', gap: 28 }}>
-        <a className="lk" href={link('/home')} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
+        <a className="lk" href={link('/home')} style={{ display: 'flex', alignItems: 'center', minHeight: 44, gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
         {/* 가운데 검색: 어느 화면에서든 이름·동물번호·특이사항·메모·진단·보호자로 찾는다 */}
         <form method="get" action="/home" style={{ flex: 1, display: 'flex', justifyContent: 'center', margin: 0, minWidth: 0 }}
           onSubmit={(e) => {
@@ -215,8 +215,8 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
             <input name="q" key={q} defaultValue={q} placeholder="반려견 검색 (이름 · 동물번호 · 진단 · 보호자 · 메모)" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 15, background: 'transparent', color: '#1B2433' }} />
           </label>
         </form>
-        <a className="lk hv-orange" href={link('/upload')} style={{ height: 42, padding: '0 18px', borderRadius: 12, background: '#D2601A', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, flex: 'none' }}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>
-        <a className="lk hv-border" href={link('/my')} style={{ height: 42, padding: '0 14px 0 6px', borderRadius: 21, border: '1px solid #E2DCD3', background: nav === 'my' ? '#FCEEE3' : '#fff', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}><span style={{ width: 30, height: 30, borderRadius: 15, background: '#FCEEE3', color: '#A8481A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>{acct.name.slice(0, 1)}</span><span className="acct-kind" style={{ fontSize: 13, fontWeight: 600, color: '#7A808A', whiteSpace: 'nowrap' }}>기관</span><span className="acct-name" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>{acct.name}</span></a>
+        <a className="lk hv-orange" href={link('/upload')} style={{ height: 44, padding: '0 18px', borderRadius: 12, background: '#D2601A', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, flex: 'none' }}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>
+        <a className="lk hv-border" href={link('/my')} style={{ height: 44, padding: '0 14px 0 6px', borderRadius: 22, border: '1px solid #E2DCD3', background: nav === 'my' ? '#FCEEE3' : '#fff', display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}><span style={{ width: 30, height: 30, borderRadius: 15, background: '#FCEEE3', color: '#A8481A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>{acct.name.slice(0, 1)}</span><span className="acct-kind" style={{ fontSize: 13, fontWeight: 600, color: '#5B6472', whiteSpace: 'nowrap' }}>기관</span><span className="acct-name" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>{acct.name}</span></a>
       </div>
     </header>
   )

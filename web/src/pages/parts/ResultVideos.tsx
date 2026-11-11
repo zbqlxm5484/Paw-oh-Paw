@@ -65,7 +65,7 @@ export function ResultVideos({ sessionId }: { sessionId: string }) {
   const status = cur?.video_status
 
   let body
-  if (cur === undefined) body = <span style={css('font-size:14px;color:#8E949C')}>불러오는 중입니다</span>
+  if (cur === undefined) body = <span style={css('font-size:14px;color:#5B6472')}>불러오는 중입니다</span>
   else if (cur === null) body = <span style={css('font-size:14px;color:#5B6472')}>결과 영상을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</span>
   else if (status === 'READY' && cur.video_url)
     body = (
@@ -79,8 +79,8 @@ export function ResultVideos({ sessionId }: { sessionId: string }) {
   return (
     <section className="no-print" style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:12px')}>
       <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap')}>
-        <b style={css('font-size:16px')}>결과 영상</b>
-        <span style={css('font-size:12.5px;color:#8E949C')}>AI가 찾은 관절점과 골격을 영상 위에 그렸습니다. 사람 얼굴은 가렸습니다</span>
+        <b style={css('font-size:15px')}>결과 영상</b>
+        <span style={css('font-size:13px;color:#5B6472')}>AI가 찾은 관절점과 골격을 영상 위에 그렸습니다. 사람 얼굴은 가렸습니다</span>
       </div>
       <div style={css('display:flex;gap:8px;flex-wrap:wrap')}>
         {shots.map((s) => {
@@ -89,9 +89,9 @@ export function ResultVideos({ sessionId }: { sessionId: string }) {
           const val = s.validity ? VALIDITY[s.validity] : null
           return (
             <button key={s.id} type="button" onClick={() => setPick(s.id)}
-              style={css(`height:34px;padding:0 12px;border-radius:9px;border:1px solid ${on ? '#D2601A' : '#E2DCD3'};background:${on ? '#FFF4EC' : '#fff'};color:${on ? '#A8481A' : '#3A4250'};font-size:13px;font-weight:${on ? 700 : 600};display:flex;align-items:center;gap:6px;cursor:pointer`)}>
+              style={css(`height:44px;padding:0 12px;border-radius:9px;border:1px solid ${on ? '#D2601A' : '#E2DCD3'};background:${on ? '#FFF4EC' : '#fff'};color:${on ? '#A8481A' : '#3A4250'};font-size:13px;font-weight:${on ? 700 : 600};display:flex;align-items:center;gap:6px;cursor:pointer`)}>
               {s.seq_no}번{side ? ` · ${SIDE[side] ?? side}` : ''}
-              {val ? <span style={css(`padding:1px 6px;border-radius:6px;background:${val[1]};color:${val[2]};font-size:11.5px;font-weight:700`)}>{val[0]}</span> : null}
+              {val ? <span style={css(`padding:1px 6px;border-radius:6px;background:${val[1]};color:${val[2]};font-size:12px;font-weight:700`)}>{val[0]}</span> : null}
             </button>
           )
         })}

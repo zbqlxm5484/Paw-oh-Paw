@@ -9,8 +9,8 @@ import type { Staff } from '../store/types'
 import { isRemote, MOCK } from '../store/backend'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 
-const BTN = 'height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:600;cursor:pointer'
-const INP = 'height:40px;border-radius:10px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:14px;color:#1B2433'
+const BTN = 'height:44px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:600;cursor:pointer'
+const INP = 'height:44px;border-radius:10px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:14px;color:#1B2433'
 
 interface CodeRow { id: string; code: string; used: number; revoked: boolean; note: string }
 interface StaffRow { id: string; login_id: string; name: string; email: string; active: boolean; joined: string }
@@ -102,13 +102,13 @@ export default function Admin() {
     <Base me={me} toast={toast} topbar={<AuthBar />}>
       <main style={css('max-width:1100px;margin:0 auto;padding:36px 32px 96px;display:flex;flex-direction:column;gap:24px')}>
         <div style={css('display:flex;align-items:flex-end;gap:16px')}>
-          <div style={css('display:flex;flex-direction:column;gap:6px')}><span style={css('font-size:14px;color:#5B6472')}>서비스 운영</span><h1 style={css('margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px')}>기관·디바이스 코드·계정</h1></div>
+          <div style={css('display:flex;flex-direction:column;gap:6px')}><span style={css('font-size:14px;color:#5B6472')}>서비스 운영</span><h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.8px')}>기관·디바이스 코드·계정</h1></div>
           <span style={css('margin-left:auto;font-size:14px;color:#5B6472')}>{me.name} · {can_write ? '관리자' : '임시 스태프 (보기만)'}</span>
           <PostForm action="/logout"><button type="submit" style={css(BTN)}>로그아웃</button></PostForm>
         </div>
         {can_write && (
           <PostForm action="/admin/institutions" style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap')}>
-            <b style={css('font-size:16px')}>기관 추가</b>
+            <b style={css('font-size:15px')}>기관 추가</b>
             <input name="name" placeholder="기관명" style={css(`${INP};flex:1;min-width:200px`)} />
             <label style={css('font-size:14px;color:#5B6472;display:flex;gap:8px;align-items:center')}>계약 종료일<input type="date" name="ends" style={css(INP)} /></label>
             <button type="submit" style={css(`${BTN};background:#1B2433;color:#fff;border:0`)}>만들기</button>
@@ -117,7 +117,7 @@ export default function Admin() {
         {insts.map((i) => (
           <section key={i.id} style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px;display:flex;flex-direction:column;gap:14px')}>
             <div style={css('display:flex;align-items:center;gap:12px;flex-wrap:wrap')}>
-              <h2 style={css('margin:0;font-size:20px;font-weight:800')}>{i.name}</h2><span style={css('font-size:13px;color:#A0A7B2')}>{i.code}</span>
+              <h2 style={css('margin:0;font-size:18px;font-weight:800')}>{i.name}</h2><span style={css('font-size:13px;color:#5B6472')}>{i.code}</span>
               <span style={css(`height:26px;padding:0 10px;border-radius:999px;font-size:13px;font-weight:700;display:flex;align-items:center;background:${i.status === 'ACTIVE' ? '#E6F4EC' : '#FBEAE6'};color:${i.status === 'ACTIVE' ? '#2E8B57' : '#C2412D'}`)}>{i.status === 'ACTIVE' ? '계약 중' : '계약 만료'}</span>
               <PostForm action={`/admin/institutions/${i.id}`} style={css('margin-left:auto;display:flex;gap:8px;align-items:center')}><span style={css('font-size:14px;color:#5B6472')}>계약 종료일</span><input type="date" name="ends" defaultValue={i.ends} disabled={!can_write} style={css(INP)} />{can_write && <button type="submit" style={css(BTN)}>저장</button>}</PostForm>
             </div>
@@ -125,7 +125,7 @@ export default function Admin() {
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>디바이스 코드</b>
                 {i.codes.map((c) => <CodeLine key={c.id} c={c} can_write={can_write} />)}
                 {can_write && <PostForm action={`/admin/institutions/${i.id}/codes`} style={css('display:flex;gap:8px;margin-top:4px')}><input name="note" placeholder="메모 (예: 2호기)" style={css(`${INP};flex:1`)} /><button type="submit" style={css(BTN)}>코드 발급</button></PostForm>}
-                <span style={css('font-size:12px;color:#A0A7B2')}>기관마다 쓸 수 있는 코드는 하나입니다. 새로 발급하려면 먼저 회수하세요. 가입 계정 수에 제한은 없습니다.</span>
+                <span style={css('font-size:12px;color:#5B6472')}>기관마다 쓸 수 있는 코드는 하나입니다. 새로 발급하려면 먼저 회수하세요. 가입 계정 수에 제한은 없습니다.</span>
               </div>
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>담당자 계정</b>
                 {i.staff.map((st) => (
@@ -135,12 +135,12 @@ export default function Admin() {
                     {can_write && <PostForm action={`/admin/staff/${st.id}`}><button type="submit" style={css(BTN)}>{st.active ? '중지' : '재개'}</button></PostForm>}
                   </div>
                 ))}
-                {i.staff.length === 0 && <span style={css('font-size:14px;color:#A0A7B2')}>아직 가입한 담당자가 없습니다</span>}
+                {i.staff.length === 0 && <span style={css('font-size:14px;color:#5B6472')}>아직 가입한 담당자가 없습니다</span>}
               </div>
             </div>
           </section>
         ))}
-        <p style={css('margin:0;font-size:13px;color:#A0A7B2')}>운영 계정은 기관의 반려견·측정 자료를 열람하지 않아요(기관별 분리). 관리자·스태프 계정은 운영 스크립트로만 만듭니다.</p>
+        <p style={css('margin:0;font-size:13px;color:#5B6472')}>운영 계정은 기관의 반려견·측정 자료를 열람하지 않아요(기관별 분리). 관리자·스태프 계정은 운영 스크립트로만 만듭니다.</p>
       </main>
     </Base>
   )

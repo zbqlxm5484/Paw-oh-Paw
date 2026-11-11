@@ -40,7 +40,7 @@ export function QualityCard({ r }: { r: Result }) {
     <div className="no-print" style={css(`display:flex;flex-direction:column;gap:10px;padding:16px 20px;border-radius:14px;background:#fff;border:1px solid ${ok ? '#ECE8E2' : '#F0D2BC'}`)}>
       <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap')}>
         <b style={css('font-size:15px')}>측정 신뢰도</b>
-        <span style={css('font-size:12.5px;color:#8E949C')}>쪽마다 {MIN_PASSES}번 이상 쓴 걸음이 있어야 지난 측정과 변화를 판단해요 · 권장 촬영은 회차마다 약 20번(좌우 반반)</span>
+        <span style={css('font-size:13px;color:#5B6472')}>쪽마다 {MIN_PASSES}번 이상 쓴 걸음이 있어야 지난 측정과 변화를 판단해요 · 권장 촬영은 회차마다 약 20번(좌우 반반)</span>
       </div>
       <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px')}>
         {q.sides.map((s) => {
@@ -48,7 +48,7 @@ export function QualityCard({ r }: { r: Result }) {
           const pct = Math.min(100, (n / MIN_PASSES) * 100)
           return (
             <div key={s.side} style={css('display:flex;flex-direction:column;gap:6px')}>
-              <span style={css('display:flex;justify-content:space-between;font-size:13.5px')}>
+              <span style={css('display:flex;justify-content:space-between;font-size:14px')}>
                 <span>{s.side} 다리 쪽</span>
                 <b style={css(`font-variant-numeric:tabular-nums;color:${s.need ? '#B4501A' : '#1B2433'}`)}>{n} / {MIN_PASSES}</b>
               </span>
@@ -59,7 +59,7 @@ export function QualityCard({ r }: { r: Result }) {
           )
         })}
       </div>
-      {q.hint ? <span style={css('font-size:14px;font-weight:600;color:#A8481A')}>{q.hint}</span> : <span style={css('font-size:13.5px;color:#5B6472')}>양쪽 모두 충분히 걸어서 지난 측정과 변화를 판단할 수 있어요</span>}
+      {q.hint ? <span style={css('font-size:14px;font-weight:600;color:#A8481A')}>{q.hint}</span> : <span style={css('font-size:14px;color:#5B6472')}>양쪽 모두 충분히 걸어서 지난 측정과 변화를 판단할 수 있어요</span>}
       {q.judgeNote ? <span style={css('font-size:13px;color:#5B6472')}>{q.judgeNote}</span> : null}
       {ex ? <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{excludeText(ex)}</span> : null}
     </div>

@@ -35,7 +35,7 @@ export const SITE: Record<string, string> = { ...LIMB, SP: '척추' } // 수술�
 export const STAGE: Record<string, [string, string, string]> = {
   pre: ['수술 전', '#EEF1F6', '#4A5A78'],
   rehab: ['재활 중', '#FCEEE3', '#A8481A'],
-  done: ['종결', '#F0EEEA', '#7A808A'],
+  done: ['종결', '#F0EEEA', '#5B6472'],
 }
 export const STAGE_NAMES: Record<string, string> = Object.fromEntries(Object.entries(STAGE).map(([k, v]) => [k, v[0]]))
 // 메모 = 환자에 붙는 짧은 특이사항. 진료 기록 = 방문 하나의 S·O·A·P
