@@ -225,7 +225,11 @@ export interface ReportContentSession {
   symmetry_level?: LegLevel | string | null
 }
 export interface ReportContentDog { name: string; breed: string | null; sex: string | null; birth_year: number | null; focus_limb: LimbCode | string | null }
-export interface ReportContentPrevious { session_id: string; measured_on: string; round: number; model_changed: boolean }
+export interface ReportContentPrevious {
+  session_id: string; measured_on: string; round: number; model_changed: boolean
+  /** "2회차, 2026년 11월 10일", 이번 회차와 같은 날이면 만든 시각까지(백엔드 v1.52, 문장 속 직전 회차 글과 같음). 옛 서버는 없을 수 있다 */
+  label?: string
+}
 export interface ReportContentBaseline {
   session_id: string; measured_on: string; round: number; symmetry_score: number | null
   /** 이번 − 기준(%p). 한쪽이라도 없으면 null. 예전 서버라 칸이 없으면 화면이 symmetry_score − baseline.symmetry_score */
