@@ -13,7 +13,7 @@ const SIDE: Record<string, string> = { LF: '왼앞', RF: '오른앞', LH: '왼�
 type J = 'INCREASE' | 'DECREASE' | 'WITHIN_RANGE' | 'VALUE_ONLY'
 const LABEL: Record<J, string> = { INCREASE: '증가', DECREASE: '감소', WITHIN_RANGE: '범위 안', VALUE_ONLY: '값만' }
 const COLOR: Record<J, string> = { INCREASE: '#D2601A', DECREASE: '#3A4250', WITHIN_RANGE: '#C9C3BA', VALUE_ONLY: '#C9C3BA' }
-const CHIP: Record<J, [string, string]> = { INCREASE: ['#FCEEE3', '#A8481A'], DECREASE: ['#E9EBEE', '#3A4250'], WITHIN_RANGE: ['#F2EFEA', '#5B6472'], VALUE_ONLY: ['#fff', '#8E949C'] }
+const CHIP: Record<J, [string, string]> = { INCREASE: ['#FCEEE3', '#A8481A'], DECREASE: ['#E9EBEE', '#3A4250'], WITHIN_RANGE: ['#F2EFEA', '#5B6472'], VALUE_ONLY: ['#fff', '#5B6472'] }
 const r1 = (v: number) => Math.round(v * 10) / 10
 const korDate = (iso: string) => {
   const [, m, d] = iso.split('-')
@@ -49,24 +49,24 @@ export function AppChangeProfile({ base, gait }: { base: CompareOut | undefined;
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800 }}>기준 회차 대비 변화</h3>
-      <span style={{ fontSize: '11.5px', color: '#5B6472' }}>기준 {korDate(base.base.measured_on)} → 이번 {korDate(base.target.measured_on)} · 관절 가동 범위. 회색 띠는 오차 범위예요</span>
+      <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>기준 {korDate(base.base.measured_on)} → 이번 {korDate(base.target.measured_on)} · 관절 가동 범위. 회색 띠는 오차 범위예요</span>
       {rows.map((x, i) => {
         const bar = geom(x.diff, scale)
         const band = x.tol != null ? geom(x.tol, scale) : null
         return (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '78px 1fr 48px 46px', gap: '6px', alignItems: 'center', padding: '4px 0', borderTop: i ? '1px solid #F2EFEA' : 'none' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap' }}>{x.joint} <span style={{ fontWeight: 500, color: '#8E949C' }}>{x.side}</span></span>
+            <span style={{ fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap' }}>{x.joint} <span style={{ fontWeight: 500, color: '#5B6472' }}>{x.side}</span></span>
             <div style={{ position: 'relative', height: 12 }}>
               {band ? <span style={{ position: 'absolute', top: 0, bottom: 0, left: `${50 - band.width}%`, width: `${band.width * 2}%`, background: '#ECE8E2', borderRadius: 3 }} /> : null}
               <span style={{ position: 'absolute', top: -2, bottom: -2, left: '50%', width: 1, background: '#A0A7B2' }} />
               <span style={{ position: 'absolute', top: 3, height: 6, left: `${bar.left}%`, width: `${Math.max(bar.width, 0.6)}%`, background: COLOR[x.j], opacity: x.j === 'VALUE_ONLY' ? 0.45 : 1, borderRadius: 2 }} />
             </div>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{x.diff > 0 ? '+' : x.diff < 0 ? '−' : ''}{Math.abs(x.diff).toFixed(1)}°</span>
-            <span style={{ justifySelf: 'start', padding: '1px 6px', borderRadius: 5, fontSize: '11px', fontWeight: 700, background: CHIP[x.j][0], color: CHIP[x.j][1], border: x.j === 'VALUE_ONLY' ? '1px solid #E2DCD3' : 'none' }}>{LABEL[x.j]}</span>
+            <span style={{ fontSize: '12px', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{x.diff > 0 ? '+' : x.diff < 0 ? '−' : ''}{Math.abs(x.diff).toFixed(1)}°</span>
+            <span style={{ justifySelf: 'start', padding: '1px 6px', borderRadius: 5, fontSize: '12px', fontWeight: 700, background: CHIP[x.j][0], color: CHIP[x.j][1], border: x.j === 'VALUE_ONLY' ? '1px solid #E2DCD3' : 'none' }}>{LABEL[x.j]}</span>
           </div>
         )
       })}
-      {rows.some((x) => x.j === 'VALUE_ONLY') ? <span style={{ fontSize: '11px', color: '#8E949C' }}>'값만'은 걸은 횟수가 모자라거나 오차 범위가 정해지지 않아 증가·감소를 가르지 않은 관절이에요.</span> : null}
+      {rows.some((x) => x.j === 'VALUE_ONLY') ? <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>'값만'은 걸은 횟수가 모자라거나 오차 범위가 정해지지 않아 증가·감소를 가르지 않은 관절이에요.</span> : null}
     </section>
   )
 }

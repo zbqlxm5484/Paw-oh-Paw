@@ -15,7 +15,7 @@ export function AppQualityLine({ result, kind }: { result: SessionResultOut | nu
   const q = measureQuality(passesByLimb(result))
   if (!q) return null
   return (
-    <span style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '3px', color: '#3A4250' }}>
+    <span style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '3px', lineHeight: 1.5, color: '#3A4250' }}>
       <span>다리 쪽별 쓴 걸음 <b style={{ fontVariantNumeric: 'tabular-nums' }}>{sidesText(q)}</b></span>
       {q.hint ? <span style={{ color: '#A8481A' }}>{q.hint}</span> : null}
       {kind === 'v' && q.judgeNote ? <span style={{ color: '#5B6472' }}>{q.judgeNote}</span> : null}
@@ -32,7 +32,7 @@ export function AppExcludeLine({ ex, kind }: { ex: readonly (readonly [string, n
   return (
     <span style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '3px', lineHeight: 1.5, color: '#5B6472' }}>
       <span>{excludeText(s, kind === 'g' ? '분석에 쓰지 못한 걸음' : '쓰지 못한 걸음')}</span>
-      {terms.length ? <span style={{ fontSize: '11px', color: '#5B6472' }}>{terms.join(' · ')}</span> : null}
+      {terms.length ? <span style={{ fontSize: '12px', color: '#5B6472' }}>{terms.join(' · ')}</span> : null}
     </span>
   )
 }

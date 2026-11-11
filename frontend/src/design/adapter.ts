@@ -244,14 +244,14 @@ export function compareRows(cmp: CompareOut | undefined, focus: Limb | null): DC
       const bt = i ? '1px solid #F2EFEA' : 'none'
       const isFocus = !!focus && it.limb === focus
       const limb = it.limb === 'NONE' ? '전체' : LIMB_KO[it.limb] + (isFocus ? ' · 관심 다리' : '')
-      const lc = isFocus ? '#B4501A' : '#8E949C'
+      const lc = isFocus ? '#B4501A' : '#5B6472'
       if (it.base_value == null || it.target_value == null) {
-        return { n, limb, lc, vals: it.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+        return { n, limb, lc, vals: it.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
       }
       const b = fmtVal(it.base_value, it.unit), t = fmtVal(it.target_value, it.unit), df = Math.round((t - b) * 10) / 10
       // 모델이 달라 판단을 보류한 항목: 값은 보여 주되 증감 판정은 하지 않는다
       if (it.judgement === 'UNKNOWN' || it.judgement === 'NOT_COMPARABLE') {
-        return { n, limb, lc, vals: `${b}${u} → ${t}${u}`, j: it.judgement === 'UNKNOWN' ? '판단 보류' : '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+        return { n, limb, lc, vals: `${b}${u} → ${t}${u}`, j: it.judgement === 'UNKNOWN' ? '판단 보류' : '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
       }
       const inR = it.judgement === 'WITHIN_RANGE'
       return {

@@ -61,8 +61,8 @@ export const baseOf = (ctx: ResultCtx, d: DDog) => (d.base && ctx.results.find((
 
 /** 직전 회차 대비 문구. [문구, 색] */
 export function delta(a: number | null, b: number | null | undefined, unit: string): [string, string] {
-  if (a == null) return ['측정 불가', '#8E949C']
-  if (b == null) return ['첫 측정', '#8E949C']
+  if (a == null) return ['측정 불가', '#5B6472']
+  if (b == null) return ['첫 측정', '#5B6472']
   const d = r1(a - b)
   return [d > 0 ? `직전 대비 +${d}${unit}` : d < 0 ? `직전 대비 −${-d}${unit}` : '직전과 같음', '#5B6472']
 }
