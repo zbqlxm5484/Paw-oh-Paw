@@ -142,22 +142,22 @@ export function AppReport(p: AppReportProps) {
         <div style={{ ...box({ border: '1.5px solid #E9D3C2', background: '#FFF9F4' }), display: 'grid', gridTemplateColumns: '64px 1fr', rowGap: '6px', columnGap: '10px', fontSize: '13px', lineHeight: 1.5 }}>
           <b style={{ color: '#A8481A' }}>주요 결과</b><span>{hind.si >= front.si ? hind.say : front.say}</span>
           <b style={{ color: '#A8481A' }}>측정 품질</b><span>{quality}</span>
-          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `지난 측정(${prev[0]})보다 좌우 대칭 지수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}%p` : '첫 측정이라 비교할 회차가 없어요'}</span>
+          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `지난 측정(${prev[0]})보다 좌우 대칭 점수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
         </div>
       ) : null}
 
-      {/* 좌우 대칭 지수 */}
+      {/* 좌우 대칭 점수 */}
       <div style={{ ...box({ background: '#FAF7F2' }), display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '14px', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#5B6472' }}>좌우 대칭 지수</span>
-          <b style={{ fontSize: '34px', letterSpacing: '-1px', lineHeight: 1.1, color: symLv[3] }}>{p.sym == null ? '—' : sym}<span style={{ fontSize: '16px' }}>%</span></b>
+          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#5B6472' }}>좌우 대칭 점수</span>
+          <b style={{ fontSize: '34px', letterSpacing: '-1px', lineHeight: 1.1, color: symLv[3] }}>{p.sym == null ? '—' : sym}<span style={{ fontSize: '16px' }}>점</span></b>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ position: 'relative', height: 10, borderRadius: 5, background: 'linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)' }}>
             <span style={{ position: 'absolute', top: -4, left: `calc(${Math.max(0, Math.min(100, sym))}% - 2px)`, width: 4, height: 18, borderRadius: 2, background: '#1B2433' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#8E949C' }}><span>0</span><span>80</span><span>90</span><span>100</span></div>
-          <span style={{ fontSize: '12px', color: '#3A4250' }}>{p.vsBase ? <>기준 회차({p.vsBase.date})보다 <b style={{ color: p.vsBase.d > 0 ? '#2E8B57' : p.vsBase.d < 0 ? '#C2412D' : '#3A4250' }}>{p.vsBase.d > 0 ? '+' : ''}{r1(p.vsBase.d)}%p</b></> : '기준 회차와 비교할 값이 없습니다'}</span>
+          <span style={{ fontSize: '12px', color: '#3A4250' }}>{p.vsBase ? <>기준 회차({p.vsBase.date})보다 <b style={{ color: p.vsBase.d > 0 ? '#2E8B57' : p.vsBase.d < 0 ? '#C2412D' : '#3A4250' }}>{p.vsBase.d > 0 ? '+' : ''}{r1(p.vsBase.d)}점</b></> : '기준 회차와 비교할 값이 없습니다'}</span>
         </div>
       </div>
 
@@ -202,8 +202,8 @@ function SymTrend({ hist }: { hist: [string, number][] }) {
   const Y = (v: number) => 80 - ((v - lo) / (hi - lo)) * 60
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <b style={{ fontSize: '14px' }}>지금까지 좌우 대칭 지수</b>
-      <span style={{ fontSize: '11px', color: '#8E949C' }}>점 하나가 그날 측정한 대칭 지수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
+      <b style={{ fontSize: '14px' }}>지금까지 좌우 대칭 점수</b>
+      <span style={{ fontSize: '11px', color: '#8E949C' }}>점 하나가 그날 측정한 대칭 점수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
       <svg viewBox="0 0 320 100" style={{ width: '100%' }}>
         <polyline points={h.map(([, v], i) => `${X(i)},${Y(v)}`).join(' ')} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round" />
         {h.map(([d, v], i) => (

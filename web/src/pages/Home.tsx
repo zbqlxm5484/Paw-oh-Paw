@@ -102,7 +102,7 @@ export default function Home() {
     table = (
       <div className="tbl" style={css('--tw:900px;--tw-n:680px')}>
         <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#7A808A`)}>
-          <span>측정일</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 지수</span><span>상태</span><span className="tbl-opt">촬영</span>
+          <span>측정일</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 점수</span><span>상태</span><span className="tbl-opt">촬영</span>
         </div>
         {rows.map((r, i) => (
           <div key={r.id} className="hv-row tbl-r" data-href={`/results/${r.id}`} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>

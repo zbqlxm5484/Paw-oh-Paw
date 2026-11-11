@@ -183,7 +183,7 @@ export default function Gait3d() {
             <div style={css('padding:18px;border-radius:16px;background:#fff;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
               <b style={css('font-size:22px')}>{rd.name}</b>
               <span style={css('font-size:14px;color:#5B6472')}>{rd.desc}</span>
-              <span style={css('font-size:14px')}>좌우 대칭 지수 <b>{bm.sym}%</b></span>
+              <span style={css('font-size:14px')}>좌우 대칭 점수 <b>{bm.sym}점</b></span>
             </div>
             <div style={css('padding:18px;border-radius:16px;background:#fff;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:10px')}>
               {([['front', '앞다리'], ['hind', '뒷다리']] as const).map(([part, label]) => {
@@ -516,7 +516,7 @@ function mount(ctx: Ctx, el: Els): () => void {
     return '<b style="font-size:14px">' + L.label + (L.weak ? ' · 덜 씁니다' : '') + '</b>' + rows
   }
   function bodyTip() {
-    return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 지수 <b>' + OVERALL.sym + '%</b></div><div style="color:#C9CFD8">'
+    return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 점수 <b>' + OVERALL.sym + '점</b></div><div style="color:#C9CFD8">'
       + OVERALL.front + '</div><div style="color:#C9CFD8">' + OVERALL.hind + '</div>'
   }
   const onMove = (e: PointerEvent) => {
