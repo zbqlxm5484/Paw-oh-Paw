@@ -7,7 +7,7 @@ import { usePage, useTitle } from '../app/page'
 import { redirect, setToast, type Go } from '../app/session'
 import { dogOf } from '../store/db'
 import { compare_view, seg, TREND_KEYS, valid } from '../views/views'
-import { link } from '../config'
+import { link, LIMB } from '../config'
 import { api, type CompareOut } from '../api/client'
 import { MOCK } from '../store/backend'
 import { serverCompareRows } from '../views/vet'
@@ -56,9 +56,14 @@ export default function Compare() {
   const cmp = cmp0 === 'base' || cmp0 === 'prev' ? cmp0 : 'base'
   const tk = TREND_KEYS.some(([k]) => k === tk0) ? tk0 : 'rom'
   const trend = TREND_KEYS.map(([k, label]) => ({ key: k, label, on: k === tk }))
-  const cp0 = compare_view(acct, d, cmp, tk)
+  // 관심 다리: 이 화면에서만 바꿔 본다(?leg=). 반려견에 저장된 관심 다리(보고서 점선)는 그대로이고, 처음엔 그 값으로 연다
+  const leg0 = query.get('leg')
+  const focus = leg0 === 'none' ? null : leg0 && LIMB[leg0] ? leg0 : d.focus
+  const q = (c: string, t: string, l: string | null) => `?cmp=${c}&tk=${t}${l !== d.focus ? `&leg=${l ?? 'none'}` : ''}`
+  const legs = [[null, '정하지 않음'], ['LF', LIMB.LF], ['RF', LIMB.RF], ['LH', LIMB.LH], ['RH', LIMB.RH]] as const
+  const cp0 = compare_view(acct, { ...d, focus }, cmp, tk)
   // 백엔드 회차면 증가·감소 판정은 서버 비교 API(15.8, 수치별 오차 범위·통과 8회 조건)를 쓴다. 추이 그림은 그대로
-  const cp = cp0.has && srv && srv.key === cmp ? { ...cp0, ...serverCompareRows(srv.o, d.focus) } : cp0
+  const cp = cp0.has && srv && srv.key === cmp ? { ...cp0, ...serverCompareRows(srv.o, focus) } : cp0
   const segs = seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], cmp)
   // href="?cmp=..." 는 상대 주소라 Base 가 가로채지 않는다 → 새로 불러오지 않게 여기서 이동
   const rel = (href: string) => (e: MouseEvent) => {
@@ -78,13 +83,21 @@ export default function Compare() {
           <>
             <div style={css('display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
               <div style={css('display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:380px;max-width:100%')}>
-                {segs.map((g) => <a key={g.key} className="lk" href={link(`?cmp=${g.key}&tk=${tk}`)} onClick={rel(`?cmp=${g.key}&tk=${tk}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
+                {segs.map((g) => <a key={g.key} className="lk" href={link(q(g.key, tk, focus))} onClick={rel(q(g.key, tk, focus))} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
               </div>
               <div style={css('flex:0 0 auto;max-width:100%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap')}>
                 <div><span style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>{cp.baseLabel}</span><b style={css('display:block;font-size:16px;font-variant-numeric:tabular-nums')}>{cp.baseDate}</b></div>
                 <svg width="22" height="22" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><path d="M3 12h17M14 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"></path></svg>
                 <div><span style={css('font-size:12.5px;color:#5B6472;font-weight:600')}>최근 회차</span><b style={css('display:block;font-size:16px;font-variant-numeric:tabular-nums')}>{cp.tDate}</b></div>
               </div>
+            </div>
+            <div style={css('display:flex;align-items:center;gap:8px;flex-wrap:wrap')}>
+              <b style={css('font-size:14px;color:#3A4250;margin-right:4px')}>관심 다리</b>
+              {legs.map(([k, label]) => {
+                const on = focus === k
+                return <a key={label} className="lk" href={link(q(cmp, tk, k))} onClick={rel(q(cmp, tk, k))} aria-pressed={on} style={css(`min-height:44px;padding:0 16px;border-radius:22px;background:${on ? '#FCEEE3' : '#fff'};color:${on ? '#A8481A' : '#3A4250'};border:1px solid ${on ? '#E7A77A' : '#ECE8E2'};display:flex;align-items:center;font-size:14px;font-weight:${on ? 700 : 600}`)}>{label}{k && k === d.focus ? <span style={css('margin-left:6px;font-size:12px;font-weight:600;color:#8E949C')}>저장됨</span> : null}</a>
+              })}
+              <span style={css('font-size:12.5px;color:#5B6472')}>고른 다리를 표 맨 위로 올려요. 보고서의 관심 다리는 반려견 정보에서 바꿉니다.</span>
             </div>
             {cp.modelChanged ? (
               <div style={css('background:#FAF1DF;border-radius:12px;padding:14px 18px;font-size:14.5px;line-height:1.5;color:#7A5410;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}><span>{cp.modelMsg}</span></div>
@@ -101,7 +114,7 @@ export default function Compare() {
               <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px 18px;display:flex;flex-direction:column;gap:14px')}>
                 <div style={css('display:flex;justify-content:space-between;align-items:center')}><b style={css('font-size:16px')}>회차별 추이</b>{cp.two ? <div style={css('display:flex;gap:12px;font-size:13px;font-weight:600;color:#5B6472')}><span style={css('display:flex;align-items:center;gap:6px')}><span style={css('width:10px;height:10px;border-radius:3px;background:#3B6FE0')}></span>왼쪽</span><span style={css('display:flex;align-items:center;gap:6px')}><span style={css('width:10px;height:10px;border-radius:3px;background:#E5604D')}></span>오른쪽</span></div> : null}</div>
                 <div style={css('display:flex;gap:8px;flex-wrap:wrap')}>
-                  {trend.map((c) => <a key={c.key} className="lk" href={link(`?cmp=${cmp}&tk=${c.key}`)} onClick={rel(`?cmp=${cmp}&tk=${c.key}`)} style={css(`height:36px;padding:0 14px;border-radius:18px;background:${c.on ? '#1B2433' : '#fff'};color:${c.on ? '#fff' : '#3A4250'};border:1px solid ${c.on ? '#1B2433' : '#ECE8E2'};display:flex;align-items:center;font-size:14px;font-weight:600`)}>{c.label}</a>)}
+                  {trend.map((c) => <a key={c.key} className="lk" href={link(q(cmp, c.key, focus))} onClick={rel(q(cmp, c.key, focus))} style={css(`height:36px;padding:0 14px;border-radius:18px;background:${c.on ? '#1B2433' : '#fff'};color:${c.on ? '#fff' : '#3A4250'};border:1px solid ${c.on ? '#1B2433' : '#ECE8E2'};display:flex;align-items:center;font-size:14px;font-weight:600`)}>{c.label}</a>)}
                 </div>
                 <svg viewBox="0 0 320 150" style={css('width:100%;display:block')}>
                   <g stroke="#ECE8E2" strokeDasharray="3 4"><line x1="20" y1="20" x2="300" y2="20"></line><line x1="20" y1="75" x2="300" y2="75"></line><line x1="20" y1="130" x2="300" y2="130"></line></g>

@@ -11,7 +11,7 @@ import { dogKeys } from '../api/dogs'
 import { fileUrl } from '../api/labels'
 import { savePdf, type SaveHow } from '../app/pdfSave'
 import { useSession } from '../api/sessions'
-import type { DeviceCodeVerifyOut, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
+import type { DeviceCodeVerifyOut, Limb, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
 import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
 import { enterDemo, exitDemo, isDemo, takeDemoAutologin } from '../app/demoMode'
@@ -29,6 +29,8 @@ export interface RouteInfo {
 export interface UiSel {
   cmp: 'base' | 'prev'
   tk: string
+  /** 경과 비교에서 이 화면에서만 고른 관심 다리. undefined 면 반려견에 저장된 값, null 이면 정하지 않음 */
+  leg?: Limb | null
 }
 
 export interface ProtoProps {
@@ -136,7 +138,7 @@ export function DesignRoot() {
   }, [sessQ.data?.status, qc])
   const cmpDog = route.screen === 'compare' ? data.dogs.find((d) => d.id === route.params.dogId) : undefined
   const cmpTarget = cmpDog ? data.results.find((r) => r.dog === cmpDog.id && r.st !== 'fail')?.id : undefined
-  const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null, cmpTarget)
+  const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, ui.leg !== undefined ? ui.leg : cmpDog?.focus ?? null, cmpTarget)
   const reportsQ = useReportData(route.screen === 'report' || route.screen === 'detail' ? route.params.sessionId : undefined) // 회차 결과에서도 PDF 를 바로 받는다(11-06)
   // 보고서 수의사용 탭: 이 회차를 직전 회차와 비교(서버 판정)하고 무릎 가동 범위 추이를 읽는다(웹 수의사용 보고서와 같은 구성)
   // 회차 결과 화면도 보고서와 같은 본문을 쓴다
