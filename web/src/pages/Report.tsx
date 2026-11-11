@@ -9,6 +9,7 @@ import { dogOf, resultOf } from '../store/db'
 import { body_map, memo_panel, owner_guide, result_view, seg } from '../views/views'
 import { pystr } from '../views/pyfmt'
 import { DogPanel } from './parts/DogPanel'
+import { ResultVideos } from './parts/ResultVideos'
 import { link } from '../config'
 import { MOCK, isRemote, syncDogChart } from '../store/backend'
 import type { Account, Result } from '../store/types'
@@ -166,6 +167,7 @@ export default function Report() {
                 <span style={css('display:flex;align-items:center;gap:6px;font-size:13.5px;color:#5B6472;font-variant-numeric:tabular-nums')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>{status}</span>
               </div>
 
+              {fromServer ? <ResultVideos sessionId={(r.src ?? '').split(':')[1] || r.id} /> : null}
               <ReportPaper acct={acct} r={r} rd={rd} rp={rp} bm={bm} kind={kind} fromServer={fromServer} />
             </>
           )}
