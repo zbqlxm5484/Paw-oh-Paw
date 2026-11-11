@@ -1,11 +1,12 @@
 // 앱 보고서 · 수의사용 탭(웹 수의사용 보고서와 같은 구성, S15P31A404-210·103):
-// 왼쪽과 오른쪽 비교(관절별 위아래 막대), 뒷무릎 각도·보행 주기, 지난 측정과 비교(서버 비교 API), 무릎 가동 범위 변화(서버 추이 API).
+// 왼쪽과 오른쪽 비교(관절별 위아래 막대), 뒷무릎 각도·보행 주기, 무릎을 가장 굽힌·편 순간(결과 영상 프레임, AppAngleFrames), 지난 측정과 비교(서버 비교 API), 무릎 가동 범위 변화(서버 추이 API).
 import type { CompareItem, CompareOut, SessionResultOut, TrendsOut } from '../../api/types'
 import { useEffect, useState } from 'react'
 import kneeCycle from './knee_cycle.json'
 import { clipFromAngles, pickShots, type ClipInfo, type GaitClip } from './gaitClip'
 import { getAngles } from '../../api/results'
 import { getSession } from '../../api/sessions'
+import { AppAngleFrames } from './AppAngleFrames'
 import { AppChangeProfile } from './AppChangeProfile'
 
 const BLUE = '#3B6FE0'
@@ -224,6 +225,7 @@ export function AppVetSections({ result, cmp, trend, baseLabel, base, gait }: { 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <LrBars result={result} />
       <KneeCycle result={result} />
+      <AppAngleFrames sessionId={result.id} gait={gait ?? mainGaitOf(result)} />
       <CmpList cmp={cmp} baseLabel={baseLabel} />
       <AppChangeProfile base={base} gait={gait} />
       <KneeTrend trend={trend} />

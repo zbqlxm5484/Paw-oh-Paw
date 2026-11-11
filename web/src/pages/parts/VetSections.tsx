@@ -4,6 +4,7 @@ import { api, ApiError } from '../../api/client'
 import { css } from '../../app/css'
 import type { Account, Result } from '../../store/types'
 import { sess_label } from '../../views/views'
+import { AngleFrames } from './AngleFrames'
 import { ChangeProfile } from './ChangeProfile'
 import { cmpFromServer, cmpLocal, GAIT_CODE, gaitsOf, kneeTrend, LIMBS, lrCompare, otherRows, type CmpRow, type CmpView } from '../../views/vet'
 
@@ -196,16 +197,21 @@ export function VetSections({ acct, r, fromServer, knee, onReady }: { acct: Acco
   // 기준 회차 대비 변화 프로필(ChangeProfile)도 값을 받은 뒤에 준비 완료
   const [profDone, setProfDone] = useState(false)
   const profSettled = useCallback(() => setProfDone(true), [])
-  const loading = (fromServer && cmp === undefined) || !profDone
+  // 무릎을 가장 굽힌·편 순간(백엔드 회차만): 결과 영상을 찍어 그림을 만든 뒤(또는 칸을 뺀 뒤) 준비 완료
+  const sid = fromServer ? ((r.src ?? '').split(':')[1] || r.id) : null
+  const [framesDone, setFramesDone] = useState(false)
+  const framesSettled = useCallback(() => setFramesDone(true), [])
+  const loading = (fromServer && cmp === undefined) || !profDone || (!!sid && !framesDone)
   useEffect(() => {
     if (!loading) onReady?.()
   }, [loading, onReady])
   return (
     <div style={css('display:flex;flex-direction:column;gap:28px')}>
-      {/* 인쇄(A4): 1쪽 끝 = 측정 품질(Report.tsx), 2쪽 = 좌우 비교·뒷무릎 각도(이번 회차), 3쪽 = 지난 측정과 비교·무릎 가동 범위 변화(시간에 따른 변화).
+      {/* 인쇄(A4): 1쪽 끝 = 측정 품질(Report.tsx), 2쪽 = 좌우 비교·뒷무릎 각도·무릎을 가장 굽힌·편 순간(이번 회차), 3쪽 = 지난 측정과 비교·무릎 가동 범위 변화(시간에 따른 변화).
           그 밖의 수치(걸음 길이·입각기·발 들림)는 첫 쪽 다리별 수치와 겹치고 검증이 덜 돼 수의사용 화면에서 뺐다(OtherTable 은 남겨 둔다) */}
       <LrSection r={r} />
       {knee}
+      {sid ? <AngleFrames sessionId={sid} gait={GAIT_CODE[gait] ?? null} onSettled={framesSettled} /> : null}
       <CmpSection v={cmp} gait={gait} base={(() => { const b = cmp && cmp.baseId ? acct.results.find((x) => x.id === cmp.baseId) : undefined; return b ? sess_label(acct, b, r) : undefined })()} />
       <ChangeProfile acct={acct} r={r} gait={gait} fromServer={fromServer} onSettled={profSettled} />
       <KneeTrend acct={acct} r={r} gait={gait} />
