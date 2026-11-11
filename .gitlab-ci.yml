@@ -80,6 +80,8 @@ smoke:
     COMPOSE_PROJECT: $SMOKE_PROJECT
     COMPOSE_EXTRA: "-f infra/ci/compose.ci.yaml"
   script:
+    # 이전 smoke 가 중간에 죽어 남긴 컨테이너가 포트를 잡고 있으면 이번 smoke 도 실패하므로 먼저 치운다
+    - bash infra/ci/cleanup_stale_smoke.sh
     # 러너가 job 을 동시에 여러 개 돌려도 smoke 끼리 호스트 포트가 겹치지 않게, 슬롯 번호(CI_CONCURRENT_ID)만큼 더한 포트를 쓴다
     - export SMOKE_PORT=$((18080 + CI_CONCURRENT_ID))
     - export PUBLIC_URL=http://127.0.0.1:$SMOKE_PORT
