@@ -13,7 +13,7 @@ from decimal import Decimal
 from app.report.checks import DISCLAIMER, TermRules, contains_term, load_rules, normalize
 from app.report.inputs import ReportInput
 from app.report.judge import WITHIN_RANGE, usable_tolerance
-from app.report.numbers import NO_VALUE, CompareLine, GaitTable, gait_label
+from app.report.numbers import NO_VALUE, CompareLine, GaitTable, format_date, gait_label
 
 EDITION_LABELS = {"OWNER": "보호자용", "VET": "수의사용"}
 SIZE_LABELS = {"SMALL": "소형", "MEDIUM": "중형", "LARGE": "대형"}
@@ -51,7 +51,7 @@ class Sentences:
 def _intro(inp: ReportInput) -> str:
     counts = inp.result.get("pass_counts") or {}
     shots = inp.result.get("shot_counts") or {}
-    parts = [f"{inp.session.measured_on}에 {inp.dog.name}의 걷는 모습을 촬영해 수치를 냈습니다."]
+    parts = [f"{format_date(inp.session.measured_on)}에 {inp.dog.name}의 걷는 모습을 촬영해 수치를 냈습니다."]
     profile: list[str] = []
     weight = inp.session.weight_kg if inp.session.weight_kg is not None else inp.dog.weight_kg
     if weight is not None:
@@ -136,7 +136,7 @@ def _previous_note(inp: ReportInput, tables: list[GaitTable]) -> str | None:
     """직전 회차 비교 표의 안내(5절 비교 규칙). 평가 단어 없이 방향만 말한다. 비교 표가 하나도 없으면 None이다."""
     if not inp.previous or not any(table.changes for table in tables):
         return None
-    measured_on = inp.previous.get("measured_on")
+    measured_on = format_date(inp.previous.get("measured_on"))
     if inp.previous_model_changed:
         return f"직전 회차({measured_on})는 분석 방식이 달라 값만 표에 함께 적고, 변화는 판단하지 않았습니다."
     head = (
@@ -162,7 +162,7 @@ def _previous_gaps(inp: ReportInput, tables: list[GaitTable]) -> list[str]:
     """보행 유형이 달라 비교하지 않은 묶음(5절: 같은 유형끼리만). 이번 회차에 수치 표가 없으면 적지 않는다."""
     if not inp.previous or not tables:
         return []
-    measured_on = inp.previous.get("measured_on")
+    measured_on = format_date(inp.previous.get("measured_on"))
     before = [str(gait.get("gait_type")) for gait in inp.previous.get("gaits") or []]
     now = {table.gait_type for table in tables}
     gaps = [

@@ -103,7 +103,7 @@ jargon:
     explanation: 왼쪽과 오른쪽 값의 차이를 두 값의 평균으로 나눈 백분율
   - term: 걸음 길이
     explanation: 한 걸음에 나아가는 거리(몸통 길이 대비 %)
-  - term: 발 높이
+  - term: 발 들림 높이
     explanation: 걸을 때 발이 바닥에서 가장 높이 들린 높이(몸통 길이 대비 %)
   - term: 발 움직임 범위
     explanation: 걸을 때 발이 앞뒤로 움직인 폭(몸통 길이 대비 %)

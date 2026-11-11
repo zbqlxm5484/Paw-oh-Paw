@@ -14,7 +14,14 @@ from app.report.checks import DISCLAIMER, check_texts, find_unexplained_jargon, 
 from app.report.generate import generate_report, render
 from app.report.inputs import parse_input
 from app.report.judge import INCREASE, WITHIN_RANGE
-from app.report.numbers import UNMEASURABLE, build_tables, format_change, format_value
+from app.report.numbers import (
+    METRIC_LABELS,
+    UNMEASURABLE,
+    build_tables,
+    format_change,
+    format_date,
+    format_value,
+)
 from app.report.pdf import PdfUnavailableError, pdf_available
 from app.report.sentences import _glossary
 from app.report.verify import KIND_NOT_IN_SOURCE, compare_numbers, reference_from_result
@@ -92,6 +99,25 @@ def test_compare_lines_keep_reasons_and_previous_values_go_into_the_change_table
     assert hip.note == "직전 회차에 이 수치가 없습니다."
 
 
+def test_format_date_writes_the_korean_form_and_keeps_unknown_text() -> None:
+    assert format_date("2026-11-02") == "2026년 11월 2일"  # 웹·앱 화면과 같은 모양, 앞의 0은 뗀다
+    assert format_date("2026-10-20") == "2026년 10월 20일"
+    assert format_date("미정") == "미정"  # 연-월-일이 아니면 그대로
+    assert format_date("2026-11") == "2026-11"
+
+
+def test_report_dates_are_not_printed_in_iso_form() -> None:
+    rendered = render(sample_input())
+    assert "2026-11-02" not in rendered.html and "2026년 11월 2일" in rendered.html
+    assert "측정일 2026년 11월 2일" in rendered.html
+
+
+def test_paw_lift_label_gets_its_glossary_entry() -> None:
+    """용어 풀이의 이름이 수치 라벨과 다르면 풀이가 붙지 않는다(라벨은 '발 들림 높이')."""
+    label = METRIC_LABELS["paw_lift"]
+    assert label in dict(_glossary(f"{label} 값", load_rules()))
+
+
 def test_format_value_never_prints_zero_for_missing() -> None:
     assert format_value(None, "deg") == UNMEASURABLE
     assert format_value(0.0, "deg") == "0.0°"  # 진짜 0은 0으로 적는다(값이 있을 때만)
@@ -166,12 +192,12 @@ def test_summary_exceptions_follow_the_template_without_a_second_sentence() -> N
 
 def test_intro_follows_the_template_and_drops_only_the_missing_profile_items() -> None:
     assert render(sample_input()).sentences.intro == (
-        "2026-11-02에 제니의 걷는 모습을 촬영해 수치를 냈습니다. 체중 12.5 kg, 중형견, 말티즈. "
+        "2026년 11월 2일에 제니의 걷는 모습을 촬영해 수치를 냈습니다. 체중 12.5 kg, 중형견, 말티즈. "
         "촬영 4건에서 걸음 6회를 보았고, 그중 5회로 수치를 냈습니다(제외 1회)."
     )
     bare = sample_input(dog={"name": "코코"}, session={"id": "x", "measured_on": "2026-11-02"})
     assert render(bare).sentences.intro == (
-        "2026-11-02에 코코의 걷는 모습을 촬영해 수치를 냈습니다. "
+        "2026년 11월 2일에 코코의 걷는 모습을 촬영해 수치를 냈습니다. "
         "촬영 4건에서 걸음 6회를 보았고, 그중 5회로 수치를 냈습니다(제외 1회)."
     )
 
@@ -359,14 +385,14 @@ def test_previous_session_with_another_model_version_is_not_compared() -> None:
     previous = sample_result(measured_on="2026-10-20", model_version="0.3.0/v1/deadbeef")
     rendered = render(sample_input(previous=previous))
     assert rendered.texts["previous"] == (
-        "직전 회차(2026-10-20)는 분석 방식이 달라 값만 표에 함께 적고, 변화는 판단하지 않았습니다."
+        "직전 회차(2026년 10월 20일)는 분석 방식이 달라 값만 표에 함께 적고, 변화는 판단하지 않았습니다."
     )
 
 
 def test_previous_session_with_the_same_model_version_points_at_the_table() -> None:
     rendered = render(sample_input(previous=sample_result(measured_on="2026-10-20"), settings={"tolerance": {}}))
     assert rendered.texts["previous"] == (
-        "직전 회차(2026-10-20)와 이번 회차의 값을 표에 나란히 적었습니다. "
+        "직전 회차(2026년 10월 20일)와 이번 회차의 값을 표에 나란히 적었습니다. "
         "차이는 이번 값에서 직전 값을 뺀 것입니다. "
         "값의 차이는 측정 조건에 따라서도 생길 수 있습니다."
     )
@@ -533,7 +559,7 @@ def test_rendered_report_shows_changes_in_their_own_section_and_explains_the_rul
     assert "(38.0°" not in html and "(45.0°" not in html  # 본문 표의 괄호는 없앴다
     assert html.index("<h2>직전 회차와 비교</h2>") < html.index('<table class="changes">') < html.index("<h2>참고</h2>")
     assert rendered.texts["previous"] == (
-        "직전 회차(2026-10-20)와 이번 회차의 값을 표에 나란히 적었습니다. "
+        "직전 회차(2026년 10월 20일)와 이번 회차의 값을 표에 나란히 적었습니다. "
         "차이는 이번 값에서 직전 값을 뺀 것입니다. "
         "오차 범위보다 크게 달라진 값은 증가·감소로 적었습니다. "
         '"범위 안"은 달라진 크기가 오차 범위 안이라는 뜻이고, 정상 범위라는 뜻은 아닙니다. '
@@ -588,8 +614,8 @@ def test_gaits_the_other_session_lacks_are_not_compared_and_say_so(edition: str)
     assert rendered.tables[0].changes == []
     assert rendered.sentences.previous_note is None
     assert rendered.sentences.previous_gaps == [
-        "속보 수치는 직전 회차(2026-10-20)에 같은 보행 유형이 없어 비교하지 않았습니다.",
-        "직전 회차(2026-10-20)의 평보 수치는 이번 회차에 같은 보행 유형이 없어 비교하지 않았습니다.",
+        "속보 수치는 직전 회차(2026년 10월 20일)에 같은 보행 유형이 없어 비교하지 않았습니다.",
+        "직전 회차(2026년 10월 20일)의 평보 수치는 이번 회차에 같은 보행 유형이 없어 비교하지 않았습니다.",
     ]
     assert "<h2>직전 회차와 비교</h2>" in rendered.html and 'class="pair"' not in rendered.html
     assert not any(n.kind in ("previous", "change") for n in rendered.numbers)

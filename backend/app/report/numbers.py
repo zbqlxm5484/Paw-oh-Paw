@@ -172,6 +172,19 @@ def gait_label(gait_type: str) -> str:
     return GAIT_LABELS.get(gait_type, gait_type)
 
 
+def format_date(text: Any) -> str:
+    """문장과 PDF 머리줄에 적는 날짜. "2026-11-02" → "2026년 11월 2일"(웹·앱 화면과 같은 모양).
+
+    연-월-일 숫자 셋이 아니면 받은 글자를 그대로 돌려준다. API가 내려주는 날짜 값은 바꾸지 않는다.
+    """
+    raw = str(text)
+    parts = raw.split("-")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return raw
+    year, month, day = (int(part) for part in parts)
+    return f"{year}년 {month}월 {day}일"
+
+
 def format_value(value: float | None, unit: str) -> str:
     """숫자와 단위. 각도·비율은 소수 1자리, 횟수는 정수, 나머지는 소수 2자리. 기준은 수치 이름에 있다."""
     if value is None:
