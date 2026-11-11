@@ -13,7 +13,8 @@ import { link } from '../config'
 import { MOCK, isRemote, syncDogChart } from '../store/backend'
 import type { Account, Result } from '../store/types'
 import { PrintPdf } from './parts/ServerPdf'
-import { VetSections } from './parts/VetSections'
+import { mainGait, VetSections } from './parts/VetSections'
+import { OwnerAdvice, OwnerChangeStrip } from './parts/OwnerSummary'
 import { api } from '../api/client'
 import { kneeChartView, loadKneeCurve, type KneeChartView } from '../views/reportContent'
 
@@ -66,31 +67,6 @@ function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; pa
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
       <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
-    </div>
-  )
-}
-
-/** 보호자가 알아 두면 좋은 점(둘째 쪽 시작). 병명·질환 가능성은 말하지 않는다 */
-function OwnerGuideBox({ bm }: { bm: BM }) {
-  const og = owner_guide(bm)
-  return (
-    <div className="rep-p2" style={css('display:flex;flex-direction:column;gap:14px')}>
-      <b style={css('font-size:18px')}>보호자가 알아 두면 좋은 점</b>
-      <div style={css('padding:14px 18px;border-radius:12px;background:#FFF9F4;border:1px solid #F0DCCB;font-size:15px;line-height:1.6;font-weight:600')}>{og.what}</div>
-      <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px')}>
-        {og.look.length ? (
-          <div style={css('padding:14px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:8px')}>
-            <b style={css('font-size:14px;color:#3A4250')}>집에서 보일 수 있는 모습</b>
-            {og.look.map((x) => <span key={x} style={css('font-size:14px;line-height:1.55;padding-left:12px;border-left:3px solid #F2C9AE')}>{x}</span>)}
-          </div>
-        ) : null}
-        <div style={css('padding:14px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:8px')}>
-          <b style={css('font-size:14px;color:#3A4250')}>집에서 도와줄 수 있는 것</b>
-          {og.help.map((x) => <span key={x} style={css('font-size:14px;line-height:1.55;padding-left:12px;border-left:3px solid #CFE3D6')}>{x}</span>)}
-        </div>
-      </div>
-      <div style={css('padding:12px 18px;border-radius:12px;background:#FBEAE6;font-size:14px;line-height:1.6;color:#8A2E1E')}><b>이럴 땐 담당 수의사에게 바로 알려 주세요</b><div style={css('margin-top:6px;display:flex;flex-direction:column;gap:2px')}>{og.urgent.map((u, i) => <span key={i}>· {u}</span>)}</div></div>
-      <span style={css('font-size:12px;color:#8E949C')}>일반적인 안내예요. 우리 아이에게 맞는 관리는 담당 수의사와 상의해 주세요.</span>
     </div>
   )
 }
@@ -250,6 +226,8 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
         <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F2A898;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 많이 덜 씀 (10% 이상)</span>
       </div>
 
+      {kind === 'g' ? <OwnerChangeStrip acct={acct} r={r} gait={mainGait(r)} /> : null}
+
       {/* 다리 한 쌍씩 한 줄 설명 */}
       <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px')}>
         {([['front', '앞다리'], ['hind', '뒷다리']] as const).map(([part, label]) => {
@@ -266,7 +244,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       </div>
 
       {/* 측정 품질: 쓴 통과·뺀 통과와 이유를 숨김없이 (REQ-GD-005, PR-F08-05). 보호자용은 바로 위 안내 상자에서 둘째 쪽, 수의사용은 첫 쪽 끝(11-05) */}
-      {kind === 'g' ? <OwnerGuideBox bm={bm} /> : null}
+      {kind === 'g' ? <OwnerAdvice og={owner_guide(bm)} /> : null}
 
       <div style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
         <b>측정 품질</b>
