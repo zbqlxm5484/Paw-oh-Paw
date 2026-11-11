@@ -1,9 +1,10 @@
 // 수의사용 보고서의 추가 섹션(백엔드 보고서 시안 반영, S15P31A404-103, 보고서 그래프는 S15P31A404-208 연관)
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../../api/client'
 import { css } from '../../app/css'
 import type { Account, Result } from '../../store/types'
 import { sess_label } from '../../views/views'
+import { ChangeProfile } from './ChangeProfile'
 import { cmpFromServer, cmpLocal, GAIT_CODE, gaitsOf, kneeTrend, LIMBS, lrCompare, otherRows, type CmpRow, type CmpView } from '../../views/vet'
 
 const BLUE = '#3B6FE0'
@@ -192,7 +193,10 @@ export function VetSections({ acct, r, fromServer, knee, onReady }: { acct: Acco
   }, [acct, r, gait, fromServer])
   // 인쇄 전용 화면: 비교 값을 다 받은 뒤(서버 회차) 또는 바로(브라우저 계산) 다 그렸다고 알린다
   // (서버 회차는 비교 API 응답이 오기 전까지 cmp 가 undefined. 브라우저 계산은 직전 회차가 없으면 undefined 여도 다 그린 것)
-  const loading = fromServer && cmp === undefined
+  // 기준 회차 대비 변화 프로필(ChangeProfile)도 값을 받은 뒤에 준비 완료
+  const [profDone, setProfDone] = useState(false)
+  const profSettled = useCallback(() => setProfDone(true), [])
+  const loading = (fromServer && cmp === undefined) || !profDone
   useEffect(() => {
     if (!loading) onReady?.()
   }, [loading, onReady])
@@ -203,6 +207,7 @@ export function VetSections({ acct, r, fromServer, knee, onReady }: { acct: Acco
       <LrSection r={r} />
       {knee}
       <CmpSection v={cmp} gait={gait} base={(() => { const b = cmp && cmp.baseId ? acct.results.find((x) => x.id === cmp.baseId) : undefined; return b ? sess_label(acct, b, r) : undefined })()} />
+      <ChangeProfile acct={acct} r={r} gait={gait} fromServer={fromServer} onSettled={profSettled} />
       <KneeTrend acct={acct} r={r} gait={gait} />
     </div>
   )

@@ -11,6 +11,8 @@ import { link } from '../config'
 import { api, type CompareOut } from '../api/client'
 import { MOCK } from '../store/backend'
 import { serverCompareRows } from '../views/vet'
+import { ChangeProfile } from './parts/ChangeProfile'
+import { mainGait } from './parts/VetSections'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -111,6 +113,12 @@ export default function Compare() {
                 <span style={css('font-size:13px;color:#5B6472')}>{cp.focusNote}</span>
               </div>
             </div>
+            {/* 기준 회차 대비일 때: 관절별 변화 막대 + 오차 범위 띠 + 작은 추이선(QA 2절) */}
+            {cmp === 'base' && valid(acct, d.id)[0] ? (
+              <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px')}>
+                <ChangeProfile acct={acct} r={valid(acct, d.id)[0]} gait={mainGait(valid(acct, d.id)[0])} fromServer={remoteDog} />
+              </div>
+            ) : null}
           </>
         )}
       </main>

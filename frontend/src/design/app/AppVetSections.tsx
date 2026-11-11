@@ -6,6 +6,7 @@ import kneeCycle from './knee_cycle.json'
 import { clipFromAngles, pickShots, type ClipInfo, type GaitClip } from './gaitClip'
 import { getAngles } from '../../api/results'
 import { getSession } from '../../api/sessions'
+import { AppChangeProfile } from './AppChangeProfile'
 
 const BLUE = '#3B6FE0'
 const ORANGE = '#D2601A'
@@ -217,13 +218,14 @@ function KneeTrend({ trend }: { trend: TrendsOut | undefined }) {
   )
 }
 
-export function AppVetSections({ result, cmp, trend, baseLabel }: { result: SessionResultOut | null | undefined; cmp: CompareOut | undefined; trend: TrendsOut | undefined; baseLabel?: string }) {
+export function AppVetSections({ result, cmp, trend, baseLabel, base, gait }: { result: SessionResultOut | null | undefined; cmp: CompareOut | undefined; trend: TrendsOut | undefined; baseLabel?: string; base?: CompareOut; gait?: string }) {
   if (!result) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <LrBars result={result} />
       <KneeCycle result={result} />
       <CmpList cmp={cmp} baseLabel={baseLabel} />
+      <AppChangeProfile base={base} gait={gait} />
       <KneeTrend trend={trend} />
     </div>
   )

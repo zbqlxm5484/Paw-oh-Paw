@@ -156,7 +156,8 @@ export function DesignRoot() {
     const t = b.measured_on === repR.measured_on && hm ? ` ${Number(hm[1]) < 12 ? '오전' : '오후'} ${Number(hm[1]) % 12 || 12}:${hm[2]}` : ''
     return `${no}회차, ${Number(mm)}월 ${Number(dd)}일${t}`
   })()
-  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} baseLabel={repBaseLabel} /> : null
+  const repBaseQ = useCompare(repR?.dog, { target: repR?.id, base: 'BASELINE', gait_type: repGait })
+  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} baseLabel={repBaseLabel} base={repBaseQ.data} gait={repGait} /> : null
 
   // 숨은 파일 입력(영상 선택·촬영)
   const fileRef = useRef<HTMLInputElement>(null)
