@@ -86,7 +86,7 @@
 
 ## 3. 수치 (`passes[].metrics`)
 
-값은 `{"value": 41.8, "unit": "deg"}`, 측정 불가는 `{"value": null, "reason": "LOW_CONFIDENCE", "reason_detail": "..."}`다. 0으로 내지 않는다(PR-F02-05). `reason_detail`은 그 통과에서 무엇을 몇 번 보았는지 적은 문장이다(예: "몸 전체가 보인 0.8초 동안 앞발 착지를 1번 보았습니다. ..."). 보고서·로그용이고 화면은 `reason` 코드로 쓴다. 11-11(#259)에 더함 다리는 그 통과의 `camera_side` 쪽이라 키에 `_l`·`_r`가 없다.
+값은 `{"value": 41.8, "unit": "deg"}`, 측정 불가는 `{"value": null, "reason": "LOW_CONFIDENCE", "reason_detail": "..."}`다. 0으로 내지 않는다(PR-F02-05). `reason_detail`은 그 통과에서 무엇을 몇 번 보았는지 적은 문장이다(예: "몸 전체가 보인 0.8초 동안 앞발 착지를 1번 보았습니다. ..."). 보고서·로그용이고 화면은 `reason` 코드로 쓴다. 11-11(#259)에 더함. 다리는 그 통과의 `camera_side` 쪽이라 키에 `_l`·`_r`가 없다.
 
 | 키 | 단위 | 뜻 |
 | --- | --- | --- |
