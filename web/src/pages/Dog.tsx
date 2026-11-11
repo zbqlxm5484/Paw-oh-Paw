@@ -57,7 +57,8 @@ export default function DogPage() {
   tab = CHART_TABS.some(([k]) => k === tab) ? tab : 'visits'
   const vis = visits(acct, cur)
   const today_iso = isoToday()
-  if (v !== today_iso && !vis.some((x) => x.day === v)) v = vis.length ? vis[0].day : today_iso // 고른 방문이 없으면 가장 최근 방문
+  // 고른 날짜가 방문 목록에 없으면 가장 최근 방문. 단, 날짜를 골라 지난 방문을 새로 쓰려는 경우(오늘 전 날짜)는 그대로 둔다(271 방문일)
+  if (v !== today_iso && !vis.some((x) => x.day === v) && !(/^\d{4}-\d{2}-\d{2}$/.test(v) && v < today_iso)) v = vis.length ? vis[0].day : today_iso
   const live = new Set(activeJobs(acct).map((j) => j.dog))
   const dd = dog_detail(acct, cur)
   const row = patient_row(acct, cur, live)
@@ -72,7 +73,7 @@ export default function DogPage() {
 
   const edit_memo = edit ? memos.find((x) => x.id === edit) || null : null
   const here = `/dogs/${cur.id}` + (tab !== 'visits' ? `?tab=${tab}` : `?v=${v}`)
-  const tv = cur.vitals.find((x) => x.day === today_iso)
+  const tv = cur.vitals.find((x) => x.day === v) // 고른 방문 날의 바이탈(있으면 채워 둔다)
   const remote = isRemote(acct.id)
   const vedit = query.get('vedit') || ''
   const hedit = query.get('hedit') || ''
@@ -88,6 +89,11 @@ export default function DogPage() {
         {/* 왼쪽: 방문 목록. 같은 날짜의 측정·바이탈·진료 기록·진단/수술·영상을 한 방문으로 묶는다 */}
         <aside className="v-list">
           <a className="lk v-new" href={link(`/dogs/${cur.id}?v=${today_iso}`)}>+ 오늘 진료 기록</a>
+          {/* 지난 방문 기록: 날짜를 골라 그날로 쓴다(방문일 271) */}
+          <form method="get" action={link(`/dogs/${cur.id}`)} style={css('display:flex;gap:6px;align-items:center;margin:0 0 4px')}>
+            <input className="inp" type="date" name="v" max={today_iso} required aria-label="기록할 날짜" style={css('flex:1;min-width:0;height:36px;border-radius:9px;border:1px solid #E2DCD3;padding:0 8px;font-size:13px;font-family:inherit')} />
+            <button className="bt" type="submit" style={css('height:36px;padding:0 10px;border-radius:9px;background:#fff;border:1px solid #E2DCD3;font-size:12.5px;font-weight:700;white-space:nowrap')}>날짜 골라 기록</button>
+          </form>
           {vis.map((x) => (
             <a key={x.day} className={`lk v-card${x.day === v ? ' on' : ''}`} href={link(`/dogs/${cur.id}?v=${x.day}`)}>
               <span style={css('display:flex;align-items:center;justify-content:space-between;gap:8px')}><b style={css('font-size:14.5px;font-variant-numeric:tabular-nums')}>{x.date}{x.today ? <>{' '}<span style={css('color:#D2601A')}>오늘</span></> : null}</b>{x.st ? <span style={css(`font-size:12px;font-weight:700;color:${x.st.c}`)}>{x.st.st}</span> : null}</span>
@@ -110,18 +116,19 @@ export default function DogPage() {
             <div className="v-sec">{sel.hist.map((h, i) => <div key={i} style={css('font-size:14.5px')}><b style={css(`color:${h.kind == '수술' ? '#A8481A' : '#3A4250'}`)}>{h.kind}</b> {h.title}{h.site ? ` · ${SITE[h.site]}` : ''}{h.by ? <>{' '}<span style={css('color:#8E949C')}>· {h.by}</span></> : null}</div>)}</div>
           ) : null}
 
-          {/* 진료 기록(SOAP): 오늘 방문에만 새로 쓴다(지난 날짜로 쓰려면 백엔드에 방문일 칸이 필요). 지난 방문은 보기·고치기 */}
+          {/* 진료 기록(SOAP): 고른 방문 날짜(오늘까지)로 쓴다(방문일 271). 오늘은 바이탈 필수, 지난 방문은 바이탈을 비워도 된다 */}
           <div className="v-sec">
             <b className="v-h">진료 기록</b>
-            {v === today_iso ? (
+            {v <= today_iso ? (
               <PostForm action={`/dogs/${cur.id}/notes`} style={css('display:flex;flex-direction:column;gap:8px;margin:0')}>
                 <input type="hidden" name="next_url" value={`/dogs/${cur.id}?v=${v}`} />
                 <input type="hidden" className="author-inp" name="author" defaultValue="" />
                 <input type="hidden" name="visit" value="1" />
+                <input type="hidden" name="visit_day" value={v} />
                 {/* 바이탈은 방문마다 반드시 잰다. 오늘 이미 잰 값이 있으면 채워 두고 고치면 바뀐다 */}
                 <div className="vit-in">
                   {([['kg', '체중 kg', cur.kg, tv ? tv.kg : ''], ['temp', '체온 ℃', '38.6', tv ? tv.temp : ''], ['hr', '심박 bpm', '92', tv ? tv.hr : ''], ['sbp', '수축기 mmHg', '140', tv ? tv.sbp : ''], ['dbp', '이완기 mmHg', '85', tv ? tv.dbp : '']] as [string, string, string, string][]).map(([nm, label, ph, val]) => (
-                    <label key={nm}><span>{label} <b style={css('color:#C2412D')}>*</b></span><input className="inp" name={nm} inputMode="decimal" required placeholder={ph} defaultValue={val} /></label>
+                    <label key={nm}><span>{label}{v === today_iso ? <>{' '}<b style={css('color:#C2412D')}>*</b></> : null}</span><input className="inp" name={nm} inputMode="decimal" required={v === today_iso} placeholder={ph} defaultValue={val} /></label>
                   ))}
                 </div>
                 {Object.entries(SOAP).map(([k, [name, hint]]) => (
@@ -151,7 +158,7 @@ export default function DogPage() {
                           <div style={css('display:flex;gap:10px;align-items:center')}><button className="bt" type="submit" style={css('height:36px;padding:0 14px;border-radius:9px;background:#1B2433;color:#fff;font-size:13.5px;font-weight:700')}>고친 내용 저장</button><a className="lk" href={link(`/dogs/${cur.id}?v=${v}`)} style={css('font-size:13.5px;color:#7A808A')}>취소</a></div>
                         </PostForm>
                       ) : (
-                        <div style={css('display:flex;gap:10px;align-items:flex-start')}><span style={css('flex:1;font-size:14.5px;line-height:1.6;white-space:pre-line;padding-top:2px')}>{n.text}</span><a className="lk" href={link(`/dogs/${cur.id}?v=${v}&edit=${n.id}#${n.id}`)} style={css('font-size:12.5px;font-weight:600;color:#B4501A;white-space:nowrap;padding-top:4px')}>고치기</a></div>
+                        <div style={css('display:flex;gap:10px;align-items:flex-start')}><span style={css('flex:1;font-size:14.5px;line-height:1.6;white-space:pre-line;padding-top:2px')}>{n.text}</span><a className="lk" href={link(`/dogs/${cur.id}?v=${v}&edit=${n.id}#${n.id}`)} style={css('font-size:12.5px;font-weight:600;color:#B4501A;white-space:nowrap;padding-top:4px')}>고치기</a><PostForm action={`/dogs/${cur.id}/notes`} style={css('display:inline;margin:0')} onBefore={() => window.confirm('이 기록을 지울까요? 고친 이력도 함께 지워지고 되돌릴 수 없습니다.')}><input type="hidden" name="note_id" value={n.id} /><input type="hidden" name="delete" value="1" /><input type="hidden" name="next_url" value={`/dogs/${cur.id}?v=${v}`} /><button className="bt" type="submit" style={css('background:none;font-size:12.5px;font-weight:600;color:#C2412D;padding:4px 0 0;white-space:nowrap')}>지우기</button></PostForm></div>
                       )}
                       {n.revs && n.revs.length ? <details style={css('font-size:12.5px;color:#7A808A')}><summary style={css('cursor:pointer')}>고친 이력 {n.revs.length}건</summary>{[...n.revs].reverse().map((r, ri) => <div key={ri} style={css('padding:5px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:5px')}><span>{r.at} · {r.author}</span><div style={css('text-decoration:line-through;white-space:pre-line')}>{r.text}</div></div>)}</details> : null}
                     </div>
@@ -283,11 +290,11 @@ export default function DogPage() {
           {/* 좁은 창(800px)에서 칸이 잘리지 않게 표만 가로로 민다(QA 10) */}
           <div style={css('overflow-x:auto')}>
             <div style={css('min-width:640px;display:flex;flex-direction:column;gap:14px')}>
-              <div style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px 52px;gap:12px;font-size:13px;font-weight:700;color:#7A808A;padding-bottom:8px;border-bottom:1px solid #ECE8E2')}><span>날짜</span><span>체중</span><span>체온</span><span>심박</span><span>혈압</span><span>기록</span><span></span></div>
+              <div style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px 96px;gap:12px;font-size:13px;font-weight:700;color:#7A808A;padding-bottom:8px;border-bottom:1px solid #ECE8E2')}><span>날짜</span><span>체중</span><span>체온</span><span>심박</span><span>혈압</span><span>기록</span><span></span></div>
               {vt.rows.map((x, i) => {
                 const raw = cur.vitals[i]
                 return vedit === raw.day ? <VitalForm key={i} dog_id={cur.id} day={raw.day} today={today_iso} author={me?.name ?? ''} v={raw} /> : (
-                  <div key={i} style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px 52px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums')}><span style={css('color:#7A808A')}>{x.day}</span>{(['kg', 'temp', 'hr', 'bp'] as VK[]).map((key) => <span key={key}><VV value={x[key]} f={x.f[key]} size={14.5} /></span>)}<span style={css('font-size:13px;color:#8E949C')}>{x.author}</span><a className="lk" href={link(`/dogs/${cur.id}?tab=progress&vedit=${raw.day}`)} style={css('font-size:12.5px;font-weight:600;color:#B4501A;text-align:right')}>고치기</a></div>
+                  <div key={i} style={css('display:grid;grid-template-columns:110px repeat(4,1fr) 160px 96px;gap:12px;font-size:14.5px;font-variant-numeric:tabular-nums')}><span style={css('color:#7A808A')}>{x.day}</span>{(['kg', 'temp', 'hr', 'bp'] as VK[]).map((key) => <span key={key}><VV value={x[key]} f={x.f[key]} size={14.5} /></span>)}<span style={css('font-size:13px;color:#8E949C')}>{x.author}</span><span style={css('display:flex;gap:10px;justify-content:flex-end')}><a className="lk" href={link(`/dogs/${cur.id}?tab=progress&vedit=${raw.day}`)} style={css('font-size:12.5px;font-weight:600;color:#B4501A')}>고치기</a><PostForm action={`/dogs/${cur.id}/vitals`} style={css('display:inline;margin:0')} onBefore={() => window.confirm(`${raw.day} 바이탈을 지울까요? 되돌릴 수 없습니다.`)}><input type="hidden" name="day" value={raw.day} /><input type="hidden" name="delete" value="1" /><input type="hidden" name="next_url" value={`/dogs/${cur.id}?tab=progress`} /><button className="bt" type="submit" style={css('background:none;font-size:12.5px;font-weight:600;color:#C2412D;padding:0')}>지우기</button></PostForm></span></div>
                 )
               })}
             </div>
@@ -413,7 +420,7 @@ export default function DogPage() {
   )
 }
 
-/** 바이탈 한 날짜 쓰기·고치기(진행 탭 표 안). 백엔드는 PUT /dogs/{id}/vitals/{날짜}: 적은 값만 바뀐다. 지우는 API 는 없다 */
+/** 바이탈 한 날짜 쓰기·고치기(진행 탭 표 안). 백엔드는 PUT /dogs/{id}/vitals/{날짜}: 적은 값만 바뀐다. 지우기는 표의 '지우기'(DELETE) */
 function VitalForm({ dog_id, day, today, author, v }: { dog_id: string; day: string; today: string; author: string; v?: { kg: string; temp: string; hr: string; sbp: string; dbp: string } }) {
   const back = `/dogs/${dog_id}?tab=progress`
   return (

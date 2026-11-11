@@ -304,6 +304,13 @@ post('/dogs/:dog_id/notes', (p, fd) => {
   const d = dogOf(acct, dog_id)
   const back = next_url.startsWith('/results/') || next_url.startsWith('/dogs/') ? next_url : `/dogs/${dog_id}` // 쓴 화면으로 돌아간다
   if (!d) return redirect('/home')
+  const today = isoToday()
+  const visitDay = f(fd, 'visit_day') || today // 방문일(지난 방문의 기록도 그 날짜로)
+  if (visitDay > today) return redirect(back, '오늘 이후 날짜로는 기록할 수 없습니다')
+  if (note_id && f(fd, 'delete')) {
+    d.notes = d.notes.filter((x) => x.id !== note_id)
+    return redirect(back, '지웠습니다')
+  }
   const author = f(fd, 'author').trim(), text = f(fd, 'text').trim() // 작성자는 로그인한 사람 이름이 기본, 고칠 수 있다
   const soap = (['S', 'O', 'A', 'P'] as const)
     .map((k) => [k, f(fd, k.toLowerCase()).trim()] as [string, string])
@@ -311,12 +318,16 @@ post('/dogs/:dog_id/notes', (p, fd) => {
   if (visit && !note_id) {
     // 오늘 방문 기록: 바이탈은 방문마다 반드시 잰다(11-02). 오늘 이미 잰 값이 있으면 바꾼다
     const vals = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
-    if (!vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
-    const today = isoToday()
-    d.vitals = d.vitals.filter((x) => x.day !== today)
-    const [kg, temp, hr, sbp, dbp] = vals
-    d.vitals.unshift({ day: today, kg, temp, hr, sbp, dbp, author })
-    d.kg = vals[0]
+    const noVital = visitDay !== today && !vals.some(Boolean) // 지난 방문은 바이탈 없이도 된다
+    if (!noVital && !vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
+    if (noVital && !soap.length) return redirect(back, '바이탈이나 진료 기록을 적어 주세요')
+    if (!noVital) {
+      d.vitals = d.vitals.filter((x) => x.day !== visitDay)
+      const [kg, temp, hr, sbp, dbp] = vals
+      d.vitals.unshift({ day: visitDay, kg, temp, hr, sbp, dbp, author })
+      d.vitals.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+      if (d.vitals[0].day === visitDay) d.kg = vals[0]
+    }
     if (!soap.length) return redirect(back, '바이탈을 기록했습니다')
   }
   if (soap.length && !note_id) {
@@ -324,7 +335,7 @@ post('/dogs/:dog_id/notes', (p, fd) => {
     const r = resultOf(acct, rid)
     const at = _now()
     soap.forEach(([k, v], i) => {
-      d.notes.unshift(mkNote(at, author, k, v, !!important && i === 0, r && r.dog === d.id ? r.id : ''))
+      d.notes.unshift({ ...mkNote(at, author, k, v, !!important && i === 0, r && r.dog === d.id ? r.id : ''), day: visitDay })
     })
     return redirect(back, '기록을 남겼습니다')
   }
@@ -363,6 +374,10 @@ post('/dogs/:dog_id/vitals', (p, fd) => {
   const d = dogOf(acct, p.dog_id)
   const back = next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}?v=${day || isoToday()}`
   if (!d) return redirect('/home')
+  if (f(fd, 'delete')) {
+    d.vitals = d.vitals.filter((x) => x.day !== day)
+    return redirect(back, '그날 바이탈을 지웠습니다')
+  }
   if (!author.trim()) return redirect(back, '작성자를 적어 주세요')
   const v = _vital_from_form(day, f(fd, 'kg'), f(fd, 'temp'), f(fd, 'hr'), f(fd, 'sbp'), f(fd, 'dbp'), author)
   if (!v) return redirect(back, '값을 하나 이상 적어 주세요')

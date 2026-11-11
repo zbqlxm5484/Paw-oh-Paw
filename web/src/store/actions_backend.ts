@@ -257,10 +257,20 @@ if (!MOCK) {
     const back = next_url.startsWith('/results/') || next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}`
     if (!d) return redirect('/home')
     const note_id = f(fd, 'note_id'), text = f(fd, 'text').trim(), important = !!f(fd, 'important'), visit = !!f(fd, 'visit')
+    // 방문일(271): 지난 방문의 기록도 그 날짜로 쓴다. 미래는 받지 않는다
+    const today = isoToday()
+    const visited_on = f(fd, 'visit_day') || today
+    if (visited_on > today) return redirect(back, '오늘 이후 날짜로는 기록할 수 없습니다')
+    if (note_id && f(fd, 'delete')) {
+      return chartDo(d.id, back, async () => {
+        await api.deleteNote(note_id)
+        return '지웠습니다'
+      })
+    }
     const soap = (['S', 'O', 'A', 'P'] as const).map((k) => [k, f(fd, k.toLowerCase()).trim()] as [string, string]).filter(([, v]) => v)
     const r = resultOf(acct, f(fd, 'rid'))
     const session_id = r && r.dog === d.id ? r.id : undefined
-    const soapBatch = () => api.addNotes(d.id, { session_id, notes: soap.map(([k, v], i) => ({ category: k, body: v, important: important && i === 0 })) })
+    const soapBatch = () => api.addNotes(d.id, { session_id, visited_on, notes: soap.map(([k, v], i) => ({ category: k, body: v, important: important && i === 0 })) })
     if (note_id) {
       if (!text) return redirect(back, '내용을 적어 주세요')
       return chartDo(d.id, back, async () => {
@@ -270,12 +280,15 @@ if (!MOCK) {
     }
     if (visit) {
       // 오늘 방문 기록: 바이탈은 방문마다 반드시 잰다(11-02). 오늘 이미 잰 값이 있으면 바꾼다
+      // 지난 방문은 그날 바이탈을 안 쟀을 수 있어 비워도 된다(적으면 다 적어야 한다)
       const vals = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
-      if (!vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
+      const noVital = visited_on !== today && !vals.some(Boolean)
+      if (!noVital && !vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
       if (badNum(...vals)) return redirect(back, '바이탈은 숫자로 적어 주세요')
+      if (noVital && !soap.length) return redirect(back, '바이탈이나 진료 기록을 적어 주세요')
       const [kg, temp, hr, sbp, dbp] = vals.map(Number)
       return chartDo(d.id, back, async () => {
-        await api.putVital(d.id, isoToday(), { weight_kg: kg, temp_c: temp, heart_rate: hr, sbp, dbp })
+        if (!noVital) await api.putVital(d.id, visited_on, { weight_kg: kg, temp_c: temp, heart_rate: hr, sbp, dbp })
         if (!soap.length) return '바이탈을 기록했습니다'
         await soapBatch()
         return '기록을 남겼습니다'
@@ -291,12 +304,12 @@ if (!MOCK) {
     const cat = f(fd, 'cat') || 'O'
     const category = CAT_OUT[cat] ?? 'OTHER'
     return chartDo(d.id, back, async () => {
-      await api.addNote(d.id, { category, body: text, important, session_id })
+      await api.addNote(d.id, { category, body: text, important, session_id, visited_on })
       return cat in config.SOAP ? '기록을 남겼습니다' : '메모를 남겼습니다'
     })
   })
 
-  // 바이탈 한 날짜 저장·고치기. 적은 값만 보낸다(빈 칸은 그대로 둔다). 지우는 API 는 없다
+  // 바이탈 한 날짜 저장·고치기·지우기. 저장은 적은 값만 보낸다(빈 칸은 그대로 둔다)
   onB('/dogs/:dog_id/vitals', async (p, fd) => {
     const acct = current()
     if (!acct) return need_login()
@@ -306,6 +319,12 @@ if (!MOCK) {
     const day = f(fd, 'day') || isoToday()
     const next_url = f(fd, 'next_url')
     const back = next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}?v=${day}`
+    if (f(fd, 'delete')) {
+      return chartDo(d.id, back, async () => {
+        await api.deleteVital(d.id, day)
+        return '그날 바이탈을 지웠습니다'
+      })
+    }
     const [kg, temp, hr, sbp, dbp] = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
     if (![kg, temp, hr, sbp, dbp].some(Boolean)) return redirect(back, '값을 하나 이상 적어 주세요')
     if (badNum(kg, temp, hr, sbp, dbp)) return redirect(back, '바이탈은 숫자로 적어 주세요')

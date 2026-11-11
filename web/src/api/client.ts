@@ -120,6 +120,8 @@ export interface StaffRef { id: string; name: string }
 export interface VitalOut {
   id: string; measured_on: string; weight_kg: number | null; temp_c: number | null; heart_rate: number | null; sbp: number | null; dbp: number | null
   staff: StaffRef | null; session_id: string | null; created_at: string; updated_at: string
+  /** 기관의 그날 기록(GET /daily-records)에서만 온다 */
+  dog_id?: string
 }
 export interface VitalIn { weight_kg?: number | null; temp_c?: number | null; heart_rate?: number | null; sbp?: number | null; dbp?: number | null }
 /** 진단 이력(진단·수술·재활) */
@@ -132,6 +134,8 @@ export interface HistoryIn { occurred_on?: string; kind?: string; title?: string
 export interface NoteOut {
   id: string; dog_id: string; session_id: string | null; category: string; body: string; important: boolean
   staff: StaffRef | null; revision_count: number; created_at: string; updated_at: string
+  /** 방문일(YYYY-MM-DD, 271). 예전 서버면 없다 */
+  visited_on?: string
 }
 export interface NoteRevisionOut { id: string; body: string; category: string; important: boolean; staff: StaffRef | null; revised_at: string }
 export interface Paged<T> { items: T[]; total: number; page: number; size: number }
@@ -308,8 +312,10 @@ export const api = {
   // ── 차트 자료(271): 바이탈·진단 이력·메모·진료 기록 ──
   /** 바이탈 목록(최신 날짜가 앞, 전부) */
   vitals: (dogId: string) => request<{ items: VitalOut[] }>(`/dogs/${dogId}/vitals`),
-  /** 그날 바이탈 저장. 있으면 보낸 값만 바꾼다(지우는 API 는 없다) */
+  /** 그날 바이탈 저장. 있으면 보낸 값만 바꾼다 */
   putVital: (dogId: string, day: string, body: VitalIn) => request<VitalOut>(`/dogs/${dogId}/vitals/${day}`, { method: 'PUT', body }),
+  /** 그날 바이탈 줄을 통째로 지운다(271). 없으면 404 */
+  deleteVital: (dogId: string, day: string) => request<void>(`/dogs/${dogId}/vitals/${day}`, { method: 'DELETE' }),
   /** 진단 이력(오래된 것부터) */
   history: (dogId: string) => request<{ items: DogHistoryOut[] }>(`/dogs/${dogId}/history`),
   addHistory: (dogId: string, body: HistoryIn) => request<DogHistoryOut>(`/dogs/${dogId}/history`, { method: 'POST', body }),
@@ -317,13 +323,19 @@ export const api = {
   deleteHistory: (dogId: string, id: string) => request<void>(`/dogs/${dogId}/history/${id}`, { method: 'DELETE' }),
   /** 메모·진료 기록(쓴 시각이 늦은 것부터). size 는 1~200 */
   notes: (dogId: string, page = 1, size = 200) => request<Paged<NoteOut>>(`/dogs/${dogId}/notes?page=${page}&size=${size}`),
-  addNote: (dogId: string, body: { category: string; body: string; important?: boolean; session_id?: string }) =>
+  addNote: (dogId: string, body: { category: string; body: string; important?: boolean; session_id?: string; visited_on?: string }) =>
     request<NoteOut>(`/dogs/${dogId}/notes`, { method: 'POST', body }),
   /** SOAP 여러 칸을 같은 시각으로(1~8건) */
-  addNotes: (dogId: string, body: { session_id?: string; notes: { category: string; body: string; important?: boolean }[] }) =>
+  addNotes: (dogId: string, body: { session_id?: string; visited_on?: string; notes: { category: string; body: string; important?: boolean }[] }) =>
     request<{ items: NoteOut[] }>(`/dogs/${dogId}/notes/batch`, { method: 'POST', body }),
   updateNote: (id: string, body: { body?: string; category?: string; important?: boolean }) => request<NoteOut>(`/notes/${id}`, { method: 'PATCH', body }),
   noteRevisions: (id: string) => request<{ items: NoteRevisionOut[] }>(`/notes/${id}/revisions`),
+  /** 메모·진료 기록 한 건과 그 수정 이력을 지운다(271) */
+  deleteNote: (id: string) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
+  /** 기관의 그날 기록(271): 그날 바이탈·메모(방문일)·회차. date 를 빼면 오늘 */
+  dailyRecords: (date?: string) => request<{ date: string; vitals: VitalOut[]; notes: NoteOut[]; sessions: { id: string; dog?: { id: string } | null; dog_id?: string }[] }>(`/daily-records${date ? `?date=${date}` : ''}`),
+  /** 내 기관의 측정 기기(271): 가린 코드와 발급 시각. 없으면 device 가 null */
+  myDevice: () => request<{ device: { code_masked: string; issued_at: string } | null }>('/auth/me/device'),
   sessionReports: (sessionId: string) => request<SessionReportsOut>(`/sessions/${sessionId}/reports`),
   /** 보고서 내용(285). token 이 있으면 인쇄 토큰으로(로그인 없이), 없으면 저장된 로그인 토큰. 404 NOT_FOUND, 409 SESSION_NOT_DONE·REPORT_CHECK_FAILED */
   reportContent: (sessionId: string, edition: ReportEdition, token?: string | null) =>

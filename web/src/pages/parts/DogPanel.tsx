@@ -56,6 +56,14 @@ export function MemoForm({ dog_id, next_url, memo_cat, edit = null, open = false
         </div>
         {edit && edit.revs && edit.revs.length ? <details style={css('font-size:12.5px;color:#7A808A')}><summary style={css('cursor:pointer')}>고친 이력 {edit.revs.length}건</summary>{[...edit.revs].reverse().map((r, i) => <div key={i} style={css('padding:4px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:4px')}>{r.at} · {r.author}<div style={css('text-decoration:line-through')}>{r.text}</div></div>)}</details> : null}
       </PostForm>
+      {edit ? (
+        <PostForm action={`/dogs/${dog_id}/notes`} style={css('display:flex;justify-content:flex-end;margin:6px 0 0')} onBefore={() => window.confirm('이 메모를 지울까요? 고친 이력도 함께 지워지고 되돌릴 수 없습니다.')}>
+          <input type="hidden" name="note_id" value={edit.id} />
+          <input type="hidden" name="delete" value="1" />
+          <input type="hidden" name="next_url" value={next_url} />
+          <button className="bt" type="submit" style={css('background:none;font-size:13px;font-weight:600;color:#C2412D;padding:0')}>메모 지우기</button>
+        </PostForm>
+      ) : null}
     </details>
   )
 }

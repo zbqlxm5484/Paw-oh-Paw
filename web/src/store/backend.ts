@@ -48,7 +48,7 @@ function toNote(n: NoteOut, revs: NoteRevisionOut[] = []): Note {
   const r: [string, string, string][] = old.map((x, i) => [localAt(i ? old[i - 1].revised_at : n.created_at), x.staff?.name ?? '', x.body])
   return {
     id: n.id, at: localAt(n.created_at), author: n.staff?.name ?? '', cat: CAT_IN[n.category] ?? n.category, text: n.body,
-    important: n.important, revs: r, rid: n.session_id ?? '',
+    important: n.important, revs: r, rid: n.session_id ?? '', day: n.visited_on,
   }
 }
 
@@ -119,7 +119,8 @@ export async function syncDogChart(acctId: string, dogId: string): Promise<void>
   changed()
 }
 
-/** 홈 '오늘' 목록용: 오늘 기록이 있을 법한 반려견 차트(바이탈·메모·진료 기록)를 먼저, 나머지도 차례로 읽는다.
+/** 홈 '오늘' 목록용: 기관의 그날 기록(GET /daily-records)으로 오늘 기록이 있는 반려견 차트만 읽는다. 그 API 가 없으면 아래 방식:
+ *  오늘 기록이 있을 법한 반려견 차트(바이탈·메모·진료 기록)를 먼저, 나머지도 차례로 읽는다.
  *  오늘 진료 기록은 반려견마다 따로 읽어야 해서(기관 단위 '오늘 기록' API 없음) 홈을 열 때 한 번, 4마리씩 최대 60마리.
  *  오늘 회차가 있는 반려견은 GET /sessions 로, 오늘 바이탈이 있는 반려견은 목록의 latest_vital 로 먼저 고른다 */
 const homeSynced = new Set<string>()
@@ -128,6 +129,21 @@ export async function syncTodayCharts(acctId: string, today: string): Promise<vo
   homeSynced.add(acctId)
   const acct = db.accounts[acctId]
   if (!acct) return
+  // 기관의 그날 기록(GET /daily-records, 271): 오늘 바이탈·진료 기록·메모·회차가 있는 반려견만 차트를 읽는다
+  try {
+    const day = await api.dailyRecords(today)
+    const ids = new Set<string>()
+    for (const v of day.vitals) if (v.dog_id) ids.add(v.dog_id)
+    for (const n of day.notes) ids.add(n.dog_id)
+    for (const s of day.sessions) { const id = s.dog?.id ?? s.dog_id; if (id) ids.add(id) }
+    const todo = [...ids].filter((id) => acct.dogs.some((d) => d.id === id))
+    for (let i = 0; i < todo.length; i += 4) {
+      await Promise.all(todo.slice(i, i + 4).map((id) => syncDogChart(acctId, id).catch(() => undefined)))
+    }
+    return
+  } catch {
+    /* 그날 기록 API 가 없는 서버면 아래처럼 반려견마다 읽는다 */
+  }
   const first = new Set<string>()
   try {
     const r = await api.instSessions(1, 100)
@@ -190,6 +206,15 @@ export async function syncFromBackend(me?: StaffOut): Promise<string> {
     }
     acct.dogs = dogs.filter((o) => !onlyDog || o.id === onlyDog).map((o) => toDog(o, acct.dogs.find((d) => d.id === o.id)))
     await syncSessions(acct, true).catch(() => undefined)   // 측정 이력의 끝난 회차, 이 브라우저에서 연 회차·측정 중 회차의 상태·결과
+    // 마이페이지 측정 기기(271): 가린 코드와 발급일. 서버 PDF 인쇄 화면(반려견 하나만 읽을 때)은 읽지 않는다
+    if (!onlyDog) {
+      try {
+        const dev = (await api.myDevice()).device
+        acct.dev = dev ? `${dev.code_masked} · ${dev.issued_at.slice(0, 10)} 발급` : '-'
+      } catch {
+        /* 이 API 가 없는 서버면 그대로 둔다 */
+      }
+    }
   }
   changed()
   return st.id
