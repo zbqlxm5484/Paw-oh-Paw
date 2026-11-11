@@ -57,7 +57,7 @@ export default function My() {
                   setDel({ name: d.name, action: `/dogs/${d.id}/delete`, desc: d.desc })
                   window.ppOpen('delModal')
                 }}
-                style={css('height:36px;padding:0 12px;margin-left:14px;border-radius:9px;display:flex;align-items:center;font-size:13.5px;font-weight:600;color:#C2412D;cursor:pointer;border-left:1px solid #F2EFEA')}>삭제</span>
+                style={css('height:36px;padding:0 12px;margin-left:8px;border-radius:9px;border:1px solid #E2DCD3;display:flex;align-items:center;font-size:14px;font-weight:600;color:#B4501A;cursor:pointer')}>삭제</span>
             </div>
           ))}
           </div>
