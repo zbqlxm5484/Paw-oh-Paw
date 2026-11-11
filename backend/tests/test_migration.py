@@ -286,6 +286,42 @@ def test_0012_keeps_one_usable_code_per_institution(engine: Engine, clean_tables
         command.upgrade(config, "head")
 
 
+def test_0022_adds_login_lock_columns_and_leaves_accounts_as_they_were(engine: Engine, clean_tables: None) -> None:
+    """0022(v1.48): 있던 계정은 틀린 수 0이고 잠금 시각·비밀번호를 바꾼 시각은 NULL이다. 내리면 세 칸만 없어진다.
+
+    이 칸을 모르는 앞 판 앱의 INSERT(배포 중에 잠깐 같은 DB에 가입 계정을 넣는다)도 들어간다.
+    """
+    config = alembic_config()
+    columns = ("login_fail_count", "login_locked_until", "password_changed_at")
+    ids = {name: uuid.uuid4() for name in ("inst", "old", "late")}
+    insert_staff = (
+        "INSERT INTO staff (id, institution_id, login_id, password_hash, name, role) "
+        "VALUES (:id, :inst, :login_id, 'x', '갑', 'CLIENT')"
+    )
+    command.downgrade(config, "0021")
+    try:
+        with engine.begin() as conn:
+            assert not any(_has_column(conn, "staff", column) for column in columns)
+            conn.execute(text("INSERT INTO institution (id, code, name) VALUES (:inst, 'A', '병원 A')"), ids)
+            conn.execute(text(insert_staff), {"id": ids["old"], "inst": ids["inst"], "login_id": "kim01"})
+        command.upgrade(config, "head")
+        with engine.begin() as conn:
+            conn.execute(text(insert_staff), {"id": ids["late"], "inst": ids["inst"], "login_id": "kim02"})
+            rows = conn.execute(
+                text(
+                    "SELECT login_id, login_fail_count, login_locked_until, password_changed_at "
+                    "FROM staff ORDER BY login_id"
+                )
+            ).all()
+            assert [tuple(row) for row in rows] == [("kim01", 0, None, None), ("kim02", 0, None, None)]
+        command.downgrade(config, "0021")
+        with engine.connect() as conn:
+            assert not any(_has_column(conn, "staff", column) for column in columns)
+            assert conn.execute(text("SELECT count(*) FROM staff")).scalar_one() == 2
+    finally:
+        command.upgrade(config, "head")
+
+
 def test_0021_fills_the_visit_date_from_the_written_day(engine: Engine, clean_tables: None) -> None:
     """0021(v1.46): 있던 메모의 방문일은 쓴 날(한국 날짜)이다. UTC로는 전날 밤이어도 한국 날짜로 채운다.
 

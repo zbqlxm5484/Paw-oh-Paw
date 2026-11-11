@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CHAR, Boolean, DateTime, ForeignKey, String, UniqueConstraint, Uuid, func, text
+from sqlalchemy import CHAR, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -46,6 +46,12 @@ class Staff(Base):
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 알림을 받을지(13.7). 설정값만 저장하고 서버가 알림을 보내지는 않는다
     notif_on: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    # 로그인 잠금(12.5, v1.48): 이어서 틀린 비밀번호 수와, 잠겼으면 풀리는 시각.
+    # 로그인하거나 비밀번호를 새로 정하면 0·NULL로 돌아간다
+    login_fail_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    login_locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 비밀번호를 마지막으로 바꾼 시각(변경·재설정). 그전에 받은 토큰은 끊긴다(11.6). 바꾼 적 없으면 NULL
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

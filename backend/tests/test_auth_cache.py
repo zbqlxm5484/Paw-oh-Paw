@@ -3,7 +3,7 @@
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,10 +15,12 @@ from app.core.auth_cache import AuthCache, AuthStaff, auth_cache
 from app.core.config import get_settings
 from app.core.dates import today_local
 from app.models import Staff
-from tests.conftest import bearer
+from tests.conftest import GOOD_PASSWORD, bearer
 
 WHOAMI = "/api/v1/_test/whoami"
 ME = "/api/v1/auth/me"
+LOGIN = "/api/v1/auth/login"
+PASSWORD = "/api/v1/auth/password"
 
 
 def _snapshot(**overrides: object) -> AuthStaff:
@@ -183,6 +185,42 @@ def test_ttl_expiry_reloads_from_db(
     db.expire_all()
     clock["t"] += 61
     assert client.get(WHOAMI, headers=headers).status_code == 403
+
+
+def test_password_change_cuts_tokens_at_once_in_the_same_process(
+    cache_on: None, client: TestClient, db: Session, staff
+) -> None:
+    """v1.48(11.6 대가): 비밀번호를 바꾼 요청을 받은 프로세스는 캐시를 지워, 옛 토큰을 바로 끊는다."""
+    login = client.post(LOGIN, json={"login_id": "staff1", "password": GOOD_PASSWORD})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert client.get(WHOAMI, headers=headers).status_code == 200
+    assert auth_cache.get(staff.id) is not None
+
+    changed = client.patch(
+        PASSWORD, json={"current_password": GOOD_PASSWORD, "new_password": "new-pass-5678"}, headers=headers
+    )
+    assert changed.status_code == 200
+    cut = client.get(WHOAMI, headers=headers)
+    assert cut.status_code == 401
+    assert cut.json()["error"]["code"] == "AUTH_EXPIRED"
+
+
+def test_password_changed_in_another_process_shows_up_after_the_ttl(
+    cache_on: None, clock: dict[str, float], client: TestClient, db: Session, staff
+) -> None:
+    """다른 프로세스에서 바꾼 비밀번호는 이 프로세스의 캐시가 지날 때까지(최대 TTL) 옛 토큰을 막지 못한다."""
+    headers = bearer(staff)
+    assert client.get(WHOAMI, headers=headers).status_code == 200  # 캐시에 들어간다
+
+    later = datetime.now(UTC) + timedelta(seconds=1)  # 이 토큰보다 뒤에 바꿨다
+    db.execute(update(Staff).where(Staff.id == staff.id).values(password_changed_at=later))
+    db.expire_all()
+    assert client.get(WHOAMI, headers=headers).status_code == 200  # 옛 스냅샷
+
+    clock["t"] += 61
+    cut = client.get(WHOAMI, headers=headers)
+    assert cut.status_code == 401
+    assert cut.json()["error"]["code"] == "AUTH_EXPIRED"
 
 
 def test_me_reads_db_and_refreshes_cache(cache_on: None, client: TestClient, db: Session, staff) -> None:

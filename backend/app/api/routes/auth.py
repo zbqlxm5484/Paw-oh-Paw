@@ -2,10 +2,11 @@
 비밀번호 재설정(BE-27)."""
 
 from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentStaff, CurrentStaffAny, DbSession, MeCaller, Reader
 from app.core.auth_cache import AuthStaff
-from app.core.errors import AppError, ErrorCode
+from app.core.errors import AppError, ErrorCode, error_response
 from app.core.security import create_access_token
 from app.schemas.auth import (
     DeviceCodeVerifyIn,
@@ -38,8 +39,19 @@ def _token_out(staff: AuthStaff) -> TokenOut:
 
 
 @router.post("/login", response_model=TokenOut)
-def login(body: LoginIn, db: DbSession) -> TokenOut:
-    return _token_out(authenticate(db, login_id=body.login_id, password=body.password))
+def login(body: LoginIn, db: DbSession) -> TokenOut | JSONResponse:
+    """로그인. 틀리면 401 LOGIN_FAILED 하나다(잠긴 계정도 같다, 13.4).
+
+    틀린 비밀번호의 실패 횟수와 잠금은 요청이 401로 끝나도 남아야 한다(12.5 로그인 잠금). 그래서 LoginRejected는
+    예외로 올리지 않고 같은 오류 응답을 돌려준다. 예외로 올리면 get_db가 rollback한다(11.7 실패해도 commit하는 곳).
+    토큰은 이 함수 안에서, authenticate가 건 담당자 행 잠금이 풀리기 전에 만든다. 비밀번호 변경이 그 잠금을
+    기다렸다가 시각을 적으므로, 옛 비밀번호로 받은 토큰이 변경 뒤에 살아남지 않는다(services/auth.set_new_password).
+    """
+    try:
+        staff = authenticate(db, login_id=body.login_id, password=body.password)
+    except auth_service.LoginRejected as rejected:
+        return error_response(rejected.code)
+    return _token_out(staff)
 
 
 @router.post("/device-codes/verify", response_model=DeviceCodeVerifyOut)
@@ -95,7 +107,11 @@ def withdraw(body: WithdrawIn, staff: CurrentStaffAny, db: DbSession) -> None:
 
 @router.patch("/password", response_model=StaffOut)
 def change_password(body: PasswordChangeIn, staff: CurrentStaff, db: DbSession) -> StaffOut:
-    """비밀번호 변경. 현재 비밀번호가 틀리면 400 PASSWORD_MISMATCH. 이미 받은 토큰은 그대로 유효하다."""
+    """비밀번호 변경. 현재 비밀번호가 틀리면 400 PASSWORD_MISMATCH.
+
+    바꾸면 그전에 받은 토큰이 모두 끊긴다(v1.48). 이 요청에 쓴 토큰도 다음 요청부터 401 AUTH_EXPIRED다(새 토큰을
+    주지 않는다. 화면이 로그인 화면으로 보낸다).
+    """
     return staff_out(
         auth_service.change_password(
             db, staff.id, current_password=body.current_password, new_password=body.new_password
@@ -111,5 +127,8 @@ def request_password_reset(body: PasswordResetRequestIn, db: DbSession) -> None:
 
 @router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
 def confirm_password_reset(body: PasswordResetConfirmIn, db: DbSession) -> None:
-    """링크의 토큰으로 비밀번호 바꾸기(인증 없음). 틀리거나 만료됐으면 400 RESET_TOKEN_INVALID."""
+    """링크의 토큰으로 비밀번호 바꾸기(인증 없음). 틀리거나 만료됐으면 400 RESET_TOKEN_INVALID.
+
+    바꾸면 그전에 받은 로그인 토큰이 끊기고 로그인 잠금이 풀린다(v1.48).
+    """
     password_reset_service.confirm_reset(db, body.token, body.new_password)

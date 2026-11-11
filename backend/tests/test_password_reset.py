@@ -14,10 +14,12 @@ from sqlalchemy.orm import Session
 from app.core import mail
 from app.core.config import get_settings
 from app.core.dates import today_local
+from app.services.auth import LOGIN_MAX_FAILURES
 from app.services.password_reset import PASSWORD_RESET_TTL_MIN
 from tests.conftest import GOOD_PASSWORD
 
 LOGIN = "/api/v1/auth/login"
+ME = "/api/v1/auth/me"
 REQUEST = "/api/v1/auth/password-reset/request"
 CONFIRM = "/api/v1/auth/password-reset/confirm"
 NEW_PASSWORD = "reset-pass-9012"
@@ -178,6 +180,47 @@ def test_confirm_rejects_expired_wrong_or_disabled(client: TestClient, db: Sessi
     assert expired.status_code == 400
     assert expired.json()["error"]["code"] == "RESET_TOKEN_INVALID"
     assert _login(client, GOOD_PASSWORD).status_code == 200
+
+
+def test_confirm_cuts_tokens_issued_before_and_unlocks(
+    client: TestClient, db: Session, mailable, outbox: list, caplog
+) -> None:
+    """v1.48(12.5): 재설정하면 그전에 받은 로그인 토큰이 끊기고 로그인 잠금이 풀린다. 로그에는 담당자 ID만 남는다."""
+    old = _login(client, GOOD_PASSWORD)
+    old_headers = {"Authorization": f"Bearer {old.json()['access_token']}"}
+    # 누가 이 아이디로 다섯 번 틀려 잠긴 상태
+    mailable.login_fail_count = LOGIN_MAX_FAILURES
+    mailable.login_locked_until = datetime.now(UTC) + timedelta(minutes=20)
+    db.flush()
+    assert _login(client, GOOD_PASSWORD).status_code == 401
+    assert client.get(ME, headers=old_headers).status_code == 200  # 잠겨도 받은 토큰은 쓴다
+
+    _request(client)
+    with caplog.at_level(logging.DEBUG):
+        done = client.post(CONFIRM, json={"token": _token_in(outbox[0]), "new_password": NEW_PASSWORD})
+    assert done.status_code == 204
+    assert (mailable.login_fail_count, mailable.login_locked_until) == (0, None)
+    assert mailable.password_changed_at is not None
+
+    cut = client.get(ME, headers=old_headers)
+    assert cut.status_code == 401
+    assert cut.json()["error"]["code"] == "AUTH_EXPIRED"
+    fresh = _login(client, NEW_PASSWORD)
+    assert fresh.status_code == 200
+    assert client.get(ME, headers={"Authorization": f"Bearer {fresh.json()['access_token']}"}).status_code == 200
+    assert f"password reset staff={mailable.id}" in caplog.text
+    assert NEW_PASSWORD not in caplog.text and EMAIL not in caplog.text
+
+
+def test_failed_confirm_keeps_tokens_and_lock(client: TestClient, db: Session, mailable, outbox: list) -> None:
+    headers = {"Authorization": f"Bearer {_login(client, GOOD_PASSWORD).json()['access_token']}"}
+    mailable.login_fail_count = 3
+    db.flush()
+    wrong = client.post(CONFIRM, json={"token": "not-the-token", "new_password": NEW_PASSWORD})
+    assert wrong.status_code == 400
+    db.expire_all()
+    assert (mailable.login_fail_count, mailable.password_changed_at) == (3, None)
+    assert client.get(ME, headers=headers).status_code == 200
 
 
 def test_new_request_replaces_the_old_token(client: TestClient, mailable, outbox: list) -> None:

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -17,8 +18,10 @@ from app.core import mail
 from app.core.auth_cache import auth_cache
 from app.core.config import get_settings
 from app.core.errors import AppError, ErrorCode, message_for
-from app.core.security import hash_password
 from app.models import Staff
+from app.services.auth import set_new_password
+
+logger = logging.getLogger(__name__)
 
 # 15.4: 발급 30분 뒤 만료(코드 상수)
 PASSWORD_RESET_TTL_MIN = 30
@@ -66,6 +69,8 @@ def confirm_reset(db: Session, token: str, new_password: str) -> None:
     """토큰으로 비밀번호 바꾸기(15.4). 해시가 맞고 만료 전인 활성 계정이 없으면 400 RESET_TOKEN_INVALID.
 
     새 비밀번호 규칙(13.4)은 PasswordResetConfirmIn이 422로 본다. 바꾸면 두 칸을 NULL로 하고 캐시에서 지운다.
+    그전에 받은 로그인 토큰이 끊기고 로그인 잠금이 풀린다(v1.48, services/auth.set_new_password).
+    로그에는 담당자 ID만 남긴다(토큰·이메일은 남기지 않는다, 11.8).
     """
     now = datetime.now(UTC)
     staff = db.scalars(
@@ -73,8 +78,9 @@ def confirm_reset(db: Session, token: str, new_password: str) -> None:
     ).one_or_none()
     if staff is None or staff.password_reset_expires_at is None or staff.password_reset_expires_at <= now:
         raise AppError(ErrorCode.RESET_TOKEN_INVALID)
-    staff.password_hash = hash_password(new_password)
+    set_new_password(db, staff, new_password)
     staff.password_reset_hash = None
     staff.password_reset_expires_at = None
     db.flush()
     auth_cache.invalidate(staff.id)
+    logger.info("password reset staff=%s", staff.id)
