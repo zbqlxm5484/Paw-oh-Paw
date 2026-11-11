@@ -84,6 +84,10 @@ export function toResult(o: SessionResultOut, dog: string): Result {
       if (Object.keys(m).length) mg[name] = m
     }
     applyMetrics(r, mg[pick[1]] ?? {})
+    // 다리별 쓴 걸음 수(변화 판정은 쪽마다 8번 이상일 때만, 백엔드 judge.TOLERANCE_MIN_PASSES)
+    const np: Record<string, number> = {}
+    for (const x of pick[0]!.metrics) if (x.limb !== 'NONE' && typeof x.n_passes === 'number') np[x.limb] = Math.max(np[x.limb] ?? 0, x.n_passes)
+    if (Object.keys(np).length) r.np = np
     // 대칭 점수는 서버 값을 그대로 쓴다(앱과 같은 숫자). 예전 서버라 필드가 없으면 위에서 화면 계산한 값
     if (o.symmetry_score !== undefined) r.sym = o.symmetry_score ?? 0
     r.gait = pick[1]

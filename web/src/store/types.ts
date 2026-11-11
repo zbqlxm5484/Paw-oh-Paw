@@ -115,6 +115,8 @@ export interface Result {
   fail_msg?: string
   /** 백엔드 결과만: 보행 유형(평보·속보·보행 유형 미판별)별 다리 수치. m 은 그중 대표 보행 하나 */
   mg?: Record<string, Metrics>
+  /** 백엔드 결과만: 대표 보행 묶음의 다리(LF·RF·LH·RH)별 쓴 걸음 수(n_passes 최댓값). 측정 신뢰도·남은 촬영 수(views/quality.ts) */
+  np?: Record<string, number>
   /** 백엔드 결과만: 측정 이력(15.8)에서의 순번(0 = 가장 최근). 같은 측정일 회차의 순서를 서버·앱과 맞추는 데 쓴다 */
   ord?: number
 }
