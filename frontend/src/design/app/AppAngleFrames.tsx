@@ -100,7 +100,7 @@ export function AppAngleFrames({ sessionId, gait }: { sessionId: string; gait: s
                 <img src={img} alt={`${SIDE[x.side] ?? ''} 뒷다리 무릎 ${label}`} style={{ width: '100%', display: 'block', borderRadius: 8, background: '#1B2433' }} />
                 <figcaption style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
                   <span><b>{label}</b> <b style={{ fontSize: '14px' }}>{f.deg.toFixed(1)}°</b></span>
-                  <span style={{ color: '#5B6472', fontSize: '11.5px' }}>{f.sec.toFixed(2)}초 · {f.frame}프레임</span>
+                  <span style={{ color: '#5B6472', fontSize: '12px' }}>{f.sec.toFixed(2)}초 · {f.frame}프레임</span>
                 </figcaption>
               </figure>
             ))}

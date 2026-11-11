@@ -28,7 +28,7 @@ export function mainGaitOf(r: SessionResultOut | null | undefined): 'TROT' | 'WA
 
 function Legend() {
   return (
-    <div style={{ display: 'flex', gap: '12px', fontSize: '11.5px', color: '#5B6472' }}>
+    <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: '#5B6472' }}>
       <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 3, background: BLUE, marginRight: 4 }} />왼쪽</span>
       <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 3, background: ORANGE, marginRight: 4 }} />오른쪽</span>
     </div>
@@ -61,11 +61,11 @@ function LrBars({ result }: { result: SessionResultOut }) {
                 {([[x.l, BLUE], [x.r, ORANGE]] as const).map(([v, c], i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <span style={{ height: 7, borderRadius: 4, background: c, width: `calc(${(v / mx) * 100}% - 38px)`, minWidth: 3 }} />
-                    <span style={{ fontSize: '11px', color: '#3A4250', fontVariantNumeric: 'tabular-nums' }}>{f1(v)}°</span>
+                    <span style={{ fontSize: '12px', color: '#3A4250', fontVariantNumeric: 'tabular-nums' }}>{f1(v)}°</span>
                   </div>
                 ))}
               </div>
-              <b style={{ textAlign: 'right', fontSize: '13.5px', fontVariantNumeric: 'tabular-nums' }}>{f1(Math.abs(x.l - x.r))}°</b>
+              <b style={{ textAlign: 'right', fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}>{f1(Math.abs(x.l - x.r))}°</b>
             </div>
           ))}
         </div>
@@ -90,7 +90,7 @@ function CmpList({ cmp, baseLabel }: { cmp: CompareOut | undefined; baseLabel?: 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <h3 style={H2}>지난 측정과 비교{cmp ? <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B6472', marginLeft: 6 }}>직전 회차({baseLabel || cmp.base.measured_on}) 대비</span> : null}</h3>
-      {!cmp ? <span style={{ fontSize: '12.5px', color: '#5B6472' }}>비교할 직전 회차가 없습니다.</span> : (
+      {!cmp ? <span style={{ fontSize: '13px', color: '#5B6472' }}>비교할 직전 회차가 없습니다.</span> : (
         <>
           {cmp.model_changed ? <span style={{ fontSize: '12px', color: '#5B6472' }}>분석 모델이 달라 변화는 판단하지 않고 값만 적었습니다.</span> : null}
           {sorted.map((it, i) => {
@@ -99,7 +99,7 @@ function CmpList({ cmp, baseLabel }: { cmp: CompareOut | undefined; baseLabel?: 
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 2px', borderBottom: '1px solid #F2EFEA', fontSize: '13px' }}>
                 <span style={{ flex: 1, minWidth: 0 }}><b>{NAME[it.metric_code]}</b> <span style={{ color: it.limb.startsWith('L') ? BLUE : ORANGE, fontSize: '12px', fontWeight: 600 }}>{SIDE[it.limb]}</span></span>
                 <span style={{ color: '#5B6472', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>{f1(it.base_value!)} → <b style={{ color: '#1B2433' }}>{f1(it.target_value!)}°</b></span>
-                <span style={{ height: 22, padding: '0 8px', borderRadius: 11, background: bg, color: fg, border: `1px solid ${bg === '#fff' ? '#D8D2C8' : bg}`, fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>{t}</span>
+                <span style={{ height: 22, padding: '0 8px', borderRadius: 11, background: bg, color: fg, border: `1px solid ${bg === '#fff' ? '#D8D2C8' : bg}`, fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>{t}</span>
               </div>
             )
           })}
@@ -167,18 +167,18 @@ function KneeCycle({ result }: { result: SessionResultOut }) {
       <h3 style={H2}>뒷무릎 각도 · 보행 주기</h3>
       <svg viewBox="0 0 320 150" style={{ width: '100%', display: 'block', fontFamily: 'inherit' }}>
         <g stroke="#ECE8E2" strokeDasharray="3 4">{[hi, mid, lo].map((v) => <line key={v} x1={x0} y1={Y(v)} x2={x1} y2={Y(v)} />)}</g>
-        <g fontSize="9.5" fill="#8E949C">
+        <g fontSize="12" fill="#5B6472">
           {[hi, mid, lo].map((v) => <text key={v} x={x0 - 5} y={Y(v) + 3} textAnchor="end">{v}°</text>)}
           {[0, 50, 100].map((p) => <text key={'x' + p} x={x0 + ((x1 - x0) * p) / 100} y="133" textAnchor="middle">{p}</text>)}
           <text x={(x0 + x1) / 2} y="146" textAnchor="middle">한 걸음 (뒷발 착지 → 다음 착지, %)</text>
-          <text x="10" y="66" textAnchor="middle" transform="rotate(-90 10 66)">무릎 각도</text>
+          <text x="8" y="66" textAnchor="middle" transform="rotate(-90 8 66)">무릎 각도</text>
         </g>
         <polygon points={[...pt(ref.max), ...pt(ref.min).reverse()].join(' ')} fill="#E9E6E1" opacity=".75" />
         <polyline points={line(ref.mean)} fill="none" stroke="#A0A7B2" strokeWidth="1.3" strokeDasharray="2 3" />
         {L.length ? <polyline points={line(L)} fill="none" stroke={BLUE} strokeWidth="2" /> : null}
         {R.length ? <polyline points={line(R)} fill="none" stroke="#E5604D" strokeWidth="2" strokeDasharray="5 4" /> : null}
       </svg>
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '11.5px', color: '#5B6472' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '12px', color: '#5B6472' }}>
         <span><span style={{ display: 'inline-block', width: 16, borderTop: `2px solid ${BLUE}`, verticalAlign: 'middle', marginRight: 5 }} />왼쪽</span>
         <span><span style={{ display: 'inline-block', width: 16, borderTop: '2px dashed #E5604D', verticalAlign: 'middle', marginRight: 5 }} />오른쪽</span>
         <span><span style={{ display: 'inline-block', width: 16, height: 9, background: '#E9E6E1', verticalAlign: 'middle', marginRight: 5 }} />정상 참고 범위</span>
@@ -205,13 +205,13 @@ function KneeTrend({ trend }: { trend: TrendsOut | undefined }) {
       <h3 style={H2}>무릎 가동 범위 변화</h3>
       <Legend />
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', fontFamily: 'inherit' }}>
-        {[lo, (lo + hi) / 2, hi].map((v, i) => <g key={i}><line x1={x0} x2={x1} y1={Y(v)} y2={Y(v)} stroke="#ECE8E2" strokeDasharray="3 4" /><text x={x0 - 5} y={Y(v) + 3} fontSize="9" fill="#8E949C" textAnchor="end">{Math.round(v)}</text></g>)}
-        {dates.map((d, i) => <text key={d} x={X(i)} y={H - 8} fontSize="9" fill="#8E949C" textAnchor="middle">{d.slice(5)}</text>)}
+        {[lo, (lo + hi) / 2, hi].map((v, i) => <g key={i}><line x1={x0} x2={x1} y1={Y(v)} y2={Y(v)} stroke="#ECE8E2" strokeDasharray="3 4" /><text x={x0 - 5} y={Y(v) + 3} fontSize="12" fill="#5B6472" textAnchor="end">{Math.round(v)}</text></g>)}
+        {dates.map((d, i) => <text key={d} x={X(i)} y={H - 8} fontSize="12" fill="#5B6472" textAnchor="middle">{d.slice(5)}</text>)}
         {([[lv, BLUE], [rv, ORANGE]] as const).map(([vs, c], k) => (
           <g key={k}>
             <polyline points={line(vs)} fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round" />
             {vs.map((v, i) => (v == null ? null : <circle key={i} cx={X(i)} cy={Y(v)} r={i === vs.length - 1 ? 4 : 3} fill={i === vs.length - 1 ? c : '#fff'} stroke={c} strokeWidth="2" />))}
-            {vs[vs.length - 1] != null ? <text x={X(vs.length - 1) + 6} y={Y(vs[vs.length - 1]!) + 3} fontSize="9.5" fontWeight="700" fill="#1B2433">{f1(vs[vs.length - 1]!)}°</text> : null}
+            {vs[vs.length - 1] != null ? <text x={X(vs.length - 1) + 6} y={Y(vs[vs.length - 1]!) + 3} fontSize="12" fontWeight="700" fill="#1B2433">{f1(vs[vs.length - 1]!)}°</text> : null}
           </g>
         ))}
       </svg>

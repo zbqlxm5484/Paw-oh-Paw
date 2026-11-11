@@ -40,16 +40,16 @@ export function AppOwnerSummary({ front, hind }: { front: PartLite; hind: PartLi
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <b style={{ fontSize: '15px' }}>보호자가 알아 두면 좋은 점</b>
       <div style={{ ...BOX, border: '1px solid #ECE8E2' }}>
-        <b style={{ fontSize: '13.5px', color: '#3A4250' }}>다음 방문까지 할 일</b>
+        <b style={{ fontSize: '14px', color: '#3A4250' }}>다음 방문까지 할 일</b>
         {todo.map((x) => <span key={x} style={{ fontSize: '13px', lineHeight: 1.5, paddingLeft: '10px', borderLeft: '3px solid #CFE3D6' }}>{x}</span>)}
-        {watch.length ? <b style={{ fontSize: '12.5px', color: '#5B6472', marginTop: '4px' }}>집에서 지켜봐 주세요</b> : null}
+        {watch.length ? <b style={{ fontSize: '13px', color: '#5B6472', marginTop: '4px' }}>집에서 지켜봐 주세요</b> : null}
         {watch.map((x) => <span key={x} style={{ fontSize: '13px', lineHeight: 1.5, paddingLeft: '10px', borderLeft: '3px solid #F2C9AE' }}>{x}</span>)}
       </div>
       <div style={{ ...BOX, background: '#FCEEE3', border: '1px solid #F0D2BC', color: '#8A3F12', fontSize: '13px', lineHeight: 1.55 }}>
         <b>이럴 때는 병원에 연락하세요</b>
         {CONTACT.map((u) => <span key={u}>· {u}</span>)}
       </div>
-      <span style={{ fontSize: '11px', color: '#8E949C' }}>일반적인 안내예요. 우리 아이에게 맞는 관리는 담당 수의사와 상의해 주세요.</span>
+      <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>일반적인 안내예요. 우리 아이에게 맞는 관리는 담당 수의사와 상의해 주세요.</span>
     </div>
   )
 }

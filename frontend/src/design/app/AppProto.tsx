@@ -341,7 +341,7 @@ export class AppProto extends DCLogic<Props, any> {
     const showTabs = li && ['home', 'results', 'my', 'story'].includes(sc)
     // 소개 장의 그림 높이: 4번째 장(보고서 견본) 높이에 맞추되, 짧은 폰에서는 아래 글이 잘리지 않게 화면의 절반 남짓으로 줄인다
     const storyH = Math.min(s.repH || 480, Math.max(380, Math.round(window.innerHeight * 0.5)))
-    const tbOn = (k: string) => { const on = (k === 'home' && sc === 'home') || (k === 'story' && sc === 'story') || (k === 'results' && sc === 'results') || (k === 'my' && sc === 'my'); return { bg: on ? '#F1EEE9' : 'transparent', c: on ? '#B4501A' : '#8E949C', w: on ? 700 : 500 } }
+    const tbOn = (k: string) => { const on = (k === 'home' && sc === 'home') || (k === 'story' && sc === 'story') || (k === 'results' && sc === 'results') || (k === 'my' && sc === 'my'); return { bg: on ? '#F1EEE9' : 'transparent', c: on ? '#B4501A' : '#5B6472', w: on ? 700 : 500 } }
     const dark = ['landing', 'capGuide'].includes(sc)
     const landscape = sc === 'capGuide' && s.rotDone
     const page = s.page
@@ -387,7 +387,7 @@ export class AppProto extends DCLogic<Props, any> {
     const ageOf = (d: DDog) => (d.birth ? `${now.getFullYear() - Number(d.birth)}살` : '나이 미입력')
     const prevValid = (r: DRes) => { const vv = valid(r.dog); const i = vv.findIndex((x) => x.id === r.id); return i >= 0 ? vv[i + 1] : undefined }
     const symChip = (r: DRes) => {
-      if (r.st === 'fail' || r.sym == null) return { t: '—', bg: '#F2EFEA', c: '#8E949C' }
+      if (r.st === 'fail' || r.sym == null) return { t: '—', bg: '#F2EFEA', c: '#5B6472' }
       const sv = r.sym, [bg, c] = sv >= 90 ? ['#DCEFE2', '#2E7A4F'] : sv >= 80 ? ['#FBEBC8', '#8A6100'] : ['#FBE0D9', '#C2412D']
       const p = prevValid(r), dv = p && p.sym != null ? sv - p.sym : 0
       return { t: `${sv}%`, bg, c, d: dv ? (dv > 0 ? `▲${dv}` : `▼${-dv}`) : undefined, dc: dv > 0 ? '#2E8B57' : '#C2412D' }
@@ -400,7 +400,7 @@ export class AppProto extends DCLogic<Props, any> {
       const syms = vs.map((x) => x.sym as number), lo = Math.min(...syms) - 3, hi = Math.max(...syms) + 3
       const pts = vs.map((x, i) => ({ x: Math.round(24 + i * (276 / Math.max(1, vs.length - 1))), y: Math.round(84 - (((x.sym as number) - lo) / (hi - lo)) * 64), v: x.sym as number, t: short(x.date), cur: i === vs.length - 1 }))
       const diff = syms.length > 1 ? syms[syms.length - 1] - syms[syms.length - 2] : 0
-      const [label, c] = syms.length === 1 ? ['첫 측정', '#7A808A'] : diff >= 3 ? ['좋아짐', '#2E8B57'] : diff <= -3 ? ['나빠짐', '#C2412D'] : ['비슷함', '#7A808A']
+      const [label, c] = syms.length === 1 ? ['첫 측정', '#5B6472'] : diff >= 3 ? ['좋아짐', '#2E8B57'] : diff <= -3 ? ['나빠짐', '#C2412D'] : ['비슷함', '#5B6472']
       return { has: true, pts, line: pts.map((p) => `${p.x},${p.y}`).join(' '), label, c, sym: syms[syms.length - 1] }
     }
     // 실패 회차라도 영상이 전부 분석 서버에서 실패했으면 다시 찍을 일이 아니다(서버 장애) → '분석 실패'

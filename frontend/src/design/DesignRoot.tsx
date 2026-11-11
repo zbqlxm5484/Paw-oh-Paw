@@ -290,19 +290,31 @@ function DemoPill({ screen }: { screen: string }) {
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,
-        height: '30px',
-        padding: '0 12px',
+        // 누르는 영역은 44px, 보이는 알약은 30px 그대로
+        height: '44px',
+        padding: 0,
         border: 'none',
-        borderRadius: '15px',
-        background: demo ? '#D2601A' : 'rgba(27,36,51,.55)',
-        color: '#fff',
-        fontSize: '12px',
-        fontWeight: 600,
+        background: 'transparent',
         fontFamily: 'inherit',
         cursor: 'pointer',
       }}
     >
-      {demo ? '체험 모드 · 끝내기' : '서버 없이 둘러보기'}
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          height: '30px',
+          padding: '0 12px',
+          borderRadius: '15px',
+          background: demo ? '#D2601A' : 'rgba(27,36,51,.55)',
+          color: '#fff',
+          fontSize: '12px',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {demo ? '체험 모드 · 끝내기' : '서버 없이 둘러보기'}
+      </span>
     </button>
   )
 }

@@ -84,27 +84,27 @@ export function Gait3dBody(p: Gait3dProps) {
     return mount(ctx, { box: boxRef.current, tip: tipRef.current!, real: realRef.current!, gen: genRef.current!, walk: walkRef.current!, stop: stopRef.current!, setLoading, api })
   }, [ctx, api])
 
-  const btn: CSSProperties = { height: 38, padding: '0 12px', borderRadius: 10, border: '1px solid #E2DCD3', background: '#fff', fontSize: 13.5, fontWeight: 700, color: INK, fontFamily: 'inherit', whiteSpace: 'nowrap' }
+  const btn: CSSProperties = { height: 44, padding: '0 12px', borderRadius: 10, border: '1px solid #E2DCD3', background: '#fff', fontSize: 14, fontWeight: 700, color: INK, fontFamily: 'inherit', whiteSpace: 'nowrap' }
   const group: CSSProperties = { display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: '#F1ECE5' }
   return (
     <div style={{ position: 'absolute', inset: 0, paddingTop: 36, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 'none', height: 56, display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px' }}>
         <div onClick={p.back} style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><svg width="24" height="24" viewBox="0 0 24 24"><use href="#i-back"></use></svg></div>
-        <b style={{ fontSize: 18 }}>3D 보기</b>
+        <b style={{ fontSize: 22 }}>3D 보기</b>
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: '0 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }} className="pp-s aw-col">
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, padding: '0 4px' }}>
-          <b style={{ fontSize: 20, letterSpacing: '-0.4px' }}>{p.name}</b><span style={{ fontSize: 13, color: SUB }}>{p.when}</span>
+          <b style={{ fontSize: 18, letterSpacing: '-0.4px' }}>{p.name}</b><span style={{ fontSize: 13, color: SUB }}>{p.when}</span>
         </div>
         <div style={{ position: 'relative', height: 'min(56vh, 440px)', borderRadius: 18, overflow: 'hidden', border: `1px solid ${LINE}`, background: 'radial-gradient(ellipse at 50% 42%,#FFFFFF 0%,#FBF8F4 45%,#EFE8DE 100%)', touchAction: 'none' }}>
           <div ref={boxRef} style={{ position: 'absolute', inset: 0 }} />
-          {loading !== null ? <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#7A808A', textAlign: 'center', padding: 20 }}>{!ctx ? '이 회차는 3D 로 볼 수치가 없습니다' : loading}</div> : null}
+          {loading !== null ? <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#5B6472', textAlign: 'center', padding: 20 }}>{!ctx ? '이 회차는 3D 로 볼 수치가 없습니다' : loading}</div> : null}
           {/* 측정 걸음의 출처: 이 회차 실제 측정 / 견본 */}
-          <span data-testid="gait-src" style={{ position: 'absolute', left: 10, top: 10, right: 10, width: 'fit-content', maxWidth: 'calc(100% - 20px)', padding: '4px 9px', borderRadius: 8, background: 'rgba(255,255,255,.88)', border: `1px solid ${gaitNote && !gaitNote.real ? '#F0C9A8' : LINE}`, fontSize: 11.5, lineHeight: 1.4, color: gaitNote && !gaitNote.real ? '#B4501A' : SUB, pointerEvents: 'none' }}>
+          <span data-testid="gait-src" style={{ position: 'absolute', left: 10, top: 10, right: 10, width: 'fit-content', maxWidth: 'calc(100% - 20px)', padding: '4px 9px', borderRadius: 8, background: 'rgba(255,255,255,.88)', border: `1px solid ${gaitNote && !gaitNote.real ? '#F0C9A8' : LINE}`, fontSize: 12, lineHeight: 1.4, color: gaitNote && !gaitNote.real ? '#B4501A' : SUB, pointerEvents: 'none' }}>
             {gaitNote ? gaitNote.note : '이 회차 관절 각도를 불러오는 중…'}
           </span>
-          <span style={{ position: 'absolute', left: 12, bottom: 10, fontSize: 11.5, color: '#8E949C', pointerEvents: 'none' }}>끌어서 돌리기 · 두 손가락으로 확대 · 다리를 누르면 수치</span>
-          <div ref={tipRef} style={{ position: 'absolute', display: 'none', pointerEvents: 'none', minWidth: 190, padding: '10px 12px', borderRadius: 12, background: 'rgba(27,36,51,.94)', color: '#fff', fontSize: 12.5, lineHeight: 1.55, boxShadow: '0 8px 24px rgba(27,36,51,.25)' }} />
+          <span style={{ position: 'absolute', left: 12, bottom: 10, fontSize: 12, color: '#5B6472', pointerEvents: 'none' }}>끌어서 돌리기 · 두 손가락으로 확대 · 다리를 누르면 수치</span>
+          <div ref={tipRef} style={{ position: 'absolute', display: 'none', pointerEvents: 'none', minWidth: 190, padding: '10px 12px', borderRadius: 12, background: 'rgba(27,36,51,.94)', color: '#fff', fontSize: 13, lineHeight: 1.55, boxShadow: '0 8px 24px rgba(27,36,51,.25)' }} />
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <div style={group}>
@@ -127,7 +127,7 @@ export function Gait3dBody(p: Gait3dProps) {
               <span style={{ fontSize: 14, lineHeight: 1.5 }}>{P.say}</span>
             </div>
           ))}
-          <span style={{ fontSize: 11.5, color: '#A0A7B2', lineHeight: 1.5 }}>측정 걸음은 이 회차의 관절 가동 범위·입각기 비율로 모델의 걷기 동작 폭을 맞춘 것입니다. 가동 범위가 없는 관절은 이 회차 촬영의 관절 각도(못 받으면 견본 걸음)로 채웁니다. 실제 영상의 움직임을 그대로 옮긴 것은 아닙니다.</span>
+          <span style={{ fontSize: 12, color: '#5B6472', lineHeight: 1.5 }}>측정 걸음은 이 회차의 관절 가동 범위·입각기 비율로 모델의 걷기 동작 폭을 맞춘 것입니다. 가동 범위가 없는 관절은 이 회차 촬영의 관절 각도(못 받으면 견본 걸음)로 채웁니다. 실제 영상의 움직임을 그대로 옮긴 것은 아닙니다.</span>
         </div>
       </div>
     </div>
