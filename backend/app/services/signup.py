@@ -17,7 +17,7 @@ from app.models import Staff
 from app.models.enums import StaffRole
 from app.schemas.auth import DeviceCodeVerifyOut, InstitutionBriefOut, SignupIn
 from app.services.auth import snapshot_of
-from app.services.device_codes import find_usable_code
+from app.services.device_codes import find_usable_code, is_usable_code
 
 
 def verify_code(db: Session, raw: str) -> DeviceCodeVerifyOut:
@@ -29,9 +29,13 @@ def verify_code(db: Session, raw: str) -> DeviceCodeVerifyOut:
 def signup(db: Session, data: SignupIn) -> AuthStaff:
     """가입(15.4 순서): 코드 검사 → 아이디 중복 → CLIENT 계정 생성 → 스냅샷.
 
-    입력 규칙(422)은 SignupIn이 먼저 본다. bcrypt는 DB 작업 전에 끝낸다(트랜잭션을 길게 잡지 않는다).
+    입력 규칙(422)은 SignupIn이 먼저 본다. 코드는 bcrypt보다 먼저 가볍게 본다(v1.48): 가입은 로그인 없이 부르는
+    API라, 쓸 수 없는 코드로 온 요청이 해시 계산(약 0.3초의 CPU)을 쓰지 못하게 한다. 해시를 계산한 뒤에는 코드를
+    다시 확인한다(그사이 회수됐을 수 있다). 잠근 행 없이 DB 연결만 쥐고 해시를 계산한다.
     같은 아이디로 동시에 가입해 uq_staff_login에 걸리면 409 LOGIN_ID_TAKEN이다.
     """
+    if not is_usable_code(db, data.code):
+        raise AppError(ErrorCode.DEVICE_CODE_INVALID)
     password_hash = hash_password(data.password)
     code = find_usable_code(db, data.code)
     if db.scalar(select(Staff.id).where(Staff.login_id == data.login_id)) is not None:
