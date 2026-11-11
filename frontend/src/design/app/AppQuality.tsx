@@ -1,6 +1,6 @@
 // 앱 보고서·회차 결과의 '측정 품질' 칸에 붙는 측정 신뢰도와 남은 촬영 수(QA 11-11, 285). 로직은 ./quality.ts(웹과 같은 코드)
 import type { SessionResultOut } from '../../api/types'
-import { measureQuality, sidesText } from './quality'
+import { excludeSummary, excludeTerms, excludeText, measureQuality, sidesText } from './quality'
 
 /** 보고서 수치와 같은 보행 묶음(속보 우선, 없으면 수치가 있는 첫 묶음)의 다리별 쓴 걸음 수(n_passes 최댓값) */
 export function passesByLimb(result: SessionResultOut | null | undefined): Record<string, number> | null {
@@ -19,6 +19,20 @@ export function AppQualityLine({ result, kind }: { result: SessionResultOut | nu
       <span>다리 쪽별 쓴 걸음 <b style={{ fontVariantNumeric: 'tabular-nums' }}>{sidesText(q)}</b></span>
       {q.hint ? <span style={{ color: '#A8481A' }}>{q.hint}</span> : null}
       {kind === 'v' && q.judgeNote ? <span style={{ color: '#5B6472' }}>{q.judgeNote}</span> : null}
+    </span>
+  )
+}
+
+/** 보고서 '측정 품질' 칸: 쓰지 못한 걸음과 사유별 수(서버 exclude_summary 문구 그대로, 많은 순). 제외가 없으면 숨긴다.
+ *  보호자용은 '분석에 쓰지 못한 걸음'으로 쓰고, 사유 문구에 전문 용어(측대보·보행 주기 등)가 있으면 풀이를 단다 */
+export function AppExcludeLine({ ex, kind }: { ex: readonly (readonly [string, number])[] | null | undefined; kind: 'g' | 'v' }) {
+  const s = excludeSummary(ex)
+  if (!s) return null
+  const terms = kind === 'g' ? excludeTerms(s) : []
+  return (
+    <span style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '3px', lineHeight: 1.5, color: '#5B6472' }}>
+      <span>{excludeText(s, kind === 'g' ? '분석에 쓰지 못한 걸음' : '쓰지 못한 걸음')}</span>
+      {terms.length ? <span style={{ fontSize: '11px', color: '#5B6472' }}>{terms.join(' · ')}</span> : null}
     </span>
   )
 }

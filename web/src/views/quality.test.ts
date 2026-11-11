@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_PASSES, measureQuality, sidesText } from './quality'
+import { MIN_PASSES, excludeSummary, excludeTerms, excludeText, measureQuality, sidesText } from './quality'
 
 describe('measureQuality', () => {
   it('양쪽 다 기준 이상이면 안내가 없다', () => {
@@ -25,5 +25,32 @@ describe('measureQuality', () => {
   it('다리별 수가 없으면(시연 데이터·예전 서버) null', () => {
     expect(measureQuality(undefined)).toBeNull()
     expect(measureQuality({})).toBeNull()
+  })
+})
+
+describe('excludeSummary · excludeText', () => {
+  it('사유별 수를 많은 순으로 묶고 끝 마침표를 뗀다', () => {
+    const s = excludeSummary([['중간에 멈췄습니다.', 2], ['뛰었습니다. 천천히 걷게 해 주세요.', 3], ['몸이 가려졌습니다.', 1]])!
+    expect(s.total).toBe(6)
+    expect(excludeText(s)).toBe('쓰지 못한 걸음 6번: 뛰었습니다. 천천히 걷게 해 주세요 (3번) · 중간에 멈췄습니다 (2번) · 몸이 가려졌습니다 (1번)')
+    expect(excludeText(s, '분석에 쓰지 못한 걸음')).toMatch(/^분석에 쓰지 못한 걸음 6번: /)
+  })
+
+  it('같은 문구는 합치고, 같은 수는 들어온 순서를 지킨다', () => {
+    const s = excludeSummary([['중간에 멈췄습니다.', 1], ['몸이 가려졌습니다.', 2], ['중간에 멈췄습니다.', 1]])!
+    expect(s.reasons).toEqual([{ msg: '중간에 멈췄습니다', n: 2 }, { msg: '몸이 가려졌습니다', n: 2 }])
+    expect(s.total).toBe(4)
+  })
+
+  it('제외가 없거나 0번뿐이면 null(줄을 숨긴다)', () => {
+    expect(excludeSummary([])).toBeNull()
+    expect(excludeSummary(undefined)).toBeNull()
+    expect(excludeSummary([['뛰었습니다.', 0]])).toBeNull()
+  })
+
+  it('보호자용: 사유 문구 속 전문 용어만 풀이한다', () => {
+    expect(excludeTerms(excludeSummary([['측대보라 수치 계산에서 뺐습니다.', 2], ['보행 주기가 부족해 계산하지 못했습니다.', 1]])!))
+      .toEqual(['측대보: 같은 쪽 앞발과 뒷발이 함께 움직이는 걸음', '보행 주기: 한 발이 바닥에 닿은 뒤 다시 닿을 때까지의 한 걸음'])
+    expect(excludeTerms(excludeSummary([['뛰었습니다.', 2]])!)).toEqual([])
   })
 })

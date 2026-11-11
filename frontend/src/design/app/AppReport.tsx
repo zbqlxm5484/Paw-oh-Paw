@@ -5,7 +5,7 @@
 import type { ReactNode } from 'react'
 import { AppOwnerSummary } from './AppOwnerSummary'
 import type { SessionResultOut } from '../../api/types'
-import { AppQualityLine } from './AppQuality'
+import { AppExcludeLine, AppQualityLine } from './AppQuality'
 import dogSmall from './dog/dog_small.svg?raw'
 import dogMedium from './dog/dog_medium.svg?raw'
 import dogLarge from './dog/dog_large.svg?raw'
@@ -192,7 +192,7 @@ export function AppReport(p: AppReportProps) {
       {/* 측정 품질 */}
       <div style={{ ...box({ background: '#FAF7F2' }), display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: '12.5px' }}>
         <b>측정 품질</b><span>{quality}</span>
-        {p.excluded.length ? <span style={{ color: '#5B6472' }}>뺀 이유: {p.excluded.map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
+        <AppExcludeLine ex={p.excluded} kind={p.kind === 'v' ? 'v' : 'g'} />
         <AppQualityLine result={p.result} kind={p.kind === 'v' ? 'v' : 'g'} />
       </div>
 

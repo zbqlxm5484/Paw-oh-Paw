@@ -42,3 +42,59 @@ export function measureQuality(np: Record<string, number | null | undefined> | u
 export function sidesText(q: Quality): string {
   return q.sides.map((s) => `${s.side} ${s.n ?? 0}/${MIN_PASSES}`).join(' · ')
 }
+
+// ---- 쓰지 못한 걸음의 사유별 수(285) ----
+// 백엔드 결과의 exclude_summary(사유 문구 message, 그 사유로 뺀 통과 수 count)를 한 줄로 묶는다. 사유 글은 서버 문구 그대로(끝 마침표만 뗀다).
+// 시연(브라우저) 회차는 화면이 만든 사유가 들어오고, 없으면 줄을 숨긴다.
+
+export type ExcludeReason = { msg: string; n: number }
+export interface ExcludeSummary {
+  /** 쓰지 못한 걸음(제외된 통과) 수 = 사유별 수의 합(백엔드 pass_counts.excluded 와 같다) */
+  total: number
+  /** 많은 순(같으면 들어온 순) */
+  reasons: ExcludeReason[]
+}
+
+/** [사유 문구, 수][] → 같은 문구는 합치고 많은 순으로. 합이 0이거나 비면 null(줄을 숨긴다) */
+export function excludeSummary(ex: readonly (readonly [string, number])[] | null | undefined): ExcludeSummary | null {
+  if (!ex || !ex.length) return null
+  const reasons: ExcludeReason[] = []
+  for (const [m, c] of ex) {
+    const n = Number(c)
+    if (!Number.isFinite(n) || n <= 0) continue
+    const msg = String(m ?? '').trim().replace(/[.。]+$/, '') || '사유를 알 수 없습니다'
+    const hit = reasons.find((x) => x.msg === msg)
+    if (hit) hit.n += n
+    else reasons.push({ msg, n })
+  }
+  const total = reasons.reduce((s, x) => s + x.n, 0)
+  if (!total) return null
+  // sort 는 안정 정렬이라 같은 수는 들어온 순서(서버는 이미 많은 순·코드 순)를 지킨다
+  return { total, reasons: reasons.sort((a, b) => b.n - a.n) }
+}
+
+/** "뛰었습니다. 천천히 걷게 해 주세요 (3번) · 중간에 멈췄습니다 (2번)". 사유 문구가 '…해 주세요'로 끝나기도 해서 수는 괄호에 둔다 */
+export function excludeReasonsText(s: ExcludeSummary): string {
+  return s.reasons.map((x) => `${x.msg} (${x.n}번)`).join(' · ')
+}
+
+/** "쓰지 못한 걸음 5번: 뛰었습니다. 천천히 걷게 해 주세요 (3번) · 중간에 멈췄습니다 (2번)" */
+export function excludeText(s: ExcludeSummary, lead = '쓰지 못한 걸음'): string {
+  return `${lead} ${s.total}번: ${excludeReasonsText(s)}`
+}
+
+/** 서버 사유 문구에 나올 수 있는 전문 용어와 보호자용 풀이(backend/app/report/terms.yaml jargon 의 explanation 그대로) */
+const OWNER_TERMS: [string, string][] = [
+  ['측대보', '같은 쪽 앞발과 뒷발이 함께 움직이는 걸음'],
+  ['평보', '네 발이 차례로 바닥을 딛는 느린 걸음'],
+  ['속보', '대각선 방향의 앞발과 뒷발이 함께 바닥을 딛는 빠른 걸음'],
+  ['보행 주기', '한 발이 바닥에 닿은 뒤 다시 닿을 때까지의 한 걸음'],
+  ['관절점', '영상에서 찾은 관절의 위치 점'],
+  ['유효 통과', '수치 계산에 쓸 수 있는, 매트를 옆으로 곧게 지나간 걷기 한 번'],
+]
+
+/** 보호자용: 사유 문구에 들어 있는 전문 용어의 풀이("측대보: 같은 쪽 …"). 없으면 빈 배열 */
+export function excludeTerms(s: ExcludeSummary): string[] {
+  const all = s.reasons.map((x) => x.msg).join(' ')
+  return OWNER_TERMS.filter(([t]) => new RegExp(t.split(' ').join('\\s*')).test(all)).map(([t, e]) => `${t}: ${e}`)
+}

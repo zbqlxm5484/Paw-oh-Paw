@@ -58,14 +58,39 @@ function papers(): { id: string; kind: 'g' | 'v'; t: string }[] {
       for (const kind of ['g', 'v'] as const) {
         const html = renderToStaticMarkup(<ReportPaper acct={acct} r={r} rd={v.rd} rp={v.rp} bm={bm} kind={kind} fromServer={false} />)
         out.push({ id: `${acct.id}/${r.id}`, kind, t: text(html) })
+        // 서버 결과의 제외 사유(exclude_summary 문구 전부)가 '측정 품질' 칸에 실린 경우도 같은 검사를 받는다(285)
+        if (r === acct.results.find((x) => x.st !== 'fail')) {
+          const rd = { ...v.rd, ex: SERVER_EXCLUDE }
+          const html2 = renderToStaticMarkup(<ReportPaper acct={acct} r={{ ...r, ex: SERVER_EXCLUDE }} rd={rd} rp={v.rp} bm={bm} kind={kind} fromServer={false} />)
+          out.push({ id: `${acct.id}/${r.id}/서버제외사유`, kind, t: text(html2) })
+        }
       }
     }
   }
   return out
 }
 
+/** 통과 제외 사유 코드(backend JudgeReason 중 exclude_reason 으로 쓰는 것)의 서버 문구(backend/messages/ko.yaml) */
+const EXCLUDE_CODES = ['RUNNING', 'STOPPED', 'SITTING', 'TURNED', 'TOWARD_CAMERA', 'PARTIAL_PASS', 'NORMALIZATION_LIMIT', 'NOT_SIDE_VIEW', 'OCCLUDED', 'OVERLAP', 'NO_DOG', 'GAIT_PACE', 'GAIT_OTHER', 'NOT_ENOUGH_CYCLES', 'LOW_CONFIDENCE', 'UNKNOWN_REASON']
+const SERVER_EXCLUDE: [string, number][] = (() => {
+  const ko = readFileSync(resolve(__dirname, '../../../backend/messages/ko.yaml'), 'utf-8')
+  return EXCLUDE_CODES.map((c, i) => {
+    const m = new RegExp(`^${c}:\\s*"(.*)"\\s*$`, 'm').exec(ko)
+    if (!m) throw new Error(`ko.yaml 에 ${c} 문구가 없다`)
+    return [m[1], i + 1] as [string, number]
+  })
+})()
+
 describe('웹 보고서 문구 — 백엔드 보고서 검사 목록(terms.yaml)', () => {
   const P = papers()
+
+  it('서버 제외 사유는 많은 순으로 측정 품질 칸에 실린다', () => {
+    const g = P.find((p) => p.kind === 'g' && p.id.endsWith('/서버제외사유'))!
+    const v = P.find((p) => p.kind === 'v' && p.id.endsWith('/서버제외사유'))!
+    const total = SERVER_EXCLUDE.reduce((a, [, n]) => a + n, 0)
+    expect(g.t).toContain(`분석에 쓰지 못한 걸음 ${total}번: 사유를 알 수 없습니다 (16번) · 관절점 인식이 불안정해 계산하지 못했습니다 (15번)`)
+    expect(v.t).toContain(`쓰지 못한 걸음 ${total}번: 사유를 알 수 없습니다 (16번)`)
+  })
 
   it('검사 목록과 그려 본 보고서가 있다', () => {
     expect(RULES.forbidden.length).toBeGreaterThan(10)
