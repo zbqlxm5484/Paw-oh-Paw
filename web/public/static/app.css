@@ -119,3 +119,8 @@ a.memo-card[href]:hover { border-color:#E2C9B4; }
   .tbl-opt { display: none !important; }
   .tbl-n { display: inline; }
 }
+
+/* 첫 동기화 중 표시(index.html). 화면 바탕과 같은 색, 가운데 작게 */
+.boot-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; color: #5B6472; background: #FAF9F6; }
+.boot-dot { width: 10px; height: 10px; border-radius: 5px; background: #D2601A; animation: boot-pulse 1s ease-in-out infinite; }
+@keyframes boot-pulse { 0%, 100% { opacity: .3 } 50% { opacity: 1 } }

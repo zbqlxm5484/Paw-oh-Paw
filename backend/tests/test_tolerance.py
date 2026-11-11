@@ -14,15 +14,15 @@ from app.services.tolerance import ToleranceFileError, get_tolerance, load_toler
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_the_shipped_file_has_the_provisional_values_from_the_handover_doc() -> None:
+def test_the_shipped_file_has_the_values_from_the_shot_count_analysis() -> None:
     tolerance = load_tolerance(ROOT / get_settings().TOLERANCE_FILE)
     assert tolerance == {
-        "rom_shoulder": 2.5,
-        "rom_carpus": 7.6,
+        "rom_shoulder": 5.0,
+        "rom_carpus": 11.8,
         "rom_hip": 5.0,
         "rom_stifle": 8.0,
-        "rom_tarsus": 4.0,
-        "stance_ratio": 5.0,
+        "rom_tarsus": 5.9,
+        "stance_ratio": 5.8,
     }
     assert set(tolerance) <= {metric.code for metric in METRICS}
 

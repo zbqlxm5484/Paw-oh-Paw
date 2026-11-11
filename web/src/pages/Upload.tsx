@@ -12,6 +12,7 @@ import { MAX_SHOTS } from '../config'
 import { dogOf } from '../store/db'
 import { avatar } from '../views/views'
 import { GuideModal, PetModal } from './parts/Modals'
+import { takeFiles } from '../store/uploadRetry'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -34,7 +35,8 @@ export default function Upload() {
   // 처음 고른 반려견(주소의 dog, 없으면 첫 반려견). 목록 순서는 처음 그릴 때 정해지고(고른 반려견이 맨 위) 바뀌지 않는다
   const [first] = useState(() => (acct ? dogOf(acct, dogQ) || acct.dogs[0] : undefined))
   const [selId, setSelId] = useState(first ? first.id : '')
-  const [files, setFiles] = useState<File[]>([])
+  // 업로드가 실패해 돌아왔으면 그때 고른 영상을 다시 채운다
+  const [files, setFiles] = useState<File[]>(() => takeFiles(first ? first.id : ''))
   const [demo, setDemo] = useState(demoQ)
   const [filt, setFilt] = useState('')
   // 폰으로 촬영: 먼저 연 회차와 QR 창. 폰에서 올라온 영상 수는 회차를 몇 초마다 읽어 센다

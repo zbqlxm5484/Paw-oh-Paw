@@ -8,6 +8,7 @@ import { on, f, petInputError, BACKEND, type Handler } from './actions'
 import { api, MOCK, SEX_OUT, SIZE_OUT, STAGE_OUT, KIND_OUT, CAT_OUT, syncFromBackend, syncDogChart, toDog, tokenStore, isRemote, syncAdmin } from './backend'
 import { db, dogOf, isoToday, resultOf } from './db'
 import { remember } from './sessions_backend'
+import { keepFiles } from './uploadRetry'
 import { LEGAL } from '../legal/content'
 
 /** 백엔드 처리 함수 등록: 로컬(시제품) 처리 함수보다 언제나 먼저 불린다 */
@@ -205,6 +206,14 @@ if (!MOCK) {
     if (phoneSess && phoneSess.dog_id !== dog) return redirect(`/upload?dog=${dog}`, 'QR 로 연 회차가 다른 반려견의 회차입니다. 화면을 새로 불러온 뒤 다시 시도해 주세요')
     const phoneShots = phoneSess?.shots.length ?? 0
     if (!files.length && !phoneShots) return redirect(`/upload?dog=${dog}`, '보행 영상을 1개 이상 올려 주세요')
+    // 오늘 바이탈(선택): 적은 칸만 그날 바이탈로 저장한다(PUT /dogs/{id}/vitals/{오늘}, 적은 값만 바뀜)
+    const vt = { temp_c: f(fd, 'temp').trim(), heart_rate: f(fd, 'hr').trim(), sbp: f(fd, 'sbp').trim(), dbp: f(fd, 'dbp').trim() }
+    if ([weight, ...Object.values(vt)].some((v) => v !== '' && !Number.isFinite(Number(v)))) {
+      keepFiles(dog, files)
+      return redirect(`/upload?dog=${dog}`, '체중·바이탈은 숫자로 적어 주세요')
+    }
+    const vitalBody = Object.fromEntries(Object.entries({ weight_kg: weight, ...vt }).filter(([, v]) => v !== '').map(([k, v]) => [k, Number(v)]))
+    const hasVital = Object.keys(vt).some((k) => vt[k as keyof typeof vt] !== '')
     // 회차 열기. 이미 측정 중인 회차가 있으면(앞서 업로드가 끊긴 경우 등) 그 회차에 이어서 올린다
     let sid = phoneSid, created = false
     if (!sid) {
@@ -217,14 +226,23 @@ if (!MOCK) {
         sid = open
       }
     }
+    // 바이탈은 업로드를 막지 않는다. 저장하지 못하면 알려만 준다
+    let vitalNote = ''
+    if (hasVital) await api.putVital(dog, isoToday(), vitalBody).catch((e) => { vitalNote = ` (바이탈은 저장하지 못했습니다: ${msg(e)})` })
     const n = Math.min(files.length, config.MAX_SHOTS - phoneShots)
+    let failedName = ''
     try {
-      for (const file of files.slice(0, n)) await api.uploadShot(sid, file)
+      for (const file of files.slice(0, n)) {
+        failedName = file.name
+        await api.uploadShot(sid, file)
+      }
     } catch (e) {
       // 이번에 연 회차는 지운다(413·400·연결 끊김). 남겨 두면 그 반려견이 '측정 중'에 갇힌다. 이어서 쓰던 회차는 그대로 둬 다음 업로드가 이어 쓴다
       if (created) await api.cancelSession(sid).catch(() => undefined)
       await syncFromBackend().catch(() => undefined)
-      return redirect(`/upload?dog=${dog}`, msg(e))
+      // 고른 영상은 업로드 화면으로 돌려보내 다시 고르지 않게 하고, 어느 파일에서 왜 멈췄는지 알린다
+      keepFiles(dog, files)
+      return redirect(`/upload?dog=${dog}`, `${failedName ? `'${failedName}' 올리기 실패: ` : ''}${msg(e)}`)
     }
     try {
       await api.completeSession(sid)
@@ -233,7 +251,7 @@ if (!MOCK) {
       if (!(e instanceof ApiError && e.code === 'SESSION_CLOSED')) return redirect(`/upload?dog=${dog}`, msg(e))
     }
     remember(acct, { id: sid, inst: acct.id, dog, started: Date.now(), n: n + phoneShots, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
-    return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸습니다')
+    return redirect(`/analyzing/${sid}`, (created ? '' : '측정 중이던 회차에 이어서 올렸습니다') + vitalNote)
   })
 
   // ── 반려견 차트(271): 메모·진료 기록·바이탈·진단 이력. 쓴 담당자는 서버가 로그인한 사람으로 적는다(작성자 칸은 보내지 않는다) ──

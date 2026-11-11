@@ -37,14 +37,14 @@ MEASURED_ON = "2026-11-04"
 PREVIOUS_MEASURED_ON = "2026-10-14"
 EDITIONS = ("OWNER", "VET")
 
-# config/tolerance.yaml의 임시값과 같다(15.8). 스크립트는 실제 파일 값을 넣어 준다
+# config/tolerance.yaml의 값과 같다(15.8, 11-11 권장 촬영 횟수 분석 값). 스크립트는 실제 파일 값을 넣어 준다
 PROVISIONAL_TOLERANCE: dict[str, float] = {
-    "rom_shoulder": 2.5,
-    "rom_carpus": 7.6,
+    "rom_shoulder": 5.0,
+    "rom_carpus": 11.8,
     "rom_hip": 5.0,
     "rom_stifle": 8.0,
-    "rom_tarsus": 4.0,
-    "stance_ratio": 5.0,
+    "rom_tarsus": 5.9,
+    "stance_ratio": 5.8,
 }
 
 # 14.3·14.4 사유 문구(messages/ko.yaml과 같은 글). 패키지는 문구 파일을 읽지 않으므로 입력에 넣어 준다
