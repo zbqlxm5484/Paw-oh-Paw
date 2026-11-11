@@ -32,6 +32,8 @@ export interface Note {
   important: boolean
   revs: [string, string, string][] // [at, author, text] 오래된 것부터
   rid: string
+  /** 방문일(YYYY-MM-DD). 없으면 쓴 시각(at)의 날짜 */
+  day?: string
 }
 
 export interface Image {

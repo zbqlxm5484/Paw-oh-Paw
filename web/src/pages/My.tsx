@@ -35,7 +35,7 @@ export default function My() {
             <svg width="20" height="20" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
           </a>
           <div style={css('flex:1 1 300px;min-width:0;border-radius:18px;background:#F3EEE6;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px')}>
-            <div><div style={css('font-size:16px;font-weight:700')}>측정 기기</div><div style={css('font-size:14px;color:#5B6472;margin-top:2px;font-variant-numeric:tabular-nums')}>{acct.dev && acct.dev !== '-' ? acct.dev : '측정 기기 정보는 아직 서버에 없습니다'}</div></div>
+            <div><div style={css('font-size:16px;font-weight:700')}>측정 기기</div><div style={css('font-size:14px;color:#5B6472;margin-top:2px;font-variant-numeric:tabular-nums')}>{acct.dev && acct.dev !== '-' ? acct.dev : '등록된 측정 기기가 없습니다'}</div></div>
             {acct.dev && acct.dev !== '-' ? <span style={css('height:34px;padding:0 14px;border-radius:10px;background:#E8F3EC;color:#2E8B57;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>양호</span> : <span style={css('font-size:13.5px;color:#8E949C')}>등록된 기기 없음</span>}
           </div>
         </div>

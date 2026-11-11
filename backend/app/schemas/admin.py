@@ -93,7 +93,10 @@ class InstitutionUpdate(BaseModel):
 
 
 class DeviceCodeOut(BaseModel):
-    """디바이스 코드(15.3). code는 화면 모양(XXXXX-XXXXX-XXXXX-XXXXX). 코드 전체가 든 자리는 발급 응답과 목록뿐이다."""
+    """디바이스 코드(15.3). code는 화면 모양(XXXXX-XXXXX-XXXXX-XXXXX).
+
+    코드 전체가 든 자리는 ADMIN이 받는 응답뿐이다. STAFF가 부른 코드 목록의 code는 가운데를 가린 값이다(v1.48).
+    """
 
     id: uuid.UUID
     code: str

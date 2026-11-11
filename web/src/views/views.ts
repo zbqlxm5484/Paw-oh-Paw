@@ -668,7 +668,7 @@ export function today_rows(acct: Account, dogs: Dog[], day = isoToday()) {
   if (day === isoToday()) for (const j of activeJobs(acct)) live.set(j.dog, j)
   const out = []
   for (const d of dogs) {
-    const notes = d.notes.filter((n) => n.at.startsWith(today))
+    const notes = d.notes.filter((n) => noteDay(n) === today)
     const res = acct.results.filter((r) => r.dog === d.id && r.day === today)
     const vit = d.vitals.find((v) => v.day === today)
     if (!(notes.length || res.length || vit || live.has(d.id))) continue
@@ -711,7 +711,7 @@ export function staff_rows(acct: Account, rs: Result[]) {
 /** 진료 기록·측정·바이탈이 있는 날짜(홈 달력의 점) */
 export function activity_days(acct: Account): Set<string> {
   const s = new Set<string>()
-  for (const d of acct.dogs) { for (const n of d.notes) s.add(n.at.slice(0, 10)); for (const v of d.vitals) s.add(v.day) }
+  for (const d of acct.dogs) { for (const n of d.notes) s.add(noteDay(n)); for (const v of d.vitals) s.add(v.day) }
   for (const r of acct.results) if (r.day) s.add(r.day)
   return s
 }
@@ -780,7 +780,7 @@ export function visits(acct: Account, d: Dog) {
   }
   for (const r of acct.results) if (r.dog === d.id && r.day) v(r.day).res.push(r)
   for (const x of d.vitals) v(x.day).vital = x
-  for (const gr of soap_entries(d, acct)) v('20' + gr.at.slice(0, 8).replaceAll('.', '-')).soap.push(gr)
+  for (const gr of soap_entries(d, acct)) v(gr.day).soap.push(gr)
   for (const h of d.history) v(h.day).hist.push(h)
   for (const im of d.images) v(im.day).imgs.push(im)
   const today = isoToday()
@@ -930,7 +930,7 @@ export function care_team(acct: Account, d: Dog): { doctor: string; measurer: st
 /** 차트 요약 탭: 시간 축 하나에 대칭 지수 선, 수술·재활 단계 세로선, 메모·바이탈 점. */
 export function chart_summary(acct: Account, d: Dog) {
   const vs = valid(acct, d.id).reverse().filter((r) => r.day)
-  const days = [...d.history.map((h) => h.day), ...vs.map((r) => r.day), ...d.vitals.map((v) => v.day), ...d.notes.map((n) => n.at.slice(0, 10))]
+  const days = [...d.history.map((h) => h.day), ...vs.map((r) => r.day), ...d.vitals.map((v) => v.day), ...d.notes.map((n) => noteDay(n))]
   if (!days.length) return { has: false as const }
   const t0 = ord(minBy(days, (x) => x))
   const t1 = ord(isoToday())
@@ -942,7 +942,7 @@ export function chart_summary(acct: Account, d: Dog) {
   const Y = (v: number) => pyround(T + ((hi - v) / (hi - lo)) * (H - T - B), 1)
   const marks = d.history.filter((h) => h.kind === '수술' || h.kind === '재활').map((h) => ({ x: X(h.day), kind: h.kind, label: head(h.title), day: short_day(h.day) }))
   const pts = vs.map((r) => ({ x: X(r.day), y: Y(r.sym), sym: r.sym, day: short_day(r.day), by: r.by, id: r.id }))
-  const notes = d.notes.map((n) => ({ x: X(n.at.slice(0, 10)), imp: n.important, t: cp(n.text).slice(0, 40).join(''), day: short_day(n.at.slice(0, 10)) }))
+  const notes = d.notes.map((n) => ({ x: X(noteDay(n)), imp: n.important, t: cp(n.text).slice(0, 40).join(''), day: short_day(noteDay(n)) }))
   const vit = d.vitals.map((v) => ({ x: X(v.day) }))
   const ticks = []
   for (let k = 0; k < 6; k++) {
@@ -969,6 +969,8 @@ export function chart_summary(acct: Account, d: Dog) {
 
 export interface NoteRow {
   id: string
+  /** 방문일 YYYY-MM-DD */
+  day: string
   at: string
   author: string
   cat: string
@@ -980,6 +982,9 @@ export interface NoteRow {
   revs: { at: string; author: string; text: string }[]
 }
 
+/** 메모·진료 기록의 방문일: 서버 방문일(visited_on), 없으면 쓴 날 */
+export const noteDay = (n: { day?: string; at: string }): string => n.day || n.at.slice(0, 10)
+
 export function note_rows(d: Dog, acct?: Account | null): NoteRow[] {
   const run_label = (rid: string) => {
     // 회차 메모면 "10.25 · 5회차"
@@ -987,7 +992,7 @@ export function note_rows(d: Dog, acct?: Account | null): NoteRow[] {
     return r ? `${short(r.date)} · ${sess_no(acct!, r)}회차` : ''
   }
   return sorted(d.notes, (n) => [n.important, n.at], true).map((n) => ({ // 중요 메모 먼저, 그 안에서 최신순
-    id: n.id, at: dotAt(n.at), author: n.author, cat: n.cat, text: n.text,
+    id: n.id, day: noteDay(n), at: dotAt(n.at), author: n.author, cat: n.cat, text: n.text,
     imp: n.important, rid: n.rid, run: run_label(n.rid),
     soap: (SOAP[n.cat] ?? ['', ''])[0],
     revs: n.revs.map(([a, w, t]) => ({ at: dotAt(a), author: w, text: t })),
@@ -995,6 +1000,8 @@ export function note_rows(d: Dog, acct?: Account | null): NoteRow[] {
 }
 
 export interface SoapEntry {
+  /** 방문일 YYYY-MM-DD */
+  day: string
   at: string
   author: string
   rid: string
@@ -1009,8 +1016,8 @@ export function soap_entries(d: Dog, acct?: Account | null): SoapEntry[] {
   const groups = new Map<string, SoapEntry>()
   for (const n of note_rows(d, acct)) {
     if (!(n.cat in SOAP)) continue // 메모(주의·보호자·예약·기타)는 진료 기록이 아니다
-    const key = JSON.stringify([n.at, n.author, n.rid])
-    if (!groups.has(key)) groups.set(key, { at: n.at, author: n.author, rid: n.rid, run: n.run, imp: false, parts: [] })
+    const key = JSON.stringify([n.day, n.at, n.author, n.rid])
+    if (!groups.has(key)) groups.set(key, { day: n.day, at: n.at, author: n.author, rid: n.rid, run: n.run, imp: false, parts: [] })
     const gr = groups.get(key)!
     gr.imp = gr.imp || n.imp
     gr.parts.push(n)

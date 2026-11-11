@@ -4,6 +4,7 @@
 11.3 "프로세스 메모리에 상태를 두지 않는다"의 유일한 예외다. DB 값의 늦은 사본일 뿐이라 어느 프로세스에서 읽어도
 같은 답이 나오고, 지워져도 다시 읽으면 된다. 프로세스 사이에서 공유해야 하면 이 모듈만 Redis로 바꾼다(3절).
 대가: 계정 중지·계약 만료·역할 변경이 최대 TTL만큼 늦게 반영된다(10절 Q28). 토큰 만료는 캐시와 상관없이 즉시다.
+비밀번호를 바꾼 뒤 옛 토큰을 끊는 것도 다른 프로세스에서는 최대 TTL만큼 늦다(v1.48).
 
 Spring에 빗대면 UserDetails를 Caffeine 캐시에 두고, isAccountNonExpired()는 꺼낼 때마다 평가하는 것이다.
 """
@@ -14,7 +15,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from app.core.config import get_settings
 from app.core.dates import contract_status as compute_contract_status
@@ -47,6 +48,8 @@ class AuthStaff:
     institution_name: str
     contract_ends_at: date | None
     notif_on: bool = True
+    # 비밀번호를 마지막으로 바꾼 시각(12.5, v1.48). 이보다 먼저 받은 토큰은 get_current_staff가 돌려보낸다
+    password_changed_at: datetime | None = None
 
     @property
     def contract_status(self) -> str:

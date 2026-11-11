@@ -8,6 +8,7 @@ import uuid
 from fastapi import APIRouter, status
 
 from app.api.deps import AdminStaff, AnalysisClientDep, CreamoffStaff, DbSession
+from app.models.enums import StaffRole
 from app.schemas.admin import (
     DeviceCodeCreate,
     DeviceCodeListOut,
@@ -55,7 +56,9 @@ def update_institution(
 
 @router.get("/institutions/{institution_id}/device-codes", response_model=DeviceCodeListOut)
 def list_device_codes(institution_id: uuid.UUID, staff: CreamoffStaff, db: DbSession) -> DeviceCodeListOut:
-    return DeviceCodeListOut(items=admin_service.list_device_codes(db, institution_id))
+    """코드 전체는 ADMIN만 본다. 조회만 하는 STAFF에게는 가운데를 가린 값을 준다(15.9, v1.48)."""
+    full = staff.role == StaffRole.ADMIN
+    return DeviceCodeListOut(items=admin_service.list_device_codes(db, institution_id, show_full_code=full))
 
 
 @router.post(
@@ -65,7 +68,7 @@ def create_device_code(
     institution_id: uuid.UUID, staff: AdminStaff, db: DbSession, body: DeviceCodeCreate | None = None
 ) -> DeviceCodeOut:
     """본문을 비워도 된다(메모 없음). 기관에 쓸 수 있는 코드가 이미 있으면 409다(15.9)."""
-    return admin_service.create_device_code(db, institution_id, body or DeviceCodeCreate())
+    return admin_service.create_device_code(db, institution_id, body or DeviceCodeCreate(), actor_id=staff.id)
 
 
 @router.patch("/device-codes/{device_code_id}", response_model=DeviceCodeOut)
@@ -78,7 +81,7 @@ def update_device_code(
 @router.post("/device-codes/{device_code_id}/revoke", response_model=DeviceCodeOut)
 def revoke_device_code(device_code_id: uuid.UUID, staff: AdminStaff, db: DbSession) -> DeviceCodeOut:
     """본문 없음. 멱등: 이미 회수됐으면 그대로 200."""
-    return admin_service.revoke_device_code(db, device_code_id)
+    return admin_service.revoke_device_code(db, device_code_id, actor_id=staff.id)
 
 
 # ---- 계정 ----

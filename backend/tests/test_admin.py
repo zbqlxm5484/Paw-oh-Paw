@@ -1,5 +1,6 @@
 """크림오프 관리자 API(11.6 역할 검사·무효화, 13.6, 15.9, 17.2 BE-23·BE-24)."""
 
+import logging
 import uuid
 from collections.abc import Iterator
 from datetime import timedelta
@@ -312,6 +313,50 @@ def test_one_usable_code_per_institution(client: TestClient, admin_headers: dict
     assert _signup(client, first.json()["code"], "kim02").status_code == 404
     assert _signup(client, second.json()["code"], "kim02").status_code == 201
     assert _login(client, "kim01").status_code == 200
+
+
+def test_code_list_is_masked_for_staff_and_full_for_admin(
+    client: TestClient, admin_headers: dict, worker_headers: dict, staff
+) -> None:
+    """v1.48(15.9): 코드 전체는 ADMIN만 본다. 조회만 하는 STAFF의 목록에는 가운데 두 묶음을 가린 값이 온다."""
+    base = f"{INSTITUTIONS}/{staff.institution_id}/device-codes"
+    issued = client.post(base, json={"note": "1호기"}, headers=admin_headers).json()
+    full = issued["code"]
+    masked = f"{full[:5]}-*****-*****-{full[-5:]}"
+
+    assert client.get(base, headers=admin_headers).json()["items"] == [issued]
+    for_worker = client.get(base, headers=worker_headers)
+    assert for_worker.status_code == 200
+    # code만 다르고 나머지 칸과 모양은 같다
+    assert for_worker.json()["items"] == [{**issued, "code": masked}]
+    assert full not in for_worker.text
+    assert full.replace("-", "") not in for_worker.text
+
+    # 회수한 코드도 가린다
+    assert client.post(f"{ADMIN}/device-codes/{issued['id']}/revoke", headers=admin_headers).status_code == 200
+    [revoked] = client.get(base, headers=worker_headers).json()["items"]
+    assert revoked["code"] == masked and revoked["revoked_at"] is not None
+    assert client.get(base, headers=admin_headers).json()["items"][0]["code"] == full
+
+
+def test_issue_and_revoke_are_logged_with_ids_only(
+    client: TestClient, creamoff: dict[str, Staff], admin_headers: dict, staff, caplog: pytest.LogCaptureFixture
+) -> None:
+    """11.8(v1.48): 코드 발급·회수는 누가 했는지 ID로 남고, 코드 값은 로그에 없다.
+
+    이미 회수한 코드를 다시 회수해도(멱등) 로그를 또 남기지 않는다.
+    """
+    base = f"{INSTITUTIONS}/{staff.institution_id}/device-codes"
+    with caplog.at_level(logging.DEBUG):
+        issued = client.post(base, json={"note": "비밀 메모"}, headers=admin_headers).json()
+        revoke_url = f"{ADMIN}/device-codes/{issued['id']}/revoke"
+        assert client.post(revoke_url, headers=admin_headers).status_code == 200
+        assert client.post(revoke_url, headers=admin_headers).status_code == 200
+    who = f"institution={staff.institution_id} by={creamoff['admin'].id}"
+    assert f"device code issued code={issued['id']} {who}" in caplog.text
+    assert caplog.text.count(f"device code revoked code={issued['id']} {who}") == 1
+    for secret in (issued["code"], issued["code"].replace("-", ""), "비밀 메모", "boss"):
+        assert secret not in caplog.text
 
 
 def test_the_index_stops_a_second_usable_code(db: Session, staff) -> None:
