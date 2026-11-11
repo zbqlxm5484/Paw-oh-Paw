@@ -12,11 +12,12 @@ export function OwnerChangeStrip({ acct, r, gait }: { acct: Account; r: Result; 
   const ch = ownerChange(acct, r, gait)
   if (!ch) return null
   const any = ch.legs.some((x) => x.joints.length)
+  const allShort = ch.legs.filter((x) => x.compared).every((x) => x.short)
   return (
     <div style={css('display:flex;flex-direction:column;gap:8px;padding:14px 18px;border-radius:12px;border:1px solid #ECE8E2')}>
       <span style={css('display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13.5px;font-weight:700')}>
         <span>{ch.baseLabel}({ch.baseDate})와 비교</span>
-        <span style={css('font-weight:600;color:#5B6472')}>{ch.modelChanged ? '분석 방식이 달라 값만 견줄 수 있어요' : any ? '달라진 다리만 주황으로 표시했어요' : '네 다리 모두 오차 범위 안이에요'}</span>
+        <span style={css('font-weight:600;color:#5B6472')}>{ch.modelChanged ? '분석 방식이 달라 값만 견줄 수 있어요' : allShort ? '쓴 걸음 수가 모자라 값만 견줄 수 있어요' : any ? '달라진 다리만 주황으로 표시했어요' : '네 다리 모두 오차 범위 안이에요'}</span>
       </span>
       <div style={css('display:grid;grid-template-columns:repeat(4,1fr);gap:8px')}>
         {ORDER.map((code) => {

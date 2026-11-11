@@ -5,6 +5,7 @@ describe('ownerSummary', () => {
   it('legNote: 비교 값 없음·범위 안·달라진 관절', () => {
     expect(legNote({ code: 'LF', joints: [], compared: false })).toBe('비교할 값 없음')
     expect(legNote({ code: 'LF', joints: [], compared: true })).toBe('범위 안')
+    expect(legNote({ code: 'LF', joints: [], compared: true, short: true })).toBe('걸음 수 부족(8번 미만), 값만 비교')
     expect(legNote({ code: 'RH', joints: [{ n: '무릎', dir: '증가', d: 9.4 }, { n: '고관절', dir: '증가', d: 6.6 }], compared: true })).toBe('무릎 증가 · 고관절 증가')
   })
   it('ownerAdvice: 기존 안내를 할 일·지켜볼 것·연락 기준으로 나눔', () => {

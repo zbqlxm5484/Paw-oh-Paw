@@ -4,6 +4,7 @@
 import { dogOf } from '../store/db'
 import type { Account, Result } from '../store/types'
 import { base_of } from './views'
+import { MIN_PASSES } from './quality'
 import { gaitsOf, JOINTS, previousOf, TOLERANCE } from './vet'
 import type { OwnerGuide } from './views'
 
@@ -16,6 +17,8 @@ export interface LegChange {
   joints: { n: string; dir: '증가' | '감소'; d: number }[]
   /** 비교할 값이 하나라도 있었는지 */
   compared: boolean
+  /** 두 회차 중 한쪽이라도 이 다리의 쓴 걸음이 MIN_PASSES 보다 적어 변화를 판단하지 않았으면 true(백엔드 judge.usable_tolerance 와 같은 규칙) */
+  short?: boolean
 }
 
 export interface OwnerChange {
@@ -51,10 +54,14 @@ export function ownerChange(acct: Account, r: Result, gait: string): OwnerChange
   const bm = Object.fromEntries(gaitsOf(base))[gait]
   if (!tm || !bm) return null
   const modelChanged = !!(base.model && r.model && base.model !== r.model)
+  // 걸음 수(np)는 백엔드 결과에만 있다. 있으면 두 회차 모두 그 다리가 MIN_PASSES 이상일 때만 변화를 판단한다(모르면 부족으로 본다)
+  const hasNp = !!(r.np || base.np)
+  const shortOf = (code: LegCode) => hasNp && ((r.np?.[code] ?? 0) < MIN_PASSES || (base!.np?.[code] ?? 0) < MIN_PASSES)
   const legs: LegChange[] = (['LF', 'RF', 'LH', 'RH'] as LegCode[]).map((code) => {
     const fh = code[1]
     const joints: LegChange['joints'] = []
     let compared = false
+    const short = shortOf(code)
     for (const [mc, n, , part] of JOINTS) {
       if (part !== fh) continue
       const b = val(bm, mc, code), t = val(tm, mc, code)
@@ -62,10 +69,10 @@ export function ownerChange(acct: Account, r: Result, gait: string): OwnerChange
       compared = true
       const tol = TOLERANCE[mc]
       const dd = r1(t - b)
-      if (modelChanged || tol == null || Math.abs(dd) <= tol) continue
+      if (modelChanged || short || tol == null || Math.abs(dd) <= tol) continue
       joints.push({ n, dir: dd > 0 ? '증가' : '감소', d: dd })
     }
-    return { code, joints, compared }
+    return { code, joints, compared, short }
   })
   if (!legs.some((x) => x.compared)) return null
   const day = base.day || ''
@@ -75,6 +82,7 @@ export function ownerChange(acct: Account, r: Result, gait: string): OwnerChange
 /** 다리 한 칸의 짧은 설명 */
 export function legNote(x: LegChange): string {
   if (!x.compared) return '비교할 값 없음'
+  if (x.short) return `걸음 수 부족(${MIN_PASSES}번 미만), 값만 비교`
   if (!x.joints.length) return '범위 안'
   return x.joints.map((j) => `${j.n} ${j.dir}`).join(' · ')
 }
