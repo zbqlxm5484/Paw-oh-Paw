@@ -96,7 +96,7 @@ smoke:
 # ---------- deploy ----------
 # 무중단(blue-green) 배포 + 실패 시 자동 원복. 동작은 infra/ci/deploy.sh 참고
 # 환경 2벌: master=운영(compose 프로젝트 creamoff, 포트 8080, 변수 ENV_FILE, 수동 배포),
-#           develop=개발(compose 프로젝트 creamoff-dev, 포트 8081, 변수 ENV_FILE_DEV, 자동 배포).
+#           develop=개발(compose 프로젝트 creamoff-dev, 포트 8082, 변수 ENV_FILE_DEV, 자동 배포).
 # 프로젝트명이 달라 DB·Redis·업로드 볼륨이 서로 분리된다. 같은 EC2 한 대에서 둘이 동시에 돈다
 deploy_prod:
   stage: deploy
@@ -113,8 +113,8 @@ deploy_dev:
   resource_group: creamoff-dev-server # 개발 배포 동시 실행 방지(운영과 별도 그룹)
   variables:
     COMPOSE_PROJECT: creamoff-dev
-    NGINX_PORT: "8081"                # compose.yaml 의 nginx 호스트 포트
-    PUBLIC_URL: http://127.0.0.1:8081
+    NGINX_PORT: "8082"                # compose.yaml 의 nginx 호스트 포트
+    PUBLIC_URL: http://127.0.0.1:8082
   rules:
     - if: $CI_COMMIT_BRANCH == "develop"
   script:
