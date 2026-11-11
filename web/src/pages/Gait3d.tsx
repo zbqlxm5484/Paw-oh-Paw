@@ -159,7 +159,7 @@ export default function Gait3d() {
           <div style={css('flex:1 1 640px;min-width:0;position:relative;border-radius:18px;overflow:hidden;background:radial-gradient(ellipse at 50% 42%,#FFFFFF 0%,#FBF8F4 45%,#EFE8DE 100%);border:1px solid #ECE8E2;height:560px')}>
             <div id="view" ref={viewRef} style={css('position:absolute;inset:0')}></div>
             {loading !== null ? <div id="loading" style={css('position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;color:#7A808A')}>{loading}</div> : null}
-            <div style={css('position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)')}>
+            <div className="g3d-tb g3d-tb-l" style={css('position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)')}>
               <button className="bt seg-mode" id="mode-real" ref={realRef} type="button" onClick={() => api.current?.setMode('real')} style={css('height:36px;padding:0 14px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>측정 걸음</button>
               <button className="bt seg-mode" id="mode-gen" ref={genRef} type="button" onClick={() => api.current?.setMode('gen')} style={css('height:36px;padding:0 14px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>일반 걸음</button>
               <span style={css('width:1px;height:22px;background:#E2DCD3;margin:0 4px')}></span>
@@ -169,12 +169,12 @@ export default function Gait3d() {
               <button className="bt" id="ghost" ref={ghostRef} type="button" title={pv.ctx.ghost ? `${pv.ctx.ghost.label}을 반투명 파란색으로 겹쳐 걷습니다` : '겹쳐 볼 기준 회차가 없어요(이 회차가 기준 회차)'} onClick={() => { const on = !ghostOn; setGhostOn(on); api.current?.setGhost(on) }} style={css('height:36px;padding:0 14px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>기준 회차 겹치기</button>
             </div>
             {/* 보는 각도: 추천 각도에 표시, 누르면 그 방향으로 카메라를 옮긴다 */}
-            <div style={css('position:absolute;right:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)')}>
+            <div className="g3d-tb g3d-tb-r" style={css('position:absolute;right:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)')}>
               {VIEWS.map(([k, label]) => (
                 <button key={k} className="bt view-btn" type="button" data-view={k} onClick={() => setView(k)} style={css(`height:34px;padding:0 11px;border-radius:9px;border:1px solid ${k === view.main ? '#D2601A' : '#E2DCD3'};background:#fff;color:${k === view.main ? '#B4501A' : '#1B2433'};font-size:13px;font-weight:700`)}>{label}{k === view.main ? ' ★' : k === view.sub ? ' ☆' : ''}</button>
               ))}
             </div>
-            <span style={css('position:absolute;left:14px;bottom:12px;font-size:12.5px;color:#8E949C')}>끌어서 돌리기 · 휠로 확대 · 다리에 마우스를 올리면 수치</span>
+            <span className="g3d-hint" style={css('position:absolute;left:14px;bottom:12px;font-size:12.5px;color:#8E949C')}>끌어서 돌리기 · 휠로 확대 · 다리에 마우스를 올리면 수치</span>
             {/* 측정 걸음의 출처: 이 회차 실제 측정 / 견본 */}
             <span id="gait-src" style={css(`position:absolute;right:14px;bottom:10px;max-width:calc(100% - 330px);padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.9);border:1px solid ${gaitNote && !gaitNote.real ? '#F0C9A8' : '#ECE8E2'};font-size:12px;line-height:1.4;color:${gaitNote && !gaitNote.real ? '#B4501A' : '#5B6472'};pointer-events:none;text-align:right`)}>{gaitNote ? gaitNote.note : '이 회차 관절 각도를 불러오는 중…'}</span>
             <div id="tip" ref={tipRef} style={css('position:absolute;display:none;pointer-events:none;min-width:200px;padding:10px 12px;border-radius:12px;background:rgba(27,36,51,.94);color:#fff;font-size:13px;line-height:1.55;box-shadow:0 8px 24px rgba(27,36,51,.25)')}></div>
