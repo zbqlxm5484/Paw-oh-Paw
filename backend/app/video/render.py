@@ -62,11 +62,21 @@ FACE_TILE_OVERLAP = 0.2
 # 0.06뿐이고(0.7이면 2개를 놓친다), 0.5는 24/24에 오탐 1(같은 사람의 턱 아래 상자라 가려도 해가 없다), 0.4는 오탐 5
 # (개 몸통 위 1). 얼굴을 놓치는 쪽이 엉뚱한 곳을 가리는 쪽보다 나쁘다(150 리뷰)
 FACE_SCORE_THRESHOLD = 0.5
+# 얼마 전까지 얼굴을 확실히 찾았던 자리에서는 이 점수부터 얼굴로 본다(FaceDetector.detect_tracked의 near). 고개를
+# 숙이거나 돌리는 동안 같은 얼굴의 점수가 0.3~0.5로 내려간다(시연 영상 제니 01번의 18~28번 프레임: 0.30~0.49).
+# 새 얼굴을 찾는 문턱(FACE_SCORE_THRESHOLD)은 그대로라 엉뚱한 곳을 새로 가리지는 않는다(277)
+FACE_TRACK_SCORE_THRESHOLD = 0.3
+# 확실히 찾은 얼굴의 자리를 이 시간 동안 기억한다(FaceTracker.anchors). 자리는 그대로 두고 옮기지 않는다. 낮은 점수
+# 검출이 자리를 넘겨받으면 얼굴 옆을 지나가는 개 머리 같은 오탐을 따라가며 가릴 수 있다
+FACE_TRACK_SEC = 1.0
 FACE_NMS_THRESHOLD = 0.3
 # 찾은 상자를 사방으로 이만큼 넓혀 가린다(머리카락·턱·옆얼굴)
 FACE_MARGIN = 0.3
 # 검출이 끊겨도 이 시간 동안은 마지막 자리를 계속 가린다. 한 프레임만 놓쳐도 얼굴이 드러나기 때문이다
 FACE_HOLD_SEC = 0.5
+# 유지 중인 상자는 새 검출이 그 넓이의 이만큼을 덮을 때만 버린다. 조금 겹치는 옆 상자(머리카락·어깨의 오탐)가 진짜
+# 얼굴 상자를 밀어내면 그 얼굴이 드러난다(277: 제니 01번 22~29번 프레임, 0.27초). 덮지 못하면 둘 다 가린다
+FACE_REPLACE_COVERAGE = 0.9
 # 검출은 이 간격으로만 하고 사이 프레임은 FaceTracker가 마지막 상자로 가린다(150 리뷰). 60fps는 3프레임, 30fps는
 # 2프레임마다다. 1080p 60fps 480프레임 렌더가 47초에서 20초가 됐고 가려진 프레임 수는 같았다(detect_interval_frames)
 FACE_DETECT_INTERVAL_SEC = 0.05
@@ -80,6 +90,7 @@ FACE_BLUR_SIGMA_RATIO = 1 / 8
 Point = tuple[float, float] | None
 Box = tuple[int, int, int, int]  # 프레임 픽셀의 x0, y0, x1, y1(끝은 포함하지 않음)
 FaceFinder = Callable[[np.ndarray], Sequence[Box]]  # 프레임(BGR) → 얼굴 상자 목록
+FaceMasks = Callable[[int], Sequence[Box]]  # 프레임 번호 → 검출과 상관없이 가릴 상자(render_video의 extra_faces)
 
 # 22점 연결(0부터). ai/data_prep/aihub_to_coco.py의 SKELETON(1부터)을 0부터로 옮긴 것이다.
 SKELETON: tuple[tuple[int, int], ...] = (
@@ -361,9 +372,11 @@ class FaceDetector:
         *,
         detect_width: int = FACE_DETECT_WIDTH,
         score_threshold: float = FACE_SCORE_THRESHOLD,
+        track_score_threshold: float = FACE_TRACK_SCORE_THRESHOLD,
     ) -> None:
         self.detect_width = detect_width
         self.score_threshold = score_threshold
+        self.track_score_threshold = min(track_score_threshold, score_threshold)
         if not model_path.is_file():
             raise VideoRenderError("얼굴 검출 모델 파일이 없습니다")
         # OpenCV 5.0은 모델을 열 때 엔진 안내를 표준 오류에 찍을 수 있다. 동작과 무관하고 자식 프로세스 로그를
@@ -395,8 +408,21 @@ class FaceDetector:
         half = regressors[0, :, 2:4] / FACE_INPUT_SIZE / 2
         return np.concatenate([centers - half, centers + half], axis=1), scores
 
-    def detect(self, frame: np.ndarray) -> list[Box]:
-        """frame(BGR)의 얼굴 상자(원래 프레임 좌표). 폭이 detect_width보다 크면 줄여서 찾고 상자를 되돌린다."""
+    def detect(self, frame: np.ndarray, near: Sequence[Box] = ()) -> list[Box]:
+        """frame(BGR)의 얼굴 상자(원래 프레임 좌표). 폭이 detect_width보다 크면 줄여서 찾고 상자를 되돌린다.
+
+        near를 주면 그 자리의 낮은 점수 검출도 함께 돌려준다(detect_tracked).
+        """
+        strong, weak = self.detect_tracked(frame, near)
+        return strong + weak
+
+    def detect_tracked(self, frame: np.ndarray, near: Sequence[Box] = ()) -> tuple[list[Box], list[Box]]:
+        """(확실한 검출, near 자리의 낮은 점수 검출). 둘 다 원래 프레임 좌표이고 점수 높은 순이다.
+
+        확실한 검출은 점수가 score_threshold 이상인 상자다. near는 얼마 전까지 얼굴을 확실히 찾았던 자리
+        (FaceTracker.anchors)이고, 그 자리와 겹치는(_overlaps) 후보는 track_score_threshold부터 얼굴로 본다. 고개를
+        숙이거나 돌려 점수가 내려간 같은 얼굴을 놓치지 않으려는 것이다. near가 비면 낮은 점수 검출은 없다.
+        """
         height, width = frame.shape[:2]
         if width > self.detect_width:
             ratio = self.detect_width / width
@@ -405,6 +431,8 @@ class FaceDetector:
         else:
             ratio, small = 1.0, frame
         small_height, small_width = small.shape[:2]
+        places = [[value * ratio for value in box] for box in near]  # 줄인 프레임 좌표로
+        floor = self.track_score_threshold if places else self.score_threshold
         found: list[list[float]] = []  # 줄인 프레임 좌표의 x0, y0, x1, y1
         found_scores: list[float] = []
         try:
@@ -416,13 +444,19 @@ class FaceDetector:
                 pad_x, pad_y = (side - crop_width) // 2, (side - crop_height) // 2
                 square[pad_y : pad_y + crop_height, pad_x : pad_x + crop_width] = crop
                 boxes, scores = self._infer(square)
-                for index in np.flatnonzero(scores >= self.score_threshold):
+                for index in np.flatnonzero(scores >= floor):
                     bx0, by0, bx1, by1 = (boxes[index] * side).tolist()
-                    found.append([bx0 - pad_x + x0, by0 - pad_y + y0, bx1 - pad_x + x0, by1 - pad_y + y0])
-                    found_scores.append(float(scores[index]))
+                    candidate = [bx0 - pad_x + x0, by0 - pad_y + y0, bx1 - pad_x + x0, by1 - pad_y + y0]
+                    score = float(scores[index])
+                    # 낮은 점수 후보는 얼굴이 있던 자리와 겹칠 때만 남긴다. NMS 전에 걸러야 버릴 후보가 남길 후보를
+                    # 밀어내지 않는다
+                    if score >= self.score_threshold or any(_overlaps(candidate, place) for place in places):
+                        found.append(candidate)
+                        found_scores.append(score)
         except cv2.error as error:
             raise VideoRenderError("얼굴 검출에 실패했습니다") from error
-        result: list[Box] = []
+        strong: list[Box] = []
+        weak: list[Box] = []
         for index in _nms(found, found_scores, FACE_NMS_THRESHOLD):
             bx0, by0, bx1, by1 = found[index]
             box = (
@@ -432,12 +466,12 @@ class FaceDetector:
                 min(height, math.ceil(by1 / ratio)),
             )
             if box[2] > box[0] and box[3] > box[1]:
-                result.append(box)
-        return result
+                (strong if found_scores[index] >= self.score_threshold else weak).append(box)
+        return strong, weak
 
 
-def _overlaps(a: Box, b: Box) -> bool:
-    """겹치는 넓이가 작은 쪽 상자의 절반 이상이면 같은 얼굴로 본다."""
+def _overlaps(a: Sequence[float], b: Sequence[float]) -> bool:
+    """겹치는 넓이가 작은 쪽 상자의 절반 이상이면 같은 얼굴 자리로 본다(낮은 점수 검출을 이어 받는 기준)."""
     width = min(a[2], b[2]) - max(a[0], b[0])
     height = min(a[3], b[3]) - max(a[1], b[1])
     if width <= 0 or height <= 0:
@@ -446,19 +480,52 @@ def _overlaps(a: Box, b: Box) -> bool:
     return smaller <= 0 or width * height * 2 >= smaller
 
 
+def _covers(new: Box, old: Box, coverage: float = FACE_REPLACE_COVERAGE) -> bool:
+    """new가 old 넓이의 coverage 이상을 덮는가. 덮으면 old를 따로 가릴 필요가 없다."""
+    width = min(new[2], old[2]) - max(new[0], old[0])
+    height = min(new[3], old[3]) - max(new[1], old[1])
+    area = (old[2] - old[0]) * (old[3] - old[1])
+    if width <= 0 or height <= 0 or area <= 0:
+        return False
+    return width * height >= area * coverage
+
+
+def _covered(old: Box, found: Sequence[Box]) -> bool:
+    """found 가운데 old를 덮는 상자가 있는가."""
+    return any(_covers(new, old) for new in found)
+
+
 class FaceTracker:
-    """검출이 끊긴 상자를 hold_frames 프레임 더 가린다(FACE_HOLD_SEC). 같은 자리의 새 검출은 묵은 상자를 대신한다."""
+    """가릴 상자를 프레임 사이에 이어 준다.
 
-    def __init__(self, hold_frames: int) -> None:
+    - 검출이 끊긴 상자를 hold_frames 프레임 더 가린다(FACE_HOLD_SEC).
+    - 새 검출이 유지 중인 상자를 거의 다 덮으면(FACE_REPLACE_COVERAGE) 묵은 상자를 버린다. 덮지 못하면 둘 다 가린다.
+      조금 겹치는 옆 상자가 진짜 얼굴 상자를 밀어내지 못하게 하려는 것이다.
+    - 확실한 검출의 자리를 track_frames 프레임 동안 기억한다(anchors, FACE_TRACK_SEC). 검출기는 그 자리의 낮은 점수
+      검출도 얼굴로 본다(FaceDetector.detect_tracked). 낮은 점수 검출은 가리기만 하고 자리로 기억하지 않는다.
+    """
+
+    def __init__(self, hold_frames: int, track_frames: int = 0) -> None:
         self.hold_frames = max(0, hold_frames)
+        self.track_frames = max(0, track_frames)
         self._held: list[tuple[Box, int]] = []  # (상자, 앞으로 더 가릴 프레임 수)
+        self._anchors: list[tuple[Box, int]] = []  # (확실한 검출의 상자, 앞으로 더 기억할 프레임 수)
 
-    def update(self, detected: Sequence[Box]) -> list[Box]:
-        """이번 프레임의 검출 결과를 넣고 이번 프레임에서 가릴 상자 전부(검출 + 유지 중)를 돌려준다."""
-        aged = [
-            (box, left - 1) for box, left in self._held if left > 0 and not any(_overlaps(box, new) for new in detected)
-        ]
-        self._held = [(box, self.hold_frames) for box in detected] + aged
+    def anchors(self) -> list[Box]:
+        """얼마 전까지 얼굴을 확실히 찾았던 자리. 다음 검출에 near로 넘긴다."""
+        return [box for box, _ in self._anchors]
+
+    def update(self, detected: Sequence[Box], weak: Sequence[Box] = ()) -> list[Box]:
+        """이번 프레임의 검출 결과를 넣고 이번 프레임에서 가릴 상자 전부(검출 + 유지 중)를 돌려준다.
+
+        detected는 확실한 검출, weak는 얼굴이 있던 자리의 낮은 점수 검출이다. 검출하지 않은 프레임은 둘 다 비워 부른다.
+        """
+        found = [*detected, *weak]
+        aged = [(box, left - 1) for box, left in self._held if left > 0 and not _covered(box, found)]
+        self._held = [(box, self.hold_frames) for box in found] + aged
+        remembered = [(box, left - 1) for box, left in self._anchors if left > 1 and not _covered(box, detected)]
+        fresh = [(box, self.track_frames) for box in detected] if self.track_frames > 0 else []
+        self._anchors = fresh + remembered
         return [box for box, _ in self._held]
 
 
@@ -593,13 +660,17 @@ def render_video(
     ffmpeg_path: str = "ffmpeg",
     ffmpeg_threads: int = FFMPEG_THREADS,
     detect_faces: FaceFinder | None = None,
+    extra_faces: FaceMasks | None = None,
 ) -> RenderResult:
     """원본 영상 + 관절점 파일 → output_path에 결과 영상(MP4). 실패하면 VideoRenderError.
 
     ffmpeg의 오류 출력은 output_path 옆의 ffmpeg.log에 쓴다(표준 오류를 파이프로 받으면 프레임을 넘기는 중에 막힐 수
     있다). 워커가 작업 폴더째 지운다. 프레임 번호는 0부터, 읽는 순서다(parse_keypoints).
     detect_faces는 프레임 → 얼굴 상자 목록이다. None이면 BlazeFace(FaceDetector)이고, 테스트가 가짜를 끼우는 자리다.
-    detect_interval_frames(fps) 프레임마다 부르고, 사이 프레임은 FaceTracker가 마지막 상자로 가린다.
+    detect_interval_frames(fps) 프레임마다 부르고, 사이 프레임은 FaceTracker가 마지막 상자로 가린다. BlazeFace는
+    얼굴이 있던 자리(FaceTracker.anchors)의 낮은 점수 검출도 이어서 가린다(detect_tracked).
+    extra_faces는 프레임 번호 → 검출과 상관없이 그 프레임에서 가릴 상자다. 검출기가 찾지 못하는 얼굴(화면 끝에 걸린
+    옆얼굴 등)을 사람이 눈으로 찾아 가릴 때 쓴다(시연 데이터 넣기의 face_masks.json, 17.7). 워커는 쓰지 않는다.
     """
     cv2.setNumThreads(1)  # 12.4: 자식 프로세스의 OpenCV 스레드는 1개
     keypoints = load_keypoints(keypoints_path)
@@ -618,8 +689,8 @@ def render_video(
             width / keypoints.width if keypoints.width else 1.0,
             height / keypoints.height if keypoints.height else 1.0,
         )
-        finder = detect_faces or FaceDetector().detect  # 모델을 못 열면 ffmpeg를 띄우기 전에 실패한다
-        tracker = FaceTracker(round(fps * FACE_HOLD_SEC))
+        detector = None if detect_faces is not None else FaceDetector()  # 모델을 못 열면 ffmpeg를 띄우기 전에 실패한다
+        tracker = FaceTracker(round(fps * FACE_HOLD_SEC), round(fps * FACE_TRACK_SEC))
         detect_every = detect_interval_frames(fps)
         log_path = output_path.parent / "ffmpeg.log"
         hidden = (input_path, output_path, keypoints_path)
@@ -643,7 +714,15 @@ def render_video(
                 while ok and frame is not None:
                     if frame.shape[0] != height or frame.shape[1] != width:
                         raise VideoRenderError(f"{frames}번 프레임의 크기가 첫 프레임과 다릅니다")
-                    faces = tracker.update(finder(frame) if frames % detect_every == 0 else [])
+                    if frames % detect_every != 0:
+                        faces = tracker.update([])
+                    elif detect_faces is not None:
+                        faces = tracker.update(detect_faces(frame))
+                    else:
+                        assert detector is not None
+                        faces = tracker.update(*detector.detect_tracked(frame, tracker.anchors()))
+                    if extra_faces is not None:
+                        faces = [*faces, *extra_faces(frames)]
                     if faces:
                         face_frames += 1
                     if process_frame(frame, keypoints.frames.get(frames), scale=scale, faces=faces):

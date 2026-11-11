@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from app.report.judge import CHANGE_LABELS, NOT_COMPARABLE, NOTE_MODEL_CHANGED, judge, usable_tolerance
@@ -48,7 +49,8 @@ METRIC_LABELS: dict[str, str] = {
     "gait_cycles": "보행 주기 수",
 }
 # 단위의 기준은 표 칸마다 되풀이하지 않고 수치 이름에 한 번만 적는다(metric_label)
-UNIT_NOTES: dict[str, str] = {"pct_body": "몸통 길이 기준", "body_per_sec": "몸통 길이/초"}
+# 몸통 길이 L은 T13~장골능(등 뒤쪽)이라 흔히 말하는 몸길이의 절반쯤이다. 보이는 이름은 '등 길이'로 적는다(v1.52)
+UNIT_NOTES: dict[str, str] = {"pct_body": "등 길이 기준", "body_per_sec": "등 길이/초"}
 LIMB_LABELS: dict[str, str] = {
     "LF": "왼쪽 앞다리",
     "RF": "오른쪽 앞다리",
@@ -170,6 +172,29 @@ def metric_label(code: str, unit: str = "") -> str:
 
 def gait_label(gait_type: str) -> str:
     return GAIT_LABELS.get(gait_type, gait_type)
+
+
+def format_date(text: Any) -> str:
+    """문장과 PDF 머리줄에 적는 날짜. "2026-11-02" → "2026년 11월 2일"(웹·앱 화면과 같은 모양).
+
+    연-월-일 숫자 셋이 아니면 받은 글자를 그대로 돌려준다. API가 내려주는 날짜 값은 바꾸지 않는다.
+    """
+    raw = str(text)
+    parts = raw.split("-")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return raw
+    year, month, day = (int(part) for part in parts)
+    return f"{year}년 {month}월 {day}일"
+
+
+def format_time(text: Any) -> str | None:
+    """ISO 시각 → "오전 9:38". 글자에 적힌 시각을 그대로 쓴다(시간대를 바꾸지 않는다). 읽을 수 없으면 None."""
+    try:
+        moment = datetime.fromisoformat(str(text))
+    except ValueError:
+        return None
+    half = "오전" if moment.hour < 12 else "오후"
+    return f"{half} {moment.hour % 12 or 12}:{moment.minute:02d}"
 
 
 def format_value(value: float | None, unit: str) -> str:

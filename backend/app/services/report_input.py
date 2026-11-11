@@ -11,9 +11,10 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.dates import local_zone
 from app.core.errors import AppError
 from app.models import Dog, MeasureSession, Report
 from app.models.enums import SessionStatus
@@ -51,6 +52,26 @@ def previous_session_id(db: Session, session: MeasureSession) -> uuid.UUID | Non
     ).first()
 
 
+def session_round(db: Session, session: MeasureSession) -> int:
+    """회차 번호: 같은 반려견의 끝난 회차(DONE·FAILED)를 (측정일, 만든 시각) 순으로 센 자리(1부터).
+
+    보고서 내용 API의 round와 같은 규칙이다(15.7 62번). 문장에 적는 번호가 화면의 번호와 같아야 한다.
+    """
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(MeasureSession)
+            .where(
+                MeasureSession.dog_id == session.dog_id,
+                MeasureSession.status.in_((SessionStatus.DONE.value, SessionStatus.FAILED.value)),
+                tuple_(MeasureSession.measured_on, MeasureSession.created_at, MeasureSession.id)
+                <= tuple_(session.measured_on, session.created_at, session.id),
+            )
+        )
+        or 0
+    )
+
+
 def build_report_input(db: Session, report: Report, *, tolerance: Mapping[str, float] | None = None) -> dict[str, Any]:
     """보고서 행 → 입력 dict. 회차가 DONE이 아니거나 없으면 ReportInputError(워커는 REPORT_FAILED)."""
     session: MeasureSession = report.session
@@ -62,11 +83,18 @@ def build_report_input(db: Session, report: Report, *, tolerance: Mapping[str, f
         raise ReportInputError("SESSION_NOT_READY", error.code.value) from error
     previous_id = previous_session_id(db, session)
     previous = None
+    previous_session = None
     if previous_id is not None:
         try:
             previous = session_result(db, dog.institution_id, previous_id, include_trashed=True).model_dump(mode="json")
         except AppError:
             previous = None  # 직전 회차는 없어도 만든다(8절 1번: 없는 정보는 그 항목만 뺀다)
+        row = db.get(MeasureSession, previous_id) if previous is not None else None
+        if row is not None:
+            previous_session = {
+                "round": session_round(db, row),
+                "created_at": row.created_at.astimezone(local_zone()).isoformat(),
+            }
     return {
         "edition": report.edition,
         "dog": {
@@ -87,5 +115,6 @@ def build_report_input(db: Session, report: Report, *, tolerance: Mapping[str, f
         },
         "result": result,
         "previous": previous,
+        "previous_session": previous_session,  # 직전 회차의 번호·만든 시각(v1.52)
         "settings": {"tolerance": dict(tolerance or {})},  # config/tolerance.yaml(197)
     }

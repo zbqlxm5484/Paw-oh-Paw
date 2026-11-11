@@ -9,6 +9,7 @@
   "session": {"id", "measured_on", "weight_kg", "size_class", "model_name", "model_version"},
   "result": GET /sessions/{id}/result 응답(15.7 SessionResultOut)과 같은 dict,
   "previous": 직전 DONE 회차의 같은 dict 또는 null,
+  "previous_session": {"round": 직전 회차의 회차 번호, "created_at": 만든 시각(ISO, 한국 시간)} (선택, v1.52),
   "settings": {"tolerance": {수치 코드: 오차 범위}} (선택, 197)
 }
 """
@@ -51,6 +52,8 @@ class ReportInput:
     result: dict[str, Any]
     previous: dict[str, Any] | None
     tolerance: dict[str, float]
+    previous_round: int | None = None  # 직전 회차의 회차 번호(화면과 같은 번호). 없으면 날짜만 적는다
+    previous_created_at: str | None = None  # 직전 회차를 만든 시각(ISO). 같은 날 회차를 구분할 때 쓴다
 
     @property
     def previous_model_changed(self) -> bool:
@@ -113,6 +116,7 @@ def parse_input(data: Any) -> ReportInput:
     if not isinstance(result.get("gaits"), list):
         raise ReportInputError("MISSING_FIELD", "result.gaits")
     previous = _section(data, "previous", required=False)
+    previous_session = (_section(data, "previous_session", required=False) or {}) if previous else {}
     settings = _section(data, "settings", required=False) or {}
     tolerance_raw = settings.get("tolerance") or {}
     tolerance = {
@@ -141,4 +145,6 @@ def parse_input(data: Any) -> ReportInput:
         result=result,
         previous=previous,
         tolerance=tolerance,
+        previous_round=_optional_int(previous_session.get("round")),
+        previous_created_at=_optional_text(previous_session.get("created_at")),
     )

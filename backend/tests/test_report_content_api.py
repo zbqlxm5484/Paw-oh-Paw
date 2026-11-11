@@ -77,6 +77,7 @@ def test_content_has_the_header_sentences_and_tables(client: TestClient, staff, 
         "session_id": str(first.id),
         "measured_on": "2026-10-01",
         "round": 1,
+        "label": "1회차, 2026년 10월 1일",
         "model_changed": False,
     }
     sentences = body["sentences"]
@@ -329,3 +330,23 @@ def test_symmetry_score_that_differs_between_the_two_paths_is_409(
     _, second, _ = two_sessions
     monkeypatch.setattr(content_service, "session_scores", lambda db, ids: {session_id: 1 for session_id in ids})
     assert _code(_get(client, second, bearer(staff))) == (409, "REPORT_CHECK_FAILED")
+
+
+def test_previous_session_of_the_same_day_is_labelled_with_round_and_time(
+    client: TestClient, db: Session, staff, dog
+) -> None:
+    """하루에 두 번 잰 회차: 직전 회차의 글에 회차 번호와 만든 시각이 붙고, 문장의 괄호 안도 같은 글이다."""
+    day = date(2026, 10, 15)
+    sessions = []
+    for seq, (left, right) in enumerate([(40.0, 41.0), (47.0, 42.0)]):
+        session = make_session(db, dog, staff, day, seq=seq * 95)
+        add_metric(db, session, "rom_stifle", "LH", left)
+        add_metric(db, session, "rom_stifle", "RH", right)
+        add_report(db, session, "OWNER", "DONE")
+        sessions.append(session)
+    body = _get(client, sessions[1], bearer(staff)).json()
+    previous = body["previous"]
+    assert (previous["session_id"], previous["round"], body["session"]["round"]) == (str(sessions[0].id), 1, 2)
+    label = previous["label"]
+    assert label.startswith("1회차, 2026년 10월 15일 오") and label[-3] == ":"
+    assert f"직전 회차({label})" in body["sentences"]["previous_note"]

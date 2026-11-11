@@ -63,7 +63,7 @@ def test_follow_up_shows_all_three_change_labels() -> None:
         html = _html("follow_up", edition)
         assert " 증가</span>" in html and " 감소</span>" in html and " 범위 안</span>" in html
         assert "<h2>직전 회차와 비교</h2>" in html
-        assert "2026-10-14" in html  # 직전 회차 날짜
+        assert "2026년 10월 14일" in html  # 직전 회차 날짜
 
 
 def test_model_change_keeps_values_but_no_change_labels() -> None:
