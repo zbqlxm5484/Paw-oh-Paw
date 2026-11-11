@@ -144,7 +144,8 @@ export function DesignRoot() {
   const repGait = mainGaitOf(repR?.result)
   const repCmpQ = useCompare(repR?.dog, { target: repR?.id, base: 'PREVIOUS', gait_type: repGait })
   const repTrQ = useTrends(repR?.dog, { metric_code: 'rom_stifle', gait_type: repGait })
-  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} /> : null
+  const repBaseQ = useCompare(repR?.dog, { target: repR?.id, base: 'BASELINE', gait_type: repGait })
+  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} base={repBaseQ.data} gait={repGait} /> : null
 
   // 숨은 파일 입력(영상 선택·촬영)
   const fileRef = useRef<HTMLInputElement>(null)
