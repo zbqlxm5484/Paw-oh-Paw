@@ -42,6 +42,7 @@ Oct 19, 2026 · @조영운
 | v1.47 | 2026-11-11 | 동시 처리 점검(S15P31A404-274): 여러 계정이 동시에 요청을 보내는 점검 스크립트 `scripts/load_check.py`와 기록 `docs/report/concurrencyCheck.md`. 점검에서 나온 둘을 고침: ① 11.7 DB 연결 수를 API 스레드 수와 같은 40개(평소 20 + 넘칠 때 20)로, 워커는 10개로(리뷰 반영) ② 11.11 `LocalStorage`가 동시에 쓰고 지울 때 빈 폴더 정리 때문에 실패하지 않게 ③ 보고서 두 판본을 함께 만들기(조영운 결정 11-11): 12.4 보고서 풀 크기를 1에서 `WORKER_REPORT_CONCURRENCY`(16절, 기본 2)로. 11.2 폴더 구조, 17.6. 테이블·마이그레이션·API는 바뀌지 않는다. 환경 변수 하나가 늘었다 |
 | v1.48 | 2026-11-11 | 보안 보강(S15P31A404-275, 조영운 결정 11-05·11-11. v1.47은 274번 브랜치가 쓴다). **① 로그인 잠금**: 비밀번호를 5회 틀리면 30분 동안 로그인할 수 없다. 12.2 `staff.login_fail_count`·`login_locked_until`(마이그레이션 0022), 12.5 로그인 잠금, 11.6·13.4·15.4 로그인, 11.7에 실패 횟수를 commit하는 예외. 잠긴 동안에도 응답은 401 `LOGIN_FAILED` 하나이고(아이디가 있는지 드러나지 않게) 14.1의 문구에 잠금 규칙을 적었다. 관리자가 푸는 API는 두지 않는다. **② 비밀번호를 바꾸면 그전에 받은 토큰을 끊음**: 12.2 `staff.password_changed_at`(0022), 11.6 JWT의 `iat`·요청마다 하는 검사·인증 캐시, 14.1 `AUTH_EXPIRED`, 15.4 비밀번호 변경·재설정(바꾼 본인도 다시 로그인한다), 15.10. v1.12의 '이미 받은 토큰은 그대로 유효하다'를 바꿨다. **③ 가입은 코드를 먼저 확인**: 15.4 가입 순서(쓸 수 없는 코드에는 bcrypt를 돌지 않는다). **④ 코드 목록의 전체 값은 `ADMIN`에게만**: `STAFF`에게는 가운데를 가려서 준다(15.2 32번, 15.3 **DeviceCodeOut**, 15.9). **⑤ 보안 로그**: 11.8에 로그인 실패·잠금·비밀번호 변경·재설정·코드 발급·회수를 ID만으로 남기는 규칙. 4절 BE-01·22·24·26·27, 16절 상수, 17.1·17.2. 오류 코드·엔드포인트·환경 변수는 늘지 않는다 |
 | v1.49 | 2026-11-11 | 회차 비교 오차 범위를 권장 촬영 횟수 분석 값으로 바꿈(S15P31A404-287, 박규원 11-05 분석, 조영운 리뷰): 15.8 문단과 `config/tolerance.yaml` 예시. 어깨 2.5→5.0, 앞발목 7.6→11.8, 뒷발목 4.0→5.9, 입각기 비율 5.0→5.8. 무릎은 같은 값, 고관절은 옛 값 유지. 15.8의 통과 5회 예시 값(11-02 임시값 기준)을 뺌 |
+| v1.50 | 2026-11-12 | `/metrics` 경로를 루트로 정정(S15P31A404-308, 팀 결정 11-12): 15.1 인증 줄과 15.9, 16절 `METRICS_ENABLED`의 `/api/v1/metrics`를 루트 `/metrics`로 바꿈. `apiRoutingConvention.md`·`api-spec.md`·`openapi.yaml`은 이미 루트였다. 버전 번호는 다른 브랜치와 겹치면 머지 때 조정한다. |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -1495,7 +1496,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ### 15.1 공통 약속
 
-- **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF), 디바이스 코드 확인·가입(27·28), 비밀번호 재설정 둘(40·41)을 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). 2·3·8·9·17·18·22·55·62번(모두 GET)은 로그인 토큰 대신 인쇄 토큰도 받는다(11.6). `GUEST`(계약이 끝난 `CLIENT`)가 부를 수 있는 것은 1·2뿐이다. `/admin/*`(29\~37) 중 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만이다. `/health`와 `/metrics`도 다른 API처럼 `/api/v1` 아래에 둔다(`/api/v1/health`, `/api/v1/metrics`).
+- **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF), 디바이스 코드 확인·가입(27·28), 비밀번호 재설정 둘(40·41)을 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). 2·3·8·9·17·18·22·55·62번(모두 GET)은 로그인 토큰 대신 인쇄 토큰도 받는다(11.6). `GUEST`(계약이 끝난 `CLIENT`)가 부를 수 있는 것은 1·2뿐이다. `/admin/*`(29\~37) 중 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만이다. `/health`는 다른 API처럼 `/api/v1` 아래(`/api/v1/health`)에 두고, `/metrics`만 예외로 루트(`/metrics`)에 둔다(v1.50, `apiRoutingConvention.md`). 인증이 없는 `/api/v1/*`을 nginx가 밖으로 그대로 넘기므로 `/api/v1/metrics`로 두면 지표가 밖에 열린다.
 - **공통 오류**: 아래 오류는 인증이 필요한 모든 API에서 날 수 있어 엔드포인트마다 다시 적지 않는다. 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED`(로그인 뒤에 계정이 막힘), 403 `CONTRACT_EXPIRED`(기관 계약이 끝난 `CLIENT`, `/auth/me` 제외), 404 `NOT_FOUND`(ID가 없거나 다른 기관의 것), 422 `VALIDATION_ERROR`, 500 `INTERNAL_ERROR`.
 - **ID로 찾기**: 주소에 든 ID뿐 아니라 쿼리·본문으로 받은 ID(`base`, `target`, `baseline_session_id`, `target_id`, 메모의 `session_id`)도 자기 기관 안에서만 찾는다. 반려견에 딸린 회차는 `WHERE id = :id AND dog_id = :dog_id`로 찾는다. 없는 ID와 다른 기관·다른 반려견의 ID는 똑같이 404 `NOT_FOUND`로 답해, 다른 기관에 그 자료가 있는지 알 수 없게 한다. `baseline_session_id`만 예외로 400 `BASELINE_INVALID`다(13.2).
 - **ID 형식**: 주소·쿼리·본문의 ID는 `uuid.UUID`로 받는다. 주소(경로)의 ID가 UUID 형식이 아니면 404 NOT\_FOUND(11.5), 쿼리·본문의 ID는 DB까지 가지 않고 422 `VALIDATION_ERROR`다. PostgreSQL은 UUID 컬럼을 UUID 형식이 아닌 문자열과 비교하면 오류를 내므로(그대로 두면 500), 문자열로 받은 ID를 그대로 쿼리에 넣지 않는다.
@@ -2447,7 +2448,7 @@ stance_ratio: 5.8 # pct
 
 **`GET /metrics`** — 요청 수·처리 시간 (BE-20, 선택)
 
-- Prometheus 텍스트 형식. 인증이 없으므로 밖에서 열리지 않게 내부망에서만 받는다. 방식은 허정원과 정한다(11.8).
+- Prometheus 텍스트 형식. 경로는 `/api/v1` 아래가 아니라 루트 `/metrics`다. nginx는 `/api/`만 백엔드로 넘기므로 밖에서는 닿지 않고, Docker 내부망의 Prometheus만 읽는다(허정원 `infra/monitoring/`, S15P31A404-308). `METRICS_ENABLED=true`일 때만 등록한다.
 
 ### 15.10 이번 API에 없는 것
 
@@ -2674,7 +2675,7 @@ stance_ratio: 5.8 # pct
 | `REPORT_RENDER_TIMEOUT_SEC` | `60` | 렌더러의 답을 기다리는 시간(초). 넘으면 그 판본은 기본 템플릿으로 만든다 | 8절 6번 |
 | `MESSAGES_FILE` | `messages/ko.yaml` | 화면 문구 | 14.5 |
 | `LOG_LEVEL` | `INFO` | 로그 수준 | 11.8 |
-| `METRICS_ENABLED` | `false` | `/api/v1/metrics`를 켜는지(선택) | 15.9 |
+| `METRICS_ENABLED` | `false` | 루트 `/metrics`를 켜는지(선택) | 15.9 |
 | `API_DOCS_ENABLED` | `false` | `/docs`·`/redoc`·`/openapi.json`을 여는지. 개발 환경에서만 `true`. 공식 명세는 `docs/openapi.yaml` | 15절 |
 | `AUTH_CACHE_TTL_SEC` | `60` | 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다. 테스트는 0 | 11.6 인증 캐시 |
 | `SMTP_HOST` | (빈 값) | 메일 서버. 비어 있으면 메일을 보내지 않는다(재설정 요청은 503) | 11.6 메일 |
