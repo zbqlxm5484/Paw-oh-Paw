@@ -177,6 +177,15 @@ describe('경과 비교 표 (adapter.compareRows)', () => {
     expect(r.vals).toBe('30°→ 31.2°'.replace('°→', '° →'))
   })
 
+  it('퍼센트 값끼리의 차이는 %p, 각도는 °', () => {
+    const c = { ...cmp, items: [
+      { metric_code: 'stride_length', limb: 'LF', gait_type: 'TROT', unit: 'pct_body', base_value: 152, target_value: 193, diff: 41, judgement: 'INCREASE', note: null },
+      ...cmp.items,
+    ] } as unknown as CompareOut
+    expect(compareRows(c, null).find((x) => x.n.startsWith('걸음 길이'))!.j).toBe('▲ 증가 41%p')
+    expect(compareRows(c, null).find((x) => x.n === '무릎 가동 범위')!.j).toMatch(/°$/)
+  })
+
   it('관심 다리 항목이 맨 위로', () => {
     expect(compareRows(cmp, 'LH')[0].n).toBe('고관절 가동 범위')
   })
