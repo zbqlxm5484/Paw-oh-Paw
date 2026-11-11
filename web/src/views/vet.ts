@@ -21,7 +21,7 @@ const NAME: Record<string, string> = Object.fromEntries(JOINTS.map(([c, n]) => [
 const UNIT: Record<string, string> = { deg: '°', pct: '%', pct_body: '%' }
 
 /** 회차 비교 오차 범위(백엔드 config/tolerance.yaml 의 develop 값). 백엔드 비교 API 가 없을 때만 쓴다 */
-export const TOLERANCE: Record<string, number> = { rom_shoulder: 2.5, rom_carpus: 7.6, rom_hip: 5.0, rom_stifle: 8.0, rom_tarsus: 4.0, stance_ratio: 5.0 }
+export const TOLERANCE: Record<string, number> = { rom_shoulder: 5.0, rom_carpus: 11.8, rom_hip: 5.0, rom_stifle: 8.0, rom_tarsus: 5.9, stance_ratio: 5.8 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10
 const fmt = (v: number) => r1(v).toFixed(1)
