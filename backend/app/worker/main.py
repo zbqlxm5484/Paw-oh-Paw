@@ -45,7 +45,7 @@ from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClient, AnalysisClientError, SubmitInfo, build_analysis_client
 from app.core.config import Settings, get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, use_worker_pool
 from app.core.errors import FailReason
 from app.main import configure_logging
 from app.models import Dog, MeasureSession, Shot
@@ -641,6 +641,7 @@ class Worker:
 def main() -> int:
     settings = get_settings()
     configure_logging(settings.LOG_LEVEL)
+    use_worker_pool()  # 워커는 연결을 몇 개만 쓴다. 엔진을 만들기 전에 상한을 낮춘다(core/db.py)
     clean_worker_tmp(settings)
     worker = Worker(settings)
     signal.signal(signal.SIGINT, worker.stop)

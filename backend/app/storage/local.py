@@ -20,6 +20,12 @@ from app.storage.base import StorageError
 HEALTH_PREFIX = ".health/"
 WRITE_ATTEMPTS = 4  # 쓰는 중에 폴더가 지워졌을 때 해 보는 횟수(_write_in_place)
 WRITE_RETRY_SEC = 0.02  # 다시 하기 전에 쉬는 시간. 횟수만큼 늘린다
+# 다시 해 볼 오류. PermissionError는 Windows에서 지워지는 중인 폴더에 쓸 때만 나는 것으로 본다
+_RETRY_ERRORS: tuple[type[OSError], ...] = (
+    (FileNotFoundError, PermissionError) if os.name == "nt" else (FileNotFoundError,)
+)
+_WINDOWS_DELETED = "$Extend"  # NTFS가 지우는 중인 파일을 옮겨 두는 폴더. resolve()가 이 아래 경로를 돌려줄 때가 있다
+_WINDOWS_LONG_PREFIX = "\\\\?\\"  # 긴 경로 접두어(역슬래시 둘, 물음표, 역슬래시)
 
 
 def _size(path: Path) -> int:
@@ -42,15 +48,29 @@ class LocalStorage:
         if not key or key.startswith(("/", "\\")) or ".." in Path(key).parts:
             raise StorageError(f"잘못된 파일 키입니다: {key!r}")
         path = (self.root / key).resolve()
-        if os.name == "nt" and not path.is_relative_to(self.root):
-            # Windows(NTFS)에서만: 다른 요청이 지우는 중인 경로를 resolve()하면 \?\C:\$Extend\$Deleted\... 가
-            # 돌아온다. 그때는 글자로만 정리한 경로를 쓴다(".."은 위에서 이미 막았다). 운영(Linux)에는 없는 일이다
-            path = Path(os.path.normpath(self.root / key))
+        if os.name == "nt":
+            path = self._windows_path(path, key)
         if path == self.root:
             # "."·"./"처럼 루트 자신을 가리키는 키. delete_prefix(".")가 저장소 전체를 지우는 일을 막는다
             raise StorageError(f"저장소 루트 자체를 가리키는 키입니다: {key!r}")
         if not path.is_relative_to(self.root):
             raise StorageError(f"저장소 밖을 가리키는 키입니다: {key!r}")
+        return path
+
+    def _windows_path(self, path: Path, key: str) -> Path:
+        """Windows(NTFS)에서 다른 요청이 지우는 중인 경로를 resolve()했을 때 돌아오는 두 모양을 바로잡는다.
+
+        운영(Linux)에는 없는 일이고, 개발 PC에서 지우기가 겹칠 때만 난다(S15P31A404-274).
+        - 긴 경로 접두어(_WINDOWS_LONG_PREFIX)가 붙은 채 돌아오면 접두어만 뗀다. 같은 경로다.
+        - 드라이브의 $Extend/$Deleted 아래 경로가 돌아오면 글자로만 정리한 경로를 쓴다(".."은 path()가 이미 막았다).
+        그 밖의 경로는 그대로 돌려주어 path()의 "저장소 밖" 검사를 받는다. 저장소 안에서 밖을 가리키는 링크는
+        Windows에서도 거부된다(274 리뷰).
+        """
+        text = str(path)
+        if text.startswith(_WINDOWS_LONG_PREFIX) and not text.startswith(_WINDOWS_LONG_PREFIX + "UNC"):
+            path = Path(text[len(_WINDOWS_LONG_PREFIX) :])
+        if _WINDOWS_DELETED in path.parts:
+            path = Path(os.path.normpath(self.root / key))
         return path
 
     def _prune_empty_dirs(self, directory: Path) -> None:
@@ -74,14 +94,15 @@ class LocalStorage:
 
         폴더를 만든 직후에는 비어 있어서, 같은 때 돌던 다른 요청의 빈 폴더 정리가 그 폴더를 지울 수 있다. 그러면
         write가 FileNotFoundError를 내므로(Windows는 지워지는 중인 폴더에 PermissionError를 낸다) 잠깐 쉬고 폴더를
-        다시 만들어 다시 한다. 마지막에도 같으면 그대로 올린다.
+        다시 만들어 다시 한다. 마지막에도 같으면 그대로 올린다. PermissionError를 다시 하는 것은 Windows뿐이다.
+        Linux에서는 실제 권한 오류라 바로 올린다.
         """
         for attempt in range(WRITE_ATTEMPTS):
             try:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 write()
                 return
-            except (FileNotFoundError, PermissionError):
+            except _RETRY_ERRORS:
                 if attempt == WRITE_ATTEMPTS - 1:
                     raise
                 time.sleep(WRITE_RETRY_SEC * (attempt + 1))

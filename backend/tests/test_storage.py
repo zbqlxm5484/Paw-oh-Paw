@@ -176,3 +176,54 @@ def test_many_threads_write_and_delete_under_one_folder(storage: LocalStorage) -
         thread.join()
     assert errors == []
     assert not (storage.root / "inst").exists()
+
+
+# ---- 274 리뷰: Windows 처리는 지워지는 중인 경로에만, 권한 오류 다시 하기는 Windows에만 ----
+
+
+def test_path_that_resolves_outside_the_root_is_rejected(storage: LocalStorage, monkeypatch) -> None:
+    # 저장소 안의 링크가 밖을 가리키면 resolve()가 밖의 경로를 돌려준다. 어느 OS에서든 거부해야 한다
+    outside = storage.root.parent / "elsewhere" / "a.txt"
+    original = Path.resolve
+
+    def resolve(self: Path, *args, **kwargs) -> Path:
+        return outside if self.name == "a.txt" else original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    with pytest.raises(StorageError):
+        storage.path("link/a.txt")
+
+
+def test_windows_path_only_rewrites_paths_being_deleted(storage: LocalStorage) -> None:
+    from app.storage import local
+
+    inside = storage.root / "i" / "a.txt"
+    outside = storage.root.parent / "elsewhere" / "a.txt"
+    assert storage._windows_path(inside, "i/a.txt") == inside
+    assert storage._windows_path(outside, "i/a.txt") == outside  # 밖을 가리키는 경로는 그대로 두어 검사에 걸리게 한다
+    deleted = Path(storage.root.anchor) / local._WINDOWS_DELETED / "$Deleted" / "0001" / "a.txt"
+    assert storage._windows_path(deleted, "i/a.txt") == inside
+
+
+def test_permission_error_is_retried_only_where_it_means_a_folder_being_deleted(
+    storage: LocalStorage, monkeypatch
+) -> None:
+    from app.storage import local
+
+    monkeypatch.setattr(local, "WRITE_RETRY_SEC", 0)
+    calls: list[int] = []
+
+    def denied() -> None:
+        calls.append(1)
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(local, "_RETRY_ERRORS", (FileNotFoundError,))  # Linux: 실제 권한 오류라 바로 올린다
+    with pytest.raises(PermissionError):
+        storage._write_in_place(storage.root / "p" / "a.txt", denied)
+    assert len(calls) == 1
+
+    calls.clear()
+    monkeypatch.setattr(local, "_RETRY_ERRORS", (FileNotFoundError, PermissionError))  # Windows
+    with pytest.raises(PermissionError):
+        storage._write_in_place(storage.root / "p" / "a.txt", denied)
+    assert len(calls) == local.WRITE_ATTEMPTS

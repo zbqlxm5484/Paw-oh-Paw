@@ -22,10 +22,15 @@ NAMING_CONVENTION = {"pk": "%(table_name)s_pkey"}
 # DB 연결 수(S15P31A404-274). API는 요청을 스레드 40개(FastAPI·anyio 기본값)에서 처리하고 요청 하나가 연결 하나를 쓴다.
 # SQLAlchemy 기본값(5 + 10 = 15)이면 느린 요청 15개가 연결을 다 쥐었을 때 나머지 요청이 연결을 기다리며 멈춘다
 # (분석 API가 느릴 때 촬영 삭제가 몰린 경우를 실제로 재현했다). 그래서 스레드 수와 같게 둔다. 평소에는 20개까지만
-# 열어 두고, 넘친 20개는 쓰고 나면 닫는다. PostgreSQL 기본 max_connections(100) 안에서 API 두 벌(배포 전환 중)과
-# 워커가 함께 쓸 수 있는 수다.
+# 열어 두고, 넘친 20개는 쓰고 나면 닫는다.
+# 워커는 주 반복 스레드 하나가 세션을 차례로 열어 연결을 많아야 두 개 쓴다(자식 프로세스는 DB를 모른다, 11.3).
+# 그래서 워커는 시작할 때 use_worker_pool()로 상한을 10개(5 + 5)로 낮춘다. 상한끼리 더해도 API 두 벌(배포 전환 중)
+# 80 + 워커 10 = 90으로 PostgreSQL 기본 max_connections(100) 안이다(274 리뷰).
 POOL_SIZE = 20
 POOL_MAX_OVERFLOW = 20
+WORKER_POOL_SIZE = 5
+WORKER_POOL_MAX_OVERFLOW = 5
+_pool_limits = (POOL_SIZE, POOL_MAX_OVERFLOW)
 
 # SQLSTATE 코드 (11.7 오류 종류)
 UNIQUE_VIOLATION = "23505"
@@ -89,9 +94,19 @@ def get_engine() -> Engine:
     url = get_db_settings().DATABASE_URL.get_secret_value()
     # hide_parameters: 오류 메시지에 바인드 값(반려견 이름 등)이 찍히지 않게 한다(11.8). PostgreSQL이 보내는 글의
     # 값은 scrub_db_error가 뺀다.
-    return create_engine(
-        url, hide_parameters=True, pool_pre_ping=True, pool_size=POOL_SIZE, max_overflow=POOL_MAX_OVERFLOW
-    )
+    size, overflow = _pool_limits
+    return create_engine(url, hide_parameters=True, pool_pre_ping=True, pool_size=size, max_overflow=overflow)
+
+
+def use_worker_pool() -> None:
+    """워커 프로세스가 엔진을 만들기 전에 부른다. 연결 상한을 워커의 것(5 + 5)으로 낮춘다.
+
+    엔진이 이미 만들어졌으면 상한을 바꿀 수 없으므로 RuntimeError다(부르는 자리를 잘못 둔 것이다).
+    """
+    global _pool_limits
+    if get_engine.cache_info().currsize:
+        raise RuntimeError("DB 엔진을 만든 뒤에는 연결 상한을 바꿀 수 없습니다")
+    _pool_limits = (WORKER_POOL_SIZE, WORKER_POOL_MAX_OVERFLOW)
 
 
 class _LazySessionmaker:
