@@ -86,7 +86,8 @@ def get_current_staff(db: DbSession, authorization: Annotated[str | None, Header
     이르면 돌려보낸다. 스냅샷이 캐시에서 오면 다른 프로세스에서 바꾼 비밀번호는 최대 TTL 뒤에 반영된다.
     기관 ID·역할은 토큰이 아니라 스냅샷(캐시, 없으면 DB의 담당자 + 기관 행)에서 가져온다.
     캐시에 있으면 DB를 읽지 않는다.
-    계약 검사(④)는 require_contract가 한다. GET /auth/me만 이 함수를 그대로(CurrentStaffAny) 쓴다.
+    계약 검사(④)는 require_contract가 한다. 내 정보·탈퇴·측정 기기 정보(15.2의 2·45·66번)만 이 함수를
+    그대로(CurrentStaffAny) 쓴다.
     """
     token = _bearer_token(authorization)
     try:
