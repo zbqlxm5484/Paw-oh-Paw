@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 import uuid
+from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +18,22 @@ from app.core.security import make_signed_url
 from app.storage.base import StorageError
 
 HEALTH_PREFIX = ".health/"
+WRITE_ATTEMPTS = 4  # 쓰는 중에 폴더가 지워졌을 때 해 보는 횟수(_write_in_place)
+WRITE_RETRY_SEC = 0.02  # 다시 하기 전에 쉬는 시간. 횟수만큼 늘린다
+# 다시 해 볼 오류. PermissionError는 Windows에서 지워지는 중인 폴더에 쓸 때만 나는 것으로 본다
+_RETRY_ERRORS: tuple[type[OSError], ...] = (
+    (FileNotFoundError, PermissionError) if os.name == "nt" else (FileNotFoundError,)
+)
+_WINDOWS_DELETED = "$Extend"  # NTFS가 지우는 중인 파일을 옮겨 두는 폴더. resolve()가 이 아래 경로를 돌려줄 때가 있다
+_WINDOWS_LONG_PREFIX = "\\\\?\\"  # 긴 경로 접두어(역슬래시 둘, 물음표, 역슬래시)
+
+
+def _size(path: Path) -> int:
+    """파일 크기. 세는 중에 다른 요청이 지웠으면 0."""
+    try:
+        return path.stat().st_size
+    except FileNotFoundError:
+        return 0
 
 
 class LocalStorage:
@@ -30,6 +48,8 @@ class LocalStorage:
         if not key or key.startswith(("/", "\\")) or ".." in Path(key).parts:
             raise StorageError(f"잘못된 파일 키입니다: {key!r}")
         path = (self.root / key).resolve()
+        if os.name == "nt":
+            path = self._windows_path(path, key)
         if path == self.root:
             # "."·"./"처럼 루트 자신을 가리키는 키. delete_prefix(".")가 저장소 전체를 지우는 일을 막는다
             raise StorageError(f"저장소 루트 자체를 가리키는 키입니다: {key!r}")
@@ -37,32 +57,84 @@ class LocalStorage:
             raise StorageError(f"저장소 밖을 가리키는 키입니다: {key!r}")
         return path
 
+    def _windows_path(self, path: Path, key: str) -> Path:
+        """Windows(NTFS)에서 다른 요청이 지우는 중인 경로를 resolve()했을 때 돌아오는 두 모양을 바로잡는다.
+
+        운영(Linux)에는 없는 일이고, 개발 PC에서 지우기가 겹칠 때만 난다(S15P31A404-274).
+        - 긴 경로 접두어(_WINDOWS_LONG_PREFIX)가 붙은 채 돌아오면 접두어만 뗀다. 같은 경로다.
+        - 드라이브의 $Extend/$Deleted 아래 경로가 돌아오면 글자로만 정리한 경로를 쓴다(".."은 path()가 이미 막았다).
+        그 밖의 경로는 그대로 돌려주어 path()의 "저장소 밖" 검사를 받는다. 저장소 안에서 밖을 가리키는 링크는
+        Windows에서도 거부된다(274 리뷰).
+        """
+        text = str(path)
+        if text.startswith(_WINDOWS_LONG_PREFIX) and not text.startswith(_WINDOWS_LONG_PREFIX + "UNC"):
+            path = Path(text[len(_WINDOWS_LONG_PREFIX) :])
+        if _WINDOWS_DELETED in path.parts:
+            path = Path(os.path.normpath(self.root / key))
+        return path
+
     def _prune_empty_dirs(self, directory: Path) -> None:
-        """파일을 지운 뒤 빈 폴더를 루트 직전까지 지운다."""
-        while directory != self.root and directory.is_dir() and not any(directory.iterdir()):
-            directory.rmdir()
+        """파일을 지운 뒤 빈 폴더를 루트 직전까지 지운다.
+
+        요청 여럿이 같은 폴더 아래에서 함께 쓰고 지운다(S15P31A404-274). 비었는지 먼저 보고 지우면 그사이 다른
+        요청이 그 폴더를 지우거나 파일을 넣을 수 있으므로, 바로 rmdir을 부르고 결과로 가른다. 이미 없으면 위 폴더로
+        넘어가고, 비어 있지 않거나 지울 수 없으면 거기서 멈춘다.
+        """
+        while directory != self.root:
+            try:
+                directory.rmdir()
+            except FileNotFoundError:
+                pass  # 다른 요청이 먼저 지웠다
+            except OSError:
+                return  # 비어 있지 않다
             directory = directory.parent
+
+    def _write_in_place(self, dst: Path, write: Callable[[], None]) -> None:
+        """dst의 폴더를 만들고 write를 부른다.
+
+        폴더를 만든 직후에는 비어 있어서, 같은 때 돌던 다른 요청의 빈 폴더 정리가 그 폴더를 지울 수 있다. 그러면
+        write가 FileNotFoundError를 내므로(Windows는 지워지는 중인 폴더에 PermissionError를 낸다) 잠깐 쉬고 폴더를
+        다시 만들어 다시 한다. 마지막에도 같으면 그대로 올린다. PermissionError를 다시 하는 것은 Windows뿐이다.
+        Linux에서는 실제 권한 오류라 바로 올린다.
+        """
+        for attempt in range(WRITE_ATTEMPTS):
+            try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                write()
+                return
+            except _RETRY_ERRORS:
+                if attempt == WRITE_ATTEMPTS - 1:
+                    raise
+                time.sleep(WRITE_RETRY_SEC * (attempt + 1))
 
     # ---- 쓰기·읽기 ----
 
     def put_file(self, src: Path, key: str) -> int:
         dst = self.path(key)
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        size = src.stat().st_size
-        try:
-            os.replace(src, dst)  # 같은 볼륨이면 이름만 바꾼다
-        except OSError:
-            shutil.copyfile(src, dst)  # 다른 볼륨이면 복사한 뒤 지운다
-            src.unlink()
+        size = src.stat().st_size  # src가 없으면 여기서 끝난다. 아래의 FileNotFoundError는 dst 폴더가 없다는 뜻이다
+
+        def move() -> None:
+            try:
+                os.replace(src, dst)  # 같은 볼륨이면 이름만 바꾼다
+            except FileNotFoundError:
+                raise
+            except OSError:
+                shutil.copyfile(src, dst)  # 다른 볼륨이면 복사한 뒤 지운다
+                src.unlink()
+
+        self._write_in_place(dst, move)
         return size
 
     def write_bytes(self, key: str, data: bytes) -> None:
         dst = self.path(key)
-        dst.parent.mkdir(parents=True, exist_ok=True)
         # 임시 이름은 짧게 둔다. 키가 UUID 네 단계라 Windows의 경로 길이 한도(260자)에 걸리기 쉽다.
         tmp = dst.parent / f".tmp-{uuid.uuid4().hex[:12]}"
-        tmp.write_bytes(data)
-        os.replace(tmp, dst)
+
+        def write() -> None:
+            tmp.write_bytes(data)
+            os.replace(tmp, dst)
+
+        self._write_in_place(dst, write)
 
     def read_bytes(self, key: str) -> bytes:
         return self.path(key).read_bytes()
@@ -78,8 +150,11 @@ class LocalStorage:
         path = self.path(key)
         if not path.is_file():
             return 0
-        size = path.stat().st_size
-        path.unlink()
+        try:
+            size = path.stat().st_size
+            path.unlink()
+        except FileNotFoundError:
+            return 0  # 그사이 다른 요청이 지웠다
         self._prune_empty_dirs(path.parent)
         return size
 
@@ -87,18 +162,24 @@ class LocalStorage:
         base = self.path(prefix.rstrip("/\\"))
         if not base.is_dir():
             return None, []
-        return base, [p for p in base.rglob("*") if p.is_file()]
+        try:
+            return base, [p for p in base.rglob("*") if p.is_file()]
+        except FileNotFoundError:
+            return None, []  # 훑는 중에 다른 요청이 통째로 지웠다
 
     def stat_prefix(self, prefix: str) -> tuple[int, int]:
         _base, files = self._files_under(prefix)
-        return len(files), sum(p.stat().st_size for p in files)
+        return len(files), sum(_size(p) for p in files)
 
     def delete_prefix(self, prefix: str) -> tuple[int, int]:
         base, files = self._files_under(prefix)
         if base is None:
             return 0, 0
-        count, total = len(files), sum(p.stat().st_size for p in files)
-        shutil.rmtree(base)
+        count, total = len(files), sum(_size(p) for p in files)
+        try:
+            shutil.rmtree(base)
+        except FileNotFoundError:
+            pass  # 그사이 다른 요청이 지웠다. 지우려던 것이 없으니 끝난 것이다
         self._prune_empty_dirs(base.parent)
         return count, total
 
