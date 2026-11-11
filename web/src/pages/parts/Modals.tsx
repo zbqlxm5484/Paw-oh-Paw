@@ -252,7 +252,7 @@ export function DeleteModal({ name = '', action = '', desc = '' }: { name?: stri
       <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>측정 이력과 보고서도 함께 휴지통으로 옮겨지고, 30일 동안은 복구할 수 있습니다.</span>
       <PostForm action={action} id="delForm" style={css('display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0')}>
         <div data-close="" style={css('height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer')}>취소</div>
-        <button className="bt" type="submit" style={css('height:52px;border-radius:14px;background:#C2412D;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700')}>삭제</button>
+        <button className="bt" type="submit" style={css('height:52px;border-radius:14px;background:#D2601A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700')}>삭제</button>
       </PostForm>
     </OpenModal>
   )
