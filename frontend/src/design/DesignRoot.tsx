@@ -286,7 +286,8 @@ function DemoPill({ screen }: { screen: string }) {
       style={{
         position: 'fixed',
         // 화면 위쪽은 헤더(로고·알림·기관 칩)와 겹쳐서 아래 탭바 바로 위에 둔다
-        bottom: `calc(${SAFE_BOTTOM} + 124px)`,
+        // 웰컴 화면은 아래쪽에 '서비스 소개 자세히 보기'·회원가입·로그인이 있어 그 위로 더 올린다(누르는 영역이 겹치지 않게)
+        bottom: screen === 'landing' ? `calc(${SAFE_BOTTOM} + 176px)` : `calc(${SAFE_BOTTOM} + 124px)`,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,

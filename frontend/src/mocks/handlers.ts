@@ -90,6 +90,12 @@ export const handlers = [
     return HttpResponse.json(MOCK_STAFF)
   }),
 
+  // 측정 기기 정보(271). 없으면 이 요청이 진짜 서버로 빠져 401 을 받고 체험 모드가 로그아웃된다
+  http.get(`${BASE}/auth/me/device`, ({ request }) => {
+    if (!authed(request)) return unauthorized()
+    return HttpResponse.json({ device: { code_masked: 'PWP-****-7K2Q', issued_at: '2026-10-01T09:00:00+09:00' } })
+  }),
+
   http.patch(`${BASE}/auth/me`, async ({ request }) => {
     if (!authed(request)) return unauthorized()
     await delay(250)
