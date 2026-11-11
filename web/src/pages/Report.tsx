@@ -16,7 +16,8 @@ import type { Account, Result } from '../store/types'
 import { PrintPdf } from './parts/ServerPdf'
 import { mainGait, VetSections } from './parts/VetSections'
 import { OwnerAdvice, OwnerChangeStrip } from './parts/OwnerSummary'
-import { QualityCard, QualityLine } from './parts/MeasureQuality'
+import { ExcludeLine, QualityCard, QualityLine } from './parts/MeasureQuality'
+import { excludeSummary } from '../views/quality'
 import { api } from '../api/client'
 import { kneeChartView, loadKneeCurve, type KneeChartView } from '../views/reportContent'
 
@@ -130,8 +131,8 @@ export default function Report() {
               <div style={css('display:flex;align-items:center;gap:10px')}><b style={css('font-size:20px')}>{rd.name} · {rd.when}</b><span style={css(`padding:4px 10px;border-radius:8px;background:${rd.bg};color:${rd.c};font-size:13px;font-weight:700`)}>{rd.st}</span></div>
               <b style={css('font-size:17px')}>분석하지 못했습니다</b>
               <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>{r.fail_msg || '쓸 수 있는 통과가 없었습니다. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'}</span>
-              {r.ex.length ? (
-                <div style={css('display:flex;flex-wrap:wrap;gap:6px')}>{r.ex.map(([n, c], i) => <span key={i} style={css('height:28px;padding:0 10px;border-radius:8px;background:#F2EEE8;color:#3A4250;font-size:13px;font-weight:600;display:flex;align-items:center;font-variant-numeric:tabular-nums')}>{n} {c}회</span>)}</div>
+              {excludeSummary(r.ex) ? (
+                <div style={css('display:flex;flex-wrap:wrap;gap:6px')}>{excludeSummary(r.ex)!.reasons.map((x, i) => <span key={i} style={css('min-height:28px;padding:4px 10px;border-radius:8px;background:#F2EEE8;color:#3A4250;font-size:13px;font-weight:600;display:flex;align-items:center;font-variant-numeric:tabular-nums')}>{x.msg} ({x.n}번)</span>)}</div>
               ) : null}
               <a className="lk hv-orange" href={link(`/upload?dog=${rd.dog}`)} style={css('align-self:flex-start;height:46px;padding:0 20px;border-radius:12px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700')}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>다시 올리기</a>
             </div>
@@ -253,8 +254,8 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       <div style={css('display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:14px 18px;border-radius:12px;background:#FAF7F2;font-size:14px')}>
         <b>측정 품질</b>
         <span>걸은 횟수 {rd.pm}번 중 <b>{rd.pu}번</b> 사용</span>
-        {rd.ex && rd.ex.length ? <span style={css('color:#5B6472')}>뺀 이유: {(rd.ex as [string, number][]).map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
         {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있습니다</span> : null}
+        <ExcludeLine ex={rd.ex as [string, number][] | undefined} kind={kind} />
         <QualityLine r={r} kind={kind} />
         {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#8E949C')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
       </div>
