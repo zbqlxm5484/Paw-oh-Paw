@@ -86,5 +86,5 @@ python -m engine.joint_rom data/tracks/gt_videos.fs-v4-flip.track.json
 | --- | --- |
 | W 정의로 오차 범위 다시 내기 (`config/tolerance.yaml`) | 박규원 → 조영운 |
 | 연속 프레임 정답(통과 2, 3개)으로 가동 범위 오차 재기 (필요하면) | 박규원 |
-| 이지 보정(`gaitMetrics.md` 5절)이 들어가면 `stifle_cycle_rom` 주기 경계가 바뀌므로 다시 재기 | |
+| 이지 보정(`gaitMetrics.md` 6절)이 들어가면 `stifle_cycle_rom` 주기 경계가 바뀌므로 다시 재기 | |
 | 발 경사·발 높이·발 움직임 범위 (`paw_slope_*`, `paw_lift_*`, `paw_excursion_*`) | 스프린트 4 |
