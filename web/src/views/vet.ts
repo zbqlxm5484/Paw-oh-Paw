@@ -183,7 +183,7 @@ export function otherRows(r: Result, gait: string): { n: string; v: string[] }[]
 const CMP_NAME: Record<string, string> = {
   rom_stifle: '무릎 가동 범위', rom_hip: '고관절 가동 범위', rom_tarsus: '뒷발목 가동 범위',
   rom_shoulder: '어깨 가동 범위', rom_elbow: '팔꿈치 가동 범위', rom_carpus: '앞발목 가동 범위',
-  stride_length: '걸음 길이', stance_ratio: '입각기 비율',
+  stride_length: '걸음 길이(등 길이 기준)', stance_ratio: '입각기 비율',
 }
 const GAIT_NAME: Record<string, string> = { TROT: '속보', WALK: '평보', OTHER: '보행 유형 미판별' }
 

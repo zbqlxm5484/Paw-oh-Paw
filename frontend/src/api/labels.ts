@@ -121,11 +121,11 @@ export const METRIC_LABEL: Record<string, string> = {
   rom_stifle: '무릎 가동 범위',
   rom_tarsus: '뒷발목 가동 범위',
   stifle_cv: '무릎 움직임 일관성',
-  paw_lift: '발 들림 높이',
+  paw_lift: '발 들림 높이(등 길이 기준)',
   paw_excursion: '발 움직임 범위',
-  stride_length: '걸음 길이',
+  stride_length: '걸음 길이(등 길이 기준)',
   stance_ratio: '입각기 비율',
-  walk_speed: '보행 속도',
+  walk_speed: '보행 속도(등 길이/초)',
   gait_cycles: '보행 주기 수',
 }
 export function metricLabel(code: string): string {

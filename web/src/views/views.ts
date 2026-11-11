@@ -1080,9 +1080,9 @@ const stride = (side: 'sL' | 'sR'): Fn => (r) => (hasM(r) ? r[side] : jround(r[s
 const _CMP: [string, string | null, Fn | null, string][] = [
   ['무릎 가동 범위', 'LH', (r) => r.j[0][1], '°'], ['무릎 가동 범위', 'RH', (r) => r.j[0][2], '°'],
   ['고관절 가동 범위', 'LH', (r) => r.j[1][1], '°'], ['고관절 가동 범위', 'RH', (r) => r.j[1][2], '°'],
-  ['걸음 길이', 'LH', stride('sL'), '%'], ['걸음 길이', 'RH', stride('sR'), '%'],
+  ['걸음 길이(등 길이 기준)', 'LH', stride('sL'), '%'], ['걸음 길이(등 길이 기준)', 'RH', stride('sR'), '%'],
   ['팔꿈치 가동 범위', 'LF', (r) => r.j[2][1], '°'], ['팔꿈치 가동 범위', 'RF', (r) => r.j[2][2], '°'],
-  ['대칭 점수', null, (r) => r.sym, '점'], ['발 들림 높이', 'LF', null, '%'],
+  ['대칭 점수', null, (r) => r.sym, '점'], ['발 들림 높이(등 길이 기준)', 'LF', null, '%'],
 ]
 const _TREND: Record<string, [Fn, Fn | null]> = {
   rom: [(r) => r.j[0][1], (r) => r.j[0][2]],
