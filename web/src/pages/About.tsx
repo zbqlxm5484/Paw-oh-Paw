@@ -75,7 +75,7 @@ const BONES: [string, string][] = [
   ['hip', 'stifleF'], ['stifleF', 'hockF'], ['hockF', 'hpawF'],
 ]
 const JOINT = new Set(['elbowF', 'elbowB', 'carpusF', 'carpusB', 'stifleB', 'stifleF', 'hockB', 'hockF'])
-const METRICS: [string, number, string][] = [['무릎 가동 범위', 32, '°'], ['고관절 가동 범위', 17, '°'], ['입각기 비율', 61, '%'], ['좌우 대칭 지수', 73, '%']]
+const METRICS: [string, number, string][] = [['무릎 가동 범위', 32, '°'], ['고관절 가동 범위', 17, '°'], ['입각기 비율', 61, '%'], ['좌우 대칭 점수', 73, '점']]
 const PASSES: ('ok' | 'no')[] = ['ok', 'ok', 'no', 'ok', 'ok', 'ok', 'no', 'ok']
 const TRUST: [string, string][] = [
   ['측정 품질 공개', '쓴 걸음과 뺀 걸음, 뺀 이유를 그대로 보여 줍니다.'],
@@ -324,7 +324,7 @@ export default function About() {
                   <div style={css('display:grid;grid-template-columns:repeat(4,1fr);gap:6px')}>
                     {[['체중', '28.1kg'], ['체온', '38.6℃'], ['심박', '92'], ['혈압', '142/84']].map(([k, v]) => <div key={k} style={css('background:#FAF7F2;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:10px;color:#8E949C;font-weight:600')}>{k}</span><b style={css('font-size:12.5px;font-weight:700')}>{v}</b></div>)}
                   </div>
-                  {[['S', '산책 후 오른뒤를 들고 서는 시간이 줄었다고 함'], ['O', '보행 측정 대칭 지수 73% (직전 64%)'], ['A', 'TPLO 후 회복 순조'], ['P', '2주 뒤 재측정']].map(([k, v]) => <div key={k} style={css('display:flex;gap:8px;font-size:11.5px;line-height:1.4')}><b style={css('width:14px;color:#B4501A')}>{k}</b><span style={css('color:#3A4250')}>{v}</span></div>)}
+                  {[['S', '산책 후 오른뒤를 들고 서는 시간이 줄었다고 함'], ['O', '보행 측정 대칭 점수 73점 (직전 64점)'], ['A', 'TPLO 후 회복 순조'], ['P', '2주 뒤 재측정']].map(([k, v]) => <div key={k} style={css('display:flex;gap:8px;font-size:11.5px;line-height:1.4')}><b style={css('width:14px;color:#B4501A')}>{k}</b><span style={css('color:#3A4250')}>{v}</span></div>)}
                   <div id="em-save" style={css(`align-self:flex-end;height:26px;padding:0 10px;border-radius:7px;background:${ORANGE};color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center`)}>저장</div>
                 </div>
                 {/* 커서 */}

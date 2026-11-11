@@ -65,7 +65,7 @@ function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; pa
     <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:14.5px;line-height:1.5')}>
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
-      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 지수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}%p` : '첫 측정이라 비교할 회차가 없어요'}</span>
+      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
     </div>
   )
 }
@@ -216,11 +216,11 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
 
       {kind === 'g' ? <FirstSummary bm={bm} rd={rd} /> : null}
 
-      {/* 한눈에: 좌우 대칭 지수 */}
+      {/* 한눈에: 좌우 대칭 점수 */}
       <div style={css('display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:20px 22px;border-radius:14px;background:#FAF7F2')}>
         <div style={css('display:flex;flex-direction:column;gap:2px')}>
-          <span style={css('font-size:13.5px;font-weight:700;color:#5B6472')}>좌우 대칭 지수</span>
-          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:20px')}>%</span></b>
+          <span style={css('font-size:13.5px;font-weight:700;color:#5B6472')}>좌우 대칭 점수</span>
+          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:20px')}>점</span></b>
         </div>
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
           <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
@@ -228,7 +228,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
           </div>
           <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
           {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-          <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}%p</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+          <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
         </div>
       </div>
 
@@ -280,8 +280,8 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
         /* 지금까지 변화 */
         bm.trend.length > 1 ? (
           <div style={css('display:flex;flex-direction:column;gap:6px')}>
-            <b style={css('font-size:15px')}>지금까지 좌우 대칭 지수</b>
-            <span style={css('font-size:12px;color:#8E949C')}>점 하나가 그날 측정한 대칭 지수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
+            <b style={css('font-size:15px')}>지금까지 좌우 대칭 점수</b>
+            <span style={css('font-size:12px;color:#8E949C')}>점 하나가 그날 측정한 대칭 점수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
             <svg className="rep-trend" viewBox="0 0 360 100" style={css('width:100%;max-width:560px')}>
               <polyline points={bm.trend_line} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round"></polyline>
               {bm.trend.map((p, i) => (
@@ -298,7 +298,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       )}
       <div style={css('flex:1')}></div>
       {/* 보호자용 용어 설명(보고서 검사 terms.yaml 의 설명 문구 그대로, 토씨까지 같아야 검사를 통과한다) */}
-      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
+      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b><span><b>좌우 대칭 점수</b>: 왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지를 0~100 으로 나타낸 점수. 100에 가까울수록 고르게 씀</span><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
       <span style={css('font-size:12px;color:#A0A7B2')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
     </div>
   )

@@ -342,7 +342,7 @@ export function mount(ctx: Ctx, el: Els): () => void {
     return '<b style="font-size:14px">' + L.label + (L.weak ? ' · 덜 씁니다' : '') + '</b>' + rows
   }
   function bodyTip() {
-    return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 지수 <b>' + OVERALL.sym + '%</b></div><div style="color:#C9CFD8">'
+    return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 점수 <b>' + OVERALL.sym + '점</b></div><div style="color:#C9CFD8">'
       + OVERALL.front + '</div><div style="color:#C9CFD8">' + OVERALL.hind + '</div>'
   }
   const onMove = (e: PointerEvent) => {

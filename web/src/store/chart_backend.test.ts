@@ -54,7 +54,7 @@ describe('홈 배지·변동: 서버 값이 있으면 그것으로', () => {
     const d = toDog(out({ changes: [{ code: 'RESHOOT_NEEDED', on: daysBefore(1), delta: null }, { code: 'GAIT_WORSE', on: daysBefore(1), delta: -4 }, { code: 'IMPORTANT_NOTE', on: daysBefore(3), delta: null }], badges: [] }))
     const fail = { id: 'r1', dog: 'd1', day: daysBefore(1), st: 'fail' } as Result
     const [ch, last] = changes(acct([d], [fail]), d)
-    expect(ch.map((c) => [c.t, c.tone])).toEqual([['재촬영 필요', 'bad'], ['보행 나빠짐 −4%p', 'bad'], ['중요 메모', 'warn']])
+    expect(ch.map((c) => [c.t, c.tone])).toEqual([['재촬영 필요', 'bad'], ['보행 나빠짐 −4점', 'bad'], ['중요 메모', 'warn']])
     expect(last).toBe(daysBefore(1))
     const part = { ...fail, st: 'part' }
     expect(changes(acct([d], [part]), d)[0][0].t).toBe('일부 유효 · 재촬영 권장')

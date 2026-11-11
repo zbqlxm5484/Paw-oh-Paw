@@ -31,7 +31,7 @@ export default function Results() {
     .map((r, i) => ({
       id: r.id, name: dogOf(acct, r.dog)!.name, when: `${r.date} · ${sess_no(acct, r)}회차`,
       ...st_chip(r.st), pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`,
-      sym: r.st === 'fail' ? '—' : `${r.sym}%`, w: wkg(r.w), bt: i ? '1px solid #F2EFEA' : 'none',
+      sym: r.st === 'fail' ? '—' : `${r.sym}점`, w: wkg(r.w), bt: i ? '1px solid #F2EFEA' : 'none',
     }))
 
   return (
@@ -54,7 +54,7 @@ export default function Results() {
         </div>
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow-x:auto')}>
           <div className="tbl" style={css('--tw:720px;--tw-n:560px')}>
-            <div className="tbl-r" style={css('--tc:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;--tc-n:1.1fr 1.4fr 1fr 1fr 1fr 32px;display:grid;gap:12px;padding:14px 24px;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>반려견</span><span>측정일 · 회차</span><span>상태</span><span>유효 통과</span><span>대칭 지수</span><span className="tbl-opt">체중</span><span></span></div>
+            <div className="tbl-r" style={css('--tc:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;--tc-n:1.1fr 1.4fr 1fr 1fr 1fr 32px;display:grid;gap:12px;padding:14px 24px;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>반려견</span><span>측정일 · 회차</span><span>상태</span><span>유효 통과</span><span>대칭 점수</span><span className="tbl-opt">체중</span><span></span></div>
             {rows.map((r) => (
               <a key={r.id} className="lk hv-row tbl-r" href={link(`/results/${r.id}`)} style={css(`--tc:1.1fr 1.4fr 1fr 1fr 1fr 1fr 40px;--tc-n:1.1fr 1.4fr 1fr 1fr 1fr 32px;display:grid;gap:12px;align-items:center;padding:16px 24px;border-top:${r.bt};font-size:15px;font-variant-numeric:tabular-nums`)}>
                 <b>{r.name}</b><span style={css('color:#5B6472')}>{r.when}</span><span><span style={css(`height:26px;padding:0 10px;border-radius:8px;font-size:12.5px;font-weight:700;background:${r.bg};color:${r.c};display:inline-flex;align-items:center`)}>{r.st}</span></span><span>{r.pass}</span><span>{r.sym}</span><span className="tbl-opt">{r.w}</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#A0A7B2')}><use href="#w-chev"></use></svg>
