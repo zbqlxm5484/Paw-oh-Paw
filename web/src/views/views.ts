@@ -115,7 +115,7 @@ export function mrows(r: Result, gait: string): Row[] {
     { n: '걸음 길이', l: v(r.sL * 1.5), r: v(r.sR * 1.5), u: '%', leg: '뒷다리' },
     { n: '입각기 비율', l: 61, r: 61 - jround((r.sL - r.sR) / 2), u: '%', leg: '뒷다리' },
     { sec: '앞다리', n: '팔꿈치 가동 범위', l: v(r.j[2][1]), r: v(r.j[2][2]), u: '°', leg: '앞다리' },
-    { n: '발 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
+    { n: '발 들림 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
   ]
 }
 
@@ -259,7 +259,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
     items: [
       { k: '좌우 대칭 점수', v: `${r.sym}점`, d: prev ? `직전 ${prev.sym}점` : '첫 측정' },
       { k: '뒷무릎 움직임 범위', v: `왼 ${k0.l}° · 오 ${k0.r}°`, d: `차이 ${Math.abs(k0.l! - k0.r!)}°` },
-      { k: '걸음 길이(몸통 대비)', v: `왼 ${sL}% · 오 ${sR}%`, d: `차이 ${Math.abs(sL - sR)}%p` },
+      { k: '걸음 길이(등 길이 대비)', v: `왼 ${sL}% · 오 ${sR}%`, d: `차이 ${Math.abs(sL - sR)}%p` },
     ],
     rows: [
       ...rows_t.map((x) => ({
@@ -269,7 +269,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
       { n: '대칭 점수', l: '—', r: '—', d: `${r.sym}점` },
     ] as { n: string; l: string; r: string; d: string; bg?: string }[],
     cond: `측면 가로 촬영 · 영상 ${r.videos.length || 16}개 · 통과 ${r.ps[0]}개 중 ${r.ps[1]}개 사용 · 분석 모델 pga-pose ${r.model}. 측정 불가 항목은 사유와 함께 표시했습니다.`
-      + (hasM(r) ? ' 걸음 길이·발 높이는 몸통 길이(T13~장골능) 대비이며, 문헌 값(어깨뼈~고관절 기준)과 비교할 때는 1.92로 나눕니다.' : ''),
+      + (hasM(r) ? ' 걸음 길이·발 들림 높이는 등 길이(T13~장골능) 대비이며, 문헌 값(어깨뼈~고관절 기준)과 비교할 때는 1.92로 나눕니다.' : ''),
   }
   rp.rows.forEach((row: { bg?: string }, i: number) => {
     row.bg = i % 2 ? '#fff' : '#FAF8F5'
@@ -1066,7 +1066,7 @@ const _CMP: [string, string | null, Fn | null, string][] = [
   ['고관절 가동 범위', 'LH', (r) => r.j[1][1], '°'], ['고관절 가동 범위', 'RH', (r) => r.j[1][2], '°'],
   ['걸음 길이', 'LH', stride('sL'), '%'], ['걸음 길이', 'RH', stride('sR'), '%'],
   ['팔꿈치 가동 범위', 'LF', (r) => r.j[2][1], '°'], ['팔꿈치 가동 범위', 'RF', (r) => r.j[2][2], '°'],
-  ['대칭 점수', null, (r) => r.sym, '점'], ['발 높이', 'LF', null, '%'],
+  ['대칭 점수', null, (r) => r.sym, '점'], ['발 들림 높이', 'LF', null, '%'],
 ]
 const _TREND: Record<string, [Fn, Fn | null]> = {
   rom: [(r) => r.j[0][1], (r) => r.j[0][2]],

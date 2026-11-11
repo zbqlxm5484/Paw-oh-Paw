@@ -163,9 +163,9 @@ export function kneeTrend(acct: Account, r: Result, gait: string): TrendView | n
 
 // ── 4. 그 밖의 수치 ──
 export const OTHER: [string, string, string][] = [
-  ['stride_length', '걸음 길이(몸통 길이 기준)', '%'],
+  ['stride_length', '걸음 길이(등 길이 기준)', '%'],
   ['stance_ratio', '입각기 비율', '%'],
-  ['paw_lift', '발 들림 높이(몸통 길이 기준)', '%'],
+  ['paw_lift', '발 들림 높이(등 길이 기준)', '%'],
   ['stifle_cv', '무릎 움직임 일관성', '%'],
 ]
 export const LIMBS: [string, string][] = [['LF', '왼앞'], ['RF', '오른앞'], ['LH', '왼뒤'], ['RH', '오른뒤']]

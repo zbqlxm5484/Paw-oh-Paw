@@ -104,7 +104,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
     items: [
       { k: '좌우 대칭 점수', v: num(R.sym) + '점', d: P ? `직전 ${num(P.sym)}점` : '첫 측정' },
       { k: '뒷무릎 움직임 범위', v: stifle && !stifle.na ? `왼 ${stifle.l}° · 오 ${stifle.r}°` : '측정 불가', d: stifle && !stifle.na ? `차이 ${r1(Math.abs(stifle.l - stifle.r))}°` : '' },
-      { k: '걸음 길이(몸통 대비)', v: sL != null && sR != null ? `왼 ${sL}% · 오 ${sR}%` : '측정 불가', d: sL != null && sR != null ? `차이 ${Math.abs(sL - sR)}%p` : '' },
+      { k: '걸음 길이(등 길이 대비)', v: sL != null && sR != null ? `왼 ${sL}% · 오 ${sR}%` : '측정 불가', d: sL != null && sR != null ? `차이 ${Math.abs(sL - sR)}%p` : '' },
     ],
     rows: [...rowsT.map((x) => ({ n: x.n, l: x.na ? '측정 불가' : x.l + x.u, r: x.na ? '—' : x.r + x.u, d: x.na ? '—' : r1(Math.abs(x.l - x.r)) + x.u })), { n: '대칭 점수', l: '—', r: '—', d: num(R.sym) + '점' }].map((x, i) => ({ ...x, bg: i % 2 ? '#fff' : '#FAF8F5' })),
     cond: `측면 가로 촬영 · 영상 ${R.result?.shot_counts.total ?? '-'}개 · 통과 ${R.ps[0]}개 중 ${R.ps[1]}개 사용 · 분석 모델 ${model}. 측정 불가 항목은 사유와 함께 표시했습니다.`,

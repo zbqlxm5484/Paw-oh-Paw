@@ -121,7 +121,7 @@ export const METRIC_LABEL: Record<string, string> = {
   rom_stifle: '무릎 가동 범위',
   rom_tarsus: '뒷발목 가동 범위',
   stifle_cv: '무릎 움직임 일관성',
-  paw_lift: '발 높이',
+  paw_lift: '발 들림 높이',
   paw_excursion: '발 움직임 범위',
   stride_length: '걸음 길이',
   stance_ratio: '입각기 비율',
@@ -143,7 +143,7 @@ export const JOINT_LABEL: Record<JointCode, string> = {
   tarsus: '뒷발목',
 }
 
-export const UNIT_LABEL: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '몸통/초', count: '회' }
+export const UNIT_LABEL: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '등 길이/초', count: '회' }
 
 export const PAIR_LABEL: Record<Pair, string> = { FORE: '앞다리', HIND: '뒷다리' }
 export const EDITION_LABEL: Record<Edition, string> = { OWNER: '보호자용', VET: '수의사용' }
