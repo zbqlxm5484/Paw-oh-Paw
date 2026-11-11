@@ -413,8 +413,8 @@ export class AppProto extends DCLogic<Props, any> {
           if (c.code === 'RESHOOT_NEEDED') {
             if (!latest || latest.st === 'fail') out.push(latest ? failChip(latest) : { t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' })
             else out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
-          } else if (c.code === 'GAIT_BETTER' && c.delta != null) out.push({ t: `보행 좋아짐 +${c.delta}%p`, bg: '#E8F3EC', c: '#2E8B57' })
-          else if (c.code === 'GAIT_WORSE' && c.delta != null) out.push({ t: `보행 나빠짐 −${-c.delta}%p`, bg: '#F8E7E3', c: '#C2412D' })
+          } else if (c.code === 'GAIT_BETTER' && c.delta != null) out.push({ t: `보행 좋아짐 +${c.delta}점`, bg: '#E8F3EC', c: '#2E8B57' })
+          else if (c.code === 'GAIT_WORSE' && c.delta != null) out.push({ t: `보행 나빠짐 −${-c.delta}점`, bg: '#F8E7E3', c: '#C2412D' })
           else if (c.code === 'IMPORTANT_NOTE') out.push({ t: '중요 메모', bg: '#EEF1F6', c: '#4A5A78' })
         }
         return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
@@ -425,8 +425,8 @@ export class AppProto extends DCLogic<Props, any> {
         else {
           if (r.st === 'part') out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
           const p = prevValid(r)
-          if (p && r.sym != null && p.sym != null && r.sym - p.sym >= 3) out.push({ t: `보행 좋아짐 +${r.sym - p.sym}%p`, bg: '#E8F3EC', c: '#2E8B57' })
-          else if (p && r.sym != null && p.sym != null && p.sym - r.sym >= 3) out.push({ t: `보행 나빠짐 −${p.sym - r.sym}%p`, bg: '#F8E7E3', c: '#C2412D' })
+          if (p && r.sym != null && p.sym != null && r.sym - p.sym >= 3) out.push({ t: `보행 좋아짐 +${r.sym - p.sym}점`, bg: '#E8F3EC', c: '#2E8B57' })
+          else if (p && r.sym != null && p.sym != null && p.sym - r.sym >= 3) out.push({ t: `보행 나빠짐 −${p.sym - r.sym}점`, bg: '#F8E7E3', c: '#C2412D' })
         }
       }
       return out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i)
@@ -439,7 +439,7 @@ export class AppProto extends DCLogic<Props, any> {
       // 오늘 회차가 여러 개여도 칩은 가장 최근 회차 하나만(results 는 최신순)
       const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
       if (!res.length && !live) return []
-      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }))]
+      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 점수 ${r.sym ?? '—'}점`, bg: '#F1ECE5', c: '#5B6472' }))]
       const times = res.map((r) => r.time).filter(Boolean).sort()
       return [{ key: d.id, when: times[0] || '', name: d.name, sub: d.breed || '견종 미입력', chips: [...chips, ...badgeChips(d)], right: res.map(byOf).find((b) => b !== '—') || '', live, open: () => this.openDog(d.id) }]
     })
@@ -460,7 +460,7 @@ export class AppProto extends DCLogic<Props, any> {
       if (!r) return []
       if (r.st === 'fail') return [failChip(r)]
       if (r.st === 'part') return [{ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' }]
-      return [{ t: `보행 측정 · 대칭 지수 ${r.sym ?? '—'}%`, bg: '#F1ECE5', c: '#5B6472' }]
+      return [{ t: `보행 측정 · 대칭 점수 ${r.sym ?? '—'}점`, bg: '#F1ECE5', c: '#5B6472' }]
     }
     // 변화 칩 중 재촬영·실패·일부 유효는 latestChip 과 겹치므로 뺀다(좋아짐·나빠짐·중요 메모만)
     const RETAKE_T = new Set(['재촬영 필요', '분석 실패', '일부 유효 · 재촬영 권장'])
@@ -469,7 +469,7 @@ export class AppProto extends DCLogic<Props, any> {
       return { key: d.id, when: last ? `마지막 측정 ${short(last.date)}` : '측정 전', name: d.name, sub: `${SEX[d.sex || 'm']} · ${ageOf(d)} · ${d.breed || '견종 미입력'} · ${SIZE[d.size]}`,
         // 셋째 줄: 수술·질병 이름, 그 뒤에 조치가 필요한 변화(재촬영 필요·보행 좋아짐/나빠짐)
         chips: [...badgeChips(d), ...latestChip(d), ...changesOf(d).filter((c) => !RETAKE_T.has(c.t))], right: `분석 ${all.length}건`,
-        sym: tr.has ? { t: `${tr.sym}%`, bg: '#F2EFEA', c: '#1B2433', d: tr.label, dc: tr.c } : undefined, open: () => this.openDog(d.id) }
+        sym: tr.has ? { t: `${tr.sym}점`, bg: '#F2EFEA', c: '#1B2433', d: tr.label, dc: tr.c } : undefined, open: () => this.openDog(d.id) }
     })
     const staffRows: HomeRow[] = (() => {
       const m = new Map<string, DRes[]>()
@@ -528,7 +528,7 @@ export class AppProto extends DCLogic<Props, any> {
       chips: [{ id: 'all', init: '전체', name: '전체' }, ...repDogs.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name }))].map((c) => ({ ...c, on: s.filt === c.id, pick: () => this.setState({ filt: c.id, resShown: 50 }) })),
       rows: repRows.slice(0, s.resShown).map((r) => {
         const d = dogById(r.dog)!, rp = repOf(r)
-        return { id: r.id, thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, name: d.name, when: `${r.date} · ${sessNo(r)}회차`, sub: `${d.breed || '견종 미입력'}${r.sym != null && r.st !== 'fail' ? ` · 대칭 지수 ${r.sym}%` : ''}`,
+        return { id: r.id, thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, name: d.name, when: `${r.date} · ${sessNo(r)}회차`, sub: `${d.breed || '견종 미입력'}${r.sym != null && r.st !== 'fail' ? ` · 대칭 점수 ${r.sym}점` : ''}`,
           owner: rp?.OWNER === 'DONE', vet: rp?.VET === 'DONE', openOwner: () => openRepOf(r.id, 'g'), openVet: () => openRepOf(r.id, 'v') }
       }),
       more: repRows.length > s.resShown ? `더 보기 (${repRows.length - s.resShown}건 남음)` : '', loadMore: () => this.setState({ resShown: s.resShown + 50 }),
@@ -733,7 +733,7 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       cp, cmpSegs: seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], this.props.ui.cmp, (k) => this.props.setUi({ cmp: k as 'base' | 'prev' })),
-      trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 지수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),
+      trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 점수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),
 
       isOrg, isUser: false, myName: acct.name, myDev: acct.dev || '-',
       goAccount: () => this.nav('account'), help: () => this.nav('help'), settings: () => this.nav('settings'), goSupport: () => this.nav('legal', '/legal/support'),

@@ -201,7 +201,7 @@ export function DogBody({ d }: { d: WebDog }) {
               )) : <span style={{ fontSize: 13.5, color: '#A0A7B2' }}>기록된 진단·수술이 없습니다</span>}
             </div>
             <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}><b style={{ fontSize: 15 }}>경과 한눈에 보기</b>{d.trend.has ? <span style={{ fontSize: 12.5, color: SUB }}>최근 대칭 지수 <b style={{ color: INK, ...tnum }}>{d.trend.sym}%</b> · <b style={{ color: d.trend.c }}>{d.trend.label}</b></span> : null}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}><b style={{ fontSize: 15 }}>경과 한눈에 보기</b>{d.trend.has ? <span style={{ fontSize: 12.5, color: SUB }}>최근 대칭 점수 <b style={{ color: INK, ...tnum }}>{d.trend.sym}점</b> · <b style={{ color: d.trend.c }}>{d.trend.label}</b></span> : null}</div>
               {d.trend.has ? (
                 <svg viewBox="0 0 320 110" style={{ width: '100%', display: 'block' }}>
                   {[20, 50, 80].map((y) => <line key={y} x1="24" x2="300" y1={y} y2={y} stroke="#F0ECE6" />)}
@@ -214,7 +214,7 @@ export function DogBody({ d }: { d: WebDog }) {
                     </Fragment>
                   ))}
                 </svg>
-              ) : <span style={{ fontSize: 13.5, color: '#A0A7B2' }}>유효한 회차가 쌓이면 대칭 지수 변화를 보여 줍니다.</span>}
+              ) : <span style={{ fontSize: 13.5, color: '#A0A7B2' }}>유효한 회차가 쌓이면 대칭 점수 변화를 보여 줍니다.</span>}
             </div>
             <b style={{ fontSize: 16, letterSpacing: '-0.3px', padding: '6px 2px 0' }}>측정 이력 <span style={{ color: '#A0A7B2', fontWeight: 600, fontSize: 14 }}>{d.count}</span></b>
             <div style={{ ...card, padding: '0 14px' }}>

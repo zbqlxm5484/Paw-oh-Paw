@@ -120,7 +120,7 @@ export function Gait3dBody(p: Gait3dProps) {
           {VIEWS.map(([k, label]) => <button key={k} type="button" onClick={() => api.current?.setView(k)} style={{ ...btn, flex: 1, padding: 0, border: `1px solid ${k === ctx?.view_main ? ORANGE : '#E2DCD3'}`, color: k === ctx?.view_main ? '#B4501A' : INK }}>{label}{k === ctx?.view_main ? ' ★' : ''}</button>)}
         </div>
         <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <span style={{ fontSize: 14 }}>좌우 대칭 지수 <b>{p.sym ?? '—'}%</b></span>
+          <span style={{ fontSize: 14 }}>좌우 대칭 점수 <b>{p.sym ?? '—'}점</b></span>
           {([['앞다리', lc.front], ['뒷다리', lc.hind]] as const).map(([label, P]) => (
             <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}><span>{label}</span><span style={{ color: P.lv[3] }}>{P.lv[1]}</span></span>
