@@ -1,0 +1,26 @@
+# 경보 규칙. 경보를 보내는 Alertmanager·웹훅은 2순위라 아직 없고, Prometheus 화면(Alerts)에서만 보인다.
+groups:
+  - name: creamoff
+    rules:
+      # 환경마다 blue/green 중 한 색은 항상 내려가 있으므로, 환경 안의 두 색이 모두 안 보일 때만 알린다
+      - alert: ApiDown
+        expr: sum by (env) (up{job="api"}) == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.env }} 환경 api 가 blue·green 모두 수집되지 않는다 (백엔드 /metrics 미구현·꺼짐일 수도 있다)"
+
+      - alert: DiskUsageHigh
+        # 영상 업로드가 쌓이는 서비스라 디스크가 가장 먼저 찬다
+        expr: (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 0.85
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "디스크 사용률 85% 초과 ({{ $labels.mountpoint }})"
+
+      - alert: GpuExporterDown
+        expr: up{job="gpu"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "GPU 서버 exporter 가 수집되지 않는다 (터널 끊김·GPU 서버 자동 종료·exporter 미기동)"
