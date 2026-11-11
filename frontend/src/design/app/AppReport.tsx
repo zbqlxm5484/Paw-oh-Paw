@@ -3,6 +3,7 @@
 // 좌우 비교·지난 측정과 비교·무릎 가동 범위 변화(수의사용, AppVetSections).
 // 몸 그림 색·문구 규칙은 웹 views.ts body_map 과 같다(대칭 지수 차이 5%·10% 경계).
 import type { ReactNode } from 'react'
+import { AppOwnerSummary } from './AppOwnerSummary'
 import type { SessionResultOut } from '../../api/types'
 import { AppQualityLine } from './AppQuality'
 import dogSmall from './dog/dog_small.svg?raw'
@@ -185,6 +186,8 @@ export function AppReport(p: AppReportProps) {
           </div>
         ))}
       </div>
+
+      {p.kind === 'g' ? <AppOwnerSummary front={front} hind={hind} /> : null}
 
       {/* 측정 품질 */}
       <div style={{ ...box({ background: '#FAF7F2' }), display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: '12.5px' }}>
