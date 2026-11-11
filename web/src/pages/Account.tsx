@@ -45,10 +45,10 @@ export default function Account() {
         </PostForm>
         <PostForm action="/account/withdraw" onBefore={() => window.confirm('탈퇴하면 이 계정으로 더 이상 로그인할 수 없습니다. 기관의 반려견·측정 기록은 남습니다. 탈퇴하시겠습니까?')}
           style={css('background:#fff;border:1px solid #ECE8E2;border-radius:22px;padding:28px 36px;display:flex;flex-direction:column;gap:12px')}>
-          <b style={css('font-size:19px;color:#C2412D')}>회원 탈퇴</b>
+          <b style={css('font-size:19px;color:#B4501A')}>회원 탈퇴</b>
           <span style={css('font-size:14px;color:#5B6472')}>계정만 중지됩니다. 같은 기관의 다른 담당자가 반려견·측정 기록을 계속 볼 수 있고, 기관의 마지막 계정은 탈퇴할 수 없습니다.</span>
           <input type="password" name="password" autoComplete="current-password" placeholder="현재 비밀번호" required style={css(INP)} />
-          <button type="submit" style={css('align-self:flex-end;height:48px;padding:0 22px;border-radius:12px;border:1px solid #C2412D;background:#fff;color:#C2412D;font-size:16px;font-weight:700;cursor:pointer')}>탈퇴하기</button>
+          <button type="submit" style={css('align-self:flex-end;height:48px;padding:0 22px;border-radius:12px;border:1px solid #D2601A;background:#fff;color:#B4501A;font-size:16px;font-weight:700;cursor:pointer')}>탈퇴하기</button>
         </PostForm>
       </main>
     </Base>

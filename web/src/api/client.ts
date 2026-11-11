@@ -192,6 +192,11 @@ export interface CompareItemOut {
   metric_code: string; limb: string; gait_type: string; unit: string
   base_value: number | null; target_value: number | null; diff: number | null; judgement: string; note: ReasonOut | null
 }
+/** GET /dogs/{id}/trends(15.8): 수치 하나·보행 하나의 회차별 값. 다리마다 series 하나 */
+export interface TrendsOut {
+  dog_id: string; metric_code: string; unit: string; gait_type: string
+  series: { limb: string; points: { session_id: string; measured_on: string; value: number | null; measurable: boolean }[] }[]
+}
 export interface CompareOut {
   dog_id: string
   base: { session_id: string; measured_on: string; model_version: string | null; kind: string }
@@ -307,6 +312,8 @@ export const api = {
   /** 측정 이력(15.8, 백엔드 !91). 아직 없는 서버면 404 */
   dogSessions: (dogId: string, page = 1, size = 100) => request<Paged<SessionHistoryItem>>(`/dogs/${dogId}/sessions?page=${page}&size=${size}`),
   /** 회차 비교(15.8). base = BASELINE·PREVIOUS·회차 id, target 을 빼면 최근 DONE 회차 */
+  trends: (dogId: string, metric: string, gait: string) =>
+    request<TrendsOut>(`/dogs/${dogId}/trends?metric_code=${encodeURIComponent(metric)}&gait_type=${gait}`),
   compare: (dogId: string, base: string, target?: string, gait?: string) =>
     request<CompareOut>(`/dogs/${dogId}/compare?base=${encodeURIComponent(base)}${target ? `&target=${target}` : ''}${gait ? `&gait_type=${gait}` : ''}`),
   // ── 차트 자료(271): 바이탈·진단 이력·메모·진료 기록 ──
