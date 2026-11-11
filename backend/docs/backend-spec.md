@@ -37,6 +37,7 @@ Oct 19, 2026 · @조영운
 | v1.42 | 2026-11-09 | 관절 각도 파일 다시 만들기(271 MR 리뷰 박규원, 간격은 조영운 결정 11-09): 12.4 관절 각도 파일에 '못 쓴 촬영은 5분마다 다시 시도하고, 워커를 켤 때와 30분마다 최근 48시간의 촬영에 파일이 있는지 본다'를 더했다. 15.6 `GET /shots/{shot_id}/angles`의 빈 배열 설명, 17.2 BE-14. 테이블·마이그레이션·API는 바뀌지 않는다. |
 | v1.45 | 2026-11-10 | 시연 기관 데이터 넣기(S15P31A404-273, 박규원 11-10 요청. v1.44는 276번 브랜치가 쓴다): 3절 `scripts/seed_demo.py`, 17.7 시연 기관 데이터(계정은 모두 CLIENT, 워커와 같은 결과 반영·집계, 관절 각도 파일·결과 영상은 받은 관절점으로, `job_id`는 촬영 ID의 UUID5, `--reset`은 그 기관만 파기) |
 | v1.43 | 2026-11-09 | 보고서 직전 회차 비교 표(S15P31A404-272. v1.38~v1.42는 271번 브랜치가 쓴다): 8절 2번에서 본문 표의 괄호 안 직전 값을 없애고 "직전 회차와 비교" 표를 따로 둠(같은 보행 유형·수치·다리끼리 직전 → 이번, 차이, 증가·감소·범위 안, 비교 불가 사유). 8절 7번과 12.4에 직전 값(`previous`)·차이(`change`)도 실린 숫자로 대조한다고 적음. 17.4 BE-15 고침. 템플릿 판 0.5 |
+| v1.44 | 2026-11-10 | 보고서 내용 API와 인쇄 토큰(S15P31A404-276, 박규원 11-10 요청 '보고서 PDF를 웹 보고서 화면으로'): 11.6에 인쇄 토큰(`FILE_URL_SECRET`·`FILE_URL_TTL_SEC`, 내주는 API 없음. 처음에는 회차 하나의 9·17·18·62번만 열었으나, 박규원의 11-10 결정 '(가) 웹 보고서 화면을 그대로 PDF로'에 따라 **그 기관의 조회 아홉(2·3·8·9·17·18·22·55·62번, GET만)을 여는 읽기 전용 토큰**으로 넓혔다. 인쇄 화면이 내용 API가 아니라 보고서 화면과 같은 자료로 그리기 때문이다), 12.4 권한 표 두 줄, 14.1에 `REPORT_CHECK_FAILED`(409), 15.2에 62번, 15.7에 `GET /sessions/{session_id}/report-content`(PDF와 같은 함수로 만든 글·표·숫자, 같은 검사. 회차 번호·대칭 점수·기준 회차·지난 회차·관심 다리 포함), 8절 6번에 화면 인쇄(렌더러 Gotenberg, 안 되면 기본 템플릿), 12.4 보고서 한 건, 16절 환경 변수 셋(`REPORT_RENDERER_URL`·`REPORT_PRINT_URL`·`REPORT_RENDER_TIMEOUT_SEC`), 17.4 BE-15 세 줄. 테이블은 늘지 않는다 |
 | v1.46 | 2026-11-10 | 프론트 요청 여섯(S15P31A404-271 추가분, 박규원 11-10 '프론트 ↔ 백엔드 연결 현황'과 조유진 258. v1.44는 276번, v1.45는 273번이 쓴다). **② 바이탈 삭제**: `DELETE /dogs/{dog_id}/vitals/{measured_on}`(15.2 63번, 12.5 차트 자료 ②, 15.11). **③ 메모 방문일**: `dog_note.visited_on`(12.2, 마이그레이션 0021, 기본 오늘, 지난 날짜로 쓸 수 있음. v1.36의 '날짜를 받지 않는다'를 바꿈), 목록 순서가 방문일 → 쓴 시각, `NoteOut.visited_on`(13.9, 15.3, 15.11). **④ 메모 삭제**: `DELETE /notes/{note_id}`(64번, 수정 이력까지 지움, 12.5 차트 자료 ③). **⑤ 그날 기록**: `GET /daily-records?date=`(65번, BE-35, 기관의 그날 바이탈·메모·진료 기록·회차를 한 번에), `VitalOut.dog_id`. **⑥ 측정 기기 정보**: `GET /auth/me/device`(66번, BE-36, 기관의 쓸 수 있는 디바이스 코드를 가려서 줌). 62번은 276번 브랜치가 쓴다. **⑦ DB 오류 로그**: 11.8에 DB 오류에서 행 값을 빼는 규칙(`scrub_db_error`. ②\~⑥ 검증에서 나온 것으로, 제약 오류의 500 로그에 메모 본문·연락처가 실렸다). **① 분석 API 사본을 촬영 단위로 지움**(조유진 258의 `DELETE /analyses?shot_id=…`): 6절 `AnalysisClient`에 `delete_shot`(여섯 동작)과 지우는 순서(촬영 단위 → 아는 작업이 답에 없으면 작업 단위, 옛 분석 API의 405는 작업 단위로, 워커가 가져가지 않은 촬영은 부르지 않음, 작업 ID가 없는 촬영 먼저)와 남는 한계, 7절 보관과 파기, 12.2 `purge_log.analysis_jobs_deleted`의 뜻, 12.4 잠금(잠근 뒤 그사이 달라진 촬영만)과 자동 파기가 이어서 할 때의 기억, 15.6 측정 취소·다시 분석·촬영 삭제(작업 ID가 없어도 보낸 적이 있는 촬영은 부름), 15.9 `analysis_jobs`(실제 파기는 팀 서비스가 모르던 작업도 셈)와 두 단계, 17.4 BE-10·BE-19 |
 | v1.47 | 2026-11-11 | 동시 처리 점검(S15P31A404-274): 여러 계정이 동시에 요청을 보내는 점검 스크립트 `scripts/load_check.py`와 기록 `docs/report/concurrencyCheck.md`. 점검에서 나온 둘을 고침: ① 11.7 DB 연결 수를 API 스레드 수와 같은 40개(평소 20 + 넘칠 때 20)로 ② 11.11 `LocalStorage`가 동시에 쓰고 지울 때 빈 폴더 정리 때문에 실패하지 않게 ③ 보고서 두 판본을 함께 만들기(조영운 결정 11-11): 12.4 보고서 풀 크기를 1에서 `WORKER_REPORT_CONCURRENCY`(16절, 기본 2)로. 11.2 폴더 구조, 17.6. 테이블·마이그레이션·API는 바뀌지 않는다. 환경 변수 하나가 늘었다 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
@@ -390,7 +391,9 @@ judgement 값: INCREASE · DECREASE · WITHIN\_RANGE · UNKNOWN · NOT\_COMPARAB
 3. 문장: 김지윤의 문장 템플릿(MR 80 리뷰)으로 만든다. 보호자용 요약의 둘째 문장은 비율이 가장 큰 항목의 좌우 차이를 15.8의 오차 범위 표와 견준다. 표에 그 수치가 없거나, 한쪽 `n_passes`가 8 미만이거나, 통과 수를 모르면 변화를 판단하지 않는다는 문장(15.8, 박규원 MR 86 답변), 차이의 크기가 오차 범위 이하면 범위 안, 크면 범위보다 크다는 문장이다. 외부 언어 모델은 선택이고, 쓰면 식별 정보 없는 수치만 보낸다 (PR-F08-09)
 4. 차트: matplotlib. pyplot 대신 Figure 객체로 그려, 워커 프로세스에 그림이 쌓이지 않게 한다
 5. HTML 템플릿 채우기: Jinja2
-6. PDF 변환: WeasyPrint. 한글 글꼴은 상업 이용이 되는 OFL 글꼴(본고딕 등)을 넣는다
+6. PDF 변환: 두 길이 있다. 어느 길이든 글 검사(7번)는 그 앞에서, 수치 대조는 그 뒤에서 똑같이 한다.
+   - 기본 템플릿: WeasyPrint. 한글 글꼴은 상업 이용이 되는 OFL 글꼴(본고딕 등)을 넣는다
+   - 화면 인쇄(S15P31A404-276): `REPORT_RENDERER_URL`과 `REPORT_PRINT_URL`이 있을 때. 워커가 그 회차의 인쇄 토큰(11.6)을 붙인 웹 인쇄 화면 주소 `{REPORT_PRINT_URL}/print/reports/{session_id}?edition=OWNER|VET&token=…`를 렌더러(Gotenberg, headless Chromium. `POST /forms/chromium/convert/url`)에 넘기고, 화면이 다 그렸다고 알릴 때(`window.__REPORT_READY__ === true`)까지 기다린 PDF를 받는다. 인쇄 화면은 웹의 보고서 화면과 같은 종이를 같은 조회 API로 그린다(박규원 11-10 결정 (가), 웹 MR !156). 그래서 화면 인쇄 PDF의 글과 배치는 웹 화면의 것이고 기본 템플릿과 다르다. **7번의 글 검사와 수치 대조는 여전히 서버의 보고서 모듈이 만든 글·숫자를 본다. 화면이 실제로 찍은 글·숫자를 보는 것이 아니다.** 화면의 숫자는 같은 서버 수치를 반올림해 보여 주는 것이라 값은 같지만, 화면의 문구는 금지 표현·용어 검사를 거치지 않는다. 검사에 걸리면 어느 길이든 PDF를 붙이지 않는 것은 그대로다. 휴지통에 든 반려견의 회차는 화면 인쇄를 쓰지 않고 기본 템플릿으로 만든다(인쇄 토큰도 로그인처럼 휴지통의 반려견을 읽지 못한다). 렌더러가 답하지 않거나 `REPORT_RENDER_TIMEOUT_SEC` 안에 PDF를 주지 못하면 그 판본은 기본 템플릿으로 만든다(경고 로그). 두 PDF는 모양이 다르므로, 어느 길로 만들었는지를 워커의 완료 로그에 `made_by=screen` 또는 `made_by=template`으로 남긴다(276 리뷰, 박규원). 보고서 응답에는 싣지 않는다(칸이 없다). 인쇄 화면 주소는 토큰이 들어 있어 로그에 남기지 않는다
 7. 검사: 실린 수치를 분석 결과와 자동 대조(불일치 0건. 보고서 모듈은 실은 숫자 목록(보행 유형·수치 코드·다리 또는 쌍·종류(metric·left·right·diff·symmetry_index, 직전 회차 비교 표의 previous(직전 값)·change(이번 − 직전))·값)을 돌려주고, 팀 서비스 워커가 저장 전에 그 목록을 DB의 `session_metric` 값(직전 값·차이는 입력에 넣은 직전 회차의 `session_metric` 값과 `report/judge.py`의 `difference`로 다시 계산한 차이)과 15.7 다리 비교 계산값에 맞춘다. 비교는 `report/verify.py`의 `compare_numbers`, 기준값은 `services/report_numbers.py`가 결과 조회와 같은 함수로 만든다. 값이 다르거나 기준에 없는 숫자가 하나라도 있으면 `REPORT_CHECK_FAILED`이고, 기준에는 있는데 싣지 않은 수치는 불일치가 아니다. 기업 서버는 분석 결과에서 같은 모양의 기준값을 만들어 같은 함수를 부르면 된다), 금지 표현 목록 대조(0건), 보호자용의 설명 없는 전문 용어 검사. 하나라도 걸리면 PDF를 내보내지 않고 실패로 남긴다 (PR-F08-11·12, KPI-30·31). 금지 표현·전문 용어 목록은 `report/terms.yaml`(패키지 안, 김지윤 초안이 현재본. 용어 설명은 명사형)이고 `report/checks.py`가 본다. 전문 용어는 보호자용에서 같은 문서 안에 설명 문구가 한 번은 있으면 된다(용어 바로 뒤가 아니어도 됨). 용어는 공백을 빼고 찾고, 설명 문구는 글자가 같아야 한다. 모든 판본에 "보행 평가 보조 자료" 문구가 있어야 한다
 8. 저장: 팀 서비스는 파일 저장소에 넣고 report 행을 갱신한다
 
@@ -597,6 +600,7 @@ backend/
 - **계정 만들기**: 두 길이다. 디바이스 코드 가입(`POST /auth/signup`, `CLIENT`만, 15.4)과 `scripts/seed.py`(`--role ADMIN|STAFF|CLIENT`, `device_code_id`는 NULL). 비밀번호는 bcrypt 해시로만 저장한다. 관리자 계정을 만드는 API는 없다.
 - **기관 분리**: 한 서버를 여러 병원·재활 센터(기관)가 함께 쓰므로, 담당자는 자기 기관의 반려견만 봐야 한다(PR-F09-04). 모든 조회·수정은 `api/deps.py`의 `get_current_staff()`가 꺼낸 기관 ID로 거른다. 예를 들어 A병원 담당자가 주소를 고치거나 잘못 받은 링크를 열어 B병원 반려견 ID로 요청하면, 404 `NOT_FOUND`로 답해 그 자료가 있는지도 알려 주지 않는다. 병원을 옮긴 반려견의 이력을 넘기는 일은 이 규칙에 예외를 두지 않고, 보호자 동의를 받는 별도 이전 기능으로 다룬다(10절 Q17).
 - **영상·PDF 주소(서명 URL)**: 화면의 `<video>`·`<iframe>` 태그는 주소만으로 파일을 불러와서 로그인 토큰을 헤더에 붙이지 못한다. 그렇다고 파일 주소를 공개하면 주소를 아는 누구나 영상을 본다. 그래서 조회 API는 "이 파일 하나를 5분 동안만 열 수 있다"는 서명이 붙은 주소를 내려 준다. 예: `/api/v1/shots/{shot_id}/video?exp=1792369800&sig=9f2c...` `exp`는 만료 시각, `sig`는 서버만 아는 비밀키로 만든 값(HMAC-SHA256(비밀키, 경로 + exp))이다. 주소를 고치거나 5분이 지나면 열리지 않고, 화면은 필요할 때 조회 API를 다시 불러 새 주소를 받는다. 저장소가 S3면 이 서명 대신 S3의 presigned URL을 준다(11.11).
+- **인쇄 토큰**(276): 웹의 보고서 인쇄 화면이 로그인 없이 자료를 읽게 하는 짧은 토큰이다. 워커가 그 화면을 렌더러로 열어 PDF로 만들 때 쓴다(8절 6번, 12.4). 서명 URL은 경로 하나에 묶여 있어 조회 API를 여러 개 부르는 화면에는 쓸 수 없어서 따로 둔다. 내용은 `typ`(`print` 고정), `sid`(이 토큰을 만든 회차 ID), `inst`(기관 ID), `exp`이고 HS256이다. 서명 키는 `FILE_URL_SECRET`, 유효 시간은 `FILE_URL_TTL_SEC`(기본 5분)이다. 로그인 토큰과 서명 키가 달라 서로 대신 쓸 수 없다. 만드는 곳은 `core/security.py`의 `create_print_token`뿐이고 내주는 API는 없다. 화면은 로그인 토큰처럼 `Authorization: Bearer <token>`으로 보낸다. **범위는 그 기관의 읽기 전용이다**(박규원 11-10 결정 (가): 인쇄 화면이 보고서 화면과 같은 자료를 읽는다). 받는 API는 15.2의 2번(내 정보), 3번(반려견 목록), 8번(측정 이력), 9번(회차 조회), 17번(관절 각도), 18번(회차 결과), 22번(회차 비교), 55번(기관 회차 목록), 62번(보고서 내용) 아홉이고 모두 GET이다(`api/deps.py`의 `get_reader`, 2번은 `get_me_caller`). 그 기관에 로그인한 `CLIENT`가 읽는 것과 같은 것을 읽는다: 다른 기관의 것은 404이고, 휴지통에 든 반려견의 것도 404다. `sid`는 어느 회차의 보고서를 만들려고 낸 토큰인지 적어 둔 값일 뿐, 그 회차로 좁히지 않는다. 그 밖의 API(쓰기 전부, 촬영 한 건 조회, 보고서 목록·파일, 차트 자료, 관리자 API 등)는 인쇄 토큰을 받지 않는다(401 `AUTH_REQUIRED`). 만료면 401 `AUTH_EXPIRED`다. 계약 상태와 계정 상태는 보지 않는다(사람이 아니라 서버가 만든 토큰이다). 2번은 인쇄 토큰이면 그 기관의 `CLIENT`처럼 보이는 **StaffOut**을 준다(15.4). 아홉 응답 어디에도 결과 영상·보고서 파일의 서명 주소는 없다(주소는 촬영 한 건 조회와 보고서 목록에만 있다). **넓힌 범위의 뜻**: 토큰은 인쇄 화면 주소의 쿼리에 실려 렌더러로 간다. 그 주소를 본 쪽은 5분 동안 그 기관의 반려견 목록(보호자 이름·연락처 포함)과 회차 결과를 읽을 수 있다. 그래서 주소를 로그에 남기지 않고(11.8), 렌더러와 인쇄 화면 사이는 내부망으로 둔다(16절). 처음 설계(회차 하나의 넷만)보다 넓다는 것을 알고 정한 것이다.
 - **역할 검사**: `api/deps.py`의 `require_admin`(`ADMIN`만)과 `require_creamoff`(`ADMIN`·`STAFF`) 두 의존성. `/api/v1/admin/*`의 쓰기(POST·PATCH)는 앞, 조회(GET)는 뒤를 쓰고, 아니면 403 `FORBIDDEN`이다. 그 밖의 라우트는 역할을 보지 않는다(기관 필터만).
 - **요청마다 하는 검사**(`get_current_staff`): ① 토큰을 풀어 담당자 ID를 얻는다(없거나 잘못됨 401 `AUTH_REQUIRED`, 만료 401 `AUTH_EXPIRED`). ② 캐시에서 스냅샷을 찾고, 없거나 지났으면 DB에서 담당자 + 기관을 읽어 캐시에 넣는다(담당자 행이 없으면 401 `AUTH_REQUIRED`). ③ `is_active`가 FALSE면 403 `ACCOUNT_DISABLED`. ④ `effective_role`이 `GUEST`면 403 `CONTRACT_EXPIRED`. `GET /auth/me`만 ④를 뺀 `CurrentStaffAny`를 쓴다. `ADMIN`·`STAFF`는 계약을 검사하지 않는다. ⑤ 경로 권한(위 역할 검사). 통과하면 스냅샷 `AuthStaff`를 돌려주고 모든 조회는 그 `institution_id`로 거른다. 토큰이 살아 있어도 ③·④에서 막히므로 로그아웃을 안 해도 다음 요청부터 차단된다(캐시 때문에 최대 60초 늦을 수 있다).
 - **`/auth/me`와 로그인**: 캐시를 거치지 않고 DB를 읽고, 읽은 값으로 캐시를 갱신한다. 화면이 "새로 고침"으로 최신 상태를 볼 수 있는 자리다.
@@ -1124,7 +1128,7 @@ CREATE TABLE purge_log (
 * **관절 각도 파일**(v1.39): 프레임별 관절 각도는 분석 결과 JSON이 아니라 분석 API의 관절점 파일에만 있다. 워커는 결과 영상을 맡기려고 관절점 파일을 받았을 때, 저장해 둔 `analysis.json`의 유효 통과와 맞춰 통과별 각도만 뽑아 촬영 키의 `angles.json`에 쓴다(`services/shot_angles.py`). 분석 API를 한 번 더 부르지 않는다. 파일에는 그 분석의 `job_id`를 함께 적는다. 쓴 뒤 촬영이 그대로인지(DONE이고 `job_id`가 같음) 다시 보고, 아니면 방금 쓴 파일을 지운다. 이 일이 실패해도 결과 영상은 그대로 만든다. 지울 때는 촬영·회차·반려견 접두어 삭제에 함께 지워진다(12.5). DB에 키 칸을 두지 않는다. 이 기능 전에 분석한 촬영에는 파일이 없다. **다시 만들기**(v1.42, `worker/render.py`의 `repair_angles`): 결과 영상이 READY가 되면 그 촬영은 워커의 맡기기 대상에서 빠지므로, 각도 파일은 따로 다시 만든다. ① 저장소 오류로 못 쓴 촬영은 워커가 메모리에 기억해 두고 5분마다 분석 API에서 관절점 파일을 다시 받아 만든다. ② 워커를 켤 때와 그 뒤 30분마다, 분석이 끝난 지 48시간이 안 된 촬영(DONE이고 결과 영상이 PENDING이 아닌 것, 최근 200건) 중 각도 파일이 없거나 파일의 `job_id`가 촬영의 것과 다른 촬영을 찾아 ①의 목록에 넣고 바로 만든다. 워커가 재시작되어 기억이 사라진 경우의 길이다. 한 번에 10건까지, 10초를 넘기지 않는다(주 반복과 같은 스레드다). 분석 API가 답하지 않으면 그 차례를 멈추고 다음 간격에 다시 한다. 분석 결과 JSON이 계약과 다르거나 분석 API에 그 작업이 없으면(404·410·요청 거부) 다시 해도 같으므로 그만둔다. 촬영이 지워졌거나 다시 분석에 들어갔으면(`job_id`가 바뀜) 목록에서 뺀다. 간격과 범위는 코드의 상수이고 환경 변수가 아니다.
 * **자식 프로세스**: `video/`·`report/` 함수만 부르고 DB와 저장소를 모른다(11.3). 주 반복이 작업마다 `UPLOAD_TMP_DIR/worker/{작업 ID}/` 폴더를 만들고, 입력 경로와 출력 경로를 넘긴다. 입력은 `local_copy`로 준비하고, 작업별 `ExitStack`으로 작업이 끝날 때까지 열어 둔다. 자식 프로세스는 OpenCV 스레드를 1개(`cv2.setNumThreads(1)`)로, ffmpeg를 `-threads 2`로 묶는다.
 * **맡기기와 거두기**: 빈 자리는 그 풀에서 실행 중인 작업 수가 풀 크기보다 적을 때다. 미리 줄 세워 넣지 않는다. 결과 영상은 `status='DONE' AND video_status='PENDING'`인 촬영을 `analyzed_at, id` 순으로, 보고서는 PENDING 행을 `updated_at, id` 순으로 꺼낸다. 맡긴 ID는 메모리 집합에 두어 두 번 맡기지 않는다. 주 반복은 매 바퀴 `future.done()`으로 끝난 작업을 거둔다. `add_done_callback` 안에서는 DB를 건드리지 않는다. 성공이면 출력 파일을 `put_file`로 넣고 조건을 건 UPDATE로 붙인다. 성공·실패 모두 `ExitStack`을 닫고 작업 폴더를 지운다.
-* **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 자식이 돌려준 실린 숫자 목록을 먼저 DB의 `session_metric` 값·15.7 다리 비교 계산값과 맞추고(8절 7번. 직전 회차 비교 표의 직전 값·차이는 입력을 만들 때 넣은 직전 회차의 ID를 기억해 두었다가 그 회차의 행과 맞춘다. 그사이 직전 회차의 값이 바뀌었거나 회차가 없어졌으면 어긋난다), 어긋나면 PDF를 저장하지 않고 `REPORT_CHECK_FAILED`로 남긴다(DB 오류가 아닌 이유로 기준을 읽지 못하면 `REPORT_FAILED`). 맞으면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
+* **보고서 한 건**: 주 반복이 `UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING'`으로 가져가 commit한 뒤 맡긴다. 입력 dict는 `app/services/report_input.py`의 `build_report_input(db, report)`가 만든다(8절의 입력). 화면 인쇄가 켜져 있으면(8절 6번) 이때 인쇄 토큰을 만들어 인쇄 화면 주소와 함께 자식에 넘긴다(`app/clients/renderer.py`). 반려견이 휴지통에 있으면 넘기지 않는다(인쇄 화면이 그 자료를 읽지 못해 시간 제한까지 기다리기만 한다). 자식이 돌려준 실린 숫자 목록을 먼저 DB의 `session_metric` 값·15.7 다리 비교 계산값과 맞추고(8절 7번. 직전 회차 비교 표의 직전 값·차이는 입력을 만들 때 넣은 직전 회차의 ID를 기억해 두었다가 그 회차의 행과 맞춘다. 그사이 직전 회차의 값이 바뀌었거나 회차가 없어졌으면 어긋난다), 어긋나면 PDF를 저장하지 않고 `REPORT_CHECK_FAILED`로 남긴다(DB 오류가 아닌 이유로 기준을 읽지 못하면 `REPORT_FAILED`). 맞으면 `status='DONE'`, `file_key`, `generation_ms`(자식 프로세스가 PDF를 만든 시간), `model_version`, `template_version`, `fail_reason=NULL`을 `WHERE id=:id AND status='GENERATING'`으로 쓴다. 보고서 모듈은 검사 실패를 `report.ReportCheckError`로 알리고 이는 `REPORT_CHECK_FAILED`, 그 밖의 예외는 `REPORT_FAILED`다. 보고서 키는 보고서 ID로 정해져 다시 만들어도 같다. 그래서 새 PDF로 덮어쓰고, 예전 파일을 따로 지우지 않는다.
 * **자식 프로세스가 죽으면**: `BrokenProcessPool`이 나면 그 풀을 새로 만들고, 그 풀에서 실행 중이던 작업을 모두 FAILED(`VIDEO_RENDER_FAILED`·`REPORT_FAILED`)로 둔다.
 * **거두는 중 DB 오류**: 작업과 PDF를 그대로 두고 다음 바퀴에 다시 거둔다(회차 집계와 같다). 가져간 뒤 DB가 끊겨 맡기지 못해 GENERATING인데 맡은 작업이 없는 보고서는 매 바퀴 PENDING으로 돌린다. 그대로 두면 워커를 다시 켤 때까지 다시 만들기도 409로 막히기 때문이다. 이 규칙도 워커가 한 대일 때만 맞다.
 * **다시 켤 때**: 워커가 켜지면 `UPLOAD_TMP_DIR/worker/`를 비우고, GENERATING 보고서를 PENDING으로 돌린다. 만들던 중에 꺼진 것이기 때문이다. 결과 영상은 PENDING에 머물러 있으므로 그대로 다시 맡긴다. 이 규칙은 워커가 한 대일 때만 맞다(3절 확장 계획).
@@ -1249,6 +1253,8 @@ CREATE TABLE purge_log (
 | 회차 비교 | 두 회차가 같은 반려견의 서로 다른 DONE 회차다 | 400 `COMPARE_INVALID`(`detail.reason`은 15.8) |
 | 자료 파기 | 대상에 SUBMITTED·ANALYZING 촬영이 없다 | 409 `SHOT_IN_PROGRESS` |
 | 보고서·결과 영상 파일 열기 | 서명 URL의 `exp`가 지나지 않았고 `sig`가 맞다 | 403 `FILE_LINK_EXPIRED` |
+| 인쇄 토큰으로 조회(15.2의 2·3·8·9·17·18·22·55·62번) | 대상이 토큰의 기관 것이고 휴지통에 없다(로그인한 담당자와 같다) | 404 `NOT_FOUND` |
+| 보고서 내용 조회 | 글 검사(금지 표현·용어·고정 문구)와 수치 대조를 지났다(8절 7번) | 409 `REPORT_CHECK_FAILED` |
 
 - 측정 취소·촬영 삭제가 UPLOADED 촬영을 막지 않는 이유: 워커는 UPLOADED 촬영을 가져갈 때 회차 행을 잠그고 SUBMITTED로 바꾼 뒤에야 분석 API를 부른다(12.4 잠금). 두 동작이 같은 잠금을 잡으므로 지워진 촬영에 결과가 쓰이는 일은 없다.
 
@@ -1378,6 +1384,7 @@ API 응답으로 바로 돌아가는 오류다. 모양은 11.5의 `{"error": {..
 | `SHOT_IN_PROGRESS` | 409 | 분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요. | 13.3 |
 | `SHOT_NOT_FAILED` | 409 | 실패한 촬영만 다시 분석할 수 있습니다. | 13.3 |
 | `REPORT_IN_PROGRESS` | 409 | 보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요. | 13.3 |
+| `REPORT_CHECK_FAILED` | 409 | 보고서 검사를 통과하지 못해 내보내지 않았습니다. | 보고서 내용(15.7의 62번)이 글 검사·수치 대조에 걸림(8절 7번) |
 | `DEVICE_CODE_EXISTS` | 409 | 이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요. | 회수하지 않은 코드가 있는 기관에 코드 발급(12.5) |
 | `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 가입 때 아이디 중복(다른 기관이어도) |
 | `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | `version` 불일치(12.5) |
@@ -1470,7 +1477,7 @@ STOPPED: "중간에 멈췄습니다."
 
 ### 15.1 공통 약속
 
-- **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF), 디바이스 코드 확인·가입(27·28), 비밀번호 재설정 둘(40·41)을 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). `GUEST`(계약이 끝난 `CLIENT`)가 부를 수 있는 것은 1·2뿐이다. `/admin/*`(29\~37) 중 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만이다. `/health`와 `/metrics`도 다른 API처럼 `/api/v1` 아래에 둔다(`/api/v1/health`, `/api/v1/metrics`).
+- **인증**: 로그인, `/health`, `/metrics`, 서명 URL로 여는 파일 두 개(결과 영상, 보고서 PDF), 디바이스 코드 확인·가입(27·28), 비밀번호 재설정 둘(40·41)을 빼고 모두 `Authorization: Bearer <token>`이 필요하다(11.6). 2·3·8·9·17·18·22·55·62번(모두 GET)은 로그인 토큰 대신 인쇄 토큰도 받는다(11.6). `GUEST`(계약이 끝난 `CLIENT`)가 부를 수 있는 것은 1·2뿐이다. `/admin/*`(29\~37) 중 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만이다. `/health`와 `/metrics`도 다른 API처럼 `/api/v1` 아래에 둔다(`/api/v1/health`, `/api/v1/metrics`).
 - **공통 오류**: 아래 오류는 인증이 필요한 모든 API에서 날 수 있어 엔드포인트마다 다시 적지 않는다. 401 `AUTH_REQUIRED`·`AUTH_EXPIRED`, 403 `ACCOUNT_DISABLED`(로그인 뒤에 계정이 막힘), 403 `CONTRACT_EXPIRED`(기관 계약이 끝난 `CLIENT`, `/auth/me` 제외), 404 `NOT_FOUND`(ID가 없거나 다른 기관의 것), 422 `VALIDATION_ERROR`, 500 `INTERNAL_ERROR`.
 - **ID로 찾기**: 주소에 든 ID뿐 아니라 쿼리·본문으로 받은 ID(`base`, `target`, `baseline_session_id`, `target_id`, 메모의 `session_id`)도 자기 기관 안에서만 찾는다. 반려견에 딸린 회차는 `WHERE id = :id AND dog_id = :dog_id`로 찾는다. 없는 ID와 다른 기관·다른 반려견의 ID는 똑같이 404 `NOT_FOUND`로 답해, 다른 기관에 그 자료가 있는지 알 수 없게 한다. `baseline_session_id`만 예외로 400 `BASELINE_INVALID`다(13.2).
 - **ID 형식**: 주소·쿼리·본문의 ID는 `uuid.UUID`로 받는다. 주소(경로)의 ID가 UUID 형식이 아니면 404 NOT\_FOUND(11.5), 쿼리·본문의 ID는 DB까지 가지 않고 422 `VALIDATION_ERROR`다. PostgreSQL은 UUID 컬럼을 UUID 형식이 아닌 문자열과 비교하면 오류를 내므로(그대로 두면 500), 문자열로 받은 ID를 그대로 쿼리에 넣지 않는다.
@@ -1545,6 +1552,7 @@ STOPPED: "중간에 멈췄습니다."
 | 59 | `DELETE /images/{image_id}` | 사진 지우기 | BE-34 | 204 | — |
 | 60 | `PATCH /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 고치기 | BE-29 | 200 | — |
 | 61 | `DELETE /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 지우기 | BE-29 | 204 | — |
+| 62 | `GET /sessions/{session_id}/report-content` | 보고서 내용(판본 하나의 글·표·숫자, 인쇄 화면용) | BE-15 | 200 | 409 `SESSION_NOT_DONE`, `REPORT_CHECK_FAILED` |
 | 63 | `DELETE /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 지우기(62번은 276번 브랜치가 쓴다) | BE-28 | 204 | — |
 | 64 | `DELETE /notes/{note_id}` | 메모·진료 기록 한 건 지우기(수정 이력까지) | BE-30 | 204 | — |
 | 65 | `GET /daily-records` | 기관의 그날 바이탈·메모·진료 기록·회차 | BE-35 | 200 | — |
@@ -1804,7 +1812,7 @@ STOPPED: "중간에 멈췄습니다."
 - 계약이 끝난 `CLIENT`도 로그인되고 `staff.effective_role`이 `GUEST`다. 화면은 그 값을 보고 만료 안내로 보낸다. 로그인은 DB를 직접 읽고 캐시를 갱신한다(11.6).
 - `expires_at`은 토큰 만료 시각이다. 화면은 이 시각이나 401 `AUTH_EXPIRED`를 보고 로그인 화면으로 보낸다.
 
-**`GET /auth/me`** — 내 정보. 응답 200 **StaffOut**. DB를 직접 읽고 캐시를 갱신한다. `GUEST`도 된다(계약 검사를 뺀 `CurrentStaffAny`, 11.6).
+**`GET /auth/me`** — 내 정보. 응답 200 **StaffOut**. DB를 직접 읽고 캐시를 갱신한다. `GUEST`도 된다(계약 검사를 뺀 `CurrentStaffAny`, 11.6). 인쇄 토큰(11.6, 276)으로 부르면 사람이 없으므로 그 기관의 `CLIENT`처럼 보이는 값을 준다: `institution`은 토큰의 기관, `role`과 `effective_role`은 `CLIENT`(계약이 끝났어도), `id`는 0으로 찬 UUID, `login_id`와 `name`은 `print`, `email`은 `null`, `notif_on`은 false다. 인쇄 화면은 `institution`·`role`·`effective_role`만 쓴다.
 
 **`PATCH /auth/me`** — 이름·이메일·알림 설정 수정 (BE-26). 요청 `{"name"?, "email"?, "notif_on"?}`(보낸 필드만, 규칙은 13.7). 응답 200 **StaffOut**. 바꾼 뒤 자기 스냅샷을 캐시에서 지운다. `notif_on`은 알림을 받을지의 설정값이고 계정마다 따로다. 서버는 값을 저장해 **StaffOut**으로 돌려줄 뿐 알림을 보내지 않는다(분석 완료·실패는 화면이 회차 상태를 보고 목록으로 보여 준다).
 
@@ -1994,7 +2002,7 @@ STOPPED: "중간에 멈췄습니다."
 
 **`GET /sessions/{session_id}`** — 회차 상태·진행·촬영 목록 (BE-07·09)
 
-S3 화면이 측정하는 내내 2\~3초마다 부르는 API다. 한 번에 화면 전체를 그릴 수 있게 회차·반려견·진행·촬영을 모두 담는다. 응답 200 **SessionDetailOut** = SessionOut의 모든 필드 + 아래.
+S3 화면이 측정하는 내내 2\~3초마다 부르는 API다. 한 번에 화면 전체를 그릴 수 있게 회차·반려견·진행·촬영을 모두 담는다. 인쇄 토큰(11.6)으로도 부를 수 있다. 응답 200 **SessionDetailOut** = SessionOut의 모든 필드 + 아래.
 
 ```json
 {
@@ -2071,7 +2079,7 @@ S3 화면이 측정하는 내내 2\~3초마다 부르는 API다. 한 번에 화�
 
 **`GET /shots/{shot_id}/angles`** — 프레임별 관절 각도 (BE-14, 권장)
 
-S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래프"). DB가 아니라 워커가 만들어 둔 촬영 키의 `angles.json`에서 읽는다(12.4 관절 각도 파일, v1.39). 분석 API를 부르지 않는다.
+S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래프"). DB가 아니라 워커가 만들어 둔 촬영 키의 `angles.json`에서 읽는다(12.4 관절 각도 파일, v1.39). 분석 API를 부르지 않는다. 인쇄 토큰(11.6)으로도 부를 수 있다.
 
 ```json
 // 응답 200
@@ -2128,7 +2136,7 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
 
 **`GET /sessions/{session_id}/result`** — 회차 수치와 다리 비교 요약 (BE-14·21)
 
-회차가 DONE이 아니면 409 `SESSION_NOT_DONE`이다. 응답 200 **SessionResultOut** = SessionOut의 모든 필드 + 아래.
+회차가 DONE이 아니면 409 `SESSION_NOT_DONE`이다. 인쇄 토큰(11.6)으로도 부를 수 있다. 응답 200 **SessionResultOut** = SessionOut의 모든 필드 + 아래.
 
 ```json
 {
@@ -2188,6 +2196,52 @@ S5의 관절 각도 곡선 그래프에 쓴다(세부명세서 PR-F09-02 "그래
 - `reports`는 OWNER, VET 순서다. 회차가 DONE이 되기 전에는 빈 배열이다(워커가 회차를 DONE으로 바꾸는 같은 트랜잭션에서 OWNER·VET 두 행을 PENDING으로 만든다, 12.4).
 - 화면은 PENDING·GENERATING인 판본이 있는 동안 3초마다 부른다.
 - DONE 판본의 `file_url`·`download_url`은 부를 때마다 새 서명이라 주소가 바뀐다(한 응답 안의 두 주소는 만료가 같다). 화면은 판본별로 처음 받은 주소를 `url_expires_at`까지 재사용한다. 그대로 미리보기에 묶으면 3초마다 PDF를 다시 읽는다. 다시 만들기로 DONE이 아니게 되면 붙들던 주소를 버리고 다음 DONE의 새 주소를 쓴다. PDF 응답은 `Cache-Control: private, max-age=<FILE_URL_TTL_SEC>`라 같은 주소는 브라우저 캐시의 예전 PDF를 보여 줄 수 있다.
+
+**`GET /sessions/{session_id}/report-content?edition=OWNER`** — 보고서 내용 (BE-15)
+
+판본 하나의 글·표·숫자를 JSON으로 낸다. 웹의 보고서 인쇄 화면이 이 값을 그대로 그린다(화면이 문장을 만들거나 숫자를 다시 계산하지 않는다). PDF와 같은 함수로 만들고(`report/content.py`의 `compose_content`), 같은 검사를 지난 것만 낸다: 글 검사(금지 표현·보호자용 용어 설명·고정 문구)와 수치 대조(실린 숫자 ↔ DB의 `session_metric`, 직전 회차 값·차이 포함, 8절 7번). 하나라도 걸리면 내용을 내지 않고 409 `REPORT_CHECK_FAILED`다.
+
+- `edition`은 필수이고 `OWNER`·`VET`다. 그 밖은 422.
+- 로그인 토큰 또는 인쇄 토큰(11.6)으로 부른다. 웹의 인쇄 화면은 이제 이 API가 아니라 보고서 화면과 같은 조회로 그린다(8절 6번). 이 API는 서버가 검사한 글·숫자를 화면에 쓰려는 곳을 위해 남겨 둔다.
+- 회차가 없거나 다른 기관이면 404 `NOT_FOUND`, DONE이 아니면 409 `SESSION_NOT_DONE`이다.
+- 응답 200 **ReportContentOut**:
+
+```json
+{
+  "session_id": "…",
+  "edition": "OWNER",
+  "template_version": "0.5",
+  "session": { "measured_on": "2026-11-04", "round": 3, "model_name": "fs-v4", "model_version": "…", "weight_kg": 12.5, "size_class": "MEDIUM", "symmetry_score": 92, "symmetry_level": "SLIGHT" },
+  "dog": { "name": "보리", "breed": "웰시코기", "sex": "M", "birth_year": 2021, "focus_limb": "LH" },
+  "previous": { "session_id": "…", "measured_on": "2026-10-14", "round": 2, "model_changed": false },
+  "baseline": { "session_id": "…", "measured_on": "2026-10-01", "round": 1, "symmetry_score": 88, "diff": 4 },
+  "history": [{ "measured_on": "2026-10-01", "round": 1, "symmetry_score": 88 }, { "measured_on": "2026-10-14", "round": 2, "symmetry_score": 90 }, { "measured_on": "2026-11-04", "round": 3, "symmetry_score": 92 }],
+  "legs": [{ "pair": "HIND", "gait_type": "TROT", "metric_code": "rom_stifle", "label": "무릎 가동 범위", "symmetry_index": "9.3%", "symmetry_value": 9.3, "weak_limb": "RH", "level": "SLIGHT" }],
+  "sentences": {
+    "title": "보리 보행 평가 보고서", "edition_label": "보호자용", "intro": "…", "summary": ["…"],
+    "previous_note": "…", "previous_gaps": ["…"], "caution": ["…"],
+    "glossary": [{ "term": "가동 범위", "explanation": "…" }],
+    "disclaimer": "이 보고서는 보행 평가 보조 자료이며 진단을 대신하지 않습니다."
+  },
+  "gaits": [{
+    "gait_type": "TROT", "label": "속보", "notes": ["…"],
+    "rows": [{ "metric_code": "rom_stifle", "label": "무릎 가동 범위", "unit": "deg",
+               "cells": { "LH": { "value": 38.6, "text": "38.6°", "reason": null } } }],
+    "compare": [{ "pair": "HIND", "pair_label": "뒷다리", "metric_code": "rom_stifle", "label": "무릎 가동 범위",
+                  "left": "38.6°", "right": "36.9°", "diff": "1.7°", "symmetry_index": "4.5%", "diff_value": 1.7, "symmetry_value": 4.5, "comparable": true, "reason": null }],
+    "changes": [{ "metric_code": "rom_stifle", "label": "무릎 가동 범위", "unit": "deg",
+                  "cells": { "LH": { "previous": "38.0°", "current": "47.3°", "diff": "+9.3°", "change": "INCREASE", "change_label": "증가", "note": null } } }]
+  }]
+}
+```
+
+- `round`는 같은 반려견의 끝난 회차(DONE·FAILED)를 (측정일, 만든 시각) 순으로 센 번호(1부터)다. 화면의 회차 번호와 같은 규칙이라 분석 실패 회차도 세고, 측정 중·집계 중 회차는 세지 않는다(취소한 회차는 행이 없다). `previous`는 바로 앞 DONE 회차이고 없으면 `null`이다(이때 `changes`는 모두 빈 배열). 사이에 FAILED 회차가 있으면 `previous.round`는 `session.round - 1`이 아니다.
+- `session.symmetry_score`는 12.3의 대칭 점수다(회차 결과의 값과 같다). `baseline`은 12.5의 기준 회차이고, 없거나 이 회차 자신이면 `null`이다. `history`는 이 회차까지(이 회차 포함) 끝난 회차를 오래된 순으로 최대 8개 낸다. FAILED 회차는 `symmetry_score`가 `null`이다. 화면은 대칭 점수의 차이나 그래프를 이 값으로만 그린다.
+- `dog.focus_limb`는 관심 다리(12.2)이고 없으면 `null`이다.
+- 화면이 따로 계산하지 않게 서버가 주는 값(박규원 11-10): `baseline.diff`는 이 회차의 대칭 점수 − 기준 회차의 대칭 점수다(한쪽이라도 없으면 `null`). `legs`는 몸 그림용 다리 쌍 요약이다. 보행 유형 하나(TROT, WALK, OTHER 순으로 대상 수치를 비교할 수 있는 첫 유형. 12.3 대칭 점수와 같은 순서)에서 쌍마다 대상 수치(앞다리 `rom_elbow`, 뒷다리 `rom_stifle`·`rom_hip`·`stride_length`·`stance_ratio`) 중 대칭 지수가 가장 큰 것을 고른다(같으면 적은 순서의 앞 수치). 비교할 수 있는 대상 수치가 없는 쌍은 빠진다. `level`은 차이 단계로 대칭 지수가 5 미만이면 `SIMILAR`, 10 미만이면 `SLIGHT`, 그 이상이면 `LARGE`다. 화면에 찍히는 값(소수 첫째 자리)으로 가르므로 찍힌 숫자와 단계가 어긋나지 않는다. `weak_limb`는 그 수치의 값이 작은 쪽 다리이고 `SIMILAR`면 `null`이다. `session.symmetry_level`은 100 − 대칭 점수에 같은 경계를 쓴 단계다(점수가 없으면 `null`). `legs`의 숫자는 `compare`의 것이라 수치 대조를 지난 값이다. 대칭 점수는 회차 결과의 값과 여기서 다시 계산한 값이 다르면 409 `REPORT_CHECK_FAILED`다.
+- `sentences`는 8절 3번의 문장이다. `glossary`는 보호자용에서 쓰인 전문 용어의 설명이고 수의사용은 빈 배열이다.
+- `gaits`는 보행 유형별 묶음이다. `rows`는 수치 표(`cells`의 키는 다리 코드, 측정하지 못한 칸은 `value`가 `null`이고 `reason`에 사유 문장), `compare`는 좌우 비교(15.7 다리 비교와 같은 값. `diff_value`·`symmetry_value`는 `diff`·`symmetry_index`의 숫자 값이고 비교할 수 없으면 `null`), `changes`는 직전 회차와 비교(8절 2번. `diff`는 이번 − 직전, `change`는 `INCREASE`·`DECREASE`·`WITHIN_RANGE` 또는 `null`, 비교하지 못했으면 `note`에 사유)다.
+- 글은 모두 화면에 그대로 찍는 문자열이다(단위·소수 자리까지 서버가 붙인다). `value`는 그림을 그릴 때만 쓴다.
 
 **`POST /reports/{report_id}/regenerate`** — 보고서 다시 만들기 (BE-15)
 
@@ -2594,6 +2648,9 @@ stance_ratio: 5.0 # pct
 | `SIZE_MEDIUM_MAX_KG` | `25` | 이 값 미만이면 MEDIUM, 이 값 이상이면 LARGE | 12.5 |
 | `BREEDS_FILE` | `config/breeds.yaml` | 견종 이름 목록(화면 자동완성용) | 12.5 |
 | `TOLERANCE_FILE` | `config/tolerance.yaml` | 회차 비교 오차 범위. 없으면 빈 것으로(경고 로그), 모양이 틀리면 워커 시작 실패 | 15.8 |
+| `REPORT_RENDERER_URL` | (없음) | 화면 인쇄 렌더러(Gotenberg) 주소. 예: `http://gotenberg:3000`. 비우면 보고서를 기본 템플릿(WeasyPrint)으로 만든다. `REPORT_PRINT_URL`과 둘 다 채우거나 둘 다 비운다(하나만 있으면 워커 시작 실패) | 8절 6번 |
+| `REPORT_PRINT_URL` | (없음) | 렌더러가 여는 웹 주소의 앞부분. 뒤에 `/print/reports/{session_id}`가 붙는다. 예: `http://nginx/web`. 렌더러 컨테이너에서 닿는 주소여야 한다 | 8절 6번 |
+| `REPORT_RENDER_TIMEOUT_SEC` | `60` | 렌더러의 답을 기다리는 시간(초). 넘으면 그 판본은 기본 템플릿으로 만든다 | 8절 6번 |
 | `MESSAGES_FILE` | `messages/ko.yaml` | 화면 문구 | 14.5 |
 | `LOG_LEVEL` | `INFO` | 로그 수준 | 11.8 |
 | `METRICS_ENABLED` | `false` | `/api/v1/metrics`를 켜는지(선택) | 15.9 |
@@ -2734,6 +2791,9 @@ ANALYSIS_API_MODE=mock
 - [ ] BE-15: 모든 판본에 "보행 평가 보조 자료" 문구가 있다.
 - [ ] BE-15: 직전 회차가 있으면 "직전 회차와 비교" 표에 같은 보행 유형의 값이 "직전 → 이번"으로 실리고, 5절 규칙의 변화(증가·감소·범위 안)가 오차 범위가 있고 두 회차 모두 `n_passes`가 8 이상인 값에만 붙으며, 분석 모델이 다르면 차이와 변화가 붙지 않는다. 직전 회차가 없으면 그 절이 없다.
 - [ ] BE-15: 비교 표의 직전 값과 차이가 직전 회차의 `session_metric` 값과 다르면 `REPORT_CHECK_FAILED`다.
+- [ ] BE-15: 보고서 내용 API(62번)의 글과 숫자는 같은 입력으로 만든 PDF와 같고, 글 검사나 수치 대조에 걸리면 내용을 내지 않고 409 `REPORT_CHECK_FAILED`다.
+- [ ] BE-15: 인쇄 토큰은 그 기관의 2·3·8·9·17·18·22·55·62번(GET)만 열고, 다른 기관과 휴지통의 반려견은 404, 그 밖의 API와 쓰기는 401이다. 2번은 그 기관의 `CLIENT`처럼 보이는 응답을 준다. 인쇄 토큰으로 받는 응답 어디에도 결과 영상·보고서 파일 주소가 없다. 휴지통에 든 반려견의 보고서는 화면 인쇄 없이 기본 템플릿으로 만들어진다.
+- [ ] BE-15: `REPORT_RENDERER_URL`·`REPORT_PRINT_URL`이 있으면 PDF가 웹 인쇄 화면으로 만들어지고, 렌더러가 답하지 않으면 기본 템플릿으로 만들어진다. 두 경우 모두 글 검사·수치 대조에 걸리면 PDF를 내보내지 않는다.
 - [ ] BE-16: 미리보기는 브라우저에서 열리고, `download=true`면 한글 파일 이름으로 내려받아진다.
 
 ### 17.5 이력·비교

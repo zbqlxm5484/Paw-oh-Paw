@@ -11,6 +11,7 @@ from app.core.auth_cache import AuthStaff, auth_cache
 from app.core.errors import AppError, ErrorCode
 from app.core.security import hash_password, verify_password
 from app.models import Institution, Staff
+from app.models.enums import EffectiveRole, StaffRole
 from app.schemas.auth import InstitutionOut, MeUpdate, StaffOut
 
 
@@ -154,3 +155,33 @@ def staff_out(staff: AuthStaff) -> StaffOut:
             contract_status=staff.contract_status,
         ),
     )
+
+
+# 인쇄 토큰으로 GET /auth/me를 부르면 주는 값의 자리 채움(15.4). 사람이 아니라 서버가 만든 토큰이다
+PRINT_STAFF_ID = uuid.UUID(int=0)
+PRINT_LOGIN_ID = "print"
+
+
+def print_staff_out(db: Session, institution_id: uuid.UUID) -> StaffOut:
+    """인쇄 토큰의 기관을 그 기관의 CLIENT처럼 보이는 StaffOut으로(11.6, 15.4). 기관이 없으면 401.
+
+    인쇄 화면은 institution·role·effective_role만 쓴다. 계약이 끝났어도 effective_role은 CLIENT다(인쇄 토큰은
+    계약 상태를 보지 않는다). institution의 계약 값은 실제 값이다.
+    """
+    institution = db.get(Institution, institution_id)
+    if institution is None:
+        raise AppError(ErrorCode.AUTH_REQUIRED)
+    snapshot = AuthStaff(
+        id=PRINT_STAFF_ID,
+        institution_id=institution.id,
+        login_id=PRINT_LOGIN_ID,
+        name=PRINT_LOGIN_ID,
+        email=None,
+        role=StaffRole.CLIENT.value,
+        is_active=True,
+        institution_code=institution.code,
+        institution_name=institution.name,
+        contract_ends_at=institution.contract_ends_at,
+        notif_on=False,
+    )
+    return staff_out(snapshot).model_copy(update={"effective_role": EffectiveRole.CLIENT.value})

@@ -95,6 +95,10 @@ class Settings(DbSettings):
     SIZE_MEDIUM_MAX_KG: float = 25
     BREEDS_FILE: str = "config/breeds.yaml"
     TOLERANCE_FILE: str = "config/tolerance.yaml"
+    # 보고서 PDF를 웹의 인쇄 화면으로 만들 때만 채운다(8절 6번). 둘 다 비어 있으면 기본 템플릿(WeasyPrint)으로 만든다
+    REPORT_RENDERER_URL: str = ""
+    REPORT_PRINT_URL: str = ""
+    REPORT_RENDER_TIMEOUT_SEC: float = Field(60, gt=0)
     MESSAGES_FILE: str = "messages/ko.yaml"
     LOG_LEVEL: str = "INFO"
     METRICS_ENABLED: bool = False

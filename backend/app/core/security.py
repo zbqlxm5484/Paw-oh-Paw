@@ -1,4 +1,4 @@
-"""비밀번호 해시(13.4), JWT(11.6), 서명 URL(11.6). 명세 11.2 security.py.
+"""비밀번호 해시(13.4), JWT(11.6), 서명 URL(11.6), 인쇄 토큰(11.6). 명세 11.2 security.py.
 
 Spring에 빗대면 PasswordEncoder + JwtTokenProvider + 서명 URL 도우미를 한 파일에 둔 것이다.
 HTTP 오류로 바꾸는 일은 api/deps.py가 한다. 이 파일은 TokenError 같은 자기 예외만 낸다.
@@ -117,6 +117,67 @@ def decode_access_token(token: str) -> TokenClaims:
         )
     except (KeyError, ValueError, TypeError) as error:
         raise TokenError("invalid claims") from error
+
+
+# ---- 인쇄 토큰 (11.6) ----
+
+PRINT_TOKEN_TYPE = "print"
+
+
+@dataclass(frozen=True)
+class PrintClaims:
+    """인쇄 토큰 안의 값(11.6): sid(회차 ID), inst(기관 ID), exp."""
+
+    session_id: uuid.UUID
+    institution_id: uuid.UUID
+    expires_at: datetime
+
+
+def create_print_token(
+    *, session_id: uuid.UUID, institution_id: uuid.UUID, now: datetime | None = None
+) -> tuple[str, datetime]:
+    """회차 하나를 FILE_URL_TTL_SEC(기본 300초) 동안 읽을 수 있는 토큰과 만료 시각.
+
+    서명 키가 FILE_URL_SECRET이라 로그인 토큰(JWT_SECRET)으로는 풀리지 않고, 로그인 토큰도 이 토큰으로 풀리지 않는다.
+    Spring에 빗대면 사람용 JWT와 따로 둔, 범위가 회차 하나인 일회성 액세스 토큰이다.
+    """
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    expires_at = now.replace(microsecond=0) + timedelta(seconds=settings.FILE_URL_TTL_SEC)
+    payload = {
+        "typ": PRINT_TOKEN_TYPE,
+        "sid": str(session_id),
+        "inst": str(institution_id),
+        "exp": int(expires_at.timestamp()),
+    }
+    token = jwt.encode(payload, settings.FILE_URL_SECRET.get_secret_value(), algorithm=JWT_ALGORITHM)
+    return token, expires_at
+
+
+def decode_print_token(token: str) -> PrintClaims:
+    """인쇄 토큰을 검증해 값을 꺼낸다. 만료면 TokenExpiredError, 그 밖의 문제(로그인 토큰을 준 것 포함)는 TokenError."""
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token,
+            settings.FILE_URL_SECRET.get_secret_value(),
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["typ", "sid", "inst", "exp"]},
+        )
+    except jwt.ExpiredSignatureError as error:
+        raise TokenExpiredError("print token expired") from error
+    except jwt.PyJWTError as error:
+        raise TokenError("invalid print token") from error
+    if payload["typ"] != PRINT_TOKEN_TYPE:
+        raise TokenError("not a print token")
+    try:
+        return PrintClaims(
+            session_id=uuid.UUID(str(payload["sid"])),
+            institution_id=uuid.UUID(str(payload["inst"])),
+            expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
+        )
+    except (ValueError, TypeError) as error:
+        raise TokenError("invalid print claims") from error
 
 
 # ---- 서명 URL (11.6) ----

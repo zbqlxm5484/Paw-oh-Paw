@@ -1,4 +1,5 @@
-"""요청 단위 의존성(11.2 deps.py): DB 세션(11.7), 로그인 담당자·계약 검사·역할 확인(11.6), 서명 URL 검사(11.6).
+"""요청 단위 의존성(11.2 deps.py): DB 세션(11.7), 로그인 담당자·계약 검사·역할 확인(11.6), 서명 URL 검사(11.6),
+인쇄 토큰으로도 열리는 조회(11.6 get_reader).
 
 Spring에 빗대면 get_db는 요청 하나를 감싸는 @Transactional 경계이고,
 get_current_staff는 JWT 필터 + @AuthenticationPrincipal, require_contract는 isAccountNonExpired() 검사,
@@ -6,7 +7,9 @@ require_admin·require_creamoff는 @PreAuthorize("hasRole(...)")다.
 """
 
 import logging
+import uuid
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Header
@@ -16,7 +19,13 @@ from app.clients.analysis import AnalysisClient, HttpAnalysisClient, build_analy
 from app.core.auth_cache import AuthStaff, auth_cache
 from app.core.db import SessionLocal
 from app.core.errors import AppError, ErrorCode
-from app.core.security import TokenError, TokenExpiredError, decode_access_token, verify_signed_url
+from app.core.security import (
+    TokenError,
+    TokenExpiredError,
+    decode_access_token,
+    decode_print_token,
+    verify_signed_url,
+)
 from app.models.enums import EffectiveRole, StaffRole
 from app.services.auth import load_snapshot
 
@@ -124,6 +133,58 @@ def require_creamoff(staff: CurrentStaff) -> AuthStaff:
 
 AdminStaff = Annotated[AuthStaff, Depends(require_admin)]
 CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
+
+
+# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 2·3·8·9·17·18·22·55·62번) ----
+
+
+@dataclass(frozen=True)
+class Reader:
+    """조회를 부른 쪽. 로그인한 담당자든 인쇄 토큰이든 그 기관의 것을 읽는다(11.6).
+
+    인쇄 토큰은 그 기관의 읽기 전용이다: 이 Reader를 받는 GET 라우트만 열리고, 로그인한 CLIENT가 읽는 것과 같은
+    것을 읽는다(다른 기관·휴지통의 반려견은 404). 쓰기 라우트는 CurrentStaff를 받으므로 인쇄 토큰으로는 401이다.
+    """
+
+    institution_id: uuid.UUID
+    is_print: bool = False
+
+
+def _print_reader(token: str) -> Reader | None:
+    """인쇄 토큰이면 그 기관의 Reader, 아니면 None. 만료된 인쇄 토큰은 401 AUTH_EXPIRED다.
+
+    인쇄 토큰은 서명 키가 달라 로그인 토큰과 섞이지 않는다. 서버가 만든 것이라 계정·계약 상태를 보지 않고 DB도
+    읽지 않는다.
+    """
+    try:
+        claims = decode_print_token(token)
+    except TokenExpiredError:
+        raise AppError(ErrorCode.AUTH_EXPIRED) from None
+    except TokenError:
+        return None
+    return Reader(institution_id=claims.institution_id, is_print=True)
+
+
+def get_reader(db: DbSession, authorization: Annotated[str | None, Header()] = None) -> Reader:
+    """Authorization의 토큰이 인쇄 토큰이면 그 기관의 Reader, 아니면 로그인 담당자(계약 검사 포함)의 Reader."""
+    reader = _print_reader(_bearer_token(authorization))
+    if reader is not None:
+        return reader
+    staff = require_contract(get_current_staff(db, authorization))
+    return Reader(institution_id=staff.institution_id)
+
+
+def get_me_caller(db: DbSession, authorization: Annotated[str | None, Header()] = None) -> AuthStaff | Reader:
+    """GET /auth/me를 부른 쪽: 인쇄 토큰이면 Reader, 아니면 로그인 담당자(계약 검사 없음. GUEST도 된다)."""
+    reader = _print_reader(_bearer_token(authorization))
+    if reader is not None:
+        return reader
+    return get_current_staff(db, authorization)
+
+
+# 인쇄 토큰도 받는 GET 라우트가 쓴다. 나머지 라우트는 CurrentStaff다
+ReadCaller = Annotated[Reader, Depends(get_reader)]
+MeCaller = Annotated[AuthStaff | Reader, Depends(get_me_caller)]
 
 
 def get_analysis_client() -> Iterator[AnalysisClient]:

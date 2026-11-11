@@ -9,7 +9,7 @@ GPU 서버에 배포한 분석 API를 팀 서비스 워커와 같은 순서(등�
 | 항목 | 값 |
 | --- | --- |
 | 서버 | SSAFY GPU 서버 (JupyterLab 터미널, 서버 안 주소 `http://127.0.0.1:8010`) |
-| 배포 | develop 자동 배포(S15P31A404-239), `$HOME/service/current` |
+| 배포 | 배포 태그 `v0.0.2-model`(11-06, 모델 모드 S15P31A404-229까지). GPU 서버 배포는 `v*` 태그를 찍을 때만 돈다(S15P31A404-239). 이 MR의 시간 제한·촬영 단위 지우기는 점검 당시 서버에 없었고, 점검 스크립트만 따로 올려 돌렸다 |
 | `/health` | `status: ok`, 모델 `fs-v4`, `pose_source: model`, `model_known: true` |
 | `model.version` | `0.6.0/v1/a4261a10` |
 | 영상 | 기업 제니 영상(260820, main 카메라, 1920×1080, 30fps) 3개 |
