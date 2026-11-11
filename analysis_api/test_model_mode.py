@@ -66,3 +66,30 @@ def test_frame_entry_has_box_and_kp_for_engine():
     entry = pipeline.frame_entry([10, 20, 300, 400], 0.8, kps, [0.9] * 22)
     assert entry["box"] == [10.0, 20.0, 300.0, 400.0] and entry["det_score"] == 0.8
     assert len(entry["kp"]) == 22 and entry["kp"][3] == [3.0, 4.0, 0.9]
+
+
+def test_model_workers_env(monkeypatch):
+    """ANALYSIS_MODEL_WORKERS: 없거나 잘못된 값이면 1(기존 동작), 숫자면 그 수"""
+    monkeypatch.delenv("ANALYSIS_MODEL_WORKERS", raising=False)
+    assert pipeline.model_workers() == 1
+    monkeypatch.setenv("ANALYSIS_MODEL_WORKERS", "16")
+    assert pipeline.model_workers() == 16
+    monkeypatch.setenv("ANALYSIS_MODEL_WORKERS", "abc")
+    assert pipeline.model_workers() == 1
+    monkeypatch.setenv("ANALYSIS_MODEL_WORKERS", "0")
+    assert pipeline.model_workers() == 1
+
+
+def test_analysis_failed_survives_pickle():
+    """워커 프로세스의 AnalysisFailed가 code·message를 지닌 채 프로세스 경계를 건넌다"""
+    import pickle
+    e = pickle.loads(pickle.dumps(pipeline.AnalysisFailed("DECODE_FAILED", "영상을 읽을 수 없습니다")))
+    assert (e.code, e.message) == ("DECODE_FAILED", "영상을 읽을 수 없습니다")
+
+
+def test_single_worker_uses_local(monkeypatch):
+    """워커 1개면 풀을 만들지 않고 이 프로세스에서 추론한다"""
+    monkeypatch.delenv("ANALYSIS_MODEL_WORKERS", raising=False)
+    monkeypatch.setattr(pipeline, "extract_track_local", lambda path: {"video": "x"})
+    monkeypatch.setattr(pipeline, "_get_pool", lambda: (_ for _ in ()).throw(AssertionError("풀 사용 안 함")))
+    assert pipeline.extract_track("a.mp4") == {"video": "x"}

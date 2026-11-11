@@ -87,6 +87,7 @@ ANALYSIS_API_KEY=
 | `ANALYSIS_MODEL` | `models.yaml`의 `default` | 쓸 모델 이름. 결과 `model.name`이 된다 |
 | `ANALYSIS_TRACK_FILE` | 고른 모델의 `track_file` | `track`일 때 읽을 관절점 파일. 주면 `models.yaml` 값보다 먼저 쓴다 |
 | `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256` | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.6.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
+| `ANALYSIS_MODEL_WORKERS` | 1 | `model` 모드에서 영상을 동시에 추론하는 워커 프로세스 수. 1이면 한 건씩(기존 동작). 2 이상이면 워커마다 모델을 따로 올려(VRAM 약 1.1~1.5GB씩, 첫 요청에서 로드) 영상 N건을 동시에 돌린다. 워커 수 × 모델 VRAM이 GPU 여유보다 작아야 한다. 워커가 죽으면 그 건은 `INTERNAL`로 실패하고 풀을 새로 만든다 |
 | `ANALYSIS_JOB_TIMEOUT_SEC` | 660 | 분석이 이보다 오래 `running`이면 `failed` + `TIMEOUT`. 팀 서비스 `ANALYSIS_TIMEOUT_SEC`(600)보다 60초 길게 둔다: 팀 서비스가 먼저 실패로 처리하고, 그 뒤 다시 분석·지우기가 409로 막히는 시간이 1분을 넘지 않게 한다. GPU 추론이 멈춰도 작업이 계속 running으로 남아 지우기·다시 분석이 막히지 않게 하려는 것이다 |
 
 `/health`는 Docker 상태 확인용이라 인증 없이 열려 있다. 지금 모델(`model`), 관절점 출처(`pose_source`), 모델이 `models.yaml`에 있는지(`model_known`)를 함께 준다.
