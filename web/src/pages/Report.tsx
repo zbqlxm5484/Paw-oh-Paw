@@ -65,7 +65,7 @@ function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; pa
     <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:14.5px;line-height:1.5')}>
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
-      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `지난 측정(${prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
+      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `직전 회차(${bm.prev_label || prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
     </div>
   )
 }
@@ -228,7 +228,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
           </div>
           <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
           {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-          <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+          <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
         </div>
       </div>
 

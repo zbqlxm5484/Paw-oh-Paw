@@ -711,9 +711,18 @@ export class AppProto extends DCLogic<Props, any> {
         const vs = valid(R.dog).slice().reverse(), at = vs.findIndex((x) => x.id === R.id)
         const symHist = vs.slice(0, at >= 0 ? at + 1 : vs.length).filter((x) => x.sym != null).map((x) => [x.measured_on.slice(5), x.sym as number] as [string, number])
         const bId = RD ? baseOf(RD) : null, bR = results.find((x) => x.id === bId)
-        const vsBase = bR && bR.id !== R.id && bR.sym != null && R.sym != null ? { d: R.sym - bR.sym, date: bR.measured_on.slice(5) } : null
+        // 다른 회차를 가리킬 때: "2회차, 11월 10일", 이번 회차와 같은 날이면 시각까지
+        const lbl = (x: DRes) => {
+          const [, mm, dd] = x.measured_on.split('-')
+          const hm = /^(\d{1,2}):(\d{2})/.exec(x.time || '')
+          const same = x.id !== R.id && x.measured_on === R.measured_on && hm
+          const t = same ? ` ${Number(hm![1]) < 12 ? '오전' : '오후'} ${Number(hm![1]) % 12 || 12}:${hm![2]}` : ''
+          return `${sessNo(x)}회차, ${Number(mm)}월 ${Number(dd)}일${t}`
+        }
+        const prevR = at > 0 ? vs.slice(0, at).filter((x) => x.sym != null).slice(-1)[0] : undefined
+        const vsBase = bR && bR.id !== R.id && bR.sym != null && R.sym != null ? { d: R.sym - bR.sym, date: lbl(bR) } : null
         return <AppReport kind={s.repType === 'v' ? 'v' : 'g'} result={R.result} dogName={RD?.name ?? ''} dogSize={RD?.size ?? 'M'} focus={RD?.focus ?? null}
-          sym={R.sym} symHist={symHist} vsBase={vsBase} passes={R.ps} excluded={R.ex} vet={this.props.vetReport} />
+          sym={R.sym} symHist={symHist} prevLabel={prevR ? lbl(prevR) : undefined} vsBase={vsBase} passes={R.ps} excluded={R.ex} vet={this.props.vetReport} />
       })() : null, isRepV: s.repType === 'v', repKind: s.repType === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용',
       repStatus: R ? this.props.reportStatus(rep, R.model) : '',
       repSegs: seg([['g', '보호자용'], ['v', '수의사용']], s.repType, (k) => this.setState({ repType: k })),

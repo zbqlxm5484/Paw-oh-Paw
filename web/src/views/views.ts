@@ -75,6 +75,21 @@ export function sess_no(acct: Account, r: Result): number {
   return all_.length - all_.findIndex((x) => x.id === r.id)
 }
 
+/** "오후 2:55" (회차 시각 "14:55") */
+function ampm(hm: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hm || '')
+  if (!m) return ''
+  const h = Number(m[1])
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${m[2]}`
+}
+
+/** 다른 회차를 가리킬 때의 표기: "2회차, 11월 10일". 이번 회차(cur)와 같은 날이면 시각까지 "2회차, 11월 10일 오전 9:38" */
+export function sess_label(acct: Account, x: Result, cur?: Result): string {
+  const same = !!cur && cur.id !== x.id && !!x.day && x.day === cur.day
+  const t = same ? ampm(x.time) : ''
+  return `${sess_no(acct, x)}회차, ${x.date}${t ? ' ' + t : ''}`
+}
+
 export function base_of(acct: Account, d: Dog): string | null {
   if (d.base && acct.results.some((r) => r.id === d.base && r.st !== 'fail')) return d.base
   const v = valid(acct, d.id)
@@ -415,7 +430,8 @@ export function body_map(acct: Account, r: Result) {
   return {
     svg, legs, sym: r.sym, sym_level: _level(100 - r.sym),
     vs_base: base && base.id !== r.id ? r.sym - base.sym : null,
-    base_date: base ? short(base.date) : '', focus: d && d.focus ? LIMB[d.focus] ?? '' : '',
+    base_date: base ? short(base.date) : '', base_label: base ? sess_label(acct, base, r) : '',
+    prev_label: idx > 0 ? sess_label(acct, vs[idx - 1], r) : '', focus: d && d.focus ? LIMB[d.focus] ?? '' : '',
     trend, trend_line: trend.map((p) => `${pystr(p.x)},${pystr(p.y)}`).join(' '),
   }
 }

@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../../api/client'
 import { css } from '../../app/css'
 import type { Account, Result } from '../../store/types'
+import { sess_label } from '../../views/views'
 import { cmpFromServer, cmpLocal, GAIT_CODE, gaitsOf, kneeTrend, LIMBS, lrCompare, otherRows, type CmpRow, type CmpView } from '../../views/vet'
 
 const BLUE = '#3B6FE0'
@@ -98,10 +99,10 @@ function CmpGroup({ title, note, rows, v }: { title: string; note?: string; rows
 }
 
 /** 2. 지난 측정과 비교 */
-function CmpSection({ v, gait }: { v: CmpView | null | undefined; gait: string }) {
+function CmpSection({ v, gait, base }: { v: CmpView | null | undefined; gait: string; base?: string }) {
   return (
     <section className="rep-sec rep-pb" style={css('display:flex;flex-direction:column;gap:8px')}>
-      <h2 style={css(H2)}>지난 측정과 비교{v ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{v.baseDate} 대비 · {gait}</span> : null}</h2>
+      <h2 style={css(H2)}>지난 측정과 비교{v ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>직전 회차({base || v.baseDate}) 대비 · {gait}</span> : null}</h2>
       {v === undefined ? <span style={css(SUB)}>불러오는 중…</span> : v === null ? <span style={css(SUB)}>비교할 직전 회차가 없습니다.</span> : (
         <>
           {v.modelChanged ? <span style={css(SUB)}>두 회차의 분석 모델이 달라 변화는 판단하지 않고 값만 적었습니다.</span> : null}
@@ -201,7 +202,7 @@ export function VetSections({ acct, r, fromServer, knee, onReady }: { acct: Acco
           그 밖의 수치(걸음 길이·입각기·발 들림)는 첫 쪽 다리별 수치와 겹치고 검증이 덜 돼 수의사용 화면에서 뺐다(OtherTable 은 남겨 둔다) */}
       <LrSection r={r} />
       {knee}
-      <CmpSection v={cmp} gait={gait} />
+      <CmpSection v={cmp} gait={gait} base={(() => { const b = cmp && cmp.baseId ? acct.results.find((x) => x.id === cmp.baseId) : undefined; return b ? sess_label(acct, b, r) : undefined })()} />
       <KneeTrend acct={acct} r={r} gait={gait} />
     </div>
   )

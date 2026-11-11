@@ -79,6 +79,8 @@ export interface AppReportProps {
   /** 오래된 회차부터 이 회차까지 [날짜 MM-DD, 대칭 지수] */
   symHist: [string, number][]
   /** 기준 회차 대비 대칭 지수 차이(%p)와 날짜 */
+  /** 직전 회차 표기 "2회차, 11월 10일"(같은 날이면 시각까지). 없으면 날짜만 */
+  prevLabel?: string
   vsBase: { d: number; date: string } | null
   passes: [number, number]
   excluded: [string, number][]
@@ -142,7 +144,7 @@ export function AppReport(p: AppReportProps) {
         <div style={{ ...box({ border: '1.5px solid #E9D3C2', background: '#FFF9F4' }), display: 'grid', gridTemplateColumns: '64px 1fr', rowGap: '6px', columnGap: '10px', fontSize: '13px', lineHeight: 1.5 }}>
           <b style={{ color: '#A8481A' }}>주요 결과</b><span>{hind.si >= front.si ? hind.say : front.say}</span>
           <b style={{ color: '#A8481A' }}>측정 품질</b><span>{quality}</span>
-          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `지난 측정(${prev[0]})보다 좌우 대칭 점수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
+          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `직전 회차(${p.prevLabel || prev[0]})보다 좌우 대칭 점수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
         </div>
       ) : null}
 
