@@ -4,13 +4,14 @@
  * 측정 중인 회차는 2.5초마다 다시 읽어 "분석 중" 진행도를 만든다.
  */
 import { useEffect, useMemo, useRef } from 'react'
-import { useQueries, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '../app/auth'
 import { ApiError } from '../api/client'
 import * as dogsApi from '../api/dogs'
 import { getSessionResult, resultKeys, useAllSessions, useCompare, useReports, useSessionResult, useTrends } from '../api/results'
 import * as sessApi from '../api/sessions'
+import { myDevice } from '../api/auth'
 import type { DogCreate, DogUpdate, SessionHistoryItem, SessionResultOut } from '../api/types'
 import { TREND_CODE, compareRows, toAcct, toAna, toDog, toResult, trendLines, type DAna, type DDog, type DRes } from './adapter'
 
@@ -79,7 +80,10 @@ export function useDesignData(focusSessionId?: string): DesignData {
     lastStatus.current = st
   }, [sessQ.data?.status, qc])
 
-  const acct = useMemo(() => toAcct(staff), [staff])
+  // 마이페이지 측정 기기(271). 이 API 가 없는 서버·체험 모드면 '-'
+  const devQ = useQuery({ queryKey: ['auth', 'me', 'device'], queryFn: myDevice, enabled: loggedIn, retry: false, staleTime: 10 * 60_000 })
+  const dev = devQ.data?.device ? `${devQ.data.device.code_masked} · ${devQ.data.device.issued_at.slice(0, 10)} 발급` : '-'
+  const acct = useMemo(() => toAcct(staff, dev), [staff, dev])
   return {
     dogs, results, ana, acct, loggedIn,
     loading: loggedIn && (dogsQ.isPending || hist.isPending),

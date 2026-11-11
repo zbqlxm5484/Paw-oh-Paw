@@ -24,6 +24,11 @@ export function changePassword(current_password: string, new_password: string): 
   return request<StaffOut>('/auth/password', { method: 'PATCH', body: { current_password, new_password } })
 }
 
+/** 내 기관의 측정 기기(271): 가린 코드와 발급 시각. 쓸 수 있는 코드가 없으면 device 가 null */
+export function myDevice(): Promise<{ device: { code_masked: string; issued_at: string } | null }> {
+  return request<{ device: { code_masked: string; issued_at: string } | null }>('/auth/me/device')
+}
+
 /** 디바이스 코드 확인: 기관명. 404 DEVICE_CODE_INVALID (192 뒤에는 남은 계정 수·409 가 없다) */
 export function verifyDeviceCode(code: string): Promise<DeviceCodeVerifyOut> {
   return request<DeviceCodeVerifyOut>('/auth/device-codes/verify', { method: 'POST', body: { code }, auth: false })
