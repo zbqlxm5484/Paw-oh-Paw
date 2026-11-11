@@ -61,7 +61,7 @@ def test_track_result_is_v1(tmp_path, monkeypatch):
     assert status["model"] == {"name": "fs-test", "version": f"{pipeline.API_VERSION}/v1/a4261a10"}
     r = client.get(f"/analyses/{job_id}/result").json()
     assert r["shot_id"] == "s-1" and r["validity"] == "valid" and r["validity_reason"] is None
-    assert r["versions"] == {"angle_def": "v1", "gait_events": "v1", "validity": "v1", "gait_metrics": "v1",
+    assert r["versions"] == {"angle_def": "v1", "gait_events": "v1", "validity": "v1", "gait_metrics": "v2",
                              "joint_rom": "v1"}
     assert r["input"] == {"filename": "shot.mp4", "codec": None, "fps": FPS, "width": W, "height": H,
                           "frames": 3 * FPS}
