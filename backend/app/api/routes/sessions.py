@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Query, Response, UploadFile, status
 
-from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession
+from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, ReadCaller
 from app.models.enums import SessionStatus
 from app.schemas.common import reason_out
 from app.schemas.sessions import SessionCreate, SessionDetailOut, SessionListOut, SessionOut, SessionResultOut
@@ -28,17 +28,17 @@ def start_session(dog_id: uuid.UUID, body: SessionCreate, staff: CurrentStaff, d
 
 @router.get("/sessions", response_model=SessionListOut)
 def list_sessions(
-    staff: CurrentStaff,
+    reader: ReadCaller,
     db: DbSession,
     staff_id: uuid.UUID | None = None,
     status: SessionStatus | None = None,  # noqa: A002 - 쿼리 이름이 명세(15.6)의 status다
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SessionListOut:
-    """기관의 모든 회차를 최신순으로(BE-33). staff_id·status로 거른다."""
+    """기관의 모든 회차를 최신순으로(BE-33). staff_id·status로 거른다. 인쇄 토큰도 받는다(11.6)."""
     items, total = session_service.list_sessions(
         db,
-        staff.institution_id,
+        reader.institution_id,
         staff_id=staff_id,
         status=status.value if status is not None else None,
         page=page,
@@ -48,8 +48,9 @@ def list_sessions(
 
 
 @router.get("/sessions/{session_id}", response_model=SessionDetailOut)
-def get_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionDetailOut:
-    return session_service.session_detail(db, staff.institution_id, session_id)
+def get_session(session_id: uuid.UUID, reader: ReadCaller, db: DbSession) -> SessionDetailOut:
+    """회차 상태·진행·촬영 목록(BE-07·09). 인쇄 토큰도 받는다(11.6)."""
+    return session_service.session_detail(db, reader.institution_id, session_id)
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -66,9 +67,9 @@ def complete_session(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) 
 
 
 @router.get("/sessions/{session_id}/result", response_model=SessionResultOut)
-def get_session_result(session_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> SessionResultOut:
-    """회차 수치와 다리 비교 요약(BE-14·21)."""
-    return result_service.session_result(db, staff.institution_id, session_id)
+def get_session_result(session_id: uuid.UUID, reader: ReadCaller, db: DbSession) -> SessionResultOut:
+    """회차 수치와 다리 비교 요약(BE-14·21). 인쇄 토큰도 받는다(11.6)."""
+    return result_service.session_result(db, reader.institution_id, session_id)
 
 
 @router.post("/sessions/{session_id}/shots", response_model=ShotUploadOut, status_code=status.HTTP_201_CREATED)

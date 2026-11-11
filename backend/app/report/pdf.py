@@ -21,6 +21,26 @@ GTK_DIR_NAME = "GTK3-Runtime Win64"
 GTK_MARKER_DLL = "libgobject-2.0-0.dll"
 
 
+# PDF를 만든 길(8절 6번). 워커의 완료 로그에 made_by로 남는다
+MADE_BY_TEMPLATE = "template"  # 기본 템플릿(WeasyPrint)
+MADE_BY_SCREEN = "screen"  # 화면 인쇄(렌더러가 웹 인쇄 화면을 연 것)
+
+
+class PdfSize(int):
+    """PDF의 바이트 수에 어느 길로 만들었는지를 붙인 값. PDF 단계(to_pdf)가 돌려준다.
+
+    PDF 단계는 바이트 수(int)를 돌려주는 함수다. 화면 인쇄는 안 되면 기본 템플릿으로 넘어가므로, 실제로 어느 길로
+    만들었는지는 그 함수만 안다. 그냥 int를 돌려주는 함수(html_to_pdf)는 기본 템플릿으로 본다.
+    """
+
+    made_by: str
+
+    def __new__(cls, size: int, made_by: str) -> PdfSize:
+        value = super().__new__(cls, size)
+        value.made_by = made_by
+        return value
+
+
 class PdfUnavailableError(ReportError):
     """WeasyPrint를 쓸 수 없다(패키지나 시스템 라이브러리 없음)."""
 

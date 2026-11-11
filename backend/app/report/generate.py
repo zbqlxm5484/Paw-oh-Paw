@@ -1,6 +1,6 @@
 """보고서 만들기(8절 만드는 순서 전체). 자식 프로세스는 generate_report 하나만 부른다(12.4).
 
-입력 JSON 파일 → parse_input → 수치 표(numbers) → 문장(sentences) → 차트(charts) → HTML(html) → 검사(checks) → PDF(pdf).
+입력 JSON 파일 → 수치 표·문장(content.compose_content) → 차트(charts) → HTML(html) → 검사(checks) → PDF(pdf).
 출력은 PDF 파일과 ReportResult(실린 숫자 목록·생성 시간·템플릿 판). 검사 실패는 ReportCheckError, 그 밖은 ReportError다.
 """
 
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,11 +16,11 @@ from typing import Any
 from app.report import TEMPLATE_VERSION, ReportError
 from app.report.charts import rom_chart
 from app.report.checks import ensure_checked
+from app.report.content import compose_content
 from app.report.html import render_html
-from app.report.inputs import ReportInput, parse_input
-from app.report.numbers import NOT_COMPARABLE_LABEL, GaitTable, ListedNumber, build_tables
-from app.report.pdf import html_to_pdf
-from app.report.sentences import Sentences, compose
+from app.report.numbers import GaitTable, ListedNumber
+from app.report.pdf import MADE_BY_TEMPLATE, html_to_pdf
+from app.report.sentences import Sentences
 
 
 @dataclass(frozen=True)
@@ -40,37 +41,14 @@ class ReportResult:
     template_version: str
     numbers: tuple[ListedNumber, ...]
     edition: str
-
-
-def _table_texts(tables: list[GaitTable]) -> dict[str, str]:
-    """표에 찍히는 글(수치 이름, 측정 불가 사유, 비교 사유, 직전 회차 비교의 변화·사유)도 검사 대상이다."""
-    parts: list[str] = []
-    for table in tables:
-        parts.append(table.label)
-        for row in table.rows:
-            parts.append(row.label)
-            parts.extend(cell.reason for cell in row.cells.values() if cell.reason)
-        for line in table.compare:
-            parts.append(f"{line.pair_label} {line.label}")
-            if line.reason:
-                parts.append(line.reason)
-        for change in table.changes:
-            parts.append(change.label)
-            for pair in change.cells.values():
-                if pair.change_label:
-                    parts.append(pair.change_label)
-                if pair.note:
-                    parts.append(f"{NOT_COMPARABLE_LABEL}. {pair.note}")
-    return {"tables": " ".join(parts)} if parts else {}
+    # PDF를 만든 길(8절 6번): template 또는 screen. 워커의 완료 로그에 남는다
+    made_by: str = MADE_BY_TEMPLATE
 
 
 def render(data: Any) -> Rendered:
     """입력 dict → HTML과 검사용 문장. 검사는 하지 않는다(generate_report가 한다)."""
-    inp: ReportInput = parse_input(data)
-    tables, numbers = build_tables(
-        inp.result, inp.previous, tolerance=inp.tolerance, model_changed=inp.previous_model_changed
-    )
-    sentences = compose(inp, tables)
+    content = compose_content(data)
+    inp, tables, sentences = content.inp, content.tables, content.sentences
     charts = {table.gait_type: chart for table in tables if (chart := rom_chart(table))}
     html = render_html(
         edition=inp.edition,
@@ -83,12 +61,22 @@ def render(data: Any) -> Rendered:
             "model_version": inp.session.model_version,
         },
     )
-    texts = {**sentences.texts(), **_table_texts(tables)}
-    return Rendered(html=html, texts=texts, numbers=tuple(numbers), tables=tables, sentences=sentences)
+    return Rendered(html=html, texts=content.texts, numbers=content.numbers, tables=tables, sentences=sentences)
 
 
-def generate_report(input_path: Path, output_path: Path, *, keep_html: bool = False) -> ReportResult:
-    """입력 JSON 파일 → output_path에 PDF. keep_html이면 같은 자리에 .html도 남긴다(미리보기용)."""
+def generate_report(
+    input_path: Path,
+    output_path: Path,
+    *,
+    keep_html: bool = False,
+    to_pdf: Callable[[str, Path], int] | None = None,
+) -> ReportResult:
+    """입력 JSON 파일 → output_path에 PDF. keep_html이면 같은 자리에 .html도 남긴다(미리보기용).
+
+    to_pdf는 PDF 단계를 바꿔 끼우는 자리다(8절 6번). 워커가 화면 인쇄(clients/renderer.screen_pdf)를 넣는다.
+    글 검사는 그 앞에서 하므로 어느 길로 만들든 검사에 걸린 보고서는 PDF가 되지 않는다.
+    to_pdf가 PdfSize를 돌려주면 그 made_by를, 그냥 바이트 수를 돌려주면 template을 결과에 적는다.
+    """
     started = time.perf_counter()
     try:
         data = json.loads(Path(input_path).read_text(encoding="utf-8"))
@@ -99,11 +87,12 @@ def generate_report(input_path: Path, output_path: Path, *, keep_html: bool = Fa
     ensure_checked(rendered.texts, edition=edition)
     if keep_html:
         output_path.with_suffix(".html").write_text(rendered.html, encoding="utf-8")
-    size = html_to_pdf(rendered.html, output_path)
+    size = (to_pdf or html_to_pdf)(rendered.html, output_path)
     return ReportResult(
         pdf_bytes=size,
         generation_ms=int((time.perf_counter() - started) * 1000),
         template_version=TEMPLATE_VERSION,
         numbers=rendered.numbers,
         edition=edition,
+        made_by=getattr(size, "made_by", MADE_BY_TEMPLATE),
     )

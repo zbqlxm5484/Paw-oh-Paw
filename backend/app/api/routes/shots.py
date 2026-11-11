@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Response, status
 from fastapi.responses import FileResponse
 
-from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, check_file_link
+from app.api.deps import AnalysisClientDep, CurrentStaff, DbSession, ReadCaller, check_file_link
 from app.core.config import get_settings
 from app.schemas.shots import ShotAnglesOut, ShotDetailOut, ShotOut
 from app.services import shot_angles as angle_service
@@ -35,9 +35,12 @@ def delete_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession, analysis
 
 
 @router.get("/{shot_id}/angles", response_model=ShotAnglesOut)
-def get_shot_angles(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> ShotAnglesOut:
-    """유효 통과의 프레임별 관절 각도(BE-14). 워커가 써 둔 angles.json을 읽는다. 없으면 passes가 빈 배열이다."""
-    return angle_service.shot_angles(db, get_storage(), staff.institution_id, shot_id)
+def get_shot_angles(shot_id: uuid.UUID, reader: ReadCaller, db: DbSession) -> ShotAnglesOut:
+    """유효 통과의 프레임별 관절 각도(BE-14). 워커가 써 둔 angles.json을 읽는다. 없으면 passes가 빈 배열이다.
+
+    인쇄 토큰도 받는다(11.6).
+    """
+    return angle_service.shot_angles(db, get_storage(), reader.institution_id, shot_id)
 
 
 @router.get("/{shot_id}/video", response_class=FileResponse)
