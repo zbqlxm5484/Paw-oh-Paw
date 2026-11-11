@@ -40,6 +40,7 @@ from pipeline import (
     model_files_ok,
     pose_source,
     sha256_of,
+    shutdown_pool,
 )
 from pipeline import run as pipeline_run
 
@@ -74,6 +75,7 @@ async def lifespan(app: FastAPI):
     if count:
         logger.warning("interrupted jobs marked failed: %d", count)
     yield
+    shutdown_pool()
 
 
 # 상태값: queued(대기) → running(분석 중) → done(완료) / failed(실패)
