@@ -63,7 +63,7 @@ export default function ReportPrint() {
   if (fail || !bm)
     return (
       <main className="print-main print-only" style={css('width:892px;margin:0 auto;padding:24px 0')}>
-        <b style={css('font-size:20px')}>{v.rd.name} · {v.rd.when}</b>
+        <b style={css('font-size:18px')}>{v.rd.name} · {v.rd.when}</b>
         <p style={css('font-size:15px;color:#5B6472')}>이 회차는 분석하지 못해 보고서가 없습니다.</p>
       </main>
     )

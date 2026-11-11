@@ -51,11 +51,11 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
       {kind === 'g' ? (
         <>
           <span style={css('font-size:13px;color:#5B6472')}>{m0.n}</span>
-          <b style={css(`font-size:24px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${g.weak ? g.c : '#1B2433'}`)}>{m0.v}</b>
+          <b style={css(`font-size:22px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${g.weak ? g.c : '#1B2433'}`)}>{m0.v}</b>
         </>
       ) : (
         g.mets.map((m, i) => (
-          <span key={i} style={css('font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{m.n} <b style={css(`font-size:15px;color:${m.lower && g.weak ? g.c : '#1B2433'}`)}>{m.v}</b> <span style={css('color:#A0A7B2')}>/ {m.other}</span></span>
+          <span key={i} style={css('font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{m.n} <b style={css(`font-size:15px;color:${m.lower && g.weak ? g.c : '#1B2433'}`)}>{m.v}</b> <span style={css('color:#5B6472')}>/ {m.other}</span></span>
         ))
       )}
     </div>
@@ -66,7 +66,7 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
 function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; part?: unknown } }) {
   const prev = bm.trend.length > 1 ? bm.trend[bm.trend.length - 2] : null
   return (
-    <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:14.5px;line-height:1.5')}>
+    <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:15px;line-height:1.5')}>
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
       <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `직전 회차(${bm.prev_label || prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
@@ -121,15 +121,15 @@ export default function Report() {
       <main className="print-main" style={css('max-width:1320px;margin:0 auto;padding:24px 32px 96px;display:flex;gap:24px;align-items:flex-start')}>
         <div style={css('flex:1;min-width:0;max-width:920px;display:flex;flex-direction:column;gap:20px')}>
           <div className="no-print" style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
-            <a className="lk" href={link(`/dogs/${rd.dog}`)} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{rd.name} 차트</a>
+            <a className="lk tap" href={link(`/dogs/${rd.dog}`)} style={css('display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472')}><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{rd.name} 차트</a>
             {!rd.fail ? (
               <div style={css('display:flex;gap:10px;flex-wrap:wrap')}><a className="lk hv-border" href={link(`/compare/${rd.dog}`)} style={css(BTN)}>경과 비교</a><a className="lk hv-border" href={link(`/results/${rd.id}/3d`)} style={css(BTN)}>3D로 보기</a><PrintPdf fileName={pdfName} /></div>
             ) : null}
           </div>
           {rd.fail || !bm ? (
             <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:12px')}>
-              <div style={css('display:flex;align-items:center;gap:10px')}><b style={css('font-size:20px')}>{rd.name} · {rd.when}</b><span style={css(`padding:4px 10px;border-radius:8px;background:${rd.bg};color:${rd.c};font-size:13px;font-weight:700`)}>{rd.st}</span></div>
-              <b style={css('font-size:17px')}>분석하지 못했습니다</b>
+              <div style={css('display:flex;align-items:center;gap:10px')}><b style={css('font-size:18px')}>{rd.name} · {rd.when}</b><span style={css(`padding:4px 10px;border-radius:8px;background:${rd.bg};color:${rd.c};font-size:13px;font-weight:700`)}>{rd.st}</span></div>
+              <b style={css('font-size:18px')}>분석하지 못했습니다</b>
               <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>{r.fail_msg || '쓸 수 있는 통과가 없었습니다. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'}</span>
               {excludeSummary(r.ex) ? (
                 <div style={css('display:flex;flex-wrap:wrap;gap:6px')}>{excludeSummary(r.ex)!.reasons.map((x, i) => <span key={i} style={css('min-height:28px;padding:4px 10px;border-radius:8px;background:#F2EEE8;color:#3A4250;font-size:13px;font-weight:600;display:flex;align-items:center;font-variant-numeric:tabular-nums')}>{x.msg} ({x.n}번)</span>)}</div>
@@ -140,9 +140,9 @@ export default function Report() {
             <>
               <div className="no-print" style={css('display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap')}>
                 <div style={css('display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:320px;max-width:100%')}>
-                  {segs.map((g) => <a key={g.key} className="lk" href={link(`?type=${g.key}`)} onClick={rel(`?type=${g.key}`)} style={css(`height:42px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
+                  {segs.map((g) => <a key={g.key} className="lk" href={link(`?type=${g.key}`)} onClick={rel(`?type=${g.key}`)} style={css(`height:44px;border-radius:9px;background:${g.bg};color:${g.c};box-shadow:${g.sh};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s`)}>{g.label}</a>)}
                 </div>
-                <span style={css('display:flex;align-items:center;gap:6px;font-size:13.5px;color:#5B6472;font-variant-numeric:tabular-nums')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>{status}</span>
+                <span style={css('display:flex;align-items:center;gap:6px;font-size:14px;color:#5B6472;font-variant-numeric:tabular-nums')}><span style={css('width:7px;height:7px;border-radius:4px;background:#2E8B57')}></span>{status}</span>
               </div>
 
               {!fail ? <QualityCard r={r} /> : null}
@@ -193,23 +193,23 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
     <div className="print-paper" style={css('background:#fff;border-radius:6px;box-shadow:0 18px 50px rgba(27,36,51,.1);padding:48px 52px;display:flex;flex-direction:column;gap:22px;min-height:960px')}>
       <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{kind === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용'}</span></div>
       <div style={css('height:3px;background:#D2601A;width:56px')}></div>
-      <div><div style={css('font-size:32px;font-weight:800;letter-spacing:-0.9px')}>{rp.title}</div><div style={css('font-size:14px;color:#5B6472;margin-top:6px')}>{rp.when}</div></div>
+      <div><div style={css('font-size:28px;font-weight:800;letter-spacing:-0.9px')}>{rp.title}</div><div style={css('font-size:14px;color:#5B6472;margin-top:6px')}>{rp.when}</div></div>
 
       {kind === 'g' ? <FirstSummary bm={bm} rd={rd} /> : null}
 
       {/* 한눈에: 좌우 대칭 점수 */}
       <div style={css('display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:20px 22px;border-radius:14px;background:#FAF7F2')}>
         <div style={css('display:flex;flex-direction:column;gap:2px')}>
-          <span style={css('font-size:13.5px;font-weight:700;color:#5B6472')}>좌우 대칭 점수</span>
-          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:20px')}>점</span></b>
+          <span style={css('font-size:14px;font-weight:700;color:#5B6472')}>좌우 대칭 점수</span>
+          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:18px')}>점</span></b>
         </div>
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
           <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
             <span style={css(`position:absolute;top:-5px;left:calc(${bm.sym}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>
           </div>
-          <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
-          {kind === 'g' ? <span style={css('font-size:12px;color:#8E949C')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-          <span style={css('font-size:14.5px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+          <div style={css('display:flex;justify-content:space-between;font-size:12px;color:#5B6472')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
+          {kind === 'g' ? <span style={css('font-size:12px;color:#5B6472')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
+          <span style={css('font-size:15px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
         </div>
       </div>
 
@@ -225,7 +225,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
           <div style={css('position:absolute;top:70%;right:0;left:8px')}><LegCard bm={bm} kind={kind} code="RH" align="r" /></div>
         </div>
       </div>
-      <div style={css('display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#5B6472')}>
+      <div style={css('display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:13px;color:#5B6472')}>
         <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#DCEFE2;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 좌우 비슷 (차이 5% 미만)</span>
         <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F7D6AE;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 조금 덜 씀 (5~10%)</span>
         <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F2A898;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 많이 덜 씀 (10% 이상)</span>
@@ -239,10 +239,10 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
           const p = bm.legs[part]
           return (
             <div key={part} style={css('padding:16px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
-              <span style={css('display:flex;justify-content:space-between;font-size:13.5px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span>
-              <span style={css(`font-size:${kind === 'g' ? '16px' : '14.5px'};line-height:1.55;font-weight:600`)}>{p.say}</span>
+              <span style={css('display:flex;justify-content:space-between;font-size:14px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span>
+              <span style={css(`font-size:15px;line-height:1.55;font-weight:600`)}>{p.say}</span>
               {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff} · 대칭 지수 차이 {pystr(p.si)}%</span>
-                : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#8E949C')}>{READ[p.metric]}</span></> : null}</span>}
+                : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#5B6472')}>{READ[p.metric]}</span></> : null}</span>}
             </div>
           )
         })}
@@ -257,7 +257,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
         {rd.part ? <span style={css('color:#9A6A12;font-weight:700')}>일부만 사용해서 결과가 덜 정확할 수 있습니다</span> : null}
         <ExcludeLine ex={rd.ex as [string, number][] | undefined} kind={kind} />
         <QualityLine r={r} kind={kind} />
-        {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#8E949C')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
+        {kind === 'g' ? <span style={css('flex-basis:100%;font-size:12px;color:#5B6472')}>걸은 횟수는 영상에서 반려견이 화면을 지나간 횟수예요. 뛰거나 멈춘 걸음은 빼고 계산해요</span> : null}
       </div>
 
       {kind === 'g' ? (
@@ -265,11 +265,11 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
         bm.trend.length > 1 ? (
           <div style={css('display:flex;flex-direction:column;gap:6px')}>
             <b style={css('font-size:15px')}>지금까지 좌우 대칭 점수</b>
-            <span style={css('font-size:12px;color:#8E949C')}>점 하나가 그날 측정한 대칭 점수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
+            <span style={css('font-size:12px;color:#5B6472')}>점 하나가 그날 측정한 대칭 점수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
             <svg className="rep-trend" viewBox="0 0 360 100" style={css('width:100%;max-width:560px')}>
               <polyline points={bm.trend_line} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round"></polyline>
               {bm.trend.map((p, i) => (
-                <Fragment key={i}><circle cx={p.x} cy={p.y} r={p.cur ? 5 : 3.5} fill={p.cur ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2"></circle><text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="10" fill="#3A4250" fontWeight={p.cur ? 700 : 400}>{p.v}</text><text x={p.x} y="97" textAnchor="middle" fontSize="9.5" fill="#8E949C">{p.t}</text></Fragment>
+                <Fragment key={i}><circle cx={p.x} cy={p.y} r={p.cur ? 5 : 3.5} fill={p.cur ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2"></circle><text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="12" fill="#3A4250" fontWeight={p.cur ? 700 : 400}>{p.v}</text><text x={p.x} y="97" textAnchor="middle" fontSize="12" fill="#5B6472">{p.t}</text></Fragment>
               ))}
             </svg>
           </div>
@@ -282,8 +282,8 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       )}
       <div style={css('flex:1')}></div>
       {/* 보호자용 용어 설명(보고서 검사 terms.yaml 의 설명 문구 그대로, 토씨까지 같아야 검사를 통과한다) */}
-      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b><span><b>좌우 대칭 점수</b>: 왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지를 0~100 으로 나타낸 점수. 100에 가까울수록 고르게 씀</span><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>고관절</b>: 뒷다리가 몸통과 이어지는 엉덩이 관절</span><span><b>앞발목</b>: 앞다리의 발목 관절(사람의 손목에 해당)</span><span><b>뒷발목</b>: 뒷다리의 발목 관절(사람의 발목에 해당)</span><span><b>입각기</b>: 한 걸음 중 발이 바닥을 딛고 있는 구간</span><span><b>등 길이</b>: 등 가운데(13번째 등뼈)부터 엉덩이 위(골반 윗부분)까지의 길이. 일반적인 몸길이(어깨~엉덩이)의 절반쯤이라, 몸길이로 치면 이 값의 약 절반입니다</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
-      <span style={css('font-size:12px;color:#A0A7B2')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
+      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:13px;color:#3A4250')}>용어 설명</b><span><b>좌우 대칭 점수</b>: 왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지를 0~100 으로 나타낸 점수. 100에 가까울수록 고르게 씀</span><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>고관절</b>: 뒷다리가 몸통과 이어지는 엉덩이 관절</span><span><b>앞발목</b>: 앞다리의 발목 관절(사람의 손목에 해당)</span><span><b>뒷발목</b>: 뒷다리의 발목 관절(사람의 발목에 해당)</span><span><b>입각기</b>: 한 걸음 중 발이 바닥을 딛고 있는 구간</span><span><b>등 길이</b>: 등 가운데(13번째 등뼈)부터 엉덩이 위(골반 윗부분)까지의 길이. 일반적인 몸길이(어깨~엉덩이)의 절반쯤이라, 몸길이로 치면 이 값의 약 절반입니다</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
+      <span style={css('font-size:12px;color:#5B6472')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
     </div>
   )
 }
@@ -298,7 +298,7 @@ export function KneeChart({ kc }: { kc: KC }) {
       <b style={css('font-size:15px')}>뒷무릎 각도 · 보행 주기</b>
       <svg viewBox="0 0 320 150" style={css('width:100%;max-width:520px;display:block;margin-top:8px;font-family:inherit')}>
         <g stroke="#ECE8E2" strokeDasharray="3 4">{kc.y.map((t: Tick, i: number) => <line key={i} x1={kc.x0} y1={t.y} x2={kc.x1} y2={t.y}></line>)}</g>
-        <g fontSize="9.5" fill="#8E949C">{kc.y.map((t: Tick, i: number) => <text key={i} x={kc.x0 - 5} y={t.y + 3} textAnchor="end">{t.t}</text>)}
+        <g fontSize="12" fill="#5B6472">{kc.y.map((t: Tick, i: number) => <text key={i} x={kc.x0 - 5} y={t.y + 3} textAnchor="end">{t.t}</text>)}
           {kc.x.map((t: Tick, i: number) => <text key={'x' + i} x={t.x} y="133" textAnchor="middle">{t.t}</text>)}
           <text x={(kc.x0 + kc.x1) / 2} y="146" textAnchor="middle">한 걸음 (뒷발 착지 → 다음 착지, %)</text>
           <text x="10" y="66" textAnchor="middle" transform="rotate(-90 10 66)">무릎 각도</text></g>
@@ -307,7 +307,7 @@ export function KneeChart({ kc }: { kc: KC }) {
         <polyline points={kc.L} fill="none" stroke="#3B6FE0" strokeWidth="2"></polyline>
         <polyline points={kc.R} fill="none" stroke="#E5604D" strokeWidth="2" strokeDasharray="5 4"></polyline>
       </svg>
-      <div style={css('display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#5B6472;margin-top:4px')}>
+      <div style={css('display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#5B6472;margin-top:4px')}>
         <span><span style={css('display:inline-block;width:16px;border-top:2px solid #3B6FE0;vertical-align:middle;margin-right:5px')}></span>왼쪽</span>
         <span><span style={css('display:inline-block;width:16px;border-top:2px dashed #E5604D;vertical-align:middle;margin-right:5px')}></span>오른쪽</span>
         <span><span style={css('display:inline-block;width:16px;height:9px;background:#E9E6E1;vertical-align:middle;margin-right:5px')}></span>정상 참고 범위</span>

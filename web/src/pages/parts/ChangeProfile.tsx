@@ -9,7 +9,7 @@ import { geom, gaitCode, JUDGE_LABEL, profileFromServer, profileLocal, type Prof
 
 const COLOR: Record<ProfileJudge, string> = { INCREASE: '#D2601A', DECREASE: '#3A4250', WITHIN_RANGE: '#C9C3BA', VALUE_ONLY: '#C9C3BA' }
 const CHIP: Record<ProfileJudge, [string, string]> = {
-  INCREASE: ['#FCEEE3', '#A8481A'], DECREASE: ['#E9EBEE', '#3A4250'], WITHIN_RANGE: ['#F2EFEA', '#5B6472'], VALUE_ONLY: ['#fff', '#8E949C'],
+  INCREASE: ['#FCEEE3', '#A8481A'], DECREASE: ['#E9EBEE', '#3A4250'], WITHIN_RANGE: ['#F2EFEA', '#5B6472'], VALUE_ONLY: ['#fff', '#5B6472'],
 }
 const korDate = (iso: string) => {
   const [, m, d] = iso.split('-')
@@ -89,7 +89,7 @@ export function ChangeProfile({ acct, r, gait, fromServer, onSettled, spark = tr
     return (
       <section className="rep-sec" style={css('display:flex;flex-direction:column;gap:6px')}>
         <b style={css('font-size:18px;font-weight:800;letter-spacing:-0.3px')}>기준 회차 대비 변화</b>
-        <span style={css('font-size:13.5px;color:#5B6472')}>기준 회차와 비교할 수 있게 되면 보여 드립니다.</span>
+        <span style={css('font-size:14px;color:#5B6472')}>기준 회차와 비교할 수 있게 되면 보여 드립니다.</span>
       </section>
     )
   }
@@ -100,7 +100,7 @@ export function ChangeProfile({ acct, r, gait, fromServer, onSettled, spark = tr
         <b style={css('font-size:18px;font-weight:800;letter-spacing:-0.3px')}>기준 회차 대비 변화</b>
         <span style={css('font-size:13px;color:#5B6472')}>기준 {korDate(view.baseDate)} → 이번 {korDate(view.targetDate)} · {gait} · 관절 가동 범위</span>
       </div>
-      <span style={css('font-size:12.5px;color:#8E949C;line-height:1.5')}>
+      <span style={css('font-size:13px;color:#5B6472;line-height:1.5')}>
         막대는 이번 값에서 기준 값을 뺀 크기예요. 회색 띠는 오차 범위(같은 상태를 다시 재도 생길 수 있는 차이)이고, 띠를 벗어난 관절만 색으로 표시했어요.
         {view.modelChanged ? ' 두 회차의 분석 방식이 달라 값만 적었어요.' : ''}
       </span>
@@ -117,7 +117,7 @@ export function ChangeProfile({ acct, r, gait, fromServer, onSettled, spark = tr
           const faded = x.j === 'VALUE_ONLY'
           return (
             <div key={i} style={css(`display:grid;grid-template-columns:118px 1fr 92px 64px ${showSpark ? '64px' : '0px'};gap:10px;align-items:center;padding:7px 0;border-top:${i ? '1px solid #F2EFEA' : 'none'}`)}>
-              <span style={css('font-size:13.5px;font-weight:600;white-space:nowrap')}>{x.joint} <span style={css('font-weight:500;color:#8E949C')}>{x.side}</span></span>
+              <span style={css('font-size:14px;font-weight:600;white-space:nowrap')}>{x.joint} <span style={css('font-weight:500;color:#5B6472')}>{x.side}</span></span>
               <div style={css('position:relative;height:14px')} title={`기준 ${x.base}° → 이번 ${x.target}°`}>
                 {band ? <span style={css(`position:absolute;top:0;bottom:0;left:${50 - band.width}%;width:${band.width * 2}%;background:#ECE8E2;border-radius:3px`)}></span> : null}
                 <span style={css('position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:#A0A7B2')}></span>
@@ -131,7 +131,7 @@ export function ChangeProfile({ acct, r, gait, fromServer, onSettled, spark = tr
         })}
       </div>
       {view.rows.some((x) => x.j === 'VALUE_ONLY') ? (
-        <span style={css('font-size:12px;color:#8E949C')}>'값만'은 걸은 횟수가 모자라거나(다리마다 8번 미만) 오차 범위가 정해지지 않아 증가·감소를 가르지 않은 관절이에요.</span>
+        <span style={css('font-size:12px;color:#5B6472')}>'값만'은 걸은 횟수가 모자라거나(다리마다 8번 미만) 오차 범위가 정해지지 않아 증가·감소를 가르지 않은 관절이에요.</span>
       ) : null}
     </section>
   )

@@ -107,7 +107,7 @@ export function delta(a: number, b: number | null | undefined, unit: string): st
 export function avatar(on: boolean) {
   return {
     ring: on ? '0 0 0 3px #FAF9F6,0 0 0 6px #D2601A' : 'none',
-    av: on ? '#FCEEE3' : '#EEEAE4', avc: on ? '#A8481A' : '#7A808A',
+    av: on ? '#FCEEE3' : '#EEEAE4', avc: on ? '#A8481A' : '#5B6472',
     nc: on ? '#1B2433' : '#5B6472', nw: on ? 700 : 500,
   }
 }
@@ -558,9 +558,9 @@ export function trend(acct: Account, d: Dog): Trend {
   const hi = Math.max(...syms) + 1
   const pts = syms.map((s, i) => `${fmt(4 + i * (64 / Math.max(1, syms.length - 1)), 0)},${fmt(22 - ((s - lo) / (hi - lo)) * 18, 0)}`).join(' ')
   const diff = syms.length > 1 ? syms[syms.length - 1] - syms[syms.length - 2] : 0
-  const [label, c] = syms.length === 1 ? ['첫 측정', '#7A808A']
+  const [label, c] = syms.length === 1 ? ['첫 측정', '#5B6472']
     : diff >= SYM_CHANGE ? ['좋아짐', '#2E8B57']
-      : diff <= -SYM_CHANGE ? ['나빠짐', '#C2412D'] : ['비슷함', '#7A808A']
+      : diff <= -SYM_CHANGE ? ['나빠짐', '#C2412D'] : ['비슷함', '#5B6472']
   return { has: true, pts, sym: syms[syms.length - 1], label, c, single: syms.length === 1 }
 }
 
@@ -658,7 +658,7 @@ export function analysis_rows(acct: Account, rs: Result[]) {
 
 /** 분석 표의 대칭 지수 배지: 수준별 색, 직전 유효 회차 대비 오르내림 */
 export function sym_view(acct: Account, r: Result): { sym_bg: string; sym_c: string; sym_d: string; sym_dc?: string } {
-  if (r.st === 'fail') return { sym_bg: '#F2EFEA', sym_c: '#8E949C', sym_d: '' }
+  if (r.st === 'fail') return { sym_bg: '#F2EFEA', sym_c: '#5B6472', sym_d: '' }
   const lv = r.sym >= 90 ? [90, '', '#DCEFE2', '#2E7A4F'] : r.sym >= 80 ? [80, '', '#FBEBC8', '#8A6100']
     : [0, '', '#FBE0D9', '#C2412D'] // 회차 균형 점수 기준(다리 하나 차이 기준 _LEVEL 과 다름)
   const prev = acct.results.find((x) => x.dog === r.dog && x.st !== 'fail' && (x.day < r.day || (x.day === r.day && x.time < r.time)))
@@ -1106,14 +1106,14 @@ export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
   const rows = order.map(([, [n, limb, fn, u]], i) => {
     const focus = !!d.focus && limb === d.focus
     const bt = i ? '1px solid #F2EFEA' : 'none'
-    if (!fn) return { n, limb: LIMB[limb!], lc: '#8E949C', vals: '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+    if (!fn) return { n, limb: LIMB[limb!], lc: '#5B6472', vals: '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
     const bv = fn(b)
     const tv = fn(t)
     const df = tv - bv
     const in_range = Math.abs(df) <= 1
     return {
       n, limb: limb ? LIMB[limb] + (focus ? ' · 관심 다리' : '') : '전체',
-      lc: focus ? '#B4501A' : '#8E949C', vals: `${bv}${u} → ${tv}${u}`,
+      lc: focus ? '#B4501A' : '#5B6472', vals: `${bv}${u} → ${tv}${u}`,
       // 퍼센트 값끼리의 차이는 %p(백엔드 회차 비교 vet.ts serverCompareRows 와 같은 표기)
       j: in_range ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u === '%' ? '%p' : u}` : `▼ 감소 ${-df}${u === '%' ? '%p' : u}`,
       bg: in_range ? '#F4F2EE' : '#EEE8DF', c: in_range ? '#5B6472' : '#1B2433', bt,

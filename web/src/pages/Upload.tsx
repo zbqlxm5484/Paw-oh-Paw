@@ -183,7 +183,7 @@ export default function Upload() {
   return (
     <Base acct={acct} me={me} nav="upload" toast={toast} modals={<><PetModal next_url="/upload" /><GuideModal /></>}>
       <main style={css('max-width:none;margin:0;padding:32px 80px 96px;display:flex;flex-direction:column;gap:24px')}>
-        <div style={css('display:flex;flex-direction:column;gap:6px')}><h1 style={css('margin:0;font-size:34px;font-weight:800;letter-spacing:-0.9px')}>보행 영상 분석</h1></div>
+        <div style={css('display:flex;flex-direction:column;gap:6px')}><h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.9px')}>보행 영상 분석</h1></div>
         <PostForm id="upForm" action="/analyze" encType="multipart/form-data" onBefore={onBefore} style={css('display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;margin:0')}>
           <input type="hidden" name="dog" value={sel.id} />
           <input type="hidden" name="demo_count" value="0" />
@@ -195,7 +195,7 @@ export default function Upload() {
             }} />
           <input type="file" name="files" id="filesField" multiple hidden />
           <div style={css('flex:1 1 460px;min-width:0;max-width:1100px;display:flex;flex-direction:column;gap:22px')}>
-            <div style={css('display:flex;flex-direction:column;gap:10px')}><b style={css('font-size:16px')}>1. 반려견 선택</b>
+            <div style={css('display:flex;flex-direction:column;gap:10px')}><b style={css('font-size:15px')}>1. 반려견 선택</b>
               <input id="dogFilter" placeholder="이름 · 동물번호로 찾기" autoComplete="off" onInput={(e) => setFilt(e.currentTarget.value.trim())} style={css('height:44px;max-width:420px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;padding:0 14px;font-size:15px;outline:none')} />
               <div style={css('max-height:264px;overflow-y:auto;border:1px solid #ECE8E2;border-radius:14px;background:#fff')}>
                 {dogs.map((d, i) => (
@@ -204,34 +204,34 @@ export default function Upload() {
                     style={css(`display:${!filt || `${d.name} ${d.no}`.indexOf(filt) >= 0 ? 'flex' : 'none'};align-items:center;gap:12px;padding:9px 14px;border-top:${i ? '1px solid #F2EFEA' : 'none'};cursor:pointer`)}>
                     <div className="av" style={css(`width:34px;height:34px;flex:none;border-radius:50%;background:${d.av};color:${d.avc};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;box-shadow:${d.ring}`)}>{d.init}</div>
                     <span className="nm" style={css(`font-size:15px;color:${d.nc};font-weight:${d.nw}`)}>{d.name}</span>
-                    <span style={css('font-size:13px;color:#7A808A')}>{[d.no, d.breed].filter(Boolean).join(' · ')}{d.kg ? ` · ${d.kg}kg` : ''}</span>
+                    <span style={css('font-size:13px;color:#5B6472')}>{[d.no, d.breed].filter(Boolean).join(' · ')}{d.kg ? ` · ${d.kg}kg` : ''}</span>
                   </div>
                 ))}
               </div>
-              <span data-pet="new" style={css('align-self:flex-start;font-size:14.5px;font-weight:700;color:#D2601A;cursor:pointer')}>+ 새 반려견 등록</span>
+              <span data-pet="new" style={css('align-self:flex-start;font-size:15px;font-weight:700;color:#D2601A;cursor:pointer')}>+ 새 반려견 등록</span>
             </div>
-            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '폰 촬영 회차를 연 뒤에는 체중을 바꿀 수 없습니다' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:16px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
-            <div style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:16px;font-weight:700')}>오늘 바이탈 <span style={css('color:#A0A7B2;font-weight:500;font-size:14px')}>선택</span></span>
+            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:15px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#5B6472;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '폰 촬영 회차를 연 뒤에는 체중을 바꿀 수 없습니다' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:15px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
+            <div style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:15px;font-weight:700')}>오늘 바이탈 <span style={css('color:#5B6472;font-weight:500;font-size:14px')}>선택</span></span>
               <div style={css('display:grid;grid-template-columns:repeat(4,minmax(0,140px));gap:10px')}>
                 {VITALS.map(([nm, label, ph]) => (
-                  <label key={nm} style={css('display:flex;flex-direction:column;gap:4px;min-width:0')}><span style={css('font-size:12.5px;color:#5B6472')}>{label}</span><input className="inp" name={nm} inputMode="decimal" placeholder={ph} style={css('height:48px;width:100%;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:15px;outline:none')} /></label>
+                  <label key={nm} style={css('display:flex;flex-direction:column;gap:4px;min-width:0')}><span style={css('font-size:13px;color:#5B6472')}>{label}</span><input className="inp" name={nm} inputMode="decimal" placeholder={ph} style={css('height:48px;width:100%;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:15px;outline:none')} /></label>
                 ))}
               </div>
             </div>
-            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:16px;font-weight:700')}>측정한 사람</span><input className="inp author-inp" name="author" placeholder="예) 박민준 테크니션" style={css('height:48px;width:100%;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:15px;outline:none')} /></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:15px;font-weight:700')}>측정한 사람</span><input className="inp author-inp" name="author" placeholder="예) 박민준 테크니션" style={css('height:48px;width:100%;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:15px;outline:none')} /></label>
             <div style={css('display:flex;flex-direction:column;gap:12px')}>
-              <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:12px')}><b style={css('font-size:16px')}>3. 영상 올리기</b><span id="shotN" style={css('font-size:15px;font-weight:700;color:#B4501A;font-variant-numeric:tabular-nums')}>{n + ' / ' + max}</span></div>
+              <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:12px')}><b style={css('font-size:15px')}>3. 영상 올리기</b><span id="shotN" style={css('font-size:15px;font-weight:700;color:#B4501A;font-variant-numeric:tabular-nums')}>{n + ' / ' + max}</span></div>
               {!MOCK ? (
                 <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
-                  <button type="button" className="bt hv-border" onClick={startPhone} style={css('height:42px;padding:0 16px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700')}>📱 폰으로 촬영하기</button>
-                  {phoneSid ? <button type="button" className="hv-dark" onClick={cancelPhone} style={css('height:42px;padding:0 10px;background:none;border:0;font-size:13.5px;font-weight:600;color:#8E949C;text-decoration:underline;cursor:pointer')}>이 회차 취소</button> : null}
+                  <button type="button" className="bt hv-border" onClick={startPhone} style={css('height:44px;padding:0 16px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700')}>📱 폰으로 촬영하기</button>
+                  {phoneSid ? <button type="button" className="hv-dark" onClick={cancelPhone} style={css('height:44px;padding:0 10px;background:none;border:0;font-size:14px;font-weight:600;color:#5B6472;text-decoration:underline;cursor:pointer')}>이 회차 취소</button> : null}
                   <span style={css('font-size:13px;color:#5B6472')}>{phoneSid ? (phoneN ? `폰에서 영상 ${phoneN}개가 올라왔습니다` : 'QR 을 찍어 폰에서 촬영해 주세요') : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있습니다'}</span>
                 </div>
               ) : null}
               <div id="dropZone" className="drop" onClick={() => picker.current?.click()} {...dragProps('drop')}
                 style={css(`aspect-ratio:16 / 7;border-radius:18px;border:2px dashed ${over.drop ? '#D2601A' : '#D9D2C7'};background:${over.drop ? '#FFF6EE' : '#fff'};display:${n ? 'none' : 'flex'};flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;text-align:center;padding:24px`)}>
                 <div style={css('width:56px;height:56px;border-radius:16px;background:#FCEEE3;color:#D2601A;display:flex;align-items:center;justify-content:center')}><svg width="28" height="28" viewBox="0 0 24 24"><use href="#w-up"></use></svg></div>
-                <b style={css('font-size:17px')}>영상을 끌어다 놓거나 눌러서 선택하세요</b>
+                <b style={css('font-size:18px')}>영상을 끌어다 놓거나 눌러서 선택하세요</b>
                 <span style={css('font-size:14px;color:#5B6472')}>MP4 · MOV · 가로 영상 · 4초씩 16개까지 차례대로</span>
               </div>
               <div id="fileArea" style={css(`display:${n ? 'grid' : 'none'};grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start`)}>
@@ -261,10 +261,10 @@ export default function Upload() {
                           {file && thumbs.get(file) ? <img src={thumbs.get(file)} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {ps && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
-                          {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:11px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
+                          {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:12px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
                           {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지우시겠습니까? 지운 영상은 되돌릴 수 없습니다.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
-                          <span style={css('position:absolute;left:7px;top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
+                          <span style={css('position:absolute;left:7px;top:4px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
                         </div>
                       )
                     })}
@@ -273,8 +273,8 @@ export default function Upload() {
                 </div>
               </div>
             </div>
-            <div data-open="guideModal" className="hv-dark" style={css('align-self:flex-start;display:flex;align-items:center;gap:8px;margin-top:-6px;cursor:pointer;color:#5B6472;font-size:14.5px;font-weight:600')}><span style={css('width:20px;height:20px;border-radius:50%;border:1.6px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;font-family:Georgia,serif;font-style:italic;flex:none')}>i</span>영상 촬영은 어떻게 하나요?</div>
-            <button className="bt" type="submit" id="startBtn" style={css(`align-self:flex-end;width:240px;height:58px;border-radius:14px;background:${n ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700`)}>분석 시작</button>
+            <div data-open="guideModal" className="hv-dark" style={css('align-self:flex-start;display:flex;align-items:center;gap:8px;margin-top:-6px;cursor:pointer;color:#5B6472;font-size:15px;font-weight:600')}><span style={css('width:20px;height:20px;border-radius:50%;border:1.6px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;font-family:Georgia,serif;font-style:italic;flex:none')}>i</span>영상 촬영은 어떻게 하나요?</div>
+            <button className="bt" type="submit" id="startBtn" style={css(`align-self:flex-end;width:240px;height:58px;border-radius:14px;background:${n ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700`)}>분석 시작</button>
           </div>
         </PostForm>
         {showQr && phoneSid ? <PhoneCaptureModal sid={phoneSid} shots={phoneN} onClose={() => setShowQr(false)} /> : null}
