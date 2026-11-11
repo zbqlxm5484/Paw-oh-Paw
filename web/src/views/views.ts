@@ -1135,6 +1135,6 @@ export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
     tr: b_vals.map((v, i) => `${X(i)},${Y(v)}`).join(' '),
     dl: [...a_vals.map((v, i) => ({ x: X(i), y: Y(v), c: '#3B6FE0' })), ...b_vals.map((v, i) => ({ x: X(i), y: Y(v), c: '#E5604D' }))],
     xl: vs.map((r) => short(r.date)), two: right_fn !== null,
-    focusNote: d.focus ? `관심 다리(${LIMB[d.focus]})를 맨 앞에 보여 드립니다.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드립니다.',
+    focusNote: d.focus ? `관심 다리(${LIMB[d.focus]})를 맨 앞에 보여 드립니다.` : '위에서 관심 다리를 고르면 그 다리를 맨 앞에 보여 드립니다.',
   }
 }

@@ -298,7 +298,7 @@ export class AppProto extends DCLogic<Props, any> {
           st: stt[0], bg: stt[1], c: stt[2], bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) } }),
         has: all.length > 0, none: !all.length, count: all.length + '회차',
         edit: () => this.nav('petNew', `/dogs/${D.id}/edit`),
-        compare: () => valid(D.id).length < 2 ? this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있습니다') : (this.props.setUi({ cmp: 'base' }), this.nav('compare', `/dogs/${D.id}/compare`)),
+        compare: () => valid(D.id).length < 2 ? this.toast('유효한 회차가 2개 이상 있어야 비교할 수 있습니다') : (this.props.setUi({ cmp: 'base', leg: undefined }), this.nav('compare', `/dogs/${D.id}/compare`)),
         start: () => this.goCapture(D.id) }
     }
 
@@ -309,6 +309,8 @@ export class AppProto extends DCLogic<Props, any> {
     // 경과 비교: API 값
     const CD = sc === 'compare' ? dogById(this.props.params.dogId || '') : D
     const cmpd = this.props.compare
+    // 관심 다리: 이 화면에서만 바꿔 본다(ui.leg). undefined 면 반려견에 저장된 값. 반려견 정보(보고서 점선)는 그대로
+    const cmpFocus = this.props.ui.leg !== undefined ? this.props.ui.leg : CD?.focus ?? null
     let cp: any = { has: false, none: true, rows: [], tl: '', tr: '', dl: [], xl: [], name: CD ? CD.name : '', baseLabel: '', baseDate: '', tDate: '', modelChanged: false, modelMsg: '', two: true, focusNote: '' }
     if (CD && cmpd && cmpd.cmp) {
       const c = cmpd.cmp, mode = this.props.ui.cmp
@@ -317,7 +319,7 @@ export class AppProto extends DCLogic<Props, any> {
       cp = { has: true, none: false, name: CD.name, baseLabel: mode === 'base' ? '기준 회차' : '직전 회차', baseDate: when(B, c.base.measured_on), tDate: when(T, c.target.measured_on),
         modelChanged: c.model_changed, modelMsg: `두 회차의 분석 모델이 다릅니다(${c.base.model_version ?? '-'} → ${c.target.model_version ?? '-'}). 분석 방식이 바뀌어 수치를 그대로 비교하기 어렵습니다.`,
         rows: cmpd.rows, ...cmpd.trend,
-        focusNote: CD.focus ? `관심 다리(${LIMB[CD.focus]})를 맨 앞에 보여 드립니다.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드립니다.' }
+        focusNote: cmpFocus ? `관심 다리(${LIMB[cmpFocus]})를 맨 앞에 보여 드립니다.` : '위에서 관심 다리를 고르면 그 다리를 맨 앞에 보여 드립니다.' }
     }
 
     const reqOrg = [s.to[0], s.to[1], s.to[2]].every(Boolean)
@@ -742,6 +744,7 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       cp, cmpSegs: seg([['base', '기준 회차 대비'], ['prev', '직전 회차 대비']], this.props.ui.cmp, (k) => this.props.setUi({ cmp: k as 'base' | 'prev' })),
+      cmpLegs: ([[null, '정하지 않음'], ['LF', LIMB.LF], ['RF', LIMB.RF], ['LH', LIMB.LH], ['RH', LIMB.RH]] as const).map(([k, label]) => { const on = cmpFocus === k; return { label, on, saved: !!k && k === CD?.focus, bg: on ? '#FCEEE3' : '#fff', c: on ? '#A8481A' : '#3A4250', bd: on ? '#E7A77A' : '#ECE8E2', pick: () => this.props.setUi({ leg: k }) } }),
       trendKs: [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 점수']].map(([k, label]) => { const on = this.props.ui.tk === k; return { label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.props.setUi({ tk: k }) } }),
 
       isOrg, isUser: false, myName: acct.name, myDev: acct.dev || '-',
