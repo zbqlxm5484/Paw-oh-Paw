@@ -203,7 +203,8 @@ export function serverCompareRows(o: CompareOut, focus?: string | null) {
       return { n: CMP_NAME[x.metric_code], limb, lc: '#8E949C', vals: x.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
     }
     const d = x.diff ?? x.target_value - x.base_value
-    const j = x.judgement === 'INCREASE' ? `▲ 증가 ${fmt(Math.abs(d))}${u}` : x.judgement === 'DECREASE' ? `▼ 감소 ${fmt(Math.abs(d))}${u}` : x.judgement === 'WITHIN_RANGE' ? '범위 안' : '값만'
+    const du = u === '%' ? '%p' : u // 퍼센트 값끼리의 차이는 %p
+    const j = x.judgement === 'INCREASE' ? `▲ 증가 ${fmt(Math.abs(d))}${du}` : x.judgement === 'DECREASE' ? `▼ 감소 ${fmt(Math.abs(d))}${du}` : x.judgement === 'WITHIN_RANGE' ? '범위 안' : '값만'
     const moved = x.judgement === 'INCREASE' || x.judgement === 'DECREASE'
     return {
       n: CMP_NAME[x.metric_code], limb, lc: isFocus ? '#B4501A' : '#8E949C', vals: `${fmt(x.base_value)}${u} → ${fmt(x.target_value)}${u}`,

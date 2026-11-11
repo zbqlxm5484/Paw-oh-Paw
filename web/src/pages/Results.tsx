@@ -14,10 +14,11 @@ const PAGE = 50
 export default function Results() {
   const { acct, me, toast, query } = usePage({ login: true })
   useTitle('분석 결과 · Paw oh Paw')
-  if (!acct) return null
-  const dog = query.get('dog') ?? 'all'
+  // 훅은 return 앞에서 부른다(로그인 상태가 바뀌어도 훅 순서가 같게)
   const [shown, setShown] = useState(PAGE)
   const [dq, setDq] = useState('')
+  if (!acct) return null
+  const dog = query.get('dog') ?? 'all'
   const filt = dogOf(acct, dog) ? dog : 'all'
   const kw = dq.trim()
   const hit = (id: string) => { const d = dogOf(acct, id); return !!d && (!kw || `${d.name} ${d.breed} ${d.no}`.includes(kw)) }

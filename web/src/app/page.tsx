@@ -1,5 +1,5 @@
 // 화면 공통 훅과 폼. 시제품의 page()(로그인 확인·알림)와 <form method="post"> 를 React 로 옮긴 것.
-import { useEffect, useState, type FormEvent, type FormHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type FormHTMLAttributes, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDb } from '../store/db'
 import { dispatch } from '../store/actions'
@@ -57,12 +57,29 @@ export function usePage(opts: { login?: boolean; jobId?: string; creamoff?: bool
 /** <form method="post" action="/dogs/d1/notes"> 를 그대로 쓰면, 시제품 주소 그대로 store/actions.ts 의 처리 함수로 보낸다 */
 export function PostForm({ action, children, onBefore, ...rest }: { action: string; children?: ReactNode; onBefore?: (fd: FormData) => boolean | void } & Omit<FormHTMLAttributes<HTMLFormElement>, 'action' | 'method'>) {
   const navigate = useNavigate()
+  const busy = useRef(false)
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    // 보내는 중이면 다시 누른 것은 무시한다(두 번 제출 방지. 업로드·기록 남기기가 두 번 가지 않게)
+    if (busy.current) return
+    const form = e.currentTarget
     // 누른 제출 버튼의 name=value 도 넣는다(시제품 폼처럼. 예: 관리 화면 "회수" 버튼 revoke=1)
-    const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter)
+    const fd = new FormData(form, (e.nativeEvent as SubmitEvent).submitter)
     if (onBefore && onBefore(fd) === false) return
-    const author = e.currentTarget.querySelector<HTMLInputElement>('input.author-inp')
+    busy.current = true
+    form.setAttribute('aria-busy', 'true')
+    const buttons = [...form.querySelectorAll<HTMLButtonElement>('button[type=submit], button:not([type])')].filter((b) => !b.disabled)
+    buttons.forEach((b) => (b.disabled = true))
+    try {
+      await submitForm(form, fd)
+    } finally {
+      busy.current = false
+      form.removeAttribute('aria-busy')
+      buttons.forEach((b) => (b.disabled = false))
+    }
+  }
+  const submitForm = async (form: HTMLFormElement, fd: FormData) => {
+    const author = form.querySelector<HTMLInputElement>('input.author-inp')
     if (author && author.value.trim()) {
       try {
         localStorage.setItem('pp_author', author.value.trim())

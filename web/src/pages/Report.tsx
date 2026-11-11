@@ -129,7 +129,7 @@ export default function Report() {
   const rp = v.rp
   const bm = fail ? null : body_map(acct, r)
   const segs = fail ? [] : seg([['g', '보호자용'], ['v', '수의사용']], kind)
-  const status = fail ? '' : `분석 모델 ${r.model} · 템플릿 1.0`
+  const status = fail ? '' : `분석 모델 ${r.model}`
   const rel = (href: string) => (e: MouseEvent) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey) return
     e.preventDefault()
