@@ -195,7 +195,8 @@ export function DesignRoot() {
     screen: route.screen, params: route.params, query, data, actions, auth: {
       login, signup, logout, verifyDeviceCode: authApi.verifyDeviceCode,
       updateMe: async (b: { name?: string; email?: string; notif_on?: boolean }) => setStaff(await authApi.updateMe(b)),
-      changePassword: async (current: string, next: string) => setStaff(await authApi.changePassword(current, next)),
+      // 비밀번호를 바꾸면 서버가 그전 토큰을 모두 끊는다(백엔드 v1.48, 새 토큰 없음). 탈퇴처럼 로그인을 풀고 다시 로그인하게 한다
+      changePassword: async (current: string, next: string) => { await authApi.changePassword(current, next); logout() },
       withdraw: async (password: string) => { await authApi.withdraw(password); logout() },
     }, nav, back, ui, setUi,
     compare: route.screen === 'compare' ? compare : null, reports: reportsQ.data, vetReport, reportStatus: reportStatusLine,

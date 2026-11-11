@@ -795,7 +795,7 @@ export class AppProto extends DCLogic<Props, any> {
         if (nw === cur) return this.toast('지금 비밀번호와 다른 비밀번호를 입력해 주세요')
         if (s.saving) return
         this.setState({ saving: true })
-        try { await this.props.auth.changePassword(cur, nw); this.setState({ sheet: null, pf: { cur: '', nw: '', nw2: '' } }); this.toast('비밀번호를 바꿨습니다') }
+        try { await this.props.auth.changePassword(cur, nw); this.setState({ sheet: null, pf: { cur: '', nw: '', nw2: '' } }); this.toast('비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요') }
         catch (e) { this.toast(e instanceof ApiError && e.code === 'PASSWORD_MISMATCH' ? '지금 비밀번호가 맞지 않습니다' : errMsg(e, '비밀번호를 바꾸지 못했습니다')) }
         finally { this.setState({ saving: false }) }
       },

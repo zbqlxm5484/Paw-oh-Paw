@@ -67,7 +67,7 @@ function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
   const revoke = useRef(false)
   return (
     <div style={css(`display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${c.revoked ? '.5' : '1'}`)}>
-      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했습니다' : '복사하지 못했습니다. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
+      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && !c.code.includes('*') && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했습니다' : '복사하지 못했습니다. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
       <span style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{c.revoked ? '회수됨' : `가입 계정 ${c.used}`}</span>
       {can_write && !c.revoked && (
         <PostForm action={`/admin/codes/${c.id}`} style={css('display:flex;gap:6px')}
