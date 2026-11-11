@@ -61,7 +61,7 @@ export function MemoForm({ dog_id, next_url, memo_cat, edit = null, open = false
           <input type="hidden" name="note_id" value={edit.id} />
           <input type="hidden" name="delete" value="1" />
           <input type="hidden" name="next_url" value={next_url} />
-          <button className="bt" type="submit" style={css('background:none;font-size:13px;font-weight:600;color:#C2412D;padding:0')}>메모 지우기</button>
+          <button className="bt" type="submit" style={css('background:none;font-size:13px;font-weight:600;color:#B4501A;padding:0')}>메모 지우기</button>
         </PostForm>
       ) : null}
     </details>
