@@ -2,7 +2,8 @@
 
 PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
 
-- 풀: ProcessPoolExecutor(mp_context=spawn) 1개(결과 영상 풀과 따로 두어 보고서가 결과 영상 뒤에서 기다리지 않는다).
+- 풀: ProcessPoolExecutor(mp_context=spawn), 크기는 WORKER_REPORT_CONCURRENCY(16절, 기본 2). 결과 영상 풀과 따로 두어
+  보고서가 결과 영상 뒤에서 기다리지 않는다. 2면 한 회차의 두 판본을 함께 만든다(S15P31A404-274).
 - PDF를 만드는 길(8절 6번): REPORT_RENDERER_URL·REPORT_PRINT_URL이 있으면 화면 인쇄다. 맡길 때 그 회차의 인쇄 토큰을
   만들어 인쇄 화면 주소에 붙이고, 자식은 그 주소를 렌더러에 넘겨 PDF를 받는다. 렌더러가 안 되면 기본 템플릿으로 만든다.
   설정이 없으면 늘 기본 템플릿이다. 어느 길이든 글 검사와 수치 대조는 같다. 주소(토큰)는 로그에 남기지 않는다.
@@ -65,9 +66,6 @@ PENDING = ReportStatus.PENDING.value
 GENERATING = ReportStatus.GENERATING.value
 DONE = ReportStatus.DONE.value
 FAILED = ReportStatus.FAILED.value
-# 12.4: 보고서 풀은 1개다
-REPORT_CONCURRENCY = 1
-
 GenerateFn = Callable[..., ReportResult]
 
 
@@ -119,7 +117,7 @@ class ReportGenerator:
         self.print_url = settings.REPORT_PRINT_URL.strip().rstrip("/")
         if bool(self.renderer_url) != bool(self.print_url):
             raise ValueError("REPORT_RENDERER_URL과 REPORT_PRINT_URL은 둘 다 채우거나 둘 다 비워야 합니다")
-        self.concurrency = REPORT_CONCURRENCY
+        self.concurrency = settings.WORKER_REPORT_CONCURRENCY
         self.tmp_root = Path(settings.UPLOAD_TMP_DIR) / "worker"
         self._executor_factory = executor_factory or self._spawn_pool
         self._generate = generate

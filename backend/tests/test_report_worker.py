@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.dates import today_local
-from app.models import MeasureSession, Report, SessionMetric
+from app.models import Dog, MeasureSession, Report, SessionMetric
 from app.report import ReportCheckError
 from app.report.checks import Finding
 from app.report.generate import ReportResult
@@ -41,7 +41,8 @@ MARK = b"%PDF-fake "
 
 
 def _settings(**overrides: Any) -> Settings:
-    return get_settings().model_copy(update=overrides)
+    # 기본은 한 번에 한 부로 둔다. 한 건의 흐름을 보는 시험이 바퀴마다 무엇이 바뀌는지 셀 수 있게
+    return get_settings().model_copy(update={"WORKER_REPORT_CONCURRENCY": 1, **overrides})
 
 
 def _done_session(db: Session, dog, staff, *, status: str = "DONE", reports: bool = True) -> MeasureSession:
@@ -138,6 +139,49 @@ def test_pending_reports_are_generated_one_at_a_time_and_become_done(db: Session
         assert (row.generation_ms, row.template_version, row.model_version) == (12, "0.2", MODEL_VERSION)
     assert [args[0].name for _, args, _ in executor.calls] == ["input.json", "input.json"]
     assert reporter.jobs == {} and not any((Path(settings.UPLOAD_TMP_DIR) / "worker").glob("report-*"))
+
+
+def test_two_editions_of_one_session_are_generated_together(db: Session, dog, staff) -> None:
+    # 기본값(2)이면 한 회차의 두 판본을 같은 바퀴에 맡기고 다음 바퀴에 함께 거둔다(S15P31A404-274)
+    session = _done_session(db, dog, staff)
+    settings = get_settings()
+    assert settings.WORKER_REPORT_CONCURRENCY == 2
+    executor = FakeExecutor()
+    reporter = _reporter(settings, executor)
+
+    first = _run(db, reporter, settings)
+    assert first.report_started == 2 and first.reported == 0 and len(reporter.jobs) == 2
+    assert {r.status for r in _reports(db, session).values()} == {"GENERATING"}
+
+    second = _run(db, reporter, settings)
+    assert (second.reported, second.report_started) == (2, 0)
+    rows = _reports(db, session)
+    assert set(rows) == {"OWNER", "VET"}
+    for edition, row in rows.items():
+        assert row.status == "DONE" and row.fail_reason is None
+        assert get_storage().read_bytes(row.file_key).startswith(MARK + edition.encode("utf-8"))
+    assert reporter.jobs == {} and not any((Path(settings.UPLOAD_TMP_DIR) / "worker").glob("report-*"))
+
+
+def test_reports_beyond_the_pool_size_wait_for_a_free_slot(db: Session, dog, staff) -> None:
+    # 회차 둘이 함께 끝나면 보고서 네 부 가운데 풀 크기(2)만큼만 맡기고 나머지는 자리가 날 때까지 PENDING이다
+    other = Dog(
+        institution_id=staff.institution_id, name="콩이", breed="말티즈", weight_kg=Decimal("3.20"), size_class="SMALL"
+    )
+    db.add(other)
+    db.flush()
+    sessions = [_done_session(db, dog, staff), _done_session(db, other, staff)]
+    settings = _settings(WORKER_REPORT_CONCURRENCY=2)
+    reporter = _reporter(settings, FakeExecutor())
+
+    first = _run(db, reporter, settings)
+    statuses = sorted(r.status for s in sessions for r in _reports(db, s).values())
+    assert first.report_started == 2 and statuses == ["GENERATING", "GENERATING", "PENDING", "PENDING"]
+
+    second = _run(db, reporter, settings)  # 둘을 거두고 남은 둘을 맡긴다
+    third = _run(db, reporter, settings)
+    assert (second.reported, second.report_started, third.reported) == (2, 2, 2)
+    assert {r.status for s in sessions for r in _reports(db, s).values()} == {"DONE"}
 
 
 def test_input_written_for_the_child_has_the_report_shape(db: Session, dog, staff, tmp_path: Path) -> None:
