@@ -647,13 +647,14 @@ def main() -> int:
     signal.signal(signal.SIGTERM, worker.stop)
     logger.info(
         "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss render_concurrency=%d "
-        "sweep_max=%ss",
+        "report_concurrency=%d sweep_max=%ss",
         settings.ANALYSIS_API_MODE,
         settings.WORKER_POLL_INTERVAL_SEC,
         settings.WORKER_MAX_IN_FLIGHT,
         settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION,
         settings.ANALYSIS_TIMEOUT_SEC,
         settings.WORKER_RENDER_CONCURRENCY,
+        settings.WORKER_REPORT_CONCURRENCY,
         settings.WORKER_SWEEP_MAX_SEC,
     )
     worker.run_forever()

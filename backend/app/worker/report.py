@@ -2,7 +2,8 @@
 
 PENDING 보고서를 자식 프로세스에 맡겨 PDF를 만든다.
 
-- 풀: ProcessPoolExecutor(mp_context=spawn) 1개(결과 영상 풀과 따로 두어 보고서가 결과 영상 뒤에서 기다리지 않는다).
+- 풀: ProcessPoolExecutor(mp_context=spawn), 크기는 WORKER_REPORT_CONCURRENCY(16절, 기본 2). 결과 영상 풀과 따로 두어
+  보고서가 결과 영상 뒤에서 기다리지 않는다. 2면 한 회차의 두 판본을 함께 만든다(S15P31A404-274).
 - 가져가기: UPDATE report SET status='GENERATING' WHERE id=:id AND status='PENDING' → commit → 입력 dict(report_input)를
   UPLOAD_TMP_DIR/worker/report-{id}/input.json으로 쓰고 generate_report(입력, 출력)를 맡긴다.
   자식은 DB·저장소를 모른다(11.3). 입력의 settings.tolerance는 시작할 때 읽은 config/tolerance.yaml 값이다(197).
@@ -59,9 +60,6 @@ PENDING = ReportStatus.PENDING.value
 GENERATING = ReportStatus.GENERATING.value
 DONE = ReportStatus.DONE.value
 FAILED = ReportStatus.FAILED.value
-# 12.4: 보고서 풀은 1개다
-REPORT_CONCURRENCY = 1
-
 GenerateFn = Callable[..., ReportResult]
 
 
@@ -108,7 +106,7 @@ class ReportGenerator:
         self.storage = storage
         # 오차 범위(5절·15.8)는 시작할 때 한 번 읽는다. 파일 모양이 틀리면 ToleranceFileError로 바로 멈춘다(197)
         self.tolerance = get_tolerance(settings.TOLERANCE_FILE)
-        self.concurrency = REPORT_CONCURRENCY
+        self.concurrency = settings.WORKER_REPORT_CONCURRENCY
         self.tmp_root = Path(settings.UPLOAD_TMP_DIR) / "worker"
         self._executor_factory = executor_factory or self._spawn_pool
         self._generate = generate
