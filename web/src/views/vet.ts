@@ -69,6 +69,8 @@ export type Judge = 'INCREASE' | 'DECREASE' | 'WITHIN_RANGE' | 'RANGE_NOT_SET' |
 export interface CmpRow { n: string; side: string; u: string; b: number; t: number; tol: number | null; j: Judge; diff: string }
 export interface CmpView {
   baseDate: string
+  /** 비교 대상(직전) 회차 id. 화면이 '2회차, 11월 10일'로 적는 데 쓴다 */
+  baseId?: string
   modelChanged: boolean
   changed: CmpRow[]
   within: CmpRow[]
@@ -109,7 +111,7 @@ export function cmpFromServer(o: CompareOut, gait: string): CmpView {
       })
     }
   }
-  return view(rows, o.base.measured_on, o.model_changed, true)
+  return { ...view(rows, o.base.measured_on, o.model_changed, true), baseId: o.base.session_id }
 }
 
 /** 이 회차 r 바로 앞의 유효 회차(같은 반려견) */
@@ -138,7 +140,7 @@ export function cmpLocal(acct: Account, r: Result, gait: string): CmpView | null
       rows.push({ n, side: s === 'L' ? '왼쪽' : '오른쪽', u: '°', b, t, tol: j === 'RANGE_NOT_SET' || j === 'UNKNOWN' ? null : tol, j, diff: fmt(d) })
     }
   }
-  return view(rows, p.day || p.date, p.model !== r.model, false)
+  return { ...view(rows, p.day || p.date, p.model !== r.model, false), baseId: p.id }
 }
 
 // ── 3. 무릎 가동 범위 변화 ──
@@ -163,9 +165,9 @@ export function kneeTrend(acct: Account, r: Result, gait: string): TrendView | n
 
 // ── 4. 그 밖의 수치 ──
 export const OTHER: [string, string, string][] = [
-  ['stride_length', '걸음 길이(몸통 길이 기준)', '%'],
+  ['stride_length', '걸음 길이(등 길이 기준)', '%'],
   ['stance_ratio', '입각기 비율', '%'],
-  ['paw_lift', '발 들림 높이(몸통 길이 기준)', '%'],
+  ['paw_lift', '발 들림 높이(등 길이 기준)', '%'],
   ['stifle_cv', '무릎 움직임 일관성', '%'],
 ]
 export const LIMBS: [string, string][] = [['LF', '왼앞'], ['RF', '오른앞'], ['LH', '왼뒤'], ['RH', '오른뒤']]
@@ -181,7 +183,7 @@ export function otherRows(r: Result, gait: string): { n: string; v: string[] }[]
 const CMP_NAME: Record<string, string> = {
   rom_stifle: '무릎 가동 범위', rom_hip: '고관절 가동 범위', rom_tarsus: '뒷발목 가동 범위',
   rom_shoulder: '어깨 가동 범위', rom_elbow: '팔꿈치 가동 범위', rom_carpus: '앞발목 가동 범위',
-  stride_length: '걸음 길이', stance_ratio: '입각기 비율',
+  stride_length: '걸음 길이(등 길이 기준)', stance_ratio: '입각기 비율',
 }
 const GAIT_NAME: Record<string, string> = { TROT: '속보', WALK: '평보', OTHER: '보행 유형 미판별' }
 

@@ -144,8 +144,20 @@ export function DesignRoot() {
   const repGait = mainGaitOf(repR?.result)
   const repCmpQ = useCompare(repR?.dog, { target: repR?.id, base: 'PREVIOUS', gait_type: repGait })
   const repTrQ = useTrends(repR?.dog, { metric_code: 'rom_stifle', gait_type: repGait })
+  // 비교 대상(직전) 회차 표기: "2회차, 11월 10일", 이번 회차와 같은 날이면 시각까지(웹과 같은 모양)
+  const repBaseLabel = (() => {
+    const id = repCmpQ.data?.base.session_id
+    const b = id ? data.results.find((r) => r.id === id) : undefined
+    if (!b || !repR) return undefined
+    const all = data.results.filter((r) => r.dog === b.dog)
+    const no = all.length - all.findIndex((r) => r.id === b.id)
+    const [, mm, dd] = b.measured_on.split('-')
+    const hm = /^(\d{1,2}):(\d{2})/.exec(b.time || '')
+    const t = b.measured_on === repR.measured_on && hm ? ` ${Number(hm[1]) < 12 ? '오전' : '오후'} ${Number(hm[1]) % 12 || 12}:${hm[2]}` : ''
+    return `${no}회차, ${Number(mm)}월 ${Number(dd)}일${t}`
+  })()
   const repBaseQ = useCompare(repR?.dog, { target: repR?.id, base: 'BASELINE', gait_type: repGait })
-  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} base={repBaseQ.data} gait={repGait} /> : null
+  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} baseLabel={repBaseLabel} base={repBaseQ.data} gait={repGait} /> : null
 
   // 숨은 파일 입력(영상 선택·촬영)
   const fileRef = useRef<HTMLInputElement>(null)

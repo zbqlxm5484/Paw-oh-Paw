@@ -20,7 +20,7 @@ export const SEX_TO_API: Record<DSex, Sex> = { m: 'MALE', f: 'FEMALE', mn: 'MALE
 export const SEX_FROM_API: Record<Sex, DSex> = { MALE: 'm', FEMALE: 'f', MALE_NEUTERED: 'mn', FEMALE_SPAYED: 'fs' }
 export const SIZE_TO_API: Record<DSize, SizeClass> = { S: 'SMALL', M: 'MEDIUM', L: 'LARGE' }
 export const SIZE_FROM_API: Record<SizeClass, DSize> = { SMALL: 'S', MEDIUM: 'M', LARGE: 'L' }
-export const UNIT_SIGN: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '몸통/초', count: '회' }
+export const UNIT_SIGN: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '등 길이/초', count: '회' }
 
 /** 디자인의 반려견 */
 export interface DDog {

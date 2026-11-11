@@ -75,6 +75,21 @@ export function sess_no(acct: Account, r: Result): number {
   return all_.length - all_.findIndex((x) => x.id === r.id)
 }
 
+/** "오후 2:55" (회차 시각 "14:55") */
+function ampm(hm: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hm || '')
+  if (!m) return ''
+  const h = Number(m[1])
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${m[2]}`
+}
+
+/** 다른 회차를 가리킬 때의 표기: "2회차, 11월 10일". 이번 회차(cur)와 같은 날이면 시각까지 "2회차, 11월 10일 오전 9:38" */
+export function sess_label(acct: Account, x: Result, cur?: Result): string {
+  const same = !!cur && cur.id !== x.id && !!x.day && x.day === cur.day
+  const t = same ? ampm(x.time) : ''
+  return `${sess_no(acct, x)}회차, ${x.date}${t ? ' ' + t : ''}`
+}
+
 export function base_of(acct: Account, d: Dog): string | null {
   if (d.base && acct.results.some((r) => r.id === d.base && r.st !== 'fail')) return d.base
   const v = valid(acct, d.id)
@@ -115,7 +130,7 @@ export function mrows(r: Result, gait: string): Row[] {
     { n: '걸음 길이', l: v(r.sL * 1.5), r: v(r.sR * 1.5), u: '%', leg: '뒷다리' },
     { n: '입각기 비율', l: 61, r: 61 - jround((r.sL - r.sR) / 2), u: '%', leg: '뒷다리' },
     { sec: '앞다리', n: '팔꿈치 가동 범위', l: v(r.j[2][1]), r: v(r.j[2][2]), u: '°', leg: '앞다리' },
-    { n: '발 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
+    { n: '발 들림 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
   ]
 }
 
@@ -259,7 +274,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
     items: [
       { k: '좌우 대칭 점수', v: `${r.sym}점`, d: prev ? `직전 ${prev.sym}점` : '첫 측정' },
       { k: '뒷무릎 움직임 범위', v: `왼 ${k0.l}° · 오 ${k0.r}°`, d: `차이 ${Math.abs(k0.l! - k0.r!)}°` },
-      { k: '걸음 길이(몸통 대비)', v: `왼 ${sL}% · 오 ${sR}%`, d: `차이 ${Math.abs(sL - sR)}%p` },
+      { k: '걸음 길이(등 길이 대비)', v: `왼 ${sL}% · 오 ${sR}%`, d: `차이 ${Math.abs(sL - sR)}%p` },
     ],
     rows: [
       ...rows_t.map((x) => ({
@@ -269,7 +284,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
       { n: '대칭 점수', l: '—', r: '—', d: `${r.sym}점` },
     ] as { n: string; l: string; r: string; d: string; bg?: string }[],
     cond: `측면 가로 촬영 · 영상 ${r.videos.length || 16}개 · 통과 ${r.ps[0]}개 중 ${r.ps[1]}개 사용 · 분석 모델 pga-pose ${r.model}. 측정 불가 항목은 사유와 함께 표시했습니다.`
-      + (hasM(r) ? ' 걸음 길이·발 높이는 몸통 길이(T13~장골능) 대비이며, 문헌 값(어깨뼈~고관절 기준)과 비교할 때는 1.92로 나눕니다.' : ''),
+      + (hasM(r) ? ' 걸음 길이·발 들림 높이는 등 길이(T13~장골능) 대비이며, 문헌 값(어깨뼈~고관절 기준)과 비교할 때는 1.92로 나눕니다.' : ''),
   }
   rp.rows.forEach((row: { bg?: string }, i: number) => {
     row.bg = i % 2 ? '#fff' : '#FAF8F5'
@@ -415,7 +430,8 @@ export function body_map(acct: Account, r: Result) {
   return {
     svg, legs, sym: r.sym, sym_level: _level(100 - r.sym),
     vs_base: base && base.id !== r.id ? r.sym - base.sym : null,
-    base_date: base ? short(base.date) : '', focus: d && d.focus ? LIMB[d.focus] ?? '' : '',
+    base_date: base ? short(base.date) : '', base_label: base ? sess_label(acct, base, r) : '',
+    prev_label: idx > 0 ? sess_label(acct, vs[idx - 1], r) : '', focus: d && d.focus ? LIMB[d.focus] ?? '' : '',
     trend, trend_line: trend.map((p) => `${pystr(p.x)},${pystr(p.y)}`).join(' '),
   }
 }
@@ -1064,9 +1080,9 @@ const stride = (side: 'sL' | 'sR'): Fn => (r) => (hasM(r) ? r[side] : jround(r[s
 const _CMP: [string, string | null, Fn | null, string][] = [
   ['무릎 가동 범위', 'LH', (r) => r.j[0][1], '°'], ['무릎 가동 범위', 'RH', (r) => r.j[0][2], '°'],
   ['고관절 가동 범위', 'LH', (r) => r.j[1][1], '°'], ['고관절 가동 범위', 'RH', (r) => r.j[1][2], '°'],
-  ['걸음 길이', 'LH', stride('sL'), '%'], ['걸음 길이', 'RH', stride('sR'), '%'],
+  ['걸음 길이(등 길이 기준)', 'LH', stride('sL'), '%'], ['걸음 길이(등 길이 기준)', 'RH', stride('sR'), '%'],
   ['팔꿈치 가동 범위', 'LF', (r) => r.j[2][1], '°'], ['팔꿈치 가동 범위', 'RF', (r) => r.j[2][2], '°'],
-  ['대칭 점수', null, (r) => r.sym, '점'], ['발 높이', 'LF', null, '%'],
+  ['대칭 점수', null, (r) => r.sym, '점'], ['발 들림 높이(등 길이 기준)', 'LF', null, '%'],
 ]
 const _TREND: Record<string, [Fn, Fn | null]> = {
   rom: [(r) => r.j[0][1], (r) => r.j[0][2]],

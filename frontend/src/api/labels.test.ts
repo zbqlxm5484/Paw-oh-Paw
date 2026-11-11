@@ -61,7 +61,7 @@ describe('숫자 자릿수 (screenPlan 5절)', () => {
 
   it('횟수는 정수, 그 밖은 소수 1자리', () => {
     expect(fmtMetric(12, 'count')).toBe('12회')
-    expect(fmtMetric(1.437, 'body_per_sec')).toBe('1.4몸통/초')
+    expect(fmtMetric(1.437, 'body_per_sec')).toBe('1.4등 길이/초')
   })
 
   it('측정 불가(null·NaN)는 0 이 아니라 — 로 보여 준다', () => {

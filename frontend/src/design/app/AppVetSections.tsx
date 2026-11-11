@@ -82,13 +82,13 @@ function badge(it: CompareItem): [string, string, string] {
   return ['값만', '#fff', '#5B6472']
 }
 
-function CmpList({ cmp }: { cmp: CompareOut | undefined }) {
+function CmpList({ cmp, baseLabel }: { cmp: CompareOut | undefined; baseLabel?: string }) {
   const items = (cmp?.items ?? []).filter((x) => NAME[x.metric_code] && x.base_value != null && x.target_value != null)
   const order = (it: CompareItem) => (it.judgement === 'INCREASE' || it.judgement === 'DECREASE' ? 0 : it.judgement === 'WITHIN_RANGE' ? 1 : 2)
   const sorted = [...items].sort((a, b) => order(a) - order(b) || Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0))
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <h3 style={H2}>지난 측정과 비교{cmp ? <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B6472', marginLeft: 6 }}>{cmp.base.measured_on} 대비</span> : null}</h3>
+      <h3 style={H2}>지난 측정과 비교{cmp ? <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B6472', marginLeft: 6 }}>직전 회차({baseLabel || cmp.base.measured_on}) 대비</span> : null}</h3>
       {!cmp ? <span style={{ fontSize: '12.5px', color: '#5B6472' }}>비교할 직전 회차가 없습니다.</span> : (
         <>
           {cmp.model_changed ? <span style={{ fontSize: '12px', color: '#5B6472' }}>분석 모델이 달라 변화는 판단하지 않고 값만 적었습니다.</span> : null}
@@ -218,13 +218,13 @@ function KneeTrend({ trend }: { trend: TrendsOut | undefined }) {
   )
 }
 
-export function AppVetSections({ result, cmp, trend, base, gait }: { result: SessionResultOut | null | undefined; cmp: CompareOut | undefined; trend: TrendsOut | undefined; base?: CompareOut; gait?: string }) {
+export function AppVetSections({ result, cmp, trend, baseLabel, base, gait }: { result: SessionResultOut | null | undefined; cmp: CompareOut | undefined; trend: TrendsOut | undefined; baseLabel?: string; base?: CompareOut; gait?: string }) {
   if (!result) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <LrBars result={result} />
       <KneeCycle result={result} />
-      <CmpList cmp={cmp} />
+      <CmpList cmp={cmp} baseLabel={baseLabel} />
       <AppChangeProfile base={base} gait={gait} />
       <KneeTrend trend={trend} />
     </div>
