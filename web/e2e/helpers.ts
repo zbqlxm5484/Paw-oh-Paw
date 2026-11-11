@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 
 /** 백엔드 모드 개발 서버(playwright.config.ts 의 API_PORT) */
-export const API_ORIGIN = 'http://localhost:5198'
+export const API_ORIGIN = 'http://localhost:5189'
 
 /** 콘솔 오류·잡히지 않은 예외를 모은다. React 훅 순서 오류 같은 것이 여기 남는다 */
 export function collectErrors(page: Page): string[] {
