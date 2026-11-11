@@ -1114,7 +1114,8 @@ export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
     return {
       n, limb: limb ? LIMB[limb] + (focus ? ' · 관심 다리' : '') : '전체',
       lc: focus ? '#B4501A' : '#8E949C', vals: `${bv}${u} → ${tv}${u}`,
-      j: in_range ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u}` : `▼ 감소 ${-df}${u}`,
+      // 퍼센트 값끼리의 차이는 %p(백엔드 회차 비교 vet.ts serverCompareRows 와 같은 표기)
+      j: in_range ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u === '%' ? '%p' : u}` : `▼ 감소 ${-df}${u === '%' ? '%p' : u}`,
       bg: in_range ? '#F4F2EE' : '#EEE8DF', c: in_range ? '#5B6472' : '#1B2433', bt,
     }
   })

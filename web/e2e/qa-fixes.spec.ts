@@ -70,9 +70,9 @@ test.describe('보고서 표기', () => {
     await expect(page.locator('main')).toContainText(/직전 회차\(\d+회차, \d+월 \d+일[^)]*\)보다 좌우 대칭 점수 [+-]?\d+점/)
   })
 
-  // 가짜 서버·시연 기관의 경과 비교 표(views.compare_view)는 % 값(걸음 길이 · 등 길이 기준)끼리의 차이를 '%'로 적는다.
-  // 백엔드 회차의 비교 표(views/vet.ts serverCompareRows, !171)는 '%p'. 시연 기관 화면만 남은 결함이라 고칠 때까지 fixme
-  test.fixme('경과 비교: % 값끼리의 차이는 %p (시연 기관 경로)', async ({ page }) => {
+  // 가짜 서버·시연 기관의 경과 비교 표(views.compare_view): % 값(걸음 길이 · 등 길이 기준)끼리의 차이는 '%p'.
+  // 백엔드 회차의 비교 표(views/vet.ts serverCompareRows, !171)와 같은 표기
+  test('경과 비교: % 값끼리의 차이는 %p (시연 기관 경로)', async ({ page }) => {
     await demoLogin(page)
     await page.goto('/compare/d1')
     const main = page.locator('main')

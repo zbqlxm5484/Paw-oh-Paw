@@ -256,7 +256,8 @@ export function compareRows(cmp: CompareOut | undefined, focus: Limb | null): DC
       const inR = it.judgement === 'WITHIN_RANGE'
       return {
         n, limb, lc, vals: `${b}${u} → ${t}${u}`,
-        j: inR ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u}` : `▼ 감소 ${-df}${u}`,
+        // 퍼센트 값끼리의 차이는 %p(웹 vet.ts serverCompareRows 와 같은 표기)
+        j: inR ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u === '%' ? '%p' : u}` : `▼ 감소 ${-df}${u === '%' ? '%p' : u}`,
         bg: inR ? '#F4F2EE' : '#EEE8DF', c: inR ? '#5B6472' : '#1B2433', bt,
       }
     })
