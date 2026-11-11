@@ -23,7 +23,7 @@ from app.report.numbers import (
     format_value,
 )
 from app.report.pdf import PdfUnavailableError, pdf_available
-from app.report.sentences import _glossary
+from app.report.sentences import _glossary, previous_label
 from app.report.verify import KIND_NOT_IN_SOURCE, compare_numbers, reference_from_result
 from tests.report_fixtures import compare, metric, sample_input, sample_result
 
@@ -134,11 +134,11 @@ def test_unit_basis_is_in_the_metric_name_not_in_every_cell() -> None:
     result["gaits"][0]["limb_compare"] = [compare("FORE", "stride_length", 122.7, 120.7, unit="pct_body")]
     tables, _ = build_tables(result)
     rows = {row.code: row for row in tables[0].rows}
-    assert rows["stride_length"].label == "걸음 길이(몸통 길이 기준)"
+    assert rows["stride_length"].label == "걸음 길이(등 길이 기준)"
     assert rows["stride_length"].cells["LF"].text == "122.70%"
-    assert rows["walk_speed"].label == "보행 속도(몸통 길이/초)" and rows["walk_speed"].cells["NONE"].text == "2.42"
+    assert rows["walk_speed"].label == "보행 속도(등 길이/초)" and rows["walk_speed"].cells["NONE"].text == "2.42"
     line = tables[0].compare[0]
-    assert line.label == "걸음 길이(몸통 길이 기준)" and (line.left, line.diff) == ("122.70%", "2.00%")
+    assert line.label == "걸음 길이(등 길이 기준)" and (line.left, line.diff) == ("122.70%", "2.00%")
 
 
 # ---- 문장·검사(김지윤 문장 템플릿, MR 80 리뷰. 글자 그대로 나오는지 본다) ----
@@ -685,3 +685,74 @@ def test_change_labels_and_the_note_pass_the_checks(edition: str) -> None:
     assert check_texts(rendered.texts, edition=edition) == []
     if edition == "OWNER":
         assert any(term == "오차 범위" for term, _ in rendered.sentences.glossary)
+
+
+# ---- 직전 회차 표기와 용어(v1.52) ----
+
+
+def test_previous_session_is_named_with_its_round_number() -> None:
+    data = sample_input(
+        previous=sample_result(measured_on="2026-10-20"),
+        previous_session={"round": 2, "created_at": "2026-10-20T09:38:00+09:00"},
+        settings={"tolerance": {}},
+    )
+    rendered = render(data)
+    assert previous_label(parse_input(data)) == "2회차, 2026년 10월 20일"  # 다른 날이면 시각을 적지 않는다
+    assert rendered.texts["previous"].startswith("직전 회차(2회차, 2026년 10월 20일)와 이번 회차의 값을")
+    assert check_texts(rendered.texts, edition="OWNER") == []
+
+
+@pytest.mark.parametrize(
+    ("created_at", "clock"),
+    [
+        ("2026-11-02T09:38:00+09:00", "오전 9:38"),
+        ("2026-11-02T13:05:00+09:00", "오후 1:05"),
+        ("2026-11-02T12:00:00+09:00", "오후 12:00"),
+        ("2026-11-02T00:07:00+09:00", "오전 12:07"),
+    ],
+)
+def test_previous_session_of_the_same_day_also_gets_its_time(created_at: str, clock: str) -> None:
+    """같은 반려견을 하루에 두 번 재면 직전 회차의 날짜가 이번 회차와 같다. 시각으로 구분한다."""
+    data = sample_input(
+        previous=sample_result(measured_on="2026-11-02"),
+        previous_session={"round": 1, "created_at": created_at},
+    )
+    label = f"1회차, 2026년 11월 2일 {clock}"
+    assert previous_label(parse_input(data)) == label
+    assert f"직전 회차({label})" in render(data).texts["previous"]
+
+
+def test_previous_session_without_a_round_number_keeps_the_date_only() -> None:
+    """회차 번호를 주지 않는 입력(기업 서버)은 전과 같이 날짜만 적는다. 읽을 수 없는 시각은 적지 않는다."""
+    same_day = sample_result(measured_on="2026-11-02")
+    assert previous_label(parse_input(sample_input(previous=same_day))) == "2026년 11월 2일"
+    broken = sample_input(previous=same_day, previous_session={"round": 3, "created_at": "아침"})
+    assert previous_label(parse_input(broken)) == "3회차, 2026년 11월 2일"
+
+
+def test_gaps_between_gait_types_name_the_previous_session_the_same_way() -> None:
+    data = sample_input(
+        previous=sample_result(measured_on="2026-10-20", gaits=[]),
+        previous_session={"round": 4, "created_at": "2026-10-20T10:00:00+09:00"},
+    )
+    assert all("직전 회차(4회차, 2026년 10월 20일)" in line for line in render(data).sentences.previous_gaps)
+    assert render(data).sentences.previous_gaps
+
+
+def test_back_length_and_symmetry_score_are_in_the_term_list() -> None:
+    """화면이 쓰는 이름 둘. '대칭 지수'(좌우 차이 %)와 '좌우 대칭 점수'(0~100)는 다른 용어다."""
+    terms = {j.term: j.explanation for j in load_rules().jargon}
+    assert "100에 가까울수록" in terms["좌우 대칭 점수"]
+    assert "13번째 등뼈" in terms["등 길이"]
+    assert "평균으로 나눈 백분율" in terms["대칭 지수"]
+    for name in ("걸음 길이", "발 들림 높이", "발 움직임 범위"):
+        assert "(등 길이 대비 %)" in terms[name]
+
+
+def test_owner_report_explains_back_length_when_a_unit_name_uses_it() -> None:
+    result = sample_result()
+    result["gaits"][0]["metrics"].append(metric("stride_length", "LF", 122.7, unit="pct_body"))
+    rendered = render(sample_input("OWNER", result=result))
+    assert any(row.label == "걸음 길이(등 길이 기준)" for table in rendered.tables for row in table.rows)
+    assert any(term == "등 길이" for term, _ in rendered.sentences.glossary)
+    assert check_texts(rendered.texts, edition="OWNER") == []

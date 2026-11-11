@@ -35,6 +35,7 @@ class ContentPrevious(BaseModel):
     session_id: uuid.UUID
     measured_on: str
     round: int
+    label: str  # "2회차, 2026년 11월 10일". 이번 회차와 같은 날이면 만든 시각이 붙는다(문장의 괄호 안과 같은 글)
     model_changed: bool
 
 
