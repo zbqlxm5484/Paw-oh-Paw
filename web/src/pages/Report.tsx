@@ -282,7 +282,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       )}
       <div style={css('flex:1')}></div>
       {/* 보호자용 용어 설명(보고서 검사 terms.yaml 의 설명 문구 그대로, 토씨까지 같아야 검사를 통과한다) */}
-      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:13px;color:#3A4250')}>용어 설명</b><span><b>좌우 대칭 점수</b>: 왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지를 0~100 으로 나타낸 점수. 100에 가까울수록 고르게 씀</span><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>고관절</b>: 뒷다리가 몸통과 이어지는 엉덩이 관절</span><span><b>앞발목</b>: 앞다리의 발목 관절(사람의 손목에 해당)</span><span><b>뒷발목</b>: 뒷다리의 발목 관절(사람의 발목에 해당)</span><span><b>입각기</b>: 한 걸음 중 발이 바닥을 딛고 있는 구간</span><span><b>등 길이</b>: 등 가운데(13번째 등뼈)부터 엉덩이 위(골반 윗부분)까지의 길이. 일반적인 몸길이(어깨~엉덩이)의 절반쯤이라, 몸길이로 치면 이 값의 약 절반입니다</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
+      {kind === 'g' ? <div style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}><b style={css('font-size:13px;color:#3A4250')}>용어 설명</b><span><b>좌우 대칭 점수</b>: 왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지를 0~100으로 나타낸 점수. 100에 가까울수록 고르게 씀</span><span><b>가동 범위</b>: 걸을 때 관절을 접었다 펴는 각도의 폭</span><span><b>고관절</b>: 뒷다리가 몸통과 이어지는 엉덩이 관절</span><span><b>앞발목</b>: 앞다리의 발목 관절(사람의 손목에 해당)</span><span><b>뒷발목</b>: 뒷다리의 발목 관절(사람의 발목에 해당)</span><span><b>입각기</b>: 한 걸음 중 발이 바닥을 딛고 있는 구간</span><span><b>등 길이</b>: 등 가운데(13번째 등뼈)부터 엉덩이 위(골반 윗부분)까지의 길이. 일반적인 몸길이(어깨~엉덩이)의 절반쯤이라, 몸길이로 치면 이 값의 약 절반입니다</span><span><b>오차 범위</b>: 같은 상태를 다시 재도 생길 수 있는 값의 차이</span><span><b>기준 회차</b>: 재활 시작 무렵에 잰 회차. 이후 변화를 견주는 기준</span></div> : null}
       <span style={css('font-size:12px;color:#5B6472')}>보행 평가 보조 자료이며 진단을 대신하지 않습니다.</span>
     </div>
   )
