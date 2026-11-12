@@ -28,7 +28,7 @@
 
 - 주소: 서버마다 다르다. 개발 PC `http://127.0.0.1:8010`, GPU 서버 안 `http://127.0.0.1:8010`, 팀 서버에서는 터널 `http://host.docker.internal:18010`
 - 형식: 요청은 `multipart/form-data`(등록)와 쿼리, 응답은 모두 JSON(UTF-8)이다. 시각은 한국 시간 ISO 8601(`2026-11-12T09:03:55+09:00`)
-- `/docs`(Swagger 화면)와 `/openapi.json`이 인증 없이 열려 있다. 외부에 공개하는 서버라면 앞단에서 막는다(7.4)
+- `/docs`(Swagger 화면)·`/redoc`·`/openapi.json`은 기본으로 닫혀 있고(404), `ANALYSIS_DOCS_ENABLED=true`일 때만 열린다(7.1, 7.4)
 
 ## 2. 공통
 
@@ -267,6 +267,7 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 | `ANALYSIS_UPLOAD_MAX_MB` | 100 | 영상 한 건 상한. 부르는 쪽·nginx 상한과 맞춘다 |
 | `ANALYSIS_STORAGE_DIR` | 저장소의 `data/analysis_api` | 영상·결과를 두는 곳 |
 | `ANALYSIS_JOB_TIMEOUT_SEC` | 660 | 분석 시간 한도(3.1) |
+| `ANALYSIS_DOCS_ENABLED` | `false` | `true`일 때만 `/docs`(Swagger)·`/redoc`·`/openapi.json`이 열린다. 이 셋은 `ANALYSIS_API_KEY`와 상관없이 인증 없이 열리므로 배포에서는 끄고 로컬 개발에서만 켠다(7.4) |
 
 ### 7.2 저장과 파기
 
@@ -286,9 +287,9 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 ### 7.4 보안
 
 - 인증 키를 꼭 넣는다. 팀 서버와 GPU 서버 사이는 터널로만 잇고 포트를 밖에 열지 않는다
-- `/docs`·`/openapi.json`은 인증 없이 열려 있다. 엔드포인트 목록만 보이고 자료는 없다
+- `/docs`·`/redoc`·`/openapi.json`은 기본으로 닫혀 있고 `ANALYSIS_DOCS_ENABLED=true`일 때만 열린다(7.1). 켜면 인증 키와 상관없이 열리므로 배포 서버에서는 켜지 않는다. 열려도 엔드포인트 목록만 보이고 자료는 없다
 - GPU 서버는 팀 서비스 워커만 부르는 내부 서버라 외부에 공개하지 않는다(허정원 11-12). 지금은 터널로만 이어 밖에서 닿지 않아 그대로 둔다
-- 호출 인증 보강과 `/docs` 비공개(개발·스테이징에서만 공개) 여부는 허정원이 후속 MR로 정한다
+- 호출 인증 보강 여부는 허정원이 후속 MR로 정한다
 - 영상과 결과는 반려견·기관 자료다. 저장 폴더는 서버 밖으로 복사하지 않고, 과제가 끝나면 전체 파기한다
 
 ## 8. 버전
@@ -317,3 +318,4 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 | 11-10 | 0.6.0 | `DELETE /analyses?shot_id=`, 실패 사유 `TIMEOUT`(S15P31A404-258) |
 | 11-11 | 0.6.0 | 모델 워커 프로세스 풀 `ANALYSIS_MODEL_WORKERS`(허정원) |
 | 11-11 | 0.6.0 | 발 높이 `paw_lift_*`, 수치 측정 불가 `reason_detail`, `versions.gait_metrics` v2(S15P31A404-259) |
+| 11-12 | 0.6.0 | `/docs`·`/redoc`·`/openapi.json` 기본 닫힘, `ANALYSIS_DOCS_ENABLED=true`일 때만 열림(허정원 S15P31A404-308) |

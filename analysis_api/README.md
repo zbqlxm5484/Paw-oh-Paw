@@ -175,4 +175,3 @@ python check_server.py --url ... --video a.mp4 --track ../data/tracks/fs-v4.trac
 
 - 지금은 응답 뒤 같은 프로세스 안에서 분석을 시작한다(FastAPI `BackgroundTasks`). 모델 추론은 `ANALYSIS_MODEL_WORKERS`개까지 동시에 돌고, 넘치면 차례로 기다린다. 더 늘어나면 작업 큐로 옮긴다
 - 오래된 작업·영상을 기간이 지나면 저절로 지우기(지금은 지우기 API·전체 파기 명령으로만)
-- `/docs`·`/openapi.json`이 인증 없이 열려 있다. 외부에 여는 서버라면 앞단에서 막는다(`apiSpec.md` 7.4)
