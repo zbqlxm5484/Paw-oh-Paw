@@ -19,6 +19,8 @@ SIGNUP = "/api/v1/auth/signup"
 ME = "/api/v1/auth/me"
 CODE = "ABCDEFGHJKMNPQRSTUVW"  # 20자, 모두 코드 글자
 PRETTY = "ABCDE-FGHJK-MNPQR-STUVW"
+TERMS = {"version": "2026-11-01", "service": True, "privacy": True, "device_location": True}
+MISSING = object()  # _signup에 이 값을 주면 그 키를 빼고 보낸다
 UNKNOWN = "ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ"
 
 
@@ -39,9 +41,10 @@ def _signup(client: TestClient, **overrides: object):
         "password": GOOD_PASSWORD,
         "name": "김담당",
         "email": "Kim01@Example.com",
+        "terms": TERMS,
     }
     body.update(overrides)
-    return client.post(SIGNUP, json=body)
+    return client.post(SIGNUP, json={key: value for key, value in body.items() if value is not MISSING})
 
 
 def _count(db: Session, login_id: str) -> int:
@@ -207,7 +210,7 @@ def test_signup_input_rules_are_422(client: TestClient, device_code: DeviceCode,
 
 
 def test_signup_without_email_is_422(client: TestClient, device_code: DeviceCode) -> None:
-    body = {"code": PRETTY, "login_id": "kim01", "password": GOOD_PASSWORD, "name": "김담당"}
+    body = {"code": PRETTY, "login_id": "kim01", "password": GOOD_PASSWORD, "name": "김담당", "terms": TERMS}
     response = client.post(SIGNUP, json=body)
     assert response.status_code == 422
     assert response.json()["error"]["detail"]["fields"] == [{"field": "email", "type": "missing"}]
@@ -252,8 +255,6 @@ def test_logs_do_not_contain_code_or_email(client: TestClient, device_code: Devi
 
 # ---- 약관 동의 기록 (13.5, 15.4) ----
 
-TERMS = {"version": "2026-11-01", "service": True, "privacy": True, "device_location": True}
-
 
 def test_signup_records_the_agreed_terms(client: TestClient, db: Session, device_code: DeviceCode) -> None:
     before = datetime.now(UTC) - timedelta(minutes=1)
@@ -272,13 +273,15 @@ def test_marketing_is_optional_and_defaults_to_false(client: TestClient, db: Ses
     assert row.terms_agreed_at is not None
 
 
-def test_signup_without_terms_still_works_and_leaves_no_record(
-    client: TestClient, db: Session, device_code: DeviceCode
+@pytest.mark.parametrize("terms", [MISSING, None])
+def test_signup_without_terms_is_422_and_nothing_is_created(
+    client: TestClient, db: Session, device_code: DeviceCode, terms: object
 ) -> None:
-    """웹·앱이 아직 terms를 보내지 않는다. 그 가입이 깨지면 안 되고, 동의한 것처럼 기록해도 안 된다."""
-    assert _signup(client).status_code == 201
-    row = db.scalars(select(Staff).where(Staff.login_id == "kim01")).one()
-    assert (row.terms_version, row.terms_agreed_at, row.marketing_agreed) == (None, None, False)
+    """약관 동의는 필수다(15.4, v1.58). 키가 없거나 null이면 가입시키지 않는다. 웹과 앱은 11-06부터 보낸다."""
+    response = _signup(client, terms=terms)
+    assert response.status_code == 422, response.text
+    assert [item["field"] for item in response.json()["error"]["detail"]["fields"]] == ["terms"]
+    assert _count(db, "kim01") == 0
 
 
 @pytest.mark.parametrize(

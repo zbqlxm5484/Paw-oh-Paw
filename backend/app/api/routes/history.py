@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentStaff, DbSession, ReadCaller
+from app.api.deps import DbSession, ReadCaller
 from app.models.enums import GaitType, Limb
 from app.schemas.history import BASE_QUERY_PATTERN, CompareOut, SessionHistoryOut, TrendsOut
 from app.services import compare as compare_service
@@ -50,7 +50,7 @@ def compare_sessions(
 @router.get("/{dog_id}/trends", response_model=TrendsOut)
 def get_trends(
     dog_id: uuid.UUID,
-    staff: CurrentStaff,
+    reader: ReadCaller,
     db: DbSession,
     metric_code: Annotated[str, Query(max_length=50)],
     gait_type: GaitType,
@@ -58,10 +58,13 @@ def get_trends(
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> TrendsOut:
-    """수치 추이(BE-18). metric_code·gait_type은 필수, from·to는 measured_on 기간(날짜 포함)."""
+    """수치 추이(BE-18). metric_code·gait_type은 필수, from·to는 measured_on 기간(날짜 포함).
+
+    인쇄 토큰도 받는다(11.6).
+    """
     return trends_service.trends(
         db,
-        staff.institution_id,
+        reader.institution_id,
         dog_id,
         metric_code=metric_code,
         gait_type=gait_type,
