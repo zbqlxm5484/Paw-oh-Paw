@@ -104,7 +104,7 @@ class TermsIn(BaseModel):
 class SignupIn(BaseModel):
     """POST /auth/signup 요청(13.5, 15.4). 가입 계정은 모두 CLIENT이고 이메일은 필수다(인증 메일은 없다).
 
-    terms는 약관 동의다. 화면이 아직 보내지 않아 없어도 가입되고 그때는 기록을 남기지 않는다(15.4).
+    terms는 약관 동의이고 필수다(15.4). 없으면 422다. 안에서는 필수 셋만 true여야 하고 marketing은 선택이다.
     """
 
     code: str = Field(min_length=1, max_length=40)
@@ -112,7 +112,7 @@ class SignupIn(BaseModel):
     password: NewPassword
     name: PersonName
     email: Email
-    terms: TermsIn | None = None
+    terms: TermsIn
 
 
 class PasswordChangeIn(BaseModel):

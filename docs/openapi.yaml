@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     크림오프 팀 서비스(결과 조회 웹 D-06)의 API.
-    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.57" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
+    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.58" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
 
     - 모든 주소는 `/api/v1`로 시작한다(servers 참고). `/metrics`만 예외로 루트(`/metrics`)다.
     - 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 파일 셋(결과 영상, 보고서 PDF, 사진)을 빼고 `Authorization: Bearer <token>`이 필요하다.
@@ -2067,7 +2067,7 @@ components:
             name: {type: string, example: 크림 재활센터}
     SignupIn:
       type: object
-      required: [code, login_id, password, name, email]
+      required: [code, login_id, password, name, email, terms]
       properties:
         code: {type: string, minLength: 1, maxLength: 40, example: 7F3K2-QW9PA-X2M8N-H4CDE}
         login_id: {type: string, pattern: '^[a-z0-9._-]{4,50}$', description: '4~50자, 영문 소문자·숫자·.·_·-만. 다른 기관의 아이디와도 겹칠 수 없다', example: kim01}
@@ -2077,7 +2077,7 @@ components:
         email: {type: string, minLength: 5, maxLength: 254, description: '소문자로 저장한다. 형식만 검사하고 인증 메일은 보내지 않는다', example: kim01@example.com}
     TermsIn:
       type: object
-      description: 가입 화면의 약관 동의. 지금은 보내지 않아도 가입되지만 서버에 동의 기록이 남지 않는다.
+      description: 가입 화면의 약관 동의. 필수다(없으면 422). 필수 셋은 true여야 하고 marketing만 선택이다.
       required: [version, service, privacy, device_location]
       properties:
         version: {type: string, minLength: 1, maxLength: 20, description: 화면이 보여 준 약관의 버전, example: '2026-11-01'}
