@@ -4,9 +4,9 @@ info:
   version: 1.0.0
   description: |
     크림오프 팀 서비스(결과 조회 웹 D-06)의 API.
-    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.52" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
+    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.53" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
 
-    - 모든 주소는 `/api/v1`로 시작한다(servers 참고).
+    - 모든 주소는 `/api/v1`로 시작한다(servers 참고). `/metrics`만 예외로 루트(`/metrics`)다.
     - 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 파일 셋(결과 영상, 보고서 PDF, 사진)을 빼고 `Authorization: Bearer <token>`이 필요하다.
     - 계약이 끝난 CLIENT(effective_role이 GUEST)는 로그인과 내 정보·탈퇴·측정 기기 정보(`GET /auth/me`, `DELETE /auth/me`, `GET /auth/me/device`)만 쓸 수 있고, 나머지는 403 CONTRACT_EXPIRED다.
     - 비밀번호를 5회 틀리면 그 계정은 30분 동안 로그인할 수 없다. 잠긴 동안에도 응답은 401 LOGIN_FAILED 하나다.
@@ -1669,10 +1669,16 @@ paths:
               example: {status: error, db: ok, storage: error, version: 1.0.0}
 
   /metrics:
+    servers:
+      - url: http://localhost:8000
+        description: 루트. /api/v1 아래가 아니다
     get:
       tags: [운영]
       operationId: metrics
       summary: 요청 수·처리 시간 (BE-20, 선택, 내부망만)
+      description: >-
+        경로는 /api/v1 아래가 아니라 루트 /metrics다. 서버 앞의 nginx는 /api/만 서버로 넘기므로 밖에서는 닿지 않고 내부망의 수집기만 읽는다.
+        서버 설정 METRICS_ENABLED=true일 때만 생기는 선택 항목이고, 지금 서버에는 아직 없다.
       security: []
       responses:
         '200':
