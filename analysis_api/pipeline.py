@@ -18,9 +18,12 @@
 """
 import hashlib
 import json
+import multiprocessing
 import os
 import sys
 import threading
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -54,6 +57,9 @@ class AnalysisFailed(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code, self.message = code, message
+
+    def __reduce__(self):   # 모델 워커 프로세스에서 던진 예외가 프로세스 경계를 건너 올 수 있게 한다
+        return (type(self), (self.code, self.message))
 
 
 def pose_source() -> str:
@@ -247,7 +253,56 @@ def frame_entry(box, det_score, keypoints, scores) -> dict:
             "kp": [[float(x), float(y), float(s)] for (x, y), s in zip(keypoints, scores)]}
 
 
+# ---- 모델 워커 프로세스 풀 ----
+# ANALYSIS_MODEL_WORKERS=N(기본 1)이면 N개의 워커 프로세스가 각자 모델을 올려 영상 N건을 동시에 추론한다.
+# 1이면 풀 없이 이 프로세스에서 _MODEL_LOCK 아래 한 건씩 돈다(기존 동작).
+# 워커마다 모델(VRAM 약 1.1~1.5GB)을 올리고 첫 요청에서 로드하므로, 처음 N건은 로드 시간이 더해진다.
+_POOL: Optional[ProcessPoolExecutor] = None
+_POOL_LOCK = threading.Lock()
+
+
+def model_workers() -> int:
+    try:
+        return max(1, int(os.environ.get("ANALYSIS_MODEL_WORKERS", "1")))
+    except ValueError:
+        return 1
+
+
+def _init_worker() -> None:
+    """워커 프로세스 시작 시 스레드를 1개로 제한한다(프로세스 N개가 CPU 스레드를 수백 개 만들지 않게). torch를 올리기 전에 실행된다"""
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ.setdefault(name, "1")
+
+
+def _get_pool() -> ProcessPoolExecutor:
+    global _POOL
+    with _POOL_LOCK:
+        if _POOL is None:   # CUDA는 fork 뒤에 쓸 수 없어 spawn으로 띄운다
+            _POOL = ProcessPoolExecutor(max_workers=model_workers(), mp_context=multiprocessing.get_context("spawn"),
+                                        initializer=_init_worker)
+        return _POOL
+
+
+def shutdown_pool() -> None:
+    global _POOL
+    with _POOL_LOCK:
+        pool, _POOL = _POOL, None
+    if pool is not None:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
 def extract_track(video_path: Path) -> dict:
+    """영상 → 관절점 파일의 영상 하나. 워커가 2개 이상이면 워커 프로세스에서, 아니면 이 프로세스에서 추론한다"""
+    if model_workers() <= 1:
+        return extract_track_local(video_path)
+    try:
+        return _get_pool().submit(extract_track_local, Path(video_path)).result()
+    except BrokenProcessPool as e:   # 워커가 죽음(CUDA 오류·메모리 부족 등). 풀을 버리고 다음 요청에서 새로 만든다
+        shutdown_pool()
+        raise AnalysisFailed("INTERNAL", f"모델 워커가 중단되었습니다: {type(e).__name__}") from e
+
+
+def extract_track_local(video_path: Path) -> dict:
     """영상을 프레임마다 모델에 넣어 관절점 파일의 영상 하나와 같은 형식으로 만든다.
     {"video", "fps", "width", "height", "frames": [{"box", "det_score", "kp": [[x, y, score] x 22]} 또는 None(개를 못 찾은 프레임)]}"""
     try:

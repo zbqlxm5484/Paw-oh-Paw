@@ -80,7 +80,7 @@ POST /analyses ─▶ queued ─▶ running ─▶ done
 - 작업은 디스크에 남는다. 서버를 다시 켜도 `done`·`failed` 작업은 그대로 조회된다
 - 분석 중에 서버가 꺼진 작업은 다시 켤 때 `failed` + `INTERRUPTED`가 된다
 - `running`이 `ANALYSIS_JOB_TIMEOUT_SEC`(기본 660초)를 넘으면 조회·지우기 때 `failed` + `TIMEOUT`이 된다. 그 뒤 늦게 끝난 분석 결과는 버린다
-- 모델 추론은 한 번에 하나씩 돈다(모델 잠금). 여러 건을 동시에 등록하면 차례로 분석된다
+- 모델 추론은 `ANALYSIS_MODEL_WORKERS`개(기본 1)까지 동시에 돈다. 넘치게 등록하면 차례로 분석되고, 기다리는 동안은 `running`이다
 
 ### 3.2 분석 실패 사유 (`error.code`)
 
@@ -262,6 +262,7 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 | `ANALYSIS_MODEL_DIR` | 홈의 `models/company-orig` | `model`일 때 기업 모델 폴더(`run.py`, `det.py`, `pose.py`, `det.pth`, `pose.pth`) |
 | `ANALYSIS_TRACK_FILE` | 모델의 `track_file` | `track`일 때 관절점 파일 |
 | `ANALYSIS_WEIGHTS_SHA256` | 모델의 `weights_sha256`, `model`이면 `pose.pth`에서 계산 | `model.version` 끝 8자 |
+| `ANALYSIS_MODEL_WORKERS` | 1 | `model`일 때 영상을 동시에 추론하는 워커 프로세스 수. 워커마다 모델을 따로 올려 GPU 메모리를 그만큼 더 쓴다(허정원) |
 | `ANALYSIS_UPLOAD_MAX_MB` | 100 | 영상 한 건 상한. 부르는 쪽·nginx 상한과 맞춘다 |
 | `ANALYSIS_STORAGE_DIR` | 저장소의 `data/analysis_api` | 영상·결과를 두는 곳 |
 | `ANALYSIS_JOB_TIMEOUT_SEC` | 660 | 분석 시간 한도(3.1) |
@@ -306,4 +307,5 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 | 11-05 | 0.6.0 | `DELETE /analyses/{id}`, 전체 파기 명령(S15P31A404-185) |
 | 11-06 | 0.6.0 | `pose_source: model`(영상에서 기업 모델로 추론, 허정원 S15P31A404-229) |
 | 11-10 | 0.6.0 | `DELETE /analyses?shot_id=`, 실패 사유 `TIMEOUT`(S15P31A404-258) |
+| 11-11 | 0.6.0 | 모델 워커 프로세스 풀 `ANALYSIS_MODEL_WORKERS`(허정원) |
 | 11-11 | 0.6.0 | 발 높이 `paw_lift_*`, 수치 측정 불가 `reason_detail`, `versions.gait_metrics` v2(S15P31A404-259) |

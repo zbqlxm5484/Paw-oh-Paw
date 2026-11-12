@@ -32,12 +32,12 @@ function LegCard({ c, gait, pv, limb, align }: { c: ReportContentOut; gait: Repo
         mets[0] ? (
           <>
             <span style={css('font-size:13px;color:#5B6472')}>{mets[0].n}</span>
-            <b style={css(`font-size:24px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${weak ? color : '#1B2433'}`)}>{mets[0].v}</b>
+            <b style={css(`font-size:22px;letter-spacing:-0.5px;font-variant-numeric:tabular-nums;color:${weak ? color : '#1B2433'}`)}>{mets[0].v}</b>
           </>
         ) : null
       ) : (
         mets.map((m, i) => (
-          <span key={i} style={css('font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{m.n} <b style={css(`font-size:15px;color:${m.lower && weak ? color : '#1B2433'}`)}>{m.v}</b> <span style={css('color:#A0A7B2')}>/ {m.other}</span></span>
+          <span key={i} style={css('font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{m.n} <b style={css(`font-size:15px;color:${m.lower && weak ? color : '#1B2433'}`)}>{m.v}</b> <span style={css('color:#5B6472')}>/ {m.other}</span></span>
         ))
       )}
     </div>
@@ -50,13 +50,13 @@ function CompareTable({ g, vet }: { g: ReportContentGait; vet: boolean }) {
   const top = g.compare.filter((x) => x.comparable && x.symmetry_value != null).reduce<typeof g.compare[number] | null>((a, b) => (!a || b.symmetry_value! > a.symmetry_value! ? b : a), null)
   const cols = vet ? '1.9fr 1fr 1fr 1fr 1fr' : '1.9fr 1fr 1fr 1fr'
   return (
-    <div style={css('display:flex;flex-direction:column;font-size:13.5px;font-variant-numeric:tabular-nums')}>
-      <div style={css(`display:grid;grid-template-columns:${cols};gap:8px;color:#5B6472;font-size:12.5px;padding:8px 6px 6px;border-bottom:1px solid #ECE8E2`)}>
+    <div style={css('display:flex;flex-direction:column;font-size:14px;font-variant-numeric:tabular-nums')}>
+      <div style={css(`display:grid;grid-template-columns:${cols};gap:8px;color:#5B6472;font-size:13px;padding:8px 6px 6px;border-bottom:1px solid #ECE8E2`)}>
         <b>{g.label}</b><span style={css('text-align:right')}>왼쪽</span><span style={css('text-align:right')}>오른쪽</span><span style={css('text-align:right')}>차이</span>{vet ? <span style={css('text-align:right')}>대칭 지수</span> : null}
       </div>
       {g.compare.map((x, i) => (
         <div key={i} style={css(`display:grid;grid-template-columns:${cols};gap:8px;align-items:center;padding:9px 6px;border-bottom:1px solid #F2EFEA;background:${x === top ? '#FAF8F5' : 'transparent'}`)}>
-          <span><b style={css('font-size:14px')}>{x.pair_label} {x.label}</b>{!x.comparable && x.reason ? <><br /><span style={css('font-size:12px;color:#8E949C')}>{x.reason}</span></> : null}</span>
+          <span><b style={css('font-size:14px')}>{x.pair_label} {x.label}</b>{!x.comparable && x.reason ? <><br /><span style={css('font-size:12px;color:#5B6472')}>{x.reason}</span></> : null}</span>
           <span style={css('text-align:right')}>{x.left}</span>
           <span style={css('text-align:right')}>{x.right}</span>
           <b style={css('text-align:right')}>{x.diff}</b>
@@ -81,14 +81,14 @@ function ChangesTable({ g }: { g: ReportContentGait }) {
   if (!g.changes.length) return null
   return (
     <div style={css('display:flex;flex-direction:column;font-variant-numeric:tabular-nums')}>
-      <b style={css('font-size:13.5px;color:#3A4250;padding:10px 0 6px;border-bottom:1px solid #ECE8E2')}>{g.label}</b>
+      <b style={css('font-size:14px;color:#3A4250;padding:10px 0 6px;border-bottom:1px solid #ECE8E2')}>{g.label}</b>
       {g.changes.flatMap((row) => LIMB_ORDER.filter((l) => row.cells[l]).map((limb) => {
         const x = row.cells[limb]!
         return (
           <div key={row.metric_code + limb} className="rep-cmp-row" style={css('display:grid;grid-template-columns:1.6fr 1.4fr 0.9fr 92px;gap:12px;align-items:center;min-height:42px;box-sizing:border-box;padding:9px 6px;border-bottom:1px solid #F2EFEA')}>
-            <span style={css('font-size:14px')}><b>{row.label}</b> <span style={css('color:#5B6472;font-size:13px;font-weight:600')}>{LIMB_NAME[limb] ?? limb}</span>{x.note ? <><br /><span style={css('font-size:12px;color:#8E949C')}>{x.note}</span></> : null}</span>
-            <span style={css('font-size:13.5px;color:#5B6472;text-align:right')}>{x.previous} → <b style={css('color:#1B2433')}>{x.current}</b></span>
-            <span style={css('font-size:13.5px;text-align:right')}>{x.diff ?? ''}</span>
+            <span style={css('font-size:14px')}><b>{row.label}</b> <span style={css('color:#5B6472;font-size:13px;font-weight:600')}>{LIMB_NAME[limb] ?? limb}</span>{x.note ? <><br /><span style={css('font-size:12px;color:#5B6472')}>{x.note}</span></> : null}</span>
+            <span style={css('font-size:14px;color:#5B6472;text-align:right')}>{x.previous} → <b style={css('color:#1B2433')}>{x.current}</b></span>
+            <span style={css('font-size:14px;text-align:right')}>{x.diff ?? ''}</span>
             <ChangeBadge x={x} />
           </div>
         )
@@ -121,13 +121,13 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
       <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{s.edition_label}</span></div>
       <div style={css('height:3px;background:#D2601A;width:56px')}></div>
       <div>
-        <div className="rep-title" style={css('font-size:32px;font-weight:800;letter-spacing:-0.9px')}>{s.title}</div>
+        <div className="rep-title" style={css('font-size:28px;font-weight:800;letter-spacing:-0.9px')}>{s.title}</div>
         <div style={css('font-size:14px;color:#5B6472;margin-top:6px')}>{sub}</div>
-        <p className="rep-intro" style={css('margin:12px 0 0;font-size:14.5px;line-height:1.6;color:#3A4250')}>{s.intro}</p>
+        <p className="rep-intro" style={css('margin:12px 0 0;font-size:15px;line-height:1.6;color:#3A4250')}>{s.intro}</p>
       </div>
 
       {/* 첫 쪽 요약: 주요 결과(sentences.summary) · 직전 회차(previous_note·previous_gaps) */}
-      <div className="rep-summary" style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:14.5px;line-height:1.5')}>
+      <div className="rep-summary" style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:15px;line-height:1.5')}>
         <b style={css('color:#A8481A')}>주요 결과</b><span style={css('display:flex;flex-direction:column;gap:4px')}>{s.summary.map((x, i) => <span key={i}>{x}</span>)}</span>
         {previous.length ? <><b style={css('color:#A8481A')}>직전 회차</b><span style={css('display:flex;flex-direction:column;gap:4px')}>{previous.map((x, i) => <span key={i}>{x}</span>)}</span></> : null}
       </div>
@@ -136,15 +136,15 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
       {score != null ? (
         <div style={css('display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:20px 22px;border-radius:14px;background:#FAF7F2')}>
           <div style={css('display:flex;flex-direction:column;gap:2px')}>
-            <span style={css('font-size:13.5px;font-weight:700;color:#5B6472')}>좌우 대칭 지수</span>
-            <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${lv ? LEVEL_STYLE[lv].text : '#1B2433'}`)}>{score}<span style={css('font-size:20px')}>%</span></b>
+            <span style={css('font-size:14px;font-weight:700;color:#5B6472')}>좌우 대칭 지수</span>
+            <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${lv ? LEVEL_STYLE[lv].text : '#1B2433'}`)}>{score}<span style={css('font-size:18px')}>%</span></b>
           </div>
           <div style={css('display:flex;flex-direction:column;gap:8px')}>
             <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
               <span style={css(`position:absolute;top:-5px;left:calc(${Math.max(0, Math.min(100, score))}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>
             </div>
-            <div style={css('display:flex;justify-content:space-between;font-size:11.5px;color:#8E949C')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
-            <span style={css('font-size:14.5px;color:#3A4250')}>
+            <div style={css('display:flex;justify-content:space-between;font-size:12px;color:#5B6472')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
+            <span style={css('font-size:15px;color:#3A4250')}>
               {bdiff != null && c.baseline ? <>기준 회차({c.baseline.measured_on})보다 <b style={css(`color:${bdiff > 0 ? '#2E8B57' : bdiff < 0 ? '#C2412D' : '#3A4250'}`)}>{bdiff > 0 ? '+' : ''}{bdiff}%p</b></> : c.baseline && c.baseline.session_id === c.session_id ? '이 회차가 기준 회차입니다' : null}
               {c.dog.focus_limb && LIMB[c.dog.focus_limb] ? <>{bdiff != null || c.baseline ? ' · ' : ''}관심 다리 <b>{LIMB[c.dog.focus_limb]}</b>(점선)</> : null}
             </span>
@@ -164,7 +164,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
           <div style={css('position:absolute;top:70%;right:0;left:8px')}><LegCard c={c} gait={gait} pv={pv} limb="RH" align="r" /></div>
         </div>
       </div>
-      <div style={css('display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:#5B6472')}>
+      <div style={css('display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:13px;color:#5B6472')}>
         {gait ? <span style={css('font-weight:700;color:#3A4250')}>{gait.label}</span> : null}
         <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#DCEFE2;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 좌우 비슷 (차이 5% 미만)</span>
         <span><span style={css('display:inline-block;width:11px;height:11px;border-radius:3px;background:#F7D6AE;border:1px solid #B8B0A4;vertical-align:-1px')}></span> 조금 덜 씀 (5~10%)</span>
@@ -178,10 +178,10 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
           const x = p.line
           return (
             <div key={pair} className="rep-pair" style={css('padding:16px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
-              <span style={css('display:flex;justify-content:space-between;font-size:13.5px;font-weight:700')}><span>{pair === 'FORE' ? '앞다리' : '뒷다리'}</span>{p.level ? <span style={css(`color:${LEVEL_STYLE[p.level].text}`)}>{LEVEL_STYLE[p.level].name}</span> : null}</span>
+              <span style={css('display:flex;justify-content:space-between;font-size:14px;font-weight:700')}><span>{pair === 'FORE' ? '앞다리' : '뒷다리'}</span>{p.level ? <span style={css(`color:${LEVEL_STYLE[p.level].text}`)}>{LEVEL_STYLE[p.level].name}</span> : null}</span>
               {x ? (
                 <>
-                  <span style={css(`font-size:${vet ? '14.5px' : '16px'};line-height:1.55;font-weight:600`)}>{x.label}</span>
+                  <span style={css(`font-size:15px;line-height:1.55;font-weight:600`)}>{x.label}</span>
                   <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>왼쪽 <b style={css('color:#1B2433')}>{x.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{x.right}</b> · 차이 <b style={css('color:#1B2433')}>{x.diff}</b>{vet ? <> · 대칭 지수 {x.symmetry_index}</> : null}</span>
                 </>
               ) : <span style={css(SUB)}>{gait?.compare.find((y) => y.pair === pair)?.reason ?? ''}</span>}
@@ -194,7 +194,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
       {!vet && s.caution.length ? (
         <div className="rep-p2" style={css('display:flex;flex-direction:column;gap:10px')}>
           <b style={css('font-size:18px')}>참고</b>
-          {s.caution.map((x, i) => <div key={i} style={css('padding:12px 18px;border-radius:12px;background:#FFF9F4;border:1px solid #F0DCCB;font-size:14.5px;line-height:1.6')}>{x}</div>)}
+          {s.caution.map((x, i) => <div key={i} style={css('padding:12px 18px;border-radius:12px;background:#FFF9F4;border:1px solid #F0DCCB;font-size:15px;line-height:1.6')}>{x}</div>)}
         </div>
       ) : null}
 
@@ -213,7 +213,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
           {/* 뒷무릎 각도 · 보행 주기: 이 회차의 실제 각도(GET /shots/{id}/angles)로 만든 곡선이 있을 때만. 견본·합성 곡선은 쓰지 않는다 */}
           {knee ? <section className="rep-sec rep-knee"><KneeChart kc={knee} /></section> : null}
           <section className="rep-sec rep-pb" style={css('display:flex;flex-direction:column;gap:8px')}>
-            <h2 style={css(H2)}>직전 회차와 비교{c.previous ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{c.previous.measured_on} · {c.previous.round}회차</span> : null}</h2>
+            <h2 style={css(H2)}>직전 회차와 비교{c.previous ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{c.previous.label ?? `${c.previous.round}회차, ${c.previous.measured_on}`}</span> : null}</h2>
             {previous.map((x, i) => <span key={i} style={css(SUB)}>{x}</span>)}
             {gaits.map((g) => <ChangesTable key={g.gait_type} g={g} />)}
           </section>
@@ -227,7 +227,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
           <svg className="rep-trend" viewBox="0 0 360 100" style={css('width:100%;max-width:560px')}>
             <polyline points={trend.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round"></polyline>
             {trend.map((p, i) => (
-              <Fragment key={i}><circle cx={p.x} cy={p.y} r={p.cur ? 5 : 3.5} fill={p.cur ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2"></circle><text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="10" fill="#3A4250" fontWeight={p.cur ? 700 : 400}>{p.v}</text><text x={p.x} y="97" textAnchor="middle" fontSize="9.5" fill="#8E949C">{p.t}</text></Fragment>
+              <Fragment key={i}><circle cx={p.x} cy={p.y} r={p.cur ? 5 : 3.5} fill={p.cur ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2"></circle><text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="12" fill="#3A4250" fontWeight={p.cur ? 700 : 400}>{p.v}</text><text x={p.x} y="97" textAnchor="middle" fontSize="12" fill="#5B6472">{p.t}</text></Fragment>
             ))}
           </svg>
         </div>
@@ -237,11 +237,11 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
       <div style={css('flex:1')}></div>
       {s.glossary.length ? (
         <div className="rep-glossary" style={css('display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5B6472')}>
-          <b style={css('font-size:12.5px;color:#3A4250')}>용어 설명</b>
+          <b style={css('font-size:13px;color:#3A4250')}>용어 설명</b>
           {s.glossary.map((x) => <span key={x.term}><b>{x.term}</b>: {x.explanation}</span>)}
         </div>
       ) : null}
-      <span className="rep-disclaimer" style={css('font-size:12px;color:#A0A7B2')}>{s.disclaimer}</span>
+      <span className="rep-disclaimer" style={css('font-size:12px;color:#5B6472')}>{s.disclaimer}</span>
     </div>
   )
 }

@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | `sample` (기본) | `samples/`의 견본 결과를 돌려준다. `model.name`이 `sample-pipeline` | 팀 서비스 연동 시험. 모델·관절점 파일 없이 |
 | `track` | 미리 뽑아 둔 관절점 파일(고른 모델의 `track_file`, 기업 `video_kpi.py track` 형식)에서 올린 영상을 찾아 **실제 엔진**을 돌린다 | GPU·모델 없이 실제 판별 결과를 볼 때 |
-| `model` | 올린 영상의 프레임마다 기업 모델(RTMDet 개 탐지 + RTMPose 관절 22점, `ANALYSIS_MODEL_DIR`의 `run.py`)로 관절점을 뽑아 같은 엔진을 돌린다. 추론은 한 번에 하나씩 한다 | GPU 서버 운영(허정원 S15P31A404-229) |
+| `model` | 올린 영상의 프레임마다 기업 모델(RTMDet 개 탐지 + RTMPose 관절 22점, `ANALYSIS_MODEL_DIR`의 `run.py`)로 관절점을 뽑아 같은 엔진을 돌린다. 동시에 추론하는 수는 `ANALYSIS_MODEL_WORKERS`(기본 1, 한 건씩) | GPU 서버 운영(허정원 S15P31A404-229) |
 
 `track`은 올린 영상의 SHA-256과 같은 영상을 먼저 찾고, 없으면 파일 이름으로 찾는다. 둘 다 없으면 `failed` + `POSE_UNAVAILABLE`이다.
 
@@ -89,6 +89,7 @@ ANALYSIS_API_KEY=
 | `ANALYSIS_MODEL_DIR` | 홈의 `models/company-orig` | `model`일 때 기업 모델 폴더(`run.py`, `det.py`, `pose.py`, `det.pth`, `pose.pth`). 하나라도 없으면 `/health`의 `model_known`이 false, 분석은 `POSE_UNAVAILABLE` |
 | `ANALYSIS_TRACK_FILE` | 고른 모델의 `track_file` | `track`일 때 읽을 관절점 파일. 주면 `models.yaml` 값보다 먼저 쓴다 |
 | `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256`, `model`이면 `pose.pth`에서 계산 | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.6.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
+| `ANALYSIS_MODEL_WORKERS` | 1 | `model` 모드에서 영상을 동시에 추론하는 워커 프로세스 수. 1이면 한 건씩(기존 동작). 2 이상이면 워커마다 모델을 따로 올려(VRAM 약 1.1~1.5GB씩, 첫 요청에서 로드) 영상 N건을 동시에 돌린다. 워커 수 × 모델 VRAM이 GPU 여유보다 작아야 한다. 워커가 죽으면 그 건은 `INTERNAL`로 실패하고 풀을 새로 만든다 |
 | `ANALYSIS_JOB_TIMEOUT_SEC` | 660 | 분석이 이보다 오래 `running`이면 `failed` + `TIMEOUT`. 팀 서비스 `ANALYSIS_TIMEOUT_SEC`(600)보다 60초 길게 둔다: 팀 서비스가 먼저 실패로 처리하고, 그 뒤 다시 분석·지우기가 409로 막히는 시간이 1분을 넘지 않게 한다. GPU 추론이 멈춰도 작업이 계속 running으로 남아 지우기·다시 분석이 막히지 않게 하려는 것이다 |
 
 `/health`는 Docker 상태 확인용이라 인증 없이 열려 있다. 지금 모델(`model`), 관절점 출처(`pose_source`), 모델이 `models.yaml`에 있는지(`model_known`)를 함께 준다.
@@ -138,7 +139,7 @@ data/analysis_api/
 | `DECODE_FAILED` | 영상을 읽을 수 없음 |
 | `POSE_UNAVAILABLE` | 이 영상의 관절점을 얻지 못함 (`track`에서 관절점 파일이 없거나, 영상을 못 찾거나, 관절점 파일의 모델이 다름) |
 | `INTERRUPTED` | 분석 중에 분석 API가 다시 시작됨 |
-| `INTERNAL` | 분석 중 알 수 없는 오류(추론 중 GPU 메모리 부족 등) |
+| `INTERNAL` | 분석 중 알 수 없는 오류(추론 중 GPU 메모리 부족, 모델 워커 중단 등) |
 | `TIMEOUT` | 분석이 `ANALYSIS_JOB_TIMEOUT_SEC` 안에 끝나지 않음. 상태 조회·지우기 때 판단한다. 시간 초과 뒤에 늦게 끝난 분석의 결과는 버리고, 그사이 지운 작업의 폴더를 다시 만들지 않는다. 멈춘 GPU 추론 자체를 끊지는 못하므로, 계속 멈춰 있으면 분석 API를 다시 켠다 |
 
 등록·조회 말고 지우기에서 나는 오류: 409 `JOB_IN_PROGRESS`(분석 중인 작업은 지울 수 없음), 500 `DELETE_FAILED`(폴더를 다 지우지 못함).
@@ -171,6 +172,6 @@ python check_server.py --url ... --video a.mp4 --track ../data/tracks/fs-v4.trac
 
 ## 아직 남은 것
 
-- 지금은 응답 뒤 같은 프로세스 안에서 분석한다(FastAPI `BackgroundTasks`). 모델 추론은 잠금으로 한 번에 하나씩 돈다. 동시에 많이 들어오면 차례로 기다리므로, 늘어나면 작업 큐로 옮긴다
+- 지금은 응답 뒤 같은 프로세스 안에서 분석을 시작한다(FastAPI `BackgroundTasks`). 모델 추론은 `ANALYSIS_MODEL_WORKERS`개까지 동시에 돌고, 넘치면 차례로 기다린다. 더 늘어나면 작업 큐로 옮긴다
 - 오래된 작업·영상을 기간이 지나면 저절로 지우기(지금은 지우기 API·전체 파기 명령으로만)
 - `/docs`·`/openapi.json`이 인증 없이 열려 있다. 외부에 여는 서버라면 앞단에서 막는다(`apiSpec.md` 7.4)

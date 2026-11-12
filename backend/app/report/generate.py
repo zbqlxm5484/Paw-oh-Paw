@@ -18,7 +18,7 @@ from app.report.charts import rom_chart
 from app.report.checks import ensure_checked
 from app.report.content import compose_content
 from app.report.html import render_html
-from app.report.numbers import GaitTable, ListedNumber
+from app.report.numbers import GaitTable, ListedNumber, format_date
 from app.report.pdf import MADE_BY_TEMPLATE, html_to_pdf
 from app.report.sentences import Sentences
 
@@ -56,7 +56,7 @@ def render(data: Any) -> Rendered:
         tables=tables,
         charts=charts,
         session={
-            "measured_on": inp.session.measured_on,
+            "measured_on": format_date(inp.session.measured_on),
             "model_name": inp.session.model_name,
             "model_version": inp.session.model_version,
         },

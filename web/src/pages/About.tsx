@@ -34,14 +34,14 @@ function GuestBar({ loggedIn }: { loggedIn: boolean }) {
   return (
     <header id="ab-bar" style={css('position:fixed;top:0;left:0;right:0;z-index:50;transition:opacity .25s ease,transform .25s ease')}>
       <div style={css('height:68px;padding:0 40px;display:flex;align-items:center;justify-content:space-between;gap:16px')}>
-        <a className="lk" href={link('/')} style={css(`display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px;color:${INK}`)}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
+        <a className="lk" href={link('/')} style={css(`display:flex;align-items:center;min-height:44px;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px;color:${INK}`)}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
         <nav style={css('display:flex;align-items:center;gap:6px')}>
           {loggedIn ? (
-            <a className="lk" href={link('/home')} style={css(`height:40px;padding:0 16px;border-radius:10px;background:${INK};color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700`)}>홈으로</a>
+            <a className="lk" href={link('/home')} style={css(`height:44px;padding:0 16px;border-radius:10px;background:${INK};color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700`)}>홈으로</a>
           ) : (
             <>
-              <a className="lk" href={link('/login')} style={css(`height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:${INK}`)}>로그인</a>
-              <a className="lk" href={link('/signup')} style={css(`height:40px;padding:0 16px;border-radius:10px;background:${INK};color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700`)}>회원가입</a>
+              <a className="lk" href={link('/login')} style={css(`height:44px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:${INK}`)}>로그인</a>
+              <a className="lk" href={link('/signup')} style={css(`height:44px;padding:0 16px;border-radius:10px;background:${INK};color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700`)}>회원가입</a>
             </>
           )}
         </nav>
@@ -75,7 +75,7 @@ const BONES: [string, string][] = [
   ['hip', 'stifleF'], ['stifleF', 'hockF'], ['hockF', 'hpawF'],
 ]
 const JOINT = new Set(['elbowF', 'elbowB', 'carpusF', 'carpusB', 'stifleB', 'stifleF', 'hockB', 'hockF'])
-const METRICS: [string, number, string][] = [['무릎 가동 범위', 32, '°'], ['고관절 가동 범위', 17, '°'], ['입각기 비율', 61, '%'], ['좌우 대칭 지수', 73, '%']]
+const METRICS: [string, number, string][] = [['무릎 가동 범위', 32, '°'], ['고관절 가동 범위', 17, '°'], ['입각기 비율', 61, '%'], ['좌우 대칭 점수', 73, '점']]
 const PASSES: ('ok' | 'no')[] = ['ok', 'ok', 'no', 'ok', 'ok', 'ok', 'no', 'ok']
 const TRUST: [string, string][] = [
   ['측정 품질 공개', '쓴 걸음과 뺀 걸음, 뺀 이유를 그대로 보여 줍니다.'],
@@ -256,7 +256,7 @@ export default function About() {
           {DOGS.map(([file, name, rule, , h], i) => (
             <div key={name} className="sz-dog" id={`sz-dog-${i}`} style={css(`position:relative;height:${h}vh;display:flex;flex-direction:column;align-items:center;opacity:0;transform-origin:50% 50%;z-index:${i === 0 ? 2 : 0}`)}>
               <div className="sz-tag" id={`sz-tag-${i}`} style={css('position:absolute;bottom:calc(100% + 20px);left:50%;transform:translateX(-50%);background:rgba(255,255,255,.94);border-radius:14px;padding:10px 16px;box-shadow:0 12px 30px -12px rgba(25,31,40,.35);display:flex;flex-direction:column;align-items:center;gap:2px;min-width:112px;opacity:0')}>
-                <b style={css(`font-size:17px;line-height:1.3;font-weight:700;letter-spacing:-0.02em;color:${INK}`)}>{name}</b>
+                <b style={css(`font-size:18px;line-height:1.3;font-weight:700;letter-spacing:-0.02em;color:${INK}`)}>{name}</b>
                 <span style={css(`font-size:13px;line-height:1.4;font-weight:500;color:${INK2};white-space:nowrap`)}>{rule}</span>
               </div>
               <img src={`${img}${file}`} alt={`${name}견이 옆으로 걷는 모습`} style={css('height:100%;width:auto;display:block;filter:drop-shadow(0 18px 24px rgba(25,31,40,.18))')} />
@@ -284,13 +284,13 @@ export default function About() {
           </div>
           <div id="an-panel" style={css(`position:absolute;right:40px;top:calc(68px + 24px);width:min(300px,32%);background:rgba(255,255,255,.96);color:${INK};border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:0 24px 60px -20px rgba(0,0,0,.6);opacity:0;z-index:3`)}>
             <div style={css('display:flex;gap:6px;flex-wrap:wrap')}>
-              {['영상 확인', '관절점 찾기', '걸음 나누기', '각도 계산'].map((n) => <span key={n} className="an-step" style={css('height:28px;padding:0 10px;border-radius:8px;background:#F1EDE6;color:#7A808A;display:flex;align-items:center;font-size:12.5px;font-weight:700')}>{n}</span>)}
+              {['영상 확인', '관절점 찾기', '걸음 나누기', '각도 계산'].map((n) => <span key={n} className="an-step" style={css('height:28px;padding:0 10px;border-radius:8px;background:#F1EDE6;color:#5B6472;display:flex;align-items:center;font-size:13px;font-weight:700')}>{n}</span>)}
             </div>
             <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px 16px')}>
               {METRICS.map(([n, v, u]) => (
                 <div key={n} style={css('display:flex;flex-direction:column;gap:2px')}>
                   <span style={css(`font-size:12px;line-height:1.4;font-weight:600;color:${INK3}`)}>{n}</span>
-                  <b style={css('font-size:26px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums')}><span className="an-num" data-v={v}>0</span>{u}</b>
+                  <b style={css('font-size:28px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums')}><span className="an-num" data-v={v}>0</span>{u}</b>
                 </div>
               ))}
             </div>
@@ -322,10 +322,10 @@ export default function About() {
                 <div id="em-card" style={css(`position:absolute;left:38%;top:44%;width:30%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;box-shadow:0 24px 50px -20px rgba(25,31,40,.4);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:0;color:${INK}`)}>
                   <b style={css('font-size:14px;font-weight:700')}>보리 · 오늘 진료 기록</b>
                   <div style={css('display:grid;grid-template-columns:repeat(4,1fr);gap:6px')}>
-                    {[['체중', '28.1kg'], ['체온', '38.6℃'], ['심박', '92'], ['혈압', '142/84']].map(([k, v]) => <div key={k} style={css('background:#FAF7F2;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:10px;color:#8E949C;font-weight:600')}>{k}</span><b style={css('font-size:12.5px;font-weight:700')}>{v}</b></div>)}
+                    {[['체중', '28.1kg'], ['체온', '38.6℃'], ['심박', '92'], ['혈압', '142/84']].map(([k, v]) => <div key={k} style={css('background:#FAF7F2;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:12px;color:#5B6472;font-weight:600')}>{k}</span><b style={css('font-size:13px;font-weight:700')}>{v}</b></div>)}
                   </div>
-                  {[['S', '산책 후 오른뒤를 들고 서는 시간이 줄었다고 함'], ['O', '보행 측정 대칭 지수 73% (직전 64%)'], ['A', 'TPLO 후 회복 순조'], ['P', '2주 뒤 재측정']].map(([k, v]) => <div key={k} style={css('display:flex;gap:8px;font-size:11.5px;line-height:1.4')}><b style={css('width:14px;color:#B4501A')}>{k}</b><span style={css('color:#3A4250')}>{v}</span></div>)}
-                  <div id="em-save" style={css(`align-self:flex-end;height:26px;padding:0 10px;border-radius:7px;background:${ORANGE};color:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center`)}>저장</div>
+                  {[['S', '산책 후 오른뒤를 들고 서는 시간이 줄었다고 함'], ['O', '보행 측정 대칭 점수 73점 (직전 64점)'], ['A', 'TPLO 후 회복 순조'], ['P', '2주 뒤 재측정']].map(([k, v]) => <div key={k} style={css('display:flex;gap:8px;font-size:12px;line-height:1.4')}><b style={css('width:14px;color:#B4501A')}>{k}</b><span style={css('color:#3A4250')}>{v}</span></div>)}
+                  <div id="em-save" style={css(`align-self:flex-end;height:26px;padding:0 10px;border-radius:7px;background:${ORANGE};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center`)}>저장</div>
                 </div>
                 {/* 커서 */}
                 <svg id="em-cursor" viewBox="0 0 24 24" style={css('position:absolute;left:70%;top:95%;width:22px;height:22px;opacity:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))')}><path d="M5 3l14 8-6 1.5L11 20z" fill="#191F28" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /></svg>
@@ -350,9 +350,9 @@ export default function About() {
                   <img id="rp-report-img" src={`${img}about-report-owner-full.jpg`} alt="보호자용 보고서 전체" style={css('position:absolute;left:0;top:0;width:100%;height:auto;display:block;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.45)')} />
                 </div>
                 <div id="rp-card-2" className="rp-card" style={css(`position:absolute;width:24%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;box-shadow:0 24px 50px -20px rgba(25,31,40,.4);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:0;color:${INK};left:calc(1.5% + var(--cutx, 0px));top:12%`)}>
-                  <span style={css('font-size:11px;font-weight:700;color:#B4501A;letter-spacing:.02em')}>보고서</span>
+                  <span style={css('font-size:12px;font-weight:700;color:#B4501A;letter-spacing:.02em')}>보고서</span>
                   <b style={css('font-size:14px;font-weight:700;line-height:1.35')}>보호자용과 수의사용을 따로 만듭니다</b>
-                  <div style={css('display:flex;gap:7px;font-size:11.5px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>보호자용은 주요 결과 한 줄과 그림으로</span></div><div style={css('display:flex;gap:7px;font-size:11.5px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>수의사용은 관절별 수치와 보행 주기 그래프로</span></div><div style={css('display:flex;gap:7px;font-size:11.5px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>PDF 로 바로 내려받습니다</span></div>
+                  <div style={css('display:flex;gap:7px;font-size:12px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>보호자용은 주요 결과 한 줄과 그림으로</span></div><div style={css('display:flex;gap:7px;font-size:12px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>수의사용은 관절별 수치와 보행 주기 그래프로</span></div><div style={css('display:flex;gap:7px;font-size:12px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>PDF 로 바로 내려받습니다</span></div>
                 </div>
               </div>
               <div id="rp-3d" style={css('position:absolute;inset:0;background:#fff;transform:translateX(100%);box-shadow:-20px 0 40px -20px rgba(25,31,40,.3)')}>
@@ -361,9 +361,9 @@ export default function About() {
                 <img src={`${img}about-3d-169.jpg`} alt="3D 보행 모델 화면" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} />
                 <div id="rp-tip" style={css(`position:absolute;left:31%;top:49%;transform:translate(8px,-100%);background:${INK};color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.4;font-weight:700;box-shadow:0 10px 24px -10px rgba(0,0,0,.5);white-space:nowrap;opacity:0`)}>오른뒤 무릎 <span style={css('color:#FF9A5C')}>32°</span> · 왼뒤 53°</div>
                 <div id="rp-card-3" className="rp-card" style={css(`position:absolute;width:24%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;box-shadow:0 24px 50px -20px rgba(25,31,40,.4);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:0;color:${INK};right:calc(5.5% + var(--cutx, 0px) / 0.93);top:63%;width:25%`)}>
-                  <span style={css('font-size:11px;font-weight:700;color:#B4501A;letter-spacing:.02em')}>3D 모델</span>
+                  <span style={css('font-size:12px;font-weight:700;color:#B4501A;letter-spacing:.02em')}>3D 모델</span>
                   <b style={css('font-size:14px;font-weight:700;line-height:1.35')}>측정한 수치로 다시 걷습니다</b>
-                  <div style={css('display:flex;gap:7px;font-size:11.5px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>덜 쓰는 다리를 붉게 표시합니다</span></div><div style={css('display:flex;gap:7px;font-size:11.5px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>다리에 마우스를 올리면 각도를 보여줍니다</span></div><div style={css('display:flex;gap:7px;font-size:11.5px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>기준 회차를 겹쳐 볼 수 있습니다</span></div>
+                  <div style={css('display:flex;gap:7px;font-size:12px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>덜 쓰는 다리를 붉게 표시합니다</span></div><div style={css('display:flex;gap:7px;font-size:12px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>다리에 마우스를 올리면 각도를 보여줍니다</span></div><div style={css('display:flex;gap:7px;font-size:12px;line-height:1.45;color:#3A4250')}><span style={css('color:#B4501A;font-weight:700')}>·</span><span>기준 회차를 겹쳐 볼 수 있습니다</span></div>
                 </div>
                 </div>
               </div>
@@ -391,7 +391,7 @@ export default function About() {
         {/* 7. 마무리 */}
         <section id="s-end" style={css(`position:relative;z-index:6;background:${PAPER};padding:140px 64px 120px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center`)}>
           <h2 className="end-up" style={css(T.h2 + ';opacity:0')}>분석은 수의사의 판단을 돕습니다.</h2>
-          <a className="end-up lk hv-orange" href={link(acct ? '/upload' : '/signup')} style={css(`margin-top:16px;height:56px;padding:0 28px;border-radius:14px;background:${ORANGE};color:#fff;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;opacity:0`)}>{acct ? '보행 분석 시작하기' : '기관으로 시작하기'}<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a>
+          <a className="end-up lk hv-orange" href={link(acct ? '/upload' : '/signup')} style={css(`margin-top:16px;height:56px;padding:0 28px;border-radius:14px;background:${ORANGE};color:#fff;display:flex;align-items:center;gap:8px;font-size:18px;font-weight:700;opacity:0`)}>{acct ? '보행 분석 시작하기' : '기관으로 시작하기'}<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a>
         </section>
       </div>
     </Base>

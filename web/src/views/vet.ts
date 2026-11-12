@@ -21,7 +21,7 @@ const NAME: Record<string, string> = Object.fromEntries(JOINTS.map(([c, n]) => [
 const UNIT: Record<string, string> = { deg: '°', pct: '%', pct_body: '%' }
 
 /** 회차 비교 오차 범위(백엔드 config/tolerance.yaml 의 develop 값). 백엔드 비교 API 가 없을 때만 쓴다 */
-export const TOLERANCE: Record<string, number> = { rom_shoulder: 2.5, rom_carpus: 7.6, rom_hip: 5.0, rom_stifle: 8.0, rom_tarsus: 4.0, stance_ratio: 5.0 }
+export const TOLERANCE: Record<string, number> = { rom_shoulder: 5.0, rom_carpus: 11.8, rom_hip: 5.0, rom_stifle: 8.0, rom_tarsus: 5.9, stance_ratio: 5.8 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10
 const fmt = (v: number) => r1(v).toFixed(1)
@@ -69,6 +69,8 @@ export type Judge = 'INCREASE' | 'DECREASE' | 'WITHIN_RANGE' | 'RANGE_NOT_SET' |
 export interface CmpRow { n: string; side: string; u: string; b: number; t: number; tol: number | null; j: Judge; diff: string }
 export interface CmpView {
   baseDate: string
+  /** 비교 대상(직전) 회차 id. 화면이 '2회차, 11월 10일'로 적는 데 쓴다 */
+  baseId?: string
   modelChanged: boolean
   changed: CmpRow[]
   within: CmpRow[]
@@ -109,7 +111,7 @@ export function cmpFromServer(o: CompareOut, gait: string): CmpView {
       })
     }
   }
-  return view(rows, o.base.measured_on, o.model_changed, true)
+  return { ...view(rows, o.base.measured_on, o.model_changed, true), baseId: o.base.session_id }
 }
 
 /** 이 회차 r 바로 앞의 유효 회차(같은 반려견) */
@@ -138,7 +140,7 @@ export function cmpLocal(acct: Account, r: Result, gait: string): CmpView | null
       rows.push({ n, side: s === 'L' ? '왼쪽' : '오른쪽', u: '°', b, t, tol: j === 'RANGE_NOT_SET' || j === 'UNKNOWN' ? null : tol, j, diff: fmt(d) })
     }
   }
-  return view(rows, p.day || p.date, p.model !== r.model, false)
+  return { ...view(rows, p.day || p.date, p.model !== r.model, false), baseId: p.id }
 }
 
 // ── 3. 무릎 가동 범위 변화 ──
@@ -163,9 +165,9 @@ export function kneeTrend(acct: Account, r: Result, gait: string): TrendView | n
 
 // ── 4. 그 밖의 수치 ──
 export const OTHER: [string, string, string][] = [
-  ['stride_length', '걸음 길이(몸통 길이 기준)', '%'],
+  ['stride_length', '걸음 길이(등 길이 기준)', '%'],
   ['stance_ratio', '입각기 비율', '%'],
-  ['paw_lift', '발 들림 높이(몸통 길이 기준)', '%'],
+  ['paw_lift', '발 들림 높이(등 길이 기준)', '%'],
   ['stifle_cv', '무릎 움직임 일관성', '%'],
 ]
 export const LIMBS: [string, string][] = [['LF', '왼앞'], ['RF', '오른앞'], ['LH', '왼뒤'], ['RH', '오른뒤']]
@@ -181,7 +183,7 @@ export function otherRows(r: Result, gait: string): { n: string; v: string[] }[]
 const CMP_NAME: Record<string, string> = {
   rom_stifle: '무릎 가동 범위', rom_hip: '고관절 가동 범위', rom_tarsus: '뒷발목 가동 범위',
   rom_shoulder: '어깨 가동 범위', rom_elbow: '팔꿈치 가동 범위', rom_carpus: '앞발목 가동 범위',
-  stride_length: '걸음 길이', stance_ratio: '입각기 비율',
+  stride_length: '걸음 길이(등 길이 기준)', stance_ratio: '입각기 비율',
 }
 const GAIT_NAME: Record<string, string> = { TROT: '속보', WALK: '평보', OTHER: '보행 유형 미판별' }
 
@@ -200,13 +202,14 @@ export function serverCompareRows(o: CompareOut, focus?: string | null) {
     const bt = i ? '1px solid #F2EFEA' : 'none'
     const limb = (LIMB_K[x.limb] ?? x.limb) + (isFocus ? ' · 관심 다리' : '') + ` · ${GAIT_NAME[x.gait_type] ?? x.gait_type}`
     if (x.base_value == null || x.target_value == null) {
-      return { n: CMP_NAME[x.metric_code], limb, lc: '#8E949C', vals: x.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+      return { n: CMP_NAME[x.metric_code], limb, lc: '#5B6472', vals: x.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
     }
     const d = x.diff ?? x.target_value - x.base_value
-    const j = x.judgement === 'INCREASE' ? `▲ 증가 ${fmt(Math.abs(d))}${u}` : x.judgement === 'DECREASE' ? `▼ 감소 ${fmt(Math.abs(d))}${u}` : x.judgement === 'WITHIN_RANGE' ? '범위 안' : '값만'
+    const du = u === '%' ? '%p' : u // 퍼센트 값끼리의 차이는 %p
+    const j = x.judgement === 'INCREASE' ? `▲ 증가 ${fmt(Math.abs(d))}${du}` : x.judgement === 'DECREASE' ? `▼ 감소 ${fmt(Math.abs(d))}${du}` : x.judgement === 'WITHIN_RANGE' ? '범위 안' : '값만'
     const moved = x.judgement === 'INCREASE' || x.judgement === 'DECREASE'
     return {
-      n: CMP_NAME[x.metric_code], limb, lc: isFocus ? '#B4501A' : '#8E949C', vals: `${fmt(x.base_value)}${u} → ${fmt(x.target_value)}${u}`,
+      n: CMP_NAME[x.metric_code], limb, lc: isFocus ? '#B4501A' : '#5B6472', vals: `${fmt(x.base_value)}${u} → ${fmt(x.target_value)}${u}`,
       j, bg: moved ? '#EEE8DF' : '#F4F2EE', c: moved ? '#1B2433' : '#5B6472', bt,
     }
   })

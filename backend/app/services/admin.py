@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -29,7 +30,9 @@ from app.schemas.admin import (
     StaffAdminOut,
     StaffUpdate,
 )
-from app.services.device_codes import CODE_ALPHABET, active_accounts, format_code, generate_code
+from app.services.device_codes import CODE_ALPHABET, active_accounts, format_code, generate_code, mask_code
+
+logger = logging.getLogger(__name__)
 
 # 13.6: 기관 코드를 비우면 INST- + 코드 글자 6자
 INSTITUTION_CODE_PREFIX = "INST-"
@@ -137,10 +140,11 @@ def update_institution(db: Session, institution_id: uuid.UUID, data: Institution
 # ---- 디바이스 코드 ----
 
 
-def _code_out(code: DeviceCode, active: int) -> DeviceCodeOut:
+def _code_out(code: DeviceCode, active: int, *, show_full_code: bool = True) -> DeviceCodeOut:
+    """show_full_code가 False면 code에 가운데를 가린 값을 넣는다(15.3, v1.48). 필드 모양은 같다."""
     return DeviceCodeOut(
         id=code.id,
-        code=format_code(code.code),
+        code=format_code(code.code) if show_full_code else mask_code(code.code),
         institution_id=code.institution_id,
         active_accounts=active,
         revoked_at=code.revoked_at,
@@ -167,8 +171,11 @@ def _require_device_code(db: Session, device_code_id: uuid.UUID) -> DeviceCode:
     return code
 
 
-def list_device_codes(db: Session, institution_id: uuid.UUID) -> list[DeviceCodeOut]:
-    """회수된 코드도 포함한다(revoked_at으로 구분). 발급 순."""
+def list_device_codes(db: Session, institution_id: uuid.UUID, *, show_full_code: bool) -> list[DeviceCodeOut]:
+    """회수된 코드도 포함한다(revoked_at으로 구분). 발급 순.
+
+    코드 전체는 ADMIN에게만 준다(show_full_code). 조회만 하는 STAFF에게는 가운데를 가려서 준다(15.9, v1.48).
+    """
     _require_institution(db, institution_id)
     codes = db.scalars(
         select(DeviceCode)
@@ -176,13 +183,16 @@ def list_device_codes(db: Session, institution_id: uuid.UUID) -> list[DeviceCode
         .order_by(DeviceCode.created_at, DeviceCode.id)
     ).all()
     counts = _active_counts(db, [code.id for code in codes])
-    return [_code_out(code, counts.get(code.id, 0)) for code in codes]
+    return [_code_out(code, counts.get(code.id, 0), show_full_code=show_full_code) for code in codes]
 
 
-def create_device_code(db: Session, institution_id: uuid.UUID, data: DeviceCodeCreate) -> DeviceCodeOut:
+def create_device_code(
+    db: Session, institution_id: uuid.UUID, data: DeviceCodeCreate, *, actor_id: uuid.UUID
+) -> DeviceCodeOut:
     """코드 발급(15.9). 기관마다 쓸 수 있는 코드는 하나라, 회수하지 않은 코드가 있으면 409 DEVICE_CODE_EXISTS다.
 
     동시에 두 번 발급하면 uq_device_code_active가 막는다(같은 409). 코드 값은 20자 무작위라 겹칠 일이 사실상 없다.
+    누가 발급했는지 로그에 ID로 남긴다(코드 값은 남기지 않는다, 11.8).
     """
     _require_institution(db, institution_id)
     usable = db.scalar(
@@ -199,6 +209,7 @@ def create_device_code(db: Session, institution_id: uuid.UUID, data: DeviceCodeC
             raise AppError(ErrorCode.DEVICE_CODE_EXISTS) from None
         raise
     db.refresh(code)
+    logger.info("device code issued code=%s institution=%s by=%s", code.id, institution_id, actor_id)
     return _code_out(code, 0)
 
 
@@ -213,13 +224,17 @@ def update_device_code(db: Session, device_code_id: uuid.UUID, data: DeviceCodeU
     return _code_out(code, active_accounts(db, code.id))
 
 
-def revoke_device_code(db: Session, device_code_id: uuid.UUID) -> DeviceCodeOut:
-    """회수(멱등). 이미 회수됐으면 그대로. 기존 계정은 그대로 쓴다(막으려면 계정 중지)."""
+def revoke_device_code(db: Session, device_code_id: uuid.UUID, *, actor_id: uuid.UUID) -> DeviceCodeOut:
+    """회수(멱등). 이미 회수됐으면 그대로. 기존 계정은 그대로 쓴다(막으려면 계정 중지).
+
+    실제로 회수했을 때만 누가 했는지 로그에 ID로 남긴다(코드 값은 남기지 않는다, 11.8).
+    """
     code = _require_device_code(db, device_code_id)
     if code.revoked_at is None:
         code.revoked_at = datetime.now(UTC)
         db.flush()
         db.refresh(code)
+        logger.info("device code revoked code=%s institution=%s by=%s", code.id, code.institution_id, actor_id)
     return _code_out(code, active_accounts(db, code.id))
 
 

@@ -54,7 +54,7 @@ function Head({ k, t, p, one }: { k: string; t: ReactNode; p: ReactNode; one?: b
   return (
     <Reveal style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <span style={{ fontSize: 13, fontWeight: 700, color: ORANGE, letterSpacing: '.2px' }}>{k}</span>
-      <b style={{ fontSize: one ? 'min(25px, 6vw)' : 25, lineHeight: 1.32, letterSpacing: '-0.6px', color: INK , whiteSpace: one ? 'nowrap' : undefined }}>{t}</b>
+      <b style={{ fontSize: one ? 'min(22px, 6vw)' : 22, lineHeight: 1.32, letterSpacing: '-0.6px', color: INK , whiteSpace: one ? 'nowrap' : undefined }}>{t}</b>
       <span style={{ fontSize: 15, lineHeight: 1.6, color: SUB }}>{p}</span>
     </Reveal>
   )
@@ -65,7 +65,7 @@ const sec: CSSProperties = { padding: '56px 24px', display: 'flex', flexDirectio
 const STEPS: [string, string, string][] = [
   ['1', '옆모습을 찍습니다', '휴대폰을 가로로 들고, 걷는 방향과 직각으로 4초씩 찍습니다.'],
   ['2', '관절점을 따라갑니다', '프레임마다 22개 관절점을 찾아 다리마다 각도와 걸음을 잽니다.'],
-  ['3', '숫자로 정리합니다', '쓴 걸음만 모아 관절 가동 범위·걸음 길이·좌우 대칭 지수를 냅니다.'],
+  ['3', '숫자로 정리합니다', '쓴 걸음만 모아 관절 가동 범위·걸음 길이·좌우 대칭 점수를 냅니다.'],
 ]
 const TRUST: [string, string][] = [
   ['측정 품질 공개', '쓴 걸음과 뺀 걸음, 뺀 이유를 그대로 보여 줍니다.'],
@@ -96,7 +96,7 @@ export function IntroBody({ i }: { i: IntroProps }) {
             {STEPS.map(([n, h, p], k) => (
               <Reveal key={n} delay={k * 80} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 18, padding: '16px 16px' }}>
                 <span style={{ width: 30, height: 30, flex: 'none', borderRadius: 15, background: '#FCEEE3', color: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14 }}>{n}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}><b style={{ fontSize: 16 }}>{h}</b><span style={{ fontSize: 14, lineHeight: 1.55, color: SUB }}>{p}</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}><b style={{ fontSize: 15 }}>{h}</b><span style={{ fontSize: 14, lineHeight: 1.55, color: SUB }}>{p}</span></div>
               </Reveal>
             ))}
           </div>
@@ -157,11 +157,11 @@ export function IntroBody({ i }: { i: IntroProps }) {
 
         {/* 8. 마무리 */}
         <div style={{ padding: '64px 24px 48px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, textAlign: 'center' }}>
-          <Reveal><b style={{ fontSize: 23, lineHeight: 1.4, letterSpacing: '-0.5px' }}>분석은 수의사의 판단을 돕습니다.</b></Reveal>
+          <Reveal><b style={{ fontSize: 22, lineHeight: 1.4, letterSpacing: '-0.5px' }}>분석은 수의사의 판단을 돕습니다.</b></Reveal>
           <Reveal delay={100} style={{ width: '100%' }}>
-            <div onClick={i.cta.go} style={{ height: 56, borderRadius: 16, background: ORANGE, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 17, fontWeight: 700, cursor: 'pointer' }}>{i.cta.label}<svg width="18" height="18" viewBox="0 0 24 24"><use href="#i-chev"></use></svg></div>
+            <div onClick={i.cta.go} style={{ height: 56, borderRadius: 16, background: ORANGE, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>{i.cta.label}<svg width="18" height="18" viewBox="0 0 24 24"><use href="#i-chev"></use></svg></div>
           </Reveal>
-          {i.login ? <span onClick={i.login} style={{ fontSize: 14, color: SUB, cursor: 'pointer', padding: 6 }}>이미 계정이 있으면 <b style={{ color: INK }}>로그인</b></span> : null}
+          {i.login ? <span onClick={i.login} style={{ fontSize: 14, color: SUB, cursor: 'pointer', padding: '0 6px', lineHeight: '44px', margin: '-8px 0', display: 'inline-block' }}>이미 계정이 있으면 <b style={{ color: INK }}>로그인</b></span> : null}
         </div>
       </div>
     </div>

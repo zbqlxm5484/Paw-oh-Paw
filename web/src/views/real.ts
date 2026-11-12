@@ -8,11 +8,11 @@ export const MIN_CYCLES = 4
 // (화면 이름, 수치 코드, 앞/뒤, 단위). 디딤 비율·걸음 길이·발 높이는 엔진 v0 정의(몸통 = T13~장골능 길이 기준)
 export const ROWS: [string, string, string, string, string][] = [
   ['뒷다리', '무릎 가동 범위', 'rom_stifle', 'H', '°'], ['뒷다리', '고관절 가동 범위', 'rom_hip', 'H', '°'],
-  ['뒷다리', '뒷발목 가동 범위', 'rom_tarsus', 'H', '°'], ['뒷다리', '걸음 길이(몸통 대비)', 'stride_length', 'H', '%'],
-  ['뒷다리', '입각기 비율', 'stance_ratio', 'H', '%'], ['뒷다리', '발 높이(몸통 대비)', 'paw_lift', 'H', '%'],
+  ['뒷다리', '뒷발목 가동 범위', 'rom_tarsus', 'H', '°'], ['뒷다리', '걸음 길이(등 길이 대비)', 'stride_length', 'H', '%'],
+  ['뒷다리', '입각기 비율', 'stance_ratio', 'H', '%'], ['뒷다리', '발 들림 높이(등 길이 대비)', 'paw_lift', 'H', '%'],
   ['앞다리', '어깨 가동 범위', 'rom_shoulder', 'F', '°'], ['앞다리', '팔꿈치 가동 범위', 'rom_elbow', 'F', '°'],
-  ['앞다리', '앞발목 가동 범위', 'rom_carpus', 'F', '°'], ['앞다리', '걸음 길이(몸통 대비)', 'stride_length', 'F', '%'],
-  ['앞다리', '입각기 비율', 'stance_ratio', 'F', '%'], ['앞다리', '발 높이(몸통 대비)', 'paw_lift', 'F', '%'],
+  ['앞다리', '앞발목 가동 범위', 'rom_carpus', 'F', '°'], ['앞다리', '걸음 길이(등 길이 대비)', 'stride_length', 'F', '%'],
+  ['앞다리', '입각기 비율', 'stance_ratio', 'F', '%'], ['앞다리', '발 들림 높이(등 길이 대비)', 'paw_lift', 'F', '%'],
 ]
 export const SYM_CODES: [string, string][] = [['rom_stifle', 'H'], ['rom_hip', 'H'], ['rom_elbow', 'F'], ['stride_length', 'H'], ['stance_ratio', 'H']]
 

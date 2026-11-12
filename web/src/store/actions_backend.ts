@@ -8,6 +8,7 @@ import { on, f, petInputError, BACKEND, type Handler } from './actions'
 import { api, MOCK, SEX_OUT, SIZE_OUT, STAGE_OUT, KIND_OUT, CAT_OUT, syncFromBackend, syncDogChart, toDog, tokenStore, isRemote, syncAdmin } from './backend'
 import { db, dogOf, isoToday, resultOf } from './db'
 import { remember } from './sessions_backend'
+import { keepFiles } from './uploadRetry'
 import { LEGAL } from '../legal/content'
 
 /** 백엔드 처리 함수 등록: 로컬(시제품) 처리 함수보다 언제나 먼저 불린다 */
@@ -109,7 +110,10 @@ if (!MOCK) {
     if (f(fd, 'pw') !== f(fd, 'pw2')) return redirect('/account', '새 비밀번호는 8자 이상, 현재와 다르게 입력해 주세요')
     try {
       await api.changePassword(f(fd, 'current_pw'), f(fd, 'pw'))
-      return redirect('/account', '비밀번호를 바꿨습니다')
+      // 서버가 그전에 받은 토큰을 이 요청에 쓴 것까지 끊는다(백엔드 명세 15.4 v1.48). 탈퇴처럼 토큰을 버리고 다시 로그인하게 한다
+      tokenStore.clear()
+      setLogin(null)
+      return redirect('/login', '비밀번호를 바꿨습니다. 새 비밀번호로 로그인해 주세요')
     } catch (e) {
       return redirect('/account', msg(e))
     }
@@ -202,6 +206,14 @@ if (!MOCK) {
     if (phoneSess && phoneSess.dog_id !== dog) return redirect(`/upload?dog=${dog}`, 'QR 로 연 회차가 다른 반려견의 회차입니다. 화면을 새로 불러온 뒤 다시 시도해 주세요')
     const phoneShots = phoneSess?.shots.length ?? 0
     if (!files.length && !phoneShots) return redirect(`/upload?dog=${dog}`, '보행 영상을 1개 이상 올려 주세요')
+    // 오늘 바이탈(선택): 적은 칸만 그날 바이탈로 저장한다(PUT /dogs/{id}/vitals/{오늘}, 적은 값만 바뀜)
+    const vt = { temp_c: f(fd, 'temp').trim(), heart_rate: f(fd, 'hr').trim(), sbp: f(fd, 'sbp').trim(), dbp: f(fd, 'dbp').trim() }
+    if ([weight, ...Object.values(vt)].some((v) => v !== '' && !Number.isFinite(Number(v)))) {
+      keepFiles(dog, files)
+      return redirect(`/upload?dog=${dog}`, '체중·바이탈은 숫자로 적어 주세요')
+    }
+    const vitalBody = Object.fromEntries(Object.entries({ weight_kg: weight, ...vt }).filter(([, v]) => v !== '').map(([k, v]) => [k, Number(v)]))
+    const hasVital = Object.keys(vt).some((k) => vt[k as keyof typeof vt] !== '')
     // 회차 열기. 이미 측정 중인 회차가 있으면(앞서 업로드가 끊긴 경우 등) 그 회차에 이어서 올린다
     let sid = phoneSid, created = false
     if (!sid) {
@@ -214,14 +226,23 @@ if (!MOCK) {
         sid = open
       }
     }
+    // 바이탈은 업로드를 막지 않는다. 저장하지 못하면 알려만 준다
+    let vitalNote = ''
+    if (hasVital) await api.putVital(dog, isoToday(), vitalBody).catch((e) => { vitalNote = ` (바이탈은 저장하지 못했습니다: ${msg(e)})` })
     const n = Math.min(files.length, config.MAX_SHOTS - phoneShots)
+    let failedName = ''
     try {
-      for (const file of files.slice(0, n)) await api.uploadShot(sid, file)
+      for (const file of files.slice(0, n)) {
+        failedName = file.name
+        await api.uploadShot(sid, file)
+      }
     } catch (e) {
       // 이번에 연 회차는 지운다(413·400·연결 끊김). 남겨 두면 그 반려견이 '측정 중'에 갇힌다. 이어서 쓰던 회차는 그대로 둬 다음 업로드가 이어 쓴다
       if (created) await api.cancelSession(sid).catch(() => undefined)
       await syncFromBackend().catch(() => undefined)
-      return redirect(`/upload?dog=${dog}`, msg(e))
+      // 고른 영상은 업로드 화면으로 돌려보내 다시 고르지 않게 하고, 어느 파일에서 왜 멈췄는지 알린다
+      keepFiles(dog, files)
+      return redirect(`/upload?dog=${dog}`, `${failedName ? `'${failedName}' 올리기 실패: ` : ''}${msg(e)}`)
     }
     try {
       await api.completeSession(sid)
@@ -230,7 +251,7 @@ if (!MOCK) {
       if (!(e instanceof ApiError && e.code === 'SESSION_CLOSED')) return redirect(`/upload?dog=${dog}`, msg(e))
     }
     remember(acct, { id: sid, inst: acct.id, dog, started: Date.now(), n: n + phoneShots, w: weight || dogOf(acct, dog)!.kg, by: currentStaff()?.name ?? '' })
-    return redirect(`/analyzing/${sid}`, created ? '' : '측정 중이던 회차에 이어서 올렸습니다')
+    return redirect(`/analyzing/${sid}`, (created ? '' : '측정 중이던 회차에 이어서 올렸습니다') + vitalNote)
   })
 
   // ── 반려견 차트(271): 메모·진료 기록·바이탈·진단 이력. 쓴 담당자는 서버가 로그인한 사람으로 적는다(작성자 칸은 보내지 않는다) ──
@@ -257,10 +278,20 @@ if (!MOCK) {
     const back = next_url.startsWith('/results/') || next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}`
     if (!d) return redirect('/home')
     const note_id = f(fd, 'note_id'), text = f(fd, 'text').trim(), important = !!f(fd, 'important'), visit = !!f(fd, 'visit')
+    // 방문일(271): 지난 방문의 기록도 그 날짜로 쓴다. 미래는 받지 않는다
+    const today = isoToday()
+    const visited_on = f(fd, 'visit_day') || today
+    if (visited_on > today) return redirect(back, '오늘 이후 날짜로는 기록할 수 없습니다')
+    if (note_id && f(fd, 'delete')) {
+      return chartDo(d.id, back, async () => {
+        await api.deleteNote(note_id)
+        return '지웠습니다'
+      })
+    }
     const soap = (['S', 'O', 'A', 'P'] as const).map((k) => [k, f(fd, k.toLowerCase()).trim()] as [string, string]).filter(([, v]) => v)
     const r = resultOf(acct, f(fd, 'rid'))
     const session_id = r && r.dog === d.id ? r.id : undefined
-    const soapBatch = () => api.addNotes(d.id, { session_id, notes: soap.map(([k, v], i) => ({ category: k, body: v, important: important && i === 0 })) })
+    const soapBatch = () => api.addNotes(d.id, { session_id, visited_on, notes: soap.map(([k, v], i) => ({ category: k, body: v, important: important && i === 0 })) })
     if (note_id) {
       if (!text) return redirect(back, '내용을 적어 주세요')
       return chartDo(d.id, back, async () => {
@@ -270,12 +301,15 @@ if (!MOCK) {
     }
     if (visit) {
       // 오늘 방문 기록: 바이탈은 방문마다 반드시 잰다(11-02). 오늘 이미 잰 값이 있으면 바꾼다
+      // 지난 방문은 그날 바이탈을 안 쟀을 수 있어 비워도 된다(적으면 다 적어야 한다)
       const vals = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
-      if (!vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
+      const noVital = visited_on !== today && !vals.some(Boolean)
+      if (!noVital && !vals.every(Boolean)) return redirect(back, '바이탈(체중·체온·심박·혈압)을 모두 적어 주세요')
       if (badNum(...vals)) return redirect(back, '바이탈은 숫자로 적어 주세요')
+      if (noVital && !soap.length) return redirect(back, '바이탈이나 진료 기록을 적어 주세요')
       const [kg, temp, hr, sbp, dbp] = vals.map(Number)
       return chartDo(d.id, back, async () => {
-        await api.putVital(d.id, isoToday(), { weight_kg: kg, temp_c: temp, heart_rate: hr, sbp, dbp })
+        if (!noVital) await api.putVital(d.id, visited_on, { weight_kg: kg, temp_c: temp, heart_rate: hr, sbp, dbp })
         if (!soap.length) return '바이탈을 기록했습니다'
         await soapBatch()
         return '기록을 남겼습니다'
@@ -291,12 +325,12 @@ if (!MOCK) {
     const cat = f(fd, 'cat') || 'O'
     const category = CAT_OUT[cat] ?? 'OTHER'
     return chartDo(d.id, back, async () => {
-      await api.addNote(d.id, { category, body: text, important, session_id })
+      await api.addNote(d.id, { category, body: text, important, session_id, visited_on })
       return cat in config.SOAP ? '기록을 남겼습니다' : '메모를 남겼습니다'
     })
   })
 
-  // 바이탈 한 날짜 저장·고치기. 적은 값만 보낸다(빈 칸은 그대로 둔다). 지우는 API 는 없다
+  // 바이탈 한 날짜 저장·고치기·지우기. 저장은 적은 값만 보낸다(빈 칸은 그대로 둔다)
   onB('/dogs/:dog_id/vitals', async (p, fd) => {
     const acct = current()
     if (!acct) return need_login()
@@ -306,6 +340,12 @@ if (!MOCK) {
     const day = f(fd, 'day') || isoToday()
     const next_url = f(fd, 'next_url')
     const back = next_url.startsWith('/dogs/') ? next_url : `/dogs/${p.dog_id}?v=${day}`
+    if (f(fd, 'delete')) {
+      return chartDo(d.id, back, async () => {
+        await api.deleteVital(d.id, day)
+        return '그날 바이탈을 지웠습니다'
+      })
+    }
     const [kg, temp, hr, sbp, dbp] = ['kg', 'temp', 'hr', 'sbp', 'dbp'].map((k) => f(fd, k).trim())
     if (![kg, temp, hr, sbp, dbp].some(Boolean)) return redirect(back, '값을 하나 이상 적어 주세요')
     if (badNum(kg, temp, hr, sbp, dbp)) return redirect(back, '바이탈은 숫자로 적어 주세요')

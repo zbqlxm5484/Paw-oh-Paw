@@ -23,6 +23,7 @@ from app.report import TEMPLATE_VERSION, ReportCheckError, ReportInputError
 from app.report.checks import ensure_checked
 from app.report.content import ReportContent, compose_content, difference_level, leg_summaries
 from app.report.numbers import GaitTable
+from app.report.sentences import previous_label
 from app.report.verify import compare_numbers, summarize
 from app.schemas.report_content import (
     ContentBaseline,
@@ -182,6 +183,7 @@ def _to_out(content: ReportContent, session: MeasureSession, dog: Dog, timeline:
             session_id=previous_id,
             measured_on=str(inp.previous["measured_on"]),
             round=timeline.round_of(previous_id),  # 직전 DONE 회차. 사이에 FAILED 회차가 있으면 번호가 건너뛴다
+            label=previous_label(inp),
             model_changed=inp.previous_model_changed,
         )
     return ReportContentOut(

@@ -3,7 +3,9 @@
 // 좌우 비교·지난 측정과 비교·무릎 가동 범위 변화(수의사용, AppVetSections).
 // 몸 그림 색·문구 규칙은 웹 views.ts body_map 과 같다(대칭 지수 차이 5%·10% 경계).
 import type { ReactNode } from 'react'
+import { AppOwnerSummary } from './AppOwnerSummary'
 import type { SessionResultOut } from '../../api/types'
+import { AppExcludeLine, AppQualityLine } from './AppQuality'
 import dogSmall from './dog/dog_small.svg?raw'
 import dogMedium from './dog/dog_medium.svg?raw'
 import dogLarge from './dog/dog_large.svg?raw'
@@ -11,7 +13,7 @@ import dogLarge from './dog/dog_large.svg?raw'
 type Level = [number, string, string, string]
 const LEVEL: Level[] = [[5, '비슷합니다', '#DCEFE2', '#2E8B57'], [10, '조금 차이 나요', '#F7D6AE', '#9A6A12'], [999, '차이가 큽니다', '#F2A898', '#C2412D']]
 /** 수치가 없는 부위: '비슷합니다' 로 보이지 않게 */
-const NA_LEVEL: Level = [0, '측정 불가', '#E9E4DC', '#8E949C']
+const NA_LEVEL: Level = [0, '측정 불가', '#E9E4DC', '#5B6472']
 const level = (si: number) => LEVEL.find((x) => si < x[0])!
 const LEGS: [string, string, string][] = [['front_left', 'LF', '왼앞'], ['front_right', 'RF', '오른앞'], ['hind_left', 'LH', '왼뒤'], ['hind_right', 'RH', '오른뒤']]
 const PARTS: ['front' | 'hind', string, [string, string, string][]][] = [
@@ -24,7 +26,7 @@ const WORD: Record<string, string> = {
 }
 const READ: Record<string, string> = {
   '팔꿈치 가동 범위': '걸을 때 팔꿈치를 접었다 펴는 폭', '무릎 가동 범위': '걸을 때 무릎을 접었다 펴는 폭',
-  '고관절 가동 범위': '엉덩이 관절이 앞뒤로 움직이는 폭', '걸음 길이': '한 걸음에 나아가는 거리(몸통 대비)', '입각기 비율': '한 걸음 중 발이 땅을 딛는 시간',
+  '고관절 가동 범위': '엉덩이 관절이 앞뒤로 움직이는 폭', '걸음 길이': '한 걸음에 나아가는 거리(등 길이 대비)', '입각기 비율': '한 걸음 중 발이 땅을 딛는 시간',
 }
 const r1 = (v: number) => Math.round(v * 10) / 10
 const josa = (w: string) => ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? '이' : '가')
@@ -79,6 +81,8 @@ export interface AppReportProps {
   /** 오래된 회차부터 이 회차까지 [날짜 MM-DD, 대칭 지수] */
   symHist: [string, number][]
   /** 기준 회차 대비 대칭 지수 차이(%p)와 날짜 */
+  /** 직전 회차 표기 "2회차, 11월 10일"(같은 날이면 시각까지). 없으면 날짜만 */
+  prevLabel?: string
   vsBase: { d: number; date: string } | null
   passes: [number, number]
   excluded: [string, number][]
@@ -126,11 +130,11 @@ export function AppReport(p: AppReportProps) {
         </span>
         {p.kind === 'g' ? (m0 ? (
           <>
-            <span style={{ fontSize: '11px', color: '#5B6472' }}>{m0.n}</span>
-            <b style={{ fontSize: '19px', fontVariantNumeric: 'tabular-nums', color: g.weak ? g.c : '#1B2433' }}>{m0.v}</b>
+            <span style={{ fontSize: '12px', color: '#5B6472' }}>{m0.n}</span>
+            <b style={{ fontSize: '18px', fontVariantNumeric: 'tabular-nums', color: g.weak ? g.c : '#1B2433' }}>{m0.v}</b>
           </>
         ) : null) : g.mets.map((m, i) => (
-          <span key={i} style={{ fontSize: '10.5px', color: '#5B6472', fontVariantNumeric: 'tabular-nums', lineHeight: 1.35 }}>{m.n.replace(' 가동 범위', '')} <b style={{ fontSize: '12px', color: m.lower && g.weak ? g.c : '#1B2433' }}>{m.v}</b> <span style={{ color: '#A0A7B2' }}>/ {m.other}</span></span>
+          <span key={i} style={{ fontSize: '12px', color: '#5B6472', fontVariantNumeric: 'tabular-nums', lineHeight: 1.4 }}>{m.n.replace(' 가동 범위', '')} <b style={{ fontSize: '12px', color: m.lower && g.weak ? g.c : '#1B2433' }}>{m.v}</b> <span style={{ color: '#5B6472' }}>/ {m.other}</span></span>
         ))}
       </div>
     )
@@ -142,22 +146,22 @@ export function AppReport(p: AppReportProps) {
         <div style={{ ...box({ border: '1.5px solid #E9D3C2', background: '#FFF9F4' }), display: 'grid', gridTemplateColumns: '64px 1fr', rowGap: '6px', columnGap: '10px', fontSize: '13px', lineHeight: 1.5 }}>
           <b style={{ color: '#A8481A' }}>주요 결과</b><span>{hind.si >= front.si ? hind.say : front.say}</span>
           <b style={{ color: '#A8481A' }}>측정 품질</b><span>{quality}</span>
-          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `지난 측정(${prev[0]})보다 좌우 대칭 지수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}%p` : '첫 측정이라 비교할 회차가 없어요'}</span>
+          <b style={{ color: '#A8481A' }}>이전 대비</b><span>{p.sym == null ? '이 회차는 쓸 수 있는 통과가 없어 비교할 수 없어요' : prev ? `직전 회차(${p.prevLabel || prev[0]})보다 좌우 대칭 점수 ${sym - prev[1] > 0 ? '+' : ''}${r1(sym - prev[1])}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
         </div>
       ) : null}
 
-      {/* 좌우 대칭 지수 */}
+      {/* 좌우 대칭 점수 */}
       <div style={{ ...box({ background: '#FAF7F2' }), display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '14px', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#5B6472' }}>좌우 대칭 지수</span>
-          <b style={{ fontSize: '34px', letterSpacing: '-1px', lineHeight: 1.1, color: symLv[3] }}>{p.sym == null ? '—' : sym}<span style={{ fontSize: '16px' }}>%</span></b>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#5B6472' }}>좌우 대칭 점수</span>
+          <b style={{ fontSize: '28px', letterSpacing: '-1px', lineHeight: 1.1, color: symLv[3] }}>{p.sym == null ? '—' : sym}<span style={{ fontSize: '15px' }}>점</span></b>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ position: 'relative', height: 10, borderRadius: 5, background: 'linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)' }}>
             <span style={{ position: 'absolute', top: -4, left: `calc(${Math.max(0, Math.min(100, sym))}% - 2px)`, width: 4, height: 18, borderRadius: 2, background: '#1B2433' }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#8E949C' }}><span>0</span><span>80</span><span>90</span><span>100</span></div>
-          <span style={{ fontSize: '12px', color: '#3A4250' }}>{p.vsBase ? <>기준 회차({p.vsBase.date})보다 <b style={{ color: p.vsBase.d > 0 ? '#2E8B57' : p.vsBase.d < 0 ? '#C2412D' : '#3A4250' }}>{p.vsBase.d > 0 ? '+' : ''}{r1(p.vsBase.d)}%p</b></> : '기준 회차와 비교할 값이 없습니다'}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#5B6472' }}><span>0</span><span>80</span><span>90</span><span>100</span></div>
+          <span style={{ fontSize: '12px', color: '#3A4250' }}>{p.vsBase ? <>기준 회차({p.vsBase.date})보다 <b style={{ color: p.vsBase.d > 0 ? '#2E8B57' : p.vsBase.d < 0 ? '#C2412D' : '#3A4250' }}>{p.vsBase.d > 0 ? '+' : ''}{r1(p.vsBase.d)}점</b></> : '기준 회차와 비교할 값이 없습니다'}</span>
         </div>
       </div>
 
@@ -167,7 +171,7 @@ export function AppReport(p: AppReportProps) {
         <div style={{ width: 104, height: 256 }} dangerouslySetInnerHTML={{ __html: dogSvg(p.dogSize, fills, p.focus) }} />
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around' }}><Card code="RF" align="r" /><Card code="RH" align="r" /></div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '10.5px', color: '#5B6472' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '12px', color: '#5B6472' }}>
         {LEVEL.map(([, n, c], i) => <span key={i}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 3, background: c, border: '1px solid #B8B0A4', verticalAlign: -1, marginRight: 3 }} />{['좌우 비슷 (5% 미만)', '조금 덜 씀 (5~10%)', '많이 덜 씀 (10% 이상)'][i] ?? n}</span>)}
       </div>
 
@@ -177,16 +181,19 @@ export function AppReport(p: AppReportProps) {
           <div key={label} style={{ ...box({ border: '1px solid #ECE8E2' }), display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700 }}><span>{label}</span><span style={{ color: P.lv[3] }}>{P.lv[1]}</span></span>
             <span style={{ fontSize: p.kind === 'g' ? '14px' : '13px', lineHeight: 1.5, fontWeight: 600 }}>{P.say}</span>
-            {p.kind === 'v' && P.worst ? <span style={{ fontSize: '11.5px', color: '#5B6472' }}>가장 큰 차이: {P.worst.n} {r1(Math.abs(P.worst.l - P.worst.r))}{P.worst.u} · 대칭 지수 차이 {P.si}%</span> : null}
-            {p.kind === 'g' && P.worst && READ[P.worst.n] ? <span style={{ fontSize: '11px', color: '#8E949C' }}>{P.worst.n}: {READ[P.worst.n]}</span> : null}
+            {p.kind === 'v' && P.worst ? <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>가장 큰 차이: {P.worst.n} {r1(Math.abs(P.worst.l - P.worst.r))}{P.worst.u} · 대칭 지수 차이 {P.si}%</span> : null}
+            {p.kind === 'g' && P.worst && READ[P.worst.n] ? <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>{P.worst.n}: {READ[P.worst.n]}</span> : null}
           </div>
         ))}
       </div>
 
+      {p.kind === 'g' ? <AppOwnerSummary front={front} hind={hind} /> : null}
+
       {/* 측정 품질 */}
-      <div style={{ ...box({ background: '#FAF7F2' }), display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: '12.5px' }}>
+      <div style={{ ...box({ background: '#FAF7F2' }), display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: '13px' }}>
         <b>측정 품질</b><span>{quality}</span>
-        {p.excluded.length ? <span style={{ color: '#5B6472' }}>뺀 이유: {p.excluded.map(([n, c]) => `${n} ${c}번`).join(', ')}</span> : null}
+        <AppExcludeLine ex={p.excluded} kind={p.kind === 'v' ? 'v' : 'g'} />
+        <AppQualityLine result={p.result} kind={p.kind === 'v' ? 'v' : 'g'} />
       </div>
 
       {p.kind === 'g' ? (p.symHist.length > 1 ? <SymTrend hist={p.symHist} /> : null) : p.vet}
@@ -202,15 +209,15 @@ function SymTrend({ hist }: { hist: [string, number][] }) {
   const Y = (v: number) => 80 - ((v - lo) / (hi - lo)) * 60
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <b style={{ fontSize: '14px' }}>지금까지 좌우 대칭 지수</b>
-      <span style={{ fontSize: '11px', color: '#8E949C' }}>점 하나가 그날 측정한 대칭 지수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
+      <b style={{ fontSize: '14px' }}>지금까지 좌우 대칭 점수</b>
+      <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>점 하나가 그날 측정한 대칭 점수예요. 위로 갈수록 양쪽 다리를 고르게 썼어요</span>
       <svg viewBox="0 0 320 100" style={{ width: '100%' }}>
         <polyline points={h.map(([, v], i) => `${X(i)},${Y(v)}`).join(' ')} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round" />
         {h.map(([d, v], i) => (
           <g key={i}>
             <circle cx={X(i)} cy={Y(v)} r={i === h.length - 1 ? 5 : 3.5} fill={i === h.length - 1 ? '#D2601A' : '#fff'} stroke="#D2601A" strokeWidth="2" />
-            <text x={X(i)} y={Y(v) - 9} textAnchor="middle" fontSize="10" fill="#3A4250" fontWeight={i === h.length - 1 ? 700 : 400}>{v}</text>
-            <text x={X(i)} y={96} textAnchor="middle" fontSize="9" fill="#8E949C">{d}</text>
+            <text x={X(i)} y={Y(v) - 9} textAnchor="middle" fontSize="12" fill="#3A4250" fontWeight={i === h.length - 1 ? 700 : 400}>{v}</text>
+            <text x={X(i)} y={96} textAnchor="middle" fontSize="12" fill="#5B6472">{d}</text>
           </g>
         ))}
       </svg>

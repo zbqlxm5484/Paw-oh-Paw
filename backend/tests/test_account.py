@@ -44,9 +44,13 @@ def test_change_password(client: TestClient, staff, auth_headers: dict) -> None:
     assert changed.status_code == 200
     assert changed.json()["id"] == str(staff.id)
     assert _login(client, GOOD_PASSWORD).status_code == 401
-    assert _login(client, NEW_PASSWORD).status_code == 200
-    # 이미 받은 토큰은 그대로 쓴다(토큰 무효화는 없다, 15.4)
-    assert client.get(ME, headers=auth_headers).status_code == 200
+    fresh = _login(client, NEW_PASSWORD)
+    assert fresh.status_code == 200
+    # 바꾸기 전에 받은 토큰은 끊기고(v1.48, 15.4. 자세한 것은 tests/test_token_cut.py) 새로 받은 토큰은 쓴다
+    cut = client.get(ME, headers=auth_headers)
+    assert cut.status_code == 401
+    assert cut.json()["error"]["code"] == "AUTH_EXPIRED"
+    assert client.get(ME, headers={"Authorization": f"Bearer {fresh.json()['access_token']}"}).status_code == 200
 
 
 def test_update_me(client: TestClient, staff, auth_headers: dict) -> None:

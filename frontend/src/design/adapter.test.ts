@@ -165,7 +165,7 @@ describe('경과 비교 표 (adapter.compareRows)', () => {
   } as unknown as CompareOut
 
   it('한쪽 회차 값이 없으면 숫자 없이 비교 불가와 사유', () => {
-    const r = compareRows(cmp, null).find((x) => x.n === '발 높이')!
+    const r = compareRows(cmp, null).find((x) => x.n.startsWith('발 들림 높이'))!
     expect(r.j).toBe('비교 불가')
     expect(r.vals).toBe('기준 회차에서 잴 수 없었어요')
     expect(r.vals).not.toMatch(/\b0\b/)
@@ -175,6 +175,15 @@ describe('경과 비교 표 (adapter.compareRows)', () => {
     const r = compareRows(cmp, null).find((x) => x.n === '고관절 가동 범위')!
     expect(r.j).toBe('판단 보류')
     expect(r.vals).toBe('30°→ 31.2°'.replace('°→', '° →'))
+  })
+
+  it('퍼센트 값끼리의 차이는 %p, 각도는 °', () => {
+    const c = { ...cmp, items: [
+      { metric_code: 'stride_length', limb: 'LF', gait_type: 'TROT', unit: 'pct_body', base_value: 152, target_value: 193, diff: 41, judgement: 'INCREASE', note: null },
+      ...cmp.items,
+    ] } as unknown as CompareOut
+    expect(compareRows(c, null).find((x) => x.n.startsWith('걸음 길이'))!.j).toBe('▲ 증가 41%p')
+    expect(compareRows(c, null).find((x) => x.n === '무릎 가동 범위')!.j).toMatch(/°$/)
   })
 
   it('관심 다리 항목이 맨 위로', () => {

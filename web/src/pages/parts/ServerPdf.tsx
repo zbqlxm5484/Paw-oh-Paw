@@ -73,7 +73,7 @@ export function ServerPdf({ sessionId, edition, fileName }: { sessionId: string;
   if (rep?.status === 'FAILED') {
     return (
       <>
-        <span style={css('align-self:center;font-size:13.5px;color:#C2412D')}>{rep.fail_reason?.message || '보고서를 만들지 못했습니다'}</span>
+        <span style={css('align-self:center;font-size:14px;color:#C2412D')}>{rep.fail_reason?.message || '보고서를 만들지 못했습니다'}</span>
         <div className="hv-orange" onClick={regenerate} style={css(MAIN)}>보고서 다시 만들기</div>
       </>
     )

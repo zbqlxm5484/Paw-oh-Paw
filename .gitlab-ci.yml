@@ -80,6 +80,8 @@ smoke:
     COMPOSE_PROJECT: $SMOKE_PROJECT
     COMPOSE_EXTRA: "-f infra/ci/compose.ci.yaml"
   script:
+    # 이전 smoke 가 중간에 죽어 남긴 컨테이너가 포트를 잡고 있으면 이번 smoke 도 실패하므로 먼저 치운다
+    - bash infra/ci/cleanup_stale_smoke.sh
     # 러너가 job 을 동시에 여러 개 돌려도 smoke 끼리 호스트 포트가 겹치지 않게, 슬롯 번호(CI_CONCURRENT_ID)만큼 더한 포트를 쓴다
     - export SMOKE_PORT=$((18080 + CI_CONCURRENT_ID))
     - export PUBLIC_URL=http://127.0.0.1:$SMOKE_PORT
@@ -95,23 +97,39 @@ smoke:
 
 # ---------- deploy ----------
 # 무중단(blue-green) 배포 + 실패 시 자동 원복. 동작은 infra/ci/deploy.sh 참고
-deploy:
+# 환경 2벌: master=운영(compose 프로젝트 creamoff, 포트 8080, 변수 ENV_FILE, 수동 배포),
+#           develop=개발(compose 프로젝트 creamoff-dev, 포트 8082, 변수 ENV_FILE_DEV, 자동 배포).
+# 프로젝트명이 달라 DB·Redis·업로드 볼륨이 서로 분리된다. 같은 EC2 한 대에서 둘이 동시에 돈다
+deploy_prod:
   stage: deploy
-  resource_group: creamoff-server     # 배포 동시 실행 방지
+  resource_group: creamoff-server     # 운영 배포 동시 실행 방지
   rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
     - if: $CI_COMMIT_BRANCH == "master"
       when: manual
   script:
+    - cp "$ENV_FILE" .env
+    - bash infra/ci/deploy.sh
+
+deploy_dev:
+  stage: deploy
+  resource_group: creamoff-dev-server # 개발 배포 동시 실행 방지(운영과 별도 그룹)
+  variables:
+    COMPOSE_PROJECT: creamoff-dev
+    NGINX_PORT: "8082"                # compose.yaml 의 nginx 호스트 포트
+    PUBLIC_URL: http://127.0.0.1:8082
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  script:
     # 더 새로운 커밋이 이미 develop 에 있으면 배포하지 않는다(순서 역전으로 DB 마이그레이션 번호가 어긋나는 것 방지)
     - if bash infra/ci/is_stale.sh; then exit 0; fi
-    - cp "$ENV_FILE" .env
+    - cp "$ENV_FILE_DEV" .env
     - bash infra/ci/deploy.sh
 
 # GPU 서버 분석 API 배포 (Jira 239). 두 경우에 실행된다.
 #  1) 보호된 태그 v*: 배포. 릴리스 폴더명은 태그명
-#  2) develop 머지: 분석 API 관련 파일이 바뀐 때만 자동 배포. 릴리스 폴더명은 develop-<커밋 SHA 8자>
-#     동결: CI/CD 변수 GPU_DEPLOY_FREEZE=1 이면 태그·develop 배포 모두 건너뛴다(태그를 미리 붙여도 동결 중엔 배포되지 않음).
+#  2) master 머지: 분석 API 관련 파일이 바뀐 때만 자동 배포. 릴리스 폴더명은 master-<커밋 SHA 8자>
+#     (GPU 서버는 한 대라 운영 서비스가 쓴다. develop 머지로는 배포하지 않는다. 개발 환경 백엔드는 ANALYSIS_API_MODE=mock 을 쓴다)
+#     동결: CI/CD 변수 GPU_DEPLOY_FREEZE=1 이면 태그·master 배포 모두 건너뛴다(태그를 미리 붙여도 동결 중엔 배포되지 않음).
 #           긴급 배포가 필요하면 변수를 끄거나(0·삭제) 가이드 11절 수동 배포를 쓴다
 # 러너: GPU 서버(jupyter12) shell executor, 태그 gpu-deploy, Protected. 위의 check·build·smoke 가 통과해야 도달한다.
 # 동작은 infra/ci/deploy_gpu.sh 참고. 수동 배포 절차는 manual/GPU서버_분석API_배포_가이드.md
@@ -122,10 +140,10 @@ deploy_gpu:
   timeout: 20m
   rules:
     - if: $CI_COMMIT_TAG =~ /^v/ && $GPU_DEPLOY_FREEZE != "1"
-    - if: $CI_COMMIT_BRANCH == "develop" && $GPU_DEPLOY_FREEZE != "1"
+    - if: $CI_COMMIT_BRANCH == "master" && $GPU_DEPLOY_FREEZE != "1"
       changes:                        # pipeline.py 가 루트 engine 을 불러오므로 engine 도 포함
         - analysis_api/**/*
         - engine/**/*
         - infra/ci/deploy_gpu.sh
   script:
-    - bash infra/ci/deploy_gpu.sh "${CI_COMMIT_TAG:-develop}"    # 태그 없으면(develop) 스크립트가 develop-<SHA 8자>로 바꾼다
+    - bash infra/ci/deploy_gpu.sh "${CI_COMMIT_TAG:-master}"    # 태그 없으면(master) 스크립트가 master-<SHA 8자>로 바꾼다

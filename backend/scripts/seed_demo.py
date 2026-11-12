@@ -19,6 +19,8 @@ AI·프론트가 만든 폴더(demo.json + shots/<회차키>/NN.analysis.json·N
 - --reset은 이 기관의 자료만 파기(15.9 INSTITUTION, 파기 기록 1행)한 뒤 다시 넣는다. 계정·기관은 남긴다.
   다른 기관은 건드리지 않는다. 같은 기관 코드가 다른 이름으로 있으면 아무것도 하지 않고 끝낸다.
 - 비밀번호는 파일에 없다. 계정을 새로 만들 때만 묻는다(--password로도 줄 수 있다).
+- 폴더에 face_masks.json이 있으면 그 자리도 결과 영상에서 가린다(S15P31A404-277). 검출기가 찾지 못하는 얼굴(화면 끝에
+  걸린 옆얼굴 등)을 눈으로 확인해 적어 두는 파일이다. 모양은 load_face_masks에 있다.
 """
 
 from __future__ import annotations
@@ -81,11 +83,14 @@ from app.services.symmetry import session_scores
 from app.services.uploads import check_video
 from app.storage import keys
 from app.storage.base import StorageService, get_storage
-from app.video.render import VideoRenderError, render_video
+from app.video.render import Box, VideoRenderError, render_video
 
 logger = logging.getLogger(__name__)
 
 FORMAT_VERSION = 1
+FACE_MASKS_FILE = "face_masks.json"
+# 손으로 지정한 가림 자리 하나: (첫 프레임, 끝 프레임(포함), 상자)
+FaceMask = tuple[int, int, Box]
 # 넣은 촬영의 job_id를 만드는 이름 공간. 같은 촬영 ID면 같은 번호라 --reset이 이 번호를 알아본다
 JOB_NAMESPACE = uuid.UUID("6f1c2d4e-3b5a-4c7d-9e8f-0a1b2c3d4e5f")
 CONFIRM_WORD = "RESET"
@@ -134,6 +139,7 @@ class DemoData:
     root: Path
     raw: dict[str, Any]
     videos_dir: Path | None
+    face_masks: dict[str, tuple[FaceMask, ...]] = field(default_factory=dict)  # 영상 파일 이름 → 가림 자리
 
     @property
     def institution(self) -> dict[str, Any]:
@@ -141,6 +147,41 @@ class DemoData:
 
     def path(self, relative: str) -> Path:
         return self.root / relative
+
+
+def load_face_masks(root: Path) -> dict[str, tuple[FaceMask, ...]]:
+    """face_masks.json(있을 때만): 영상 파일 이름 → 손으로 지정한 가림 자리.
+
+    검출기가 찾지 못하는 얼굴을 눈으로 확인해 적어 둔 것이다(17.3 BE-12의 눈 확인). 모양은
+    {"<영상 파일 이름>": [{"from": 첫 프레임, "to": 끝 프레임, "box": [x0, y0, x1, y1]}]}이다. 프레임 번호는 0부터이고
+    끝 프레임까지 가린다. 상자는 원본 영상의 픽셀이고, 검출한 얼굴처럼 사방을 넓혀 가린다(render.FACE_MARGIN).
+    """
+    path = root / FACE_MASKS_FILE
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SeedDemoError(f"{FACE_MASKS_FILE}을 읽지 못했습니다: {error}") from None
+    if not isinstance(raw, dict):
+        raise SeedDemoError(f"{FACE_MASKS_FILE}: 영상 파일 이름마다 목록을 적어야 합니다")
+    masks: dict[str, tuple[FaceMask, ...]] = {}
+    for name, items in raw.items():
+        where = f"{FACE_MASKS_FILE}[{name}]"
+        if not isinstance(items, list):
+            raise SeedDemoError(f"{where}: 목록이어야 합니다")
+        parsed: list[FaceMask] = []
+        for item in items:
+            box = item.get("box") if isinstance(item, dict) else None
+            numbers = [item.get("from"), item.get("to"), *box] if isinstance(box, list) else []
+            if len(numbers) != 6 or not all(type(value) is int and value >= 0 for value in numbers):
+                raise SeedDemoError(f"{where}: from, to, box [x0, y0, x1, y1]은 0 이상의 정수여야 합니다")
+            first, last, x0, y0, x1, y1 = numbers
+            if first > last or x0 >= x1 or y0 >= y1:
+                raise SeedDemoError(f"{where}: from ≤ to, x0 < x1, y0 < y1이어야 합니다")
+            parsed.append((first, last, (x0, y0, x1, y1)))
+        masks[name] = tuple(parsed)
+    return masks
 
 
 def load_data(root: Path, videos_dir: Path | None = None) -> DemoData:
@@ -187,7 +228,11 @@ def load_data(root: Path, videos_dir: Path | None = None) -> DemoData:
         refer(item.get("staff"), staff_ids, "담당자", f"notes[{i}]")
         refer(item.get("session"), session_keys, "회차", f"notes[{i}]", optional=True)
 
-    data = DemoData(root=root, raw=raw, videos_dir=videos_dir)
+    data = DemoData(root=root, raw=raw, videos_dir=videos_dir, face_masks=load_face_masks(root))
+    video_names = {shot.get("video_file") for item in raw["sessions"] for shot in item.get("shots", [])}
+    for name in data.face_masks:
+        if name not in video_names:  # 이름을 잘못 적으면 가려지지 않은 채 넘어간다
+            raise SeedDemoError(f"{FACE_MASKS_FILE}[{name}]: demo.json에 없는 영상 파일입니다")
     for item in raw["sessions"]:
         where = f"sessions[{item['key']}]"
         refer(item.get("dog"), dog_keys, "반려견", where)
@@ -222,6 +267,20 @@ def _at(day: date, hour: int, minute: int = 0, second: int = 0) -> datetime:
     return datetime.combine(day, time(hour, minute, second), tzinfo=local_zone())
 
 
+def _now() -> datetime:
+    """지금(APP_TIMEZONE). 시험이 바꿔 끼우는 자리다."""
+    return datetime.now(local_zone())
+
+
+def _no_later(moment: datetime, limit: datetime | None, back: timedelta) -> datetime:
+    """moment가 limit보다 뒤면 limit에서 back만큼 앞으로 당긴다. limit이 None이면 그대로다.
+
+    오늘(D-0) 기록은 시각을 그날 9시·10시·18시처럼 정해 넣는데, 그보다 이른 시각에 넣으면 지금보다 뒤 시각이 된다
+    (시연 당일 아침에 넣으면 홈의 '오늘'에 아직 오지 않은 시각이 찍힌다, 277).
+    """
+    return moment if limit is None or moment <= limit else limit - back
+
+
 def demo_job_id(shot_id: uuid.UUID) -> str:
     return str(uuid.uuid5(JOB_NAMESPACE, str(shot_id)))
 
@@ -249,11 +308,15 @@ class RenderCache:
     render: Callable[..., Any] = render_video
     made: dict[str, Path] = field(default_factory=dict)
 
-    def get(self, video: Path, keypoints: Path) -> Path:
+    def get(self, video: Path, keypoints: Path, masks: tuple[FaceMask, ...] = ()) -> Path:
+        """masks는 이 영상에서 손으로 지정한 가림 자리(face_masks.json)다. 있으면 검출한 얼굴에 더해 가린다."""
         digest = hashlib.sha256(video.name.encode("utf-8") + keypoints.read_bytes()).hexdigest()[:16]
         if digest not in self.made:
             output = self.workdir / f"{digest}.mp4"
-            self.render(video, keypoints, output, ffmpeg_path=self.ffmpeg_path)
+            extra: dict[str, Any] = {}
+            if masks:
+                extra["extra_faces"] = lambda frame_no: [box for first, last, box in masks if first <= frame_no <= last]
+            self.render(video, keypoints, output, ffmpeg_path=self.ffmpeg_path, **extra)
             self.made[digest] = output
         return self.made[digest]
 
@@ -445,11 +508,17 @@ def _insert(
         db.add(institution)
         db.flush()
     staff_ids = ensure_accounts(db, data, institution, password, report)
+    if data.face_masks and render_cache is not None:
+        report.notes.append(f"{FACE_MASKS_FILE}: 영상 {len(data.face_masks)}개에 손으로 지정한 가림 자리를 더했습니다")
 
     raw = data.raw
     day_of = {
         item["key"]: parse_day(item["measured_on"], today, where=f"sessions[{item['key']}]") for item in raw["sessions"]
     }
+    # 오늘을 D-0으로 넣을 때만 기록의 시각을 지금보다 뒤가 되지 않게 당긴다(_no_later). --today로 다른 날을 주면
+    # 그 날짜의 기록으로 넣는 것이 목적이라 당기지 않는다
+    clock = _now()
+    limit = clock if today == clock.date() else None
 
     # 반려견: 등록 시각은 그 반려견의 가장 이른 기록 날로 둔다(목록의 최근 등록 순서가 자연스럽게)
     dog_ids: dict[str, uuid.UUID] = {}
@@ -464,7 +533,7 @@ def _insert(
         days = [day_of[s["key"]] for s in raw["sessions"] if s["dog"] == item["key"]]
         days += [parse_day(h["occurred_on"], today, where=where) for h in raw["histories"] if h["dog"] == item["key"]]
         days += [parse_day(v["measured_on"], today, where=where) for v in raw["vitals"] if v["dog"] == item["key"]]
-        registered = _at(_earliest(days, today), 9)
+        registered = _no_later(_at(_earliest(days, today), 9), limit, timedelta(hours=3))
         dog = Dog(
             institution_id=institution.id,
             name=_require(item, "name", where),
@@ -496,7 +565,7 @@ def _insert(
                 site=_enum(item.get("site"), HistorySite, where, optional=True),
                 clinician=item.get("clinician"),
                 staff_id=staff_ids[item["staff"]],
-                created_at=_at(occurred, 18),
+                created_at=_no_later(_at(occurred, 18), limit, timedelta(minutes=30)),
             )
         )
 
@@ -509,6 +578,10 @@ def _insert(
         dog_item = next(d for d in raw["dogs"] if d["key"] == item["dog"])
         weight = Decimal(str(item.get("weight_kg") or dog_item["weight_kg"]))
         start = _at(day, 10, order % 50)
+        # 회차의 마지막 시각은 시작 + 마지막 촬영 순번(분) + 종료 2분 + 집계 1분이다. 그 시각까지 지금보다 앞이 되게
+        # 당긴다. 순서가 앞인 회차를 더 앞에 둔다
+        length = timedelta(minutes=max((shot["seq_no"] for shot in item.get("shots", [])), default=0) + 4)
+        start = _no_later(start + length, limit, timedelta(minutes=50 - order % 50)) - length
         measure = MeasureSession(
             dog_id=dog_id,
             staff_id=staff_ids[item["staff"]],
@@ -560,7 +633,7 @@ def _insert(
     for i, item in enumerate(raw["vitals"]):
         where = f"vitals[{i}]"
         day = parse_day(item["measured_on"], today, where=where)
-        moment = _at(day, 9, 30)
+        moment = _no_later(_at(day, 9, 30), limit, timedelta(hours=2))  # 그날 회차(길어야 한 시간쯤 전)보다 앞이다
         db.add(
             DogVital(
                 dog_id=dog_ids[item["dog"]],
@@ -577,14 +650,18 @@ def _insert(
             )
         )
 
-    now = datetime.now(local_zone())
+    # 회차에 붙지 않은 메모는 D-0에 쓴 것으로 넣는다. 오늘이 D-0이면 조금 전, --today로 준 다른 날이면 그날 낮이다
+    now = clock if limit is not None else _at(today, 12)
     for i, item in enumerate(raw["notes"]):
         where = f"notes[{i}]"
         body = str(_require(item, "body", where)).strip()
         if not 1 <= len(body) <= 2000:
             raise SeedDemoError(f"{where}: 내용은 1~2,000자여야 합니다")
         session_key = item.get("session")
-        written = _at(day_of[session_key], 18) if session_key else now - timedelta(minutes=len(raw["notes"]) - i)
+        if session_key:
+            written = _no_later(_at(day_of[session_key], 18), limit, timedelta(minutes=1))
+        else:
+            written = now - timedelta(minutes=len(raw["notes"]) - i)
         db.add(
             DogNote(
                 dog_id=dog_ids[item["dog"]],
@@ -710,7 +787,7 @@ def _seed_shot(
     video_values: dict[str, Any] = {"video_status": VideoStatus.FAILED.value}
     if video is not None and render_cache is not None:
         try:
-            output = render_cache.get(video, keypoints_path)
+            output = render_cache.get(video, keypoints_path, data.face_masks.get(video.name, ()))
         except VideoRenderError as error:
             report.notes.append(f"{video.name}: 결과 영상을 만들지 못했습니다({error})")
         else:

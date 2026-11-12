@@ -61,8 +61,8 @@ export const baseOf = (ctx: ResultCtx, d: DDog) => (d.base && ctx.results.find((
 
 /** 직전 회차 대비 문구. [문구, 색] */
 export function delta(a: number | null, b: number | null | undefined, unit: string): [string, string] {
-  if (a == null) return ['측정 불가', '#8E949C']
-  if (b == null) return ['첫 측정', '#8E949C']
+  if (a == null) return ['측정 불가', '#5B6472']
+  if (b == null) return ['첫 측정', '#5B6472']
   const d = r1(a - b)
   return [d > 0 ? `직전 대비 +${d}${unit}` : d < 0 ? `직전 대비 −${-d}${unit}` : '직전과 같음', '#5B6472']
 }
@@ -84,7 +84,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   const rank = (rs: DRow[]) => rs.filter((x) => !x.na).map((x) => ({ ...x, df: r1(Math.abs(x.l - x.r)) })).sort((a, b) => b.si - a.si)
   const meas = rank(rows), top = meas[0], topT = rank(rowsT)[0]
   const sL = R.sL, sR = R.sR
-  const sd = delta(R.sym, P && P.sym, '%p'), rdl = delta(R.rom, P && P.rom, '°')
+  const sd = delta(R.sym, P && P.sym, '점'), rdl = delta(R.rom, P && P.rom, '°')
   const stifle = rowsT.find((x) => x.code === 'rom_stifle')
   const model = `${R.result?.model_name ?? 'pga-pose'} ${R.model}`
   Object.assign(rd, {
@@ -102,11 +102,11 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
     title: `${d.name}의 걸음 보고서`, when: `${R.date} 측정 · ${sessNo(ctx, R)}회차 · ${desc(d)}`,
     summary: topT ? `${topT.leg} ${topT.n}에서 왼쪽과 오른쪽 차이가 가장 컸습니다(${topT.df}${topT.u}). 수의사 선생님과 함께 확인해 보세요.` : '좌우를 비교할 수 있는 항목이 없습니다. 수의사 선생님과 함께 확인해 보세요.',
     items: [
-      { k: '좌우 대칭 지수', v: num(R.sym) + '%', d: P ? `직전 ${num(P.sym)}%` : '첫 측정' },
+      { k: '좌우 대칭 점수', v: num(R.sym) + '점', d: P ? `직전 ${num(P.sym)}점` : '첫 측정' },
       { k: '뒷무릎 움직임 범위', v: stifle && !stifle.na ? `왼 ${stifle.l}° · 오 ${stifle.r}°` : '측정 불가', d: stifle && !stifle.na ? `차이 ${r1(Math.abs(stifle.l - stifle.r))}°` : '' },
-      { k: '걸음 길이(몸통 대비)', v: sL != null && sR != null ? `왼 ${sL}% · 오 ${sR}%` : '측정 불가', d: sL != null && sR != null ? `차이 ${Math.abs(sL - sR)}%p` : '' },
+      { k: '걸음 길이(등 길이 대비)', v: sL != null && sR != null ? `왼 ${sL}% · 오 ${sR}%` : '측정 불가', d: sL != null && sR != null ? `차이 ${Math.abs(sL - sR)}%p` : '' },
     ],
-    rows: [...rowsT.map((x) => ({ n: x.n, l: x.na ? '측정 불가' : x.l + x.u, r: x.na ? '—' : x.r + x.u, d: x.na ? '—' : r1(Math.abs(x.l - x.r)) + x.u })), { n: '대칭 지수', l: '—', r: '—', d: num(R.sym) + '%' }].map((x, i) => ({ ...x, bg: i % 2 ? '#fff' : '#FAF8F5' })),
+    rows: [...rowsT.map((x) => ({ n: x.n, l: x.na ? '측정 불가' : x.l + x.u, r: x.na ? '—' : x.r + x.u, d: x.na ? '—' : r1(Math.abs(x.l - x.r)) + x.u })), { n: '대칭 점수', l: '—', r: '—', d: num(R.sym) + '점' }].map((x, i) => ({ ...x, bg: i % 2 ? '#fff' : '#FAF8F5' })),
     cond: `측면 가로 촬영 · 영상 ${R.result?.shot_counts.total ?? '-'}개 · 통과 ${R.ps[0]}개 중 ${R.ps[1]}개 사용 · 분석 모델 ${model}. 측정 불가 항목은 사유와 함께 표시했습니다.`,
   }
   return { rd, rp }

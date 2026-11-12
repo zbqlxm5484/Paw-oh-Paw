@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -101,13 +102,50 @@ def test_face_tracker_keeps_a_lost_face_for_hold_frames() -> None:
     assert instant.update([FACE]) == [FACE] and instant.update([]) == []
 
 
-def test_face_tracker_replaces_a_held_box_with_an_overlapping_detection() -> None:
+def test_face_tracker_drops_a_held_box_only_when_a_new_detection_covers_it() -> None:
     tracker = FaceTracker(3)
-    moved: Box = (66, 44, 106, 74)  # 같은 얼굴이 조금 움직였다
+    again: Box = (59, 39, 101, 71)  # 같은 얼굴을 다시 찾았다. 묵은 상자를 다 덮는다
+    moved: Box = (66, 44, 106, 74)  # 같은 얼굴이 조금 움직였다. 묵은 상자의 왼쪽·위쪽은 덮지 못한다
     far: Box = (0, 0, 20, 20)
     tracker.update([FACE])
-    assert tracker.update([moved]) == [moved]  # 묵은 상자는 새 검출이 대신한다(둘 다 가리지 않는다)
-    assert tracker.update([far]) == [far, moved]  # 다른 자리면 둘 다
+    assert tracker.update([again]) == [again]  # 덮인 묵은 상자는 버린다(같은 자리를 두 번 가리지 않는다)
+    assert tracker.update([moved]) == [moved, again]  # 덮지 못하면 둘 다 가린다
+    assert tracker.update([far]) == [far, moved, again]  # 다른 자리도 둘 다
+
+
+def test_face_tracker_keeps_a_held_face_when_a_neighbouring_box_only_overlaps_it() -> None:
+    """시연 영상 제니 01번에서 본 일(277). 진짜 얼굴(16번 프레임)이 점수가 내려가 안 잡히는 동안, 옆의 작은 상자(22번
+    프레임)가 조금 겹친다고 얼굴 상자를 밀어내면 그 얼굴이 드러난다. 고치기 전 규칙(작은 쪽 넓이의 절반이 겹치면
+    대신한다)은 밀어냈고 얼굴이 8프레임 동안 드러났다.
+    """
+    face: Box = (790, 230, 843, 283)
+    neighbour: Box = (773, 226, 812, 265)  # 겹침 22x35 = 770. 작은 쪽(39x39 = 1521)의 절반을 넘지만 얼굴의 27%뿐이다
+    tracker = FaceTracker(15)
+    tracker.update([face])
+    for _ in range(6):
+        assert face in tracker.update([])
+    assert tracker.update([neighbour]) == [neighbour, face]  # 둘 다 가린다
+    for _ in range(8):
+        assert face in tracker.update([])  # 얼굴 상자는 제 유지 시간(15프레임)을 채운다
+    assert face not in tracker.update([])
+
+
+def test_face_tracker_remembers_where_a_sure_face_was() -> None:
+    tracker = FaceTracker(1, 3)
+    weak: Box = (62, 42, 98, 68)
+    assert tracker.anchors() == []
+    tracker.update([FACE])
+    assert tracker.anchors() == [FACE]
+    assert tracker.update([], [weak]) == [weak, FACE]  # 낮은 점수 검출도 가린다
+    assert tracker.anchors() == [FACE]  # 자리는 확실한 검출의 것만 기억한다. 낮은 점수 검출은 넘겨받지 못한다
+    tracker.update([])
+    assert tracker.anchors() == [FACE]  # 검출 뒤 세 번째 프레임까지 쓸 수 있다
+    tracker.update([])
+    assert tracker.anchors() == []
+
+    forgetful = FaceTracker(1)  # 기억할 시간을 주지 않으면 자리를 넘기지 않는다
+    forgetful.update([FACE])
+    assert forgetful.anchors() == []
 
 
 # ---- 골격과 합치기 ----
@@ -173,12 +211,12 @@ def test_nms_merges_overlapping_boxes_and_keeps_the_rest() -> None:
 class _FakeNet:
     """앵커 하나(24행 24열)에만 상자를 내는 가짜 모델. 상자 값은 (중심 x, 중심 y, 너비, 높이) = (0, 0, 48, 48)px."""
 
-    def __init__(self) -> None:
+    def __init__(self, logit: float = 50.0) -> None:
         regressors = np.zeros((1, 2304, 16), dtype=np.float32)
         logits = np.full((1, 2304, 1), -50.0, dtype=np.float32)
         index = 24 * 48 + 24
         regressors[0, index, 2:4] = 48.0
-        logits[0, index, 0] = 50.0
+        logits[0, index, 0] = logit  # 점수는 sigmoid(logit)
         self.outputs = [regressors, logits]
 
     def setInput(self, blob: np.ndarray) -> None:  # OpenCV의 메서드 이름 그대로
@@ -195,6 +233,27 @@ def test_face_detector_maps_tile_boxes_back_to_the_frame() -> None:
     # 400x300 프레임 → 폭 200으로 줄임 → 타일 하나 → 200x200 정사각형(위아래 25px 채움). 앵커 중심 24.5/48 → 102.1px,
     # 너비 48/192 → 50px. 정사각형 (77.1, 77.1)~(127.1, 127.1) → 채움을 빼고 2배 → (154.2, 104.2)~(254.2, 204.2)
     assert box == (154, 104, 255, 205)
+
+
+def test_face_detector_takes_a_low_score_only_where_a_face_was() -> None:
+    """고개를 숙이거나 돌리면 같은 얼굴의 점수가 0.3~0.5로 내려간다(277). 얼굴이 있던 자리에서만 그 점수를 받아 준다."""
+    detector = FaceDetector(detect_width=200)
+    frame = np.zeros((300, 400, 3), dtype=np.uint8)
+    box: Box = (154, 104, 255, 205)  # 위 시험과 같은 상자
+    here: Box = (160, 110, 250, 200)
+    elsewhere: Box = (0, 0, 60, 60)
+
+    detector._net = _FakeNet(logit=-0.2)  # 점수 0.45
+    assert detector.detect(frame) == []  # 새 얼굴로는 모자란다(0.5)
+    assert detector.detect_tracked(frame, [here]) == ([], [box])  # 얼굴이 있던 자리와 겹치면 받는다(0.3)
+    assert detector.detect(frame, [here]) == [box]
+    assert detector.detect_tracked(frame, [elsewhere]) == ([], [])  # 다른 자리의 기억은 소용없다
+
+    detector._net = _FakeNet(logit=-1.0)  # 점수 0.27
+    assert detector.detect_tracked(frame, [here]) == ([], [])  # 얼굴이 있던 자리라도 버린다
+
+    detector._net = _FakeNet()
+    assert detector.detect_tracked(frame, [here]) == ([box], [])  # 확실한 검출은 확실한 쪽에 온다
 
 
 def test_face_detector_finds_nothing_on_blank_frames() -> None:
@@ -306,8 +365,52 @@ def test_render_video_detects_every_third_frame_at_60fps_and_covers_the_frames_b
         assert _variance(_region(rendered[index], WIDENED)) < _variance(_region(source[index], WIDENED)) / 10
 
 
+def test_render_video_hands_the_remembered_places_to_blazeface(
+    texture_video: Path, ffmpeg: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """기본 검출기 길: 확실히 찾은 자리를 다음 검출에 넘기고, 그 자리의 낮은 점수 검출도 가린다."""
+    seen: list[list[Box]] = []
+
+    class Detector:
+        def detect_tracked(self, frame: np.ndarray, near: Sequence[Box] = ()) -> tuple[list[Box], list[Box]]:
+            seen.append(list(near))
+            if len(seen) == 1:
+                return [FACE], []  # 0번 프레임에서만 확실히 찾는다
+            return [], ([FACE] if near else [])  # 그 뒤로는 자리를 받았을 때만 낮은 점수로 찾는다
+
+    monkeypatch.setattr("app.video.render.FaceDetector", Detector)
+    output = tmp_path / "result.mp4"
+    result = render_video(texture_video, _empty_keypoints(tmp_path / "k.json"), output, ffmpeg_path=ffmpeg)
+
+    # 10fps라 프레임마다 검출하고, 자리는 1.0초(10프레임) 기억한다. 1~9번 프레임의 검출이 0번의 자리를 받는다
+    assert seen == [[]] + [[FACE]] * 9
+    assert (result.frames, result.face_frames) == (10, 10)
+    source, rendered = _decode(texture_video), _decode(output)
+    assert _variance(_region(rendered[9], WIDENED)) < _variance(_region(source[9], WIDENED)) / 10
+
+
 def test_render_video_uses_blazeface_by_default(texture_video: Path, ffmpeg: str, tmp_path: Path) -> None:
     result = render_video(
         texture_video, _empty_keypoints(tmp_path / "k.json"), tmp_path / "result.mp4", ffmpeg_path=ffmpeg
     )
     assert result.frames == 10 and result.face_frames == 0  # 무늬에는 얼굴이 없다
+
+
+def test_render_video_also_covers_the_places_given_by_hand(texture_video: Path, ffmpeg: str, tmp_path: Path) -> None:
+    """검출기가 아무것도 못 찾아도 extra_faces가 준 프레임의 상자는 가린다(시연 데이터의 face_masks.json, 277)."""
+    output = tmp_path / "result.mp4"
+    result = render_video(
+        texture_video,
+        _empty_keypoints(tmp_path / "k.json"),
+        output,
+        ffmpeg_path=ffmpeg,
+        detect_faces=lambda frame: [],
+        extra_faces=lambda frame_no: [FACE] if 2 <= frame_no <= 4 else [],
+    )
+
+    assert (result.frames, result.face_frames) == (10, 3)
+    source, rendered = _decode(texture_video), _decode(output)
+    for index in (2, 4):
+        assert _variance(_region(rendered[index], WIDENED)) < _variance(_region(source[index], WIDENED)) / 10
+    for index in (1, 5):  # 적어 준 프레임만 가린다. 검출한 얼굴처럼 이어서 유지하지 않는다
+        assert _variance(_region(rendered[index], WIDENED)) > _variance(_region(source[index], WIDENED)) / 2

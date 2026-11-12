@@ -92,10 +92,10 @@ export function PhoneCaptureModal({ sid, shots, onClose }: { sid: string; shots:
   return (
     <div className="no-print" onClick={onClose} style={css('position:fixed;inset:0;background:rgba(14,18,23,.55);z-index:70;display:flex;align-items:center;justify-content:center;padding:24px')}>
       <div onClick={(e) => e.stopPropagation()} style={css('width:420px;max-width:100%;background:#fff;border-radius:18px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center')}>
-        <b style={css('font-size:20px')}>폰으로 촬영하기</b>
-        <span style={css('font-size:14.5px;line-height:1.6;color:#5B6472')}>폰 카메라로 QR 을 찍으면 이 회차의 촬영 화면이 열립니다.<br />이 웹과 같은 계정으로 로그인한 뒤 찍어 주세요.</span>
+        <b style={css('font-size:18px')}>폰으로 촬영하기</b>
+        <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>폰 카메라로 QR 을 찍으면 이 회차의 촬영 화면이 열립니다.<br />이 웹과 같은 계정으로 로그인한 뒤 찍어 주세요.</span>
         {qr ? <img src={qr} alt="촬영 화면 QR" width={240} height={240} style={css('border-radius:12px;border:1px solid #ECE8E2')} /> : <div style={css('width:240px;height:240px')}></div>}
-        <span style={css('font-size:12px;color:#8E949C;word-break:break-all')}>{url}</span>
+        <span style={css('font-size:12px;color:#5B6472;word-break:break-all')}>{url}</span>
         <div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums')}>
           <span style={css(`width:8px;height:8px;border-radius:4px;background:${shots ? '#2E8B57' : '#D2601A'}`)}></span>
           {shots ? `폰에서 영상 ${shots}개가 올라왔습니다` : '폰에서 올라오기를 기다리는 중…'}

@@ -75,6 +75,21 @@ export function sess_no(acct: Account, r: Result): number {
   return all_.length - all_.findIndex((x) => x.id === r.id)
 }
 
+/** "오후 2:55" (회차 시각 "14:55") */
+function ampm(hm: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hm || '')
+  if (!m) return ''
+  const h = Number(m[1])
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 === 0 ? 12 : h % 12}:${m[2]}`
+}
+
+/** 다른 회차를 가리킬 때의 표기: "2회차, 11월 10일". 이번 회차(cur)와 같은 날이면 시각까지 "2회차, 11월 10일 오전 9:38" */
+export function sess_label(acct: Account, x: Result, cur?: Result): string {
+  const same = !!cur && cur.id !== x.id && !!x.day && x.day === cur.day
+  const t = same ? ampm(x.time) : ''
+  return `${sess_no(acct, x)}회차, ${x.date}${t ? ' ' + t : ''}`
+}
+
 export function base_of(acct: Account, d: Dog): string | null {
   if (d.base && acct.results.some((r) => r.id === d.base && r.st !== 'fail')) return d.base
   const v = valid(acct, d.id)
@@ -92,7 +107,7 @@ export function delta(a: number, b: number | null | undefined, unit: string): st
 export function avatar(on: boolean) {
   return {
     ring: on ? '0 0 0 3px #FAF9F6,0 0 0 6px #D2601A' : 'none',
-    av: on ? '#FCEEE3' : '#EEEAE4', avc: on ? '#A8481A' : '#7A808A',
+    av: on ? '#FCEEE3' : '#EEEAE4', avc: on ? '#A8481A' : '#5B6472',
     nc: on ? '#1B2433' : '#5B6472', nw: on ? 700 : 500,
   }
 }
@@ -115,7 +130,7 @@ export function mrows(r: Result, gait: string): Row[] {
     { n: '걸음 길이', l: v(r.sL * 1.5), r: v(r.sR * 1.5), u: '%', leg: '뒷다리' },
     { n: '입각기 비율', l: 61, r: 61 - jround((r.sL - r.sR) / 2), u: '%', leg: '뒷다리' },
     { sec: '앞다리', n: '팔꿈치 가동 범위', l: v(r.j[2][1]), r: v(r.j[2][2]), u: '°', leg: '앞다리' },
-    { n: '발 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
+    { n: '발 들림 높이', na: true, reason: '반대쪽 다리가 가려졌습니다', leg: '앞다리' },
   ]
 }
 
@@ -234,7 +249,7 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
   const top_t = _rank(rows_t)[0]
   const [sL, sR] = hasM(r) ? [r.sL, r.sR] : [jround(r.sL * 1.5), jround(r.sR * 1.5)]
   Object.assign(rd, {
-    sym: r.sym, symD: delta(r.sym, prev ? prev.sym : null, '%p'),
+    sym: r.sym, symD: delta(r.sym, prev ? prev.sym : null, '점'),
     rom: r.rom, romD: delta(r.rom, prev ? prev.rom : null, '°'),
     sL, sR, stD: sL === sR ? '좌우 같음' : `${sL > sR ? '오른쪽' : '왼쪽'}이 ${Math.abs(sL - sR)}%p 짧음`,
     topTitle: `${top.leg} ${top.n}에서 좌우 차이가 가장 큽니다`,
@@ -257,19 +272,19 @@ export function result_view(acct: Account, r: Result, gait = 'trot', home = fals
     when: `${r.date} 측정 · ${sess_no(acct, r)}회차 · ${rd.desc}`,
     summary: `${top_t.leg} ${top_t.n}에서 왼쪽과 오른쪽 차이가 가장 컸어요(${top_t.df}${top_t.u}). 수의사 선생님과 함께 확인해 보세요.`,
     items: [
-      { k: '좌우 대칭 지수', v: `${r.sym}%`, d: prev ? `직전 ${prev.sym}%` : '첫 측정' },
+      { k: '좌우 대칭 점수', v: `${r.sym}점`, d: prev ? `직전 ${prev.sym}점` : '첫 측정' },
       { k: '뒷무릎 움직임 범위', v: `왼 ${k0.l}° · 오 ${k0.r}°`, d: `차이 ${Math.abs(k0.l! - k0.r!)}°` },
-      { k: '걸음 길이(몸통 대비)', v: `왼 ${sL}% · 오 ${sR}%`, d: `차이 ${Math.abs(sL - sR)}%p` },
+      { k: '걸음 길이(등 길이 대비)', v: `왼 ${sL}% · 오 ${sR}%`, d: `차이 ${Math.abs(sL - sR)}%p` },
     ],
     rows: [
       ...rows_t.map((x) => ({
         n: x.n, l: x.na ? '측정 불가' : `${x.l}${x.u}`, r: x.na ? '—' : `${x.r}${x.u}`,
         d: x.na ? '—' : `${Math.abs(x.l! - x.r!)}${x.u}`,
       })),
-      { n: '대칭 지수', l: '—', r: '—', d: `${r.sym}%` },
+      { n: '대칭 점수', l: '—', r: '—', d: `${r.sym}점` },
     ] as { n: string; l: string; r: string; d: string; bg?: string }[],
     cond: `측면 가로 촬영 · 영상 ${r.videos.length || 16}개 · 통과 ${r.ps[0]}개 중 ${r.ps[1]}개 사용 · 분석 모델 pga-pose ${r.model}. 측정 불가 항목은 사유와 함께 표시했습니다.`
-      + (hasM(r) ? ' 걸음 길이·발 높이는 몸통 길이(T13~장골능) 대비이며, 문헌 값(어깨뼈~고관절 기준)과 비교할 때는 1.92로 나눕니다.' : ''),
+      + (hasM(r) ? ' 걸음 길이·발 들림 높이는 등 길이(T13~장골능) 대비이며, 문헌 값(어깨뼈~고관절 기준)과 비교할 때는 1.92로 나눕니다.' : ''),
   }
   rp.rows.forEach((row: { bg?: string }, i: number) => {
     row.bg = i % 2 ? '#fff' : '#FAF8F5'
@@ -415,7 +430,8 @@ export function body_map(acct: Account, r: Result) {
   return {
     svg, legs, sym: r.sym, sym_level: _level(100 - r.sym),
     vs_base: base && base.id !== r.id ? r.sym - base.sym : null,
-    base_date: base ? short(base.date) : '', focus: d && d.focus ? LIMB[d.focus] ?? '' : '',
+    base_date: base ? short(base.date) : '', base_label: base ? sess_label(acct, base, r) : '',
+    prev_label: idx > 0 ? sess_label(acct, vs[idx - 1], r) : '', focus: d && d.focus ? LIMB[d.focus] ?? '' : '',
     trend, trend_line: trend.map((p) => `${pystr(p.x)},${pystr(p.y)}`).join(' '),
   }
 }
@@ -542,9 +558,9 @@ export function trend(acct: Account, d: Dog): Trend {
   const hi = Math.max(...syms) + 1
   const pts = syms.map((s, i) => `${fmt(4 + i * (64 / Math.max(1, syms.length - 1)), 0)},${fmt(22 - ((s - lo) / (hi - lo)) * 18, 0)}`).join(' ')
   const diff = syms.length > 1 ? syms[syms.length - 1] - syms[syms.length - 2] : 0
-  const [label, c] = syms.length === 1 ? ['첫 측정', '#7A808A']
+  const [label, c] = syms.length === 1 ? ['첫 측정', '#5B6472']
     : diff >= SYM_CHANGE ? ['좋아짐', '#2E8B57']
-      : diff <= -SYM_CHANGE ? ['나빠짐', '#C2412D'] : ['비슷함', '#7A808A']
+      : diff <= -SYM_CHANGE ? ['나빠짐', '#C2412D'] : ['비슷함', '#5B6472']
   return { has: true, pts, sym: syms[syms.length - 1], label, c, single: syms.length === 1 }
 }
 
@@ -571,8 +587,8 @@ export function changes(acct: Account, d: Dog): [Change[], string] {
       else if (c.code === 'RESHOOT_NEEDED') {
         if (!latest || latest.st === 'fail') add(c.on, '재촬영 필요', 'bad')
         else add(c.on, '일부 유효 · 재촬영 권장', 'warn')
-      } else if (c.code === 'GAIT_BETTER' && c.delta != null) add(c.on, `보행 좋아짐 +${c.delta}%p`, 'good')
-      else if (c.code === 'GAIT_WORSE' && c.delta != null) add(c.on, `보행 나빠짐 −${-c.delta}%p`, 'bad')
+      } else if (c.code === 'GAIT_BETTER' && c.delta != null) add(c.on, `보행 좋아짐 +${c.delta}점`, 'good')
+      else if (c.code === 'GAIT_WORSE' && c.delta != null) add(c.on, `보행 나빠짐 −${-c.delta}점`, 'bad')
       else if (c.code === 'IMPORTANT_NOTE') add(c.on, '중요 메모', 'warn')
     }
     return [out.filter((x, i) => out.findIndex((y) => y.t === x.t) === i), last]
@@ -587,8 +603,8 @@ export function changes(acct: Account, d: Dog): [Change[], string] {
     }
     const prev = rs.find((x) => x.st !== 'fail' && x.day < r.day)
     if (r.st === 'part') add(r.day, '일부 유효 · 재촬영 권장', 'warn')
-    if (prev && r.sym - prev.sym >= SYM_CHANGE) add(r.day, `보행 좋아짐 +${r.sym - prev.sym}%p`, 'good')
-    else if (prev && prev.sym - r.sym >= SYM_CHANGE) add(r.day, `보행 나빠짐 −${prev.sym - r.sym}%p`, 'bad')
+    if (prev && r.sym - prev.sym >= SYM_CHANGE) add(r.day, `보행 좋아짐 +${r.sym - prev.sym}점`, 'good')
+    else if (prev && prev.sym - r.sym >= SYM_CHANGE) add(r.day, `보행 나빠짐 −${prev.sym - r.sym}점`, 'bad')
   }
   for (const n of d.notes) if (n.important && days_ago(n.at.slice(0, 10)) <= CHANGE_DAYS) add(n.at.slice(0, 10), '중요 메모', 'warn')
   const seen = new Set<string>()
@@ -634,7 +650,7 @@ export function analysis_rows(acct: Account, rs: Result[]) {
     return {
       id: r.id, dog: d.id, name: d.name, no: d.no || '—', breed: d.breed || '견종 미입력',
       when: `${short(r.date)} ${r.time}`, no_s: `${sess_no(acct, r)}회차`, ...st_chip(r.st),
-      sym: r.st === 'fail' ? '—' : `${r.sym}%`, pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`,
+      sym: r.st === 'fail' ? '—' : `${r.sym}점`, pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`,
       by: r.by || '—', badges: badges(d), dx: diagnosis(d), ...sym_view(acct, r),
     }
   })
@@ -642,7 +658,7 @@ export function analysis_rows(acct: Account, rs: Result[]) {
 
 /** 분석 표의 대칭 지수 배지: 수준별 색, 직전 유효 회차 대비 오르내림 */
 export function sym_view(acct: Account, r: Result): { sym_bg: string; sym_c: string; sym_d: string; sym_dc?: string } {
-  if (r.st === 'fail') return { sym_bg: '#F2EFEA', sym_c: '#8E949C', sym_d: '' }
+  if (r.st === 'fail') return { sym_bg: '#F2EFEA', sym_c: '#5B6472', sym_d: '' }
   const lv = r.sym >= 90 ? [90, '', '#DCEFE2', '#2E7A4F'] : r.sym >= 80 ? [80, '', '#FBEBC8', '#8A6100']
     : [0, '', '#FBE0D9', '#C2412D'] // 회차 균형 점수 기준(다리 하나 차이 기준 _LEVEL 과 다름)
   const prev = acct.results.find((x) => x.dog === r.dog && x.st !== 'fail' && (x.day < r.day || (x.day === r.day && x.time < r.time)))
@@ -668,7 +684,7 @@ export function today_rows(acct: Account, dogs: Dog[], day = isoToday()) {
   if (day === isoToday()) for (const j of activeJobs(acct)) live.set(j.dog, j)
   const out = []
   for (const d of dogs) {
-    const notes = d.notes.filter((n) => n.at.startsWith(today))
+    const notes = d.notes.filter((n) => noteDay(n) === today)
     const res = acct.results.filter((r) => r.dog === d.id && r.day === today)
     const vit = d.vitals.find((v) => v.day === today)
     if (!(notes.length || res.length || vit || live.has(d.id))) continue
@@ -711,7 +727,7 @@ export function staff_rows(acct: Account, rs: Result[]) {
 /** 진료 기록·측정·바이탈이 있는 날짜(홈 달력의 점) */
 export function activity_days(acct: Account): Set<string> {
   const s = new Set<string>()
-  for (const d of acct.dogs) { for (const n of d.notes) s.add(n.at.slice(0, 10)); for (const v of d.vitals) s.add(v.day) }
+  for (const d of acct.dogs) { for (const n of d.notes) s.add(noteDay(n)); for (const v of d.vitals) s.add(v.day) }
   for (const r of acct.results) if (r.day) s.add(r.day)
   return s
 }
@@ -780,7 +796,7 @@ export function visits(acct: Account, d: Dog) {
   }
   for (const r of acct.results) if (r.dog === d.id && r.day) v(r.day).res.push(r)
   for (const x of d.vitals) v(x.day).vital = x
-  for (const gr of soap_entries(d, acct)) v('20' + gr.at.slice(0, 8).replaceAll('.', '-')).soap.push(gr)
+  for (const gr of soap_entries(d, acct)) v(gr.day).soap.push(gr)
   for (const h of d.history) v(h.day).hist.push(h)
   for (const im of d.images) v(im.day).imgs.push(im)
   const today = isoToday()
@@ -793,7 +809,7 @@ export function visits(acct: Account, d: Dog) {
     if (x.imgs.length) tags.push({ t: `영상 ${x.imgs.length}`, bg: '#F1ECE5', c: '#5B6472' })
     const a = x.soap.flatMap((gr) => gr.parts).find((p) => p.cat === 'A' || p.cat === 'S')?.text ?? ''
     const title = x.hist.length ? head(x.hist[0].title) : a || (
-      res.length && rl.st !== 'fail' ? `보행 측정 · 대칭 지수 ${rl.sym}%` : res.length ? '보행 측정 · 재촬영 필요'
+      res.length && rl.st !== 'fail' ? `보행 측정 · 대칭 점수 ${rl.sym}점` : res.length ? '보행 측정 · 재촬영 필요'
         : x.vital ? '바이탈 측정' : '')
     const who = (x.soap.length ? x.soap[0].author : '') || (x.hist.length ? x.hist[0].by || x.hist[0].author : '')
       || (res.length ? rl.by : '') || (x.vital ? x.vital.author : '')
@@ -930,7 +946,7 @@ export function care_team(acct: Account, d: Dog): { doctor: string; measurer: st
 /** 차트 요약 탭: 시간 축 하나에 대칭 지수 선, 수술·재활 단계 세로선, 메모·바이탈 점. */
 export function chart_summary(acct: Account, d: Dog) {
   const vs = valid(acct, d.id).reverse().filter((r) => r.day)
-  const days = [...d.history.map((h) => h.day), ...vs.map((r) => r.day), ...d.vitals.map((v) => v.day), ...d.notes.map((n) => n.at.slice(0, 10))]
+  const days = [...d.history.map((h) => h.day), ...vs.map((r) => r.day), ...d.vitals.map((v) => v.day), ...d.notes.map((n) => noteDay(n))]
   if (!days.length) return { has: false as const }
   const t0 = ord(minBy(days, (x) => x))
   const t1 = ord(isoToday())
@@ -942,7 +958,7 @@ export function chart_summary(acct: Account, d: Dog) {
   const Y = (v: number) => pyround(T + ((hi - v) / (hi - lo)) * (H - T - B), 1)
   const marks = d.history.filter((h) => h.kind === '수술' || h.kind === '재활').map((h) => ({ x: X(h.day), kind: h.kind, label: head(h.title), day: short_day(h.day) }))
   const pts = vs.map((r) => ({ x: X(r.day), y: Y(r.sym), sym: r.sym, day: short_day(r.day), by: r.by, id: r.id }))
-  const notes = d.notes.map((n) => ({ x: X(n.at.slice(0, 10)), imp: n.important, t: cp(n.text).slice(0, 40).join(''), day: short_day(n.at.slice(0, 10)) }))
+  const notes = d.notes.map((n) => ({ x: X(noteDay(n)), imp: n.important, t: cp(n.text).slice(0, 40).join(''), day: short_day(noteDay(n)) }))
   const vit = d.vitals.map((v) => ({ x: X(v.day) }))
   const ticks = []
   for (let k = 0; k < 6; k++) {
@@ -958,8 +974,8 @@ export function chart_summary(acct: Account, d: Dog) {
     facts: [
       { k: '수술 후', v: surg ? `D+${days_ago(surg.day)}` : '수술 없음', sub: surg ? head(surg.title) : '' },
       {
-        k: '대칭 지수', v: last ? `${last.sym}%` : '—',
-        sub: last && first !== last ? `첫 측정 ${first!.sym}% → ${fmt_signed(last.sym - first!.sym)}%p` : last ? '첫 측정' : '유효 측정 없음',
+        k: '대칭 점수', v: last ? `${last.sym}점` : '—',
+        sub: last && first !== last ? `첫 측정 ${first!.sym}점 → ${fmt_signed(last.sym - first!.sym)}점` : last ? '첫 측정' : '유효 측정 없음',
       },
       { k: '보행 측정', v: `${vs.length}회 유효`, sub: last ? `마지막 ${short_day(last.day)} · ${last.by}` : '' },
       { k: '마지막 바이탈', v: vital_line(latest_vital(d)).when, sub: d.vitals.length ? d.vitals[0].author : '' },
@@ -969,6 +985,8 @@ export function chart_summary(acct: Account, d: Dog) {
 
 export interface NoteRow {
   id: string
+  /** 방문일 YYYY-MM-DD */
+  day: string
   at: string
   author: string
   cat: string
@@ -980,6 +998,9 @@ export interface NoteRow {
   revs: { at: string; author: string; text: string }[]
 }
 
+/** 메모·진료 기록의 방문일: 서버 방문일(visited_on), 없으면 쓴 날 */
+export const noteDay = (n: { day?: string; at: string }): string => n.day || n.at.slice(0, 10)
+
 export function note_rows(d: Dog, acct?: Account | null): NoteRow[] {
   const run_label = (rid: string) => {
     // 회차 메모면 "10.25 · 5회차"
@@ -987,7 +1008,7 @@ export function note_rows(d: Dog, acct?: Account | null): NoteRow[] {
     return r ? `${short(r.date)} · ${sess_no(acct!, r)}회차` : ''
   }
   return sorted(d.notes, (n) => [n.important, n.at], true).map((n) => ({ // 중요 메모 먼저, 그 안에서 최신순
-    id: n.id, at: dotAt(n.at), author: n.author, cat: n.cat, text: n.text,
+    id: n.id, day: noteDay(n), at: dotAt(n.at), author: n.author, cat: n.cat, text: n.text,
     imp: n.important, rid: n.rid, run: run_label(n.rid),
     soap: (SOAP[n.cat] ?? ['', ''])[0],
     revs: n.revs.map(([a, w, t]) => ({ at: dotAt(a), author: w, text: t })),
@@ -995,6 +1016,8 @@ export function note_rows(d: Dog, acct?: Account | null): NoteRow[] {
 }
 
 export interface SoapEntry {
+  /** 방문일 YYYY-MM-DD */
+  day: string
   at: string
   author: string
   rid: string
@@ -1009,8 +1032,8 @@ export function soap_entries(d: Dog, acct?: Account | null): SoapEntry[] {
   const groups = new Map<string, SoapEntry>()
   for (const n of note_rows(d, acct)) {
     if (!(n.cat in SOAP)) continue // 메모(주의·보호자·예약·기타)는 진료 기록이 아니다
-    const key = JSON.stringify([n.at, n.author, n.rid])
-    if (!groups.has(key)) groups.set(key, { at: n.at, author: n.author, rid: n.rid, run: n.run, imp: false, parts: [] })
+    const key = JSON.stringify([n.day, n.at, n.author, n.rid])
+    if (!groups.has(key)) groups.set(key, { day: n.day, at: n.at, author: n.author, rid: n.rid, run: n.run, imp: false, parts: [] })
     const gr = groups.get(key)!
     gr.imp = gr.imp || n.imp
     gr.parts.push(n)
@@ -1057,9 +1080,9 @@ const stride = (side: 'sL' | 'sR'): Fn => (r) => (hasM(r) ? r[side] : jround(r[s
 const _CMP: [string, string | null, Fn | null, string][] = [
   ['무릎 가동 범위', 'LH', (r) => r.j[0][1], '°'], ['무릎 가동 범위', 'RH', (r) => r.j[0][2], '°'],
   ['고관절 가동 범위', 'LH', (r) => r.j[1][1], '°'], ['고관절 가동 범위', 'RH', (r) => r.j[1][2], '°'],
-  ['걸음 길이', 'LH', stride('sL'), '%'], ['걸음 길이', 'RH', stride('sR'), '%'],
+  ['걸음 길이(등 길이 기준)', 'LH', stride('sL'), '%'], ['걸음 길이(등 길이 기준)', 'RH', stride('sR'), '%'],
   ['팔꿈치 가동 범위', 'LF', (r) => r.j[2][1], '°'], ['팔꿈치 가동 범위', 'RF', (r) => r.j[2][2], '°'],
-  ['대칭 지수', null, (r) => r.sym, '%'], ['발 높이', 'LF', null, '%'],
+  ['대칭 점수', null, (r) => r.sym, '점'], ['발 들림 높이(등 길이 기준)', 'LF', null, '%'],
 ]
 const _TREND: Record<string, [Fn, Fn | null]> = {
   rom: [(r) => r.j[0][1], (r) => r.j[0][2]],
@@ -1070,7 +1093,7 @@ const _TREND: Record<string, [Fn, Fn | null]> = {
   ],
   sym: [(r) => r.sym, null],
 }
-export const TREND_KEYS: [string, string][] = [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 지수']]
+export const TREND_KEYS: [string, string][] = [['rom', '무릎 가동 범위'], ['stride', '걸음 길이'], ['stance', '입각기 비율'], ['sym', '대칭 점수']]
 
 export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
   const vs = valid(acct, d.id).reverse() // 오래된 회차부터
@@ -1083,15 +1106,16 @@ export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
   const rows = order.map(([, [n, limb, fn, u]], i) => {
     const focus = !!d.focus && limb === d.focus
     const bt = i ? '1px solid #F2EFEA' : 'none'
-    if (!fn) return { n, limb: LIMB[limb!], lc: '#8E949C', vals: '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+    if (!fn) return { n, limb: LIMB[limb!], lc: '#5B6472', vals: '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
     const bv = fn(b)
     const tv = fn(t)
     const df = tv - bv
     const in_range = Math.abs(df) <= 1
     return {
       n, limb: limb ? LIMB[limb] + (focus ? ' · 관심 다리' : '') : '전체',
-      lc: focus ? '#B4501A' : '#8E949C', vals: `${bv}${u} → ${tv}${u}`,
-      j: in_range ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u}` : `▼ 감소 ${-df}${u}`,
+      lc: focus ? '#B4501A' : '#5B6472', vals: `${bv}${u} → ${tv}${u}`,
+      // 퍼센트 값끼리의 차이는 %p(백엔드 회차 비교 vet.ts serverCompareRows 와 같은 표기)
+      j: in_range ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u === '%' ? '%p' : u}` : `▼ 감소 ${-df}${u === '%' ? '%p' : u}`,
       bg: in_range ? '#F4F2EE' : '#EEE8DF', c: in_range ? '#5B6472' : '#1B2433', bt,
     }
   })
@@ -1112,6 +1136,6 @@ export function compare_view(acct: Account, d: Dog, mode: string, tk: string) {
     tr: b_vals.map((v, i) => `${X(i)},${Y(v)}`).join(' '),
     dl: [...a_vals.map((v, i) => ({ x: X(i), y: Y(v), c: '#3B6FE0' })), ...b_vals.map((v, i) => ({ x: X(i), y: Y(v), c: '#E5604D' }))],
     xl: vs.map((r) => short(r.date)), two: right_fn !== null,
-    focusNote: d.focus ? `관심 다리(${LIMB[d.focus]})를 맨 앞에 보여 드립니다.` : '관심 다리를 정하면 그 다리를 맨 앞에 보여 드립니다.',
+    focusNote: d.focus ? `관심 다리(${LIMB[d.focus]})를 맨 앞에 보여 드립니다.` : '위에서 관심 다리를 고르면 그 다리를 맨 앞에 보여 드립니다.',
   }
 }

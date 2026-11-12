@@ -11,7 +11,7 @@ import { dogKeys } from '../api/dogs'
 import { fileUrl } from '../api/labels'
 import { savePdf, type SaveHow } from '../app/pdfSave'
 import { useSession } from '../api/sessions'
-import type { DeviceCodeVerifyOut, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
+import type { DeviceCodeVerifyOut, Limb, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
 import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
 import { enterDemo, exitDemo, isDemo, takeDemoAutologin } from '../app/demoMode'
@@ -29,6 +29,8 @@ export interface RouteInfo {
 export interface UiSel {
   cmp: 'base' | 'prev'
   tk: string
+  /** 경과 비교에서 이 화면에서만 고른 관심 다리. undefined 면 반려견에 저장된 값, null 이면 정하지 않음 */
+  leg?: Limb | null
 }
 
 export interface ProtoProps {
@@ -136,7 +138,7 @@ export function DesignRoot() {
   }, [sessQ.data?.status, qc])
   const cmpDog = route.screen === 'compare' ? data.dogs.find((d) => d.id === route.params.dogId) : undefined
   const cmpTarget = cmpDog ? data.results.find((r) => r.dog === cmpDog.id && r.st !== 'fail')?.id : undefined
-  const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, cmpDog?.focus ?? null, cmpTarget)
+  const compare = useCompareData(cmpDog?.id, ui.cmp, ui.tk, ui.leg !== undefined ? ui.leg : cmpDog?.focus ?? null, cmpTarget)
   const reportsQ = useReportData(route.screen === 'report' || route.screen === 'detail' ? route.params.sessionId : undefined) // 회차 결과에서도 PDF 를 바로 받는다(11-06)
   // 보고서 수의사용 탭: 이 회차를 직전 회차와 비교(서버 판정)하고 무릎 가동 범위 추이를 읽는다(웹 수의사용 보고서와 같은 구성)
   // 회차 결과 화면도 보고서와 같은 본문을 쓴다
@@ -144,7 +146,20 @@ export function DesignRoot() {
   const repGait = mainGaitOf(repR?.result)
   const repCmpQ = useCompare(repR?.dog, { target: repR?.id, base: 'PREVIOUS', gait_type: repGait })
   const repTrQ = useTrends(repR?.dog, { metric_code: 'rom_stifle', gait_type: repGait })
-  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} /> : null
+  // 비교 대상(직전) 회차 표기: "2회차, 11월 10일", 이번 회차와 같은 날이면 시각까지(웹과 같은 모양)
+  const repBaseLabel = (() => {
+    const id = repCmpQ.data?.base.session_id
+    const b = id ? data.results.find((r) => r.id === id) : undefined
+    if (!b || !repR) return undefined
+    const all = data.results.filter((r) => r.dog === b.dog)
+    const no = all.length - all.findIndex((r) => r.id === b.id)
+    const [, mm, dd] = b.measured_on.split('-')
+    const hm = /^(\d{1,2}):(\d{2})/.exec(b.time || '')
+    const t = b.measured_on === repR.measured_on && hm ? ` ${Number(hm[1]) < 12 ? '오전' : '오후'} ${Number(hm[1]) % 12 || 12}:${hm[2]}` : ''
+    return `${no}회차, ${Number(mm)}월 ${Number(dd)}일${t}`
+  })()
+  const repBaseQ = useCompare(repR?.dog, { target: repR?.id, base: 'BASELINE', gait_type: repGait })
+  const vetReport = repR ? <AppVetSections result={repR.result} cmp={repCmpQ.data} trend={repTrQ.data} baseLabel={repBaseLabel} base={repBaseQ.data} gait={repGait} /> : null
 
   // 숨은 파일 입력(영상 선택·촬영)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -195,7 +210,8 @@ export function DesignRoot() {
     screen: route.screen, params: route.params, query, data, actions, auth: {
       login, signup, logout, verifyDeviceCode: authApi.verifyDeviceCode,
       updateMe: async (b: { name?: string; email?: string; notif_on?: boolean }) => setStaff(await authApi.updateMe(b)),
-      changePassword: async (current: string, next: string) => setStaff(await authApi.changePassword(current, next)),
+      // 비밀번호를 바꾸면 서버가 그전 토큰을 모두 끊는다(백엔드 v1.48, 새 토큰 없음). 탈퇴처럼 로그인을 풀고 다시 로그인하게 한다
+      changePassword: async (current: string, next: string) => { await authApi.changePassword(current, next); logout() },
       withdraw: async (password: string) => { await authApi.withdraw(password); logout() },
     }, nav, back, ui, setUi,
     compare: route.screen === 'compare' ? compare : null, reports: reportsQ.data, vetReport, reportStatus: reportStatusLine,
@@ -270,23 +286,36 @@ function DemoPill({ screen }: { screen: string }) {
       style={{
         position: 'fixed',
         // 화면 위쪽은 헤더(로고·알림·기관 칩)와 겹쳐서 아래 탭바 바로 위에 둔다
-        bottom: `calc(${SAFE_BOTTOM} + 124px)`,
+        // 웰컴 화면은 아래쪽에 '서비스 소개 자세히 보기'·회원가입·로그인이 있어 그 위로 더 올린다(누르는 영역이 겹치지 않게)
+        bottom: screen === 'landing' ? `calc(${SAFE_BOTTOM} + 176px)` : `calc(${SAFE_BOTTOM} + 124px)`,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,
-        height: '30px',
-        padding: '0 12px',
+        // 누르는 영역은 44px, 보이는 알약은 30px 그대로
+        height: '44px',
+        padding: 0,
         border: 'none',
-        borderRadius: '15px',
-        background: demo ? '#D2601A' : 'rgba(27,36,51,.55)',
-        color: '#fff',
-        fontSize: '12px',
-        fontWeight: 600,
+        background: 'transparent',
         fontFamily: 'inherit',
         cursor: 'pointer',
       }}
     >
-      {demo ? '체험 모드 · 끝내기' : '서버 없이 둘러보기'}
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          height: '30px',
+          padding: '0 12px',
+          borderRadius: '15px',
+          background: demo ? '#D2601A' : 'rgba(27,36,51,.55)',
+          color: '#fff',
+          fontSize: '12px',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {demo ? '체험 모드 · 끝내기' : '서버 없이 둘러보기'}
+      </span>
     </button>
   )
 }

@@ -45,7 +45,7 @@ from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClient, AnalysisClientError, SubmitInfo, build_analysis_client
 from app.core.config import Settings, get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, use_worker_pool
 from app.core.errors import FailReason
 from app.main import configure_logging
 from app.models import Dog, MeasureSession, Shot
@@ -641,19 +641,21 @@ class Worker:
 def main() -> int:
     settings = get_settings()
     configure_logging(settings.LOG_LEVEL)
+    use_worker_pool()  # 워커는 연결을 몇 개만 쓴다. 엔진을 만들기 전에 상한을 낮춘다(core/db.py)
     clean_worker_tmp(settings)
     worker = Worker(settings)
     signal.signal(signal.SIGINT, worker.stop)
     signal.signal(signal.SIGTERM, worker.stop)
     logger.info(
         "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss render_concurrency=%d "
-        "sweep_max=%ss",
+        "report_concurrency=%d sweep_max=%ss",
         settings.ANALYSIS_API_MODE,
         settings.WORKER_POLL_INTERVAL_SEC,
         settings.WORKER_MAX_IN_FLIGHT,
         settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION,
         settings.ANALYSIS_TIMEOUT_SEC,
         settings.WORKER_RENDER_CONCURRENCY,
+        settings.WORKER_REPORT_CONCURRENCY,
         settings.WORKER_SWEEP_MAX_SEC,
     )
     worker.run_forever()

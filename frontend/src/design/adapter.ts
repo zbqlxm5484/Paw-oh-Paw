@@ -20,7 +20,7 @@ export const SEX_TO_API: Record<DSex, Sex> = { m: 'MALE', f: 'FEMALE', mn: 'MALE
 export const SEX_FROM_API: Record<Sex, DSex> = { MALE: 'm', FEMALE: 'f', MALE_NEUTERED: 'mn', FEMALE_SPAYED: 'fs' }
 export const SIZE_TO_API: Record<DSize, SizeClass> = { S: 'SMALL', M: 'MEDIUM', L: 'LARGE' }
 export const SIZE_FROM_API: Record<SizeClass, DSize> = { SMALL: 'S', MEDIUM: 'M', LARGE: 'L' }
-export const UNIT_SIGN: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '몸통/초', count: '회' }
+export const UNIT_SIGN: Record<Unit, string> = { deg: '°', pct: '%', pct_body: '%', body_per_sec: '등 길이/초', count: '회' }
 
 /** 디자인의 반려견 */
 export interface DDog {
@@ -210,8 +210,9 @@ export interface DAcct {
   /** 서버 알림 설정(192). 예전 서버면 undefined */
   notifOn?: boolean
 }
-export function toAcct(s: StaffOut | null): DAcct {
-  return { type: 'org', name: s?.institution.name ?? '', id: s?.login_id ?? '', loc: '-', dev: '-', staffName: s?.name ?? '', email: s?.email ?? '', notifOn: s?.notif_on }
+/** dev: 마이페이지 '측정 기기' 칸(GET /auth/me/device 의 가린 코드·발급일). 모르면 '-' */
+export function toAcct(s: StaffOut | null, dev = '-'): DAcct {
+  return { type: 'org', name: s?.institution.name ?? '', id: s?.login_id ?? '', loc: '-', dev, staffName: s?.name ?? '', email: s?.email ?? '', notifOn: s?.notif_on }
 }
 
 /* ---------- 경과 비교 (api-spec 8절 → 디자인 cp 모양) ---------- */
@@ -243,19 +244,20 @@ export function compareRows(cmp: CompareOut | undefined, focus: Limb | null): DC
       const bt = i ? '1px solid #F2EFEA' : 'none'
       const isFocus = !!focus && it.limb === focus
       const limb = it.limb === 'NONE' ? '전체' : LIMB_KO[it.limb] + (isFocus ? ' · 관심 다리' : '')
-      const lc = isFocus ? '#B4501A' : '#8E949C'
+      const lc = isFocus ? '#B4501A' : '#5B6472'
       if (it.base_value == null || it.target_value == null) {
-        return { n, limb, lc, vals: it.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+        return { n, limb, lc, vals: it.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
       }
       const b = fmtVal(it.base_value, it.unit), t = fmtVal(it.target_value, it.unit), df = Math.round((t - b) * 10) / 10
       // 모델이 달라 판단을 보류한 항목: 값은 보여 주되 증감 판정은 하지 않는다
       if (it.judgement === 'UNKNOWN' || it.judgement === 'NOT_COMPARABLE') {
-        return { n, limb, lc, vals: `${b}${u} → ${t}${u}`, j: it.judgement === 'UNKNOWN' ? '판단 보류' : '비교 불가', bg: '#F4F2EE', c: '#8E949C', bt }
+        return { n, limb, lc, vals: `${b}${u} → ${t}${u}`, j: it.judgement === 'UNKNOWN' ? '판단 보류' : '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
       }
       const inR = it.judgement === 'WITHIN_RANGE'
       return {
         n, limb, lc, vals: `${b}${u} → ${t}${u}`,
-        j: inR ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u}` : `▼ 감소 ${-df}${u}`,
+        // 퍼센트 값끼리의 차이는 %p(웹 vet.ts serverCompareRows 와 같은 표기)
+        j: inR ? '범위 안' : df > 0 ? `▲ 증가 ${df}${u === '%' ? '%p' : u}` : `▼ 감소 ${-df}${u === '%' ? '%p' : u}`,
         bg: inR ? '#F4F2EE' : '#EEE8DF', c: inR ? '#5B6472' : '#1B2433', bt,
       }
     })
