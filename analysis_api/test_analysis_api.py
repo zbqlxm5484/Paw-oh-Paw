@@ -113,3 +113,14 @@ def test_bad_meta_is_400():
 def test_missing_video_is_400():
     r = client.post("/analyses")
     assert r.status_code == 400 and code_of(r) == "INVALID_REQUEST"
+
+
+def test_docs_are_closed_unless_enabled():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    closed = TestClient(FastAPI(**main.docs_urls(False)))
+    assert [closed.get(p).status_code for p in ("/docs", "/redoc", "/openapi.json")] == [404, 404, 404]
+    opened = TestClient(FastAPI(**main.docs_urls(True)))
+    assert [opened.get(p).status_code for p in ("/docs", "/redoc", "/openapi.json")] == [200, 200, 200]
+    assert main.DOCS_ENABLED is False   # 환경변수를 주지 않으면 배포 기본은 닫힘

@@ -66,7 +66,7 @@ uvicorn main:app --reload --port 8010
 
 관절점 파일은 `models.yaml`의 `track_file` 자리(`data/tracks/fs-v4.track.json` 등)에 둔다. 다른 곳에 있으면 `$env:ANALYSIS_TRACK_FILE`로 그 경로를 준다.
 
-브라우저에서 `http://127.0.0.1:8010/docs`를 열면 엔드포인트를 직접 불러 볼 수 있다.
+`ANALYSIS_DOCS_ENABLED=true`로 켠 뒤 브라우저에서 `http://127.0.0.1:8010/docs`를 열면 엔드포인트를 직접 불러 볼 수 있다.
 
 팀 서비스와 붙여 보려면 `backend/.env`에 아래처럼 넣는다.
 
@@ -81,6 +81,7 @@ ANALYSIS_API_KEY=
 | 이름 | 기본값 | 뜻 |
 | --- | --- | --- |
 | `ANALYSIS_API_KEY` | 비어 있음 | 비어 있으면 인증을 끈다(로컬 개발). 있으면 요청의 `X-API-Key` 헤더가 같아야 하고, 아니면 401 `AUTH_REQUIRED`. 팀 서비스의 `ANALYSIS_API_KEY`와 같은 값을 넣는다 |
+| `ANALYSIS_DOCS_ENABLED` | `false` | `true`일 때만 `/docs`(Swagger)·`/redoc`·`/openapi.json`이 열린다. 이 셋은 `ANALYSIS_API_KEY`와 상관없이 인증 없이 열리므로 배포에서는 끈다. 로컬 개발에서만 `true` |
 | `ANALYSIS_UPLOAD_MAX_MB` | 100 | 영상 한 건 상한. 넘으면 413 `TOO_LARGE`. 팀 서비스 `UPLOAD_MAX_MB`, nginx `client_max_body_size`와 맞춘다 |
 | `ANALYSIS_STORAGE_DIR` | 저장소의 `data/analysis_api` | 올린 영상을 `{작업 ID}/video.mp4`(또는 `.mov`)로 둔다. `data/`는 git에 올라가지 않는다 |
 | `ANALYSIS_POSE_SOURCE` | `sample` | 위 표 |
