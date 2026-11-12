@@ -4,8 +4,9 @@
 
 ## 이 문서의 상태
 
-- 2026-11-12: **1\~3절만 채웠다.** develop `af8a7de`의 배포 파일과 백엔드 설정을 읽은 것이고, 서버는 보지 않았다.
-- 4절은 운영 배포가 끝난 뒤에 돌리고 결과 칸을 채운다. 지금은 비어 있다.
+- 2026-11-12: **1\~3절을 채웠다.** develop `af8a7de`의 배포 파일과 백엔드 설정을 읽은 것이다.
+- 2026-11-12 13:51: 운영 주소에 4.1의 호출 여섯을 미리 돌렸다(4.0). 서버에서 본 것은 이것뿐이다.
+- 4.1\~4.4의 결과 칸은 운영 배포가 끝난 뒤에 채운다. 지금은 비어 있다.
 
 ## 1. 배포가 나가는 길 (저장소에서 본 것)
 
@@ -18,6 +19,7 @@
 - 환경이 둘로 나뉜 것은 11-11 11:07의 머지(티켓 307)부터다. 그 전에는 develop이 `creamoff`(8080)로 자동 배포됐다.
 - `origin/master`의 끝은 10-12의 문서 커밋이다. develop이 master로 머지된 적이 없다.
 - 그래서 **CI로 운영에 마지막으로 나간 것은 11-11 09:54의 develop(`b28f0d4`)이다.** 그 뒤에 develop에 들어간 것은 개발 환경에만 나갔다. 서버에서 손으로 배포했는지는 저장소로 알 수 없다.
+- 11-12 13:51에 운영 주소를 불러 보니 가입에 약관 동의가 필수가 아니었다(4.0의 6번). 278이 운영에 없다는 것은 서버에서도 확인됐다.
 - 운영에 아직 없는 백엔드 변경(저장소 기준): 274 동시 처리 보강, 275 보안 보강(마이그레이션 0022), 287 허용 범위, 277 시연 자료와 보고서 문구, 278 `/metrics`·인쇄 토큰 범위·약관 동의 필수. 같은 기간의 웹·앱 변경도 운영에는 없다.
 - master에 머지하면 분석 API(GPU 서버)도 같이 배포된다(`deploy_gpu`). CI 변수 `GPU_DEPLOY_FREEZE`가 1이면 건너뛴다. 환경이 나뉜 뒤로는 develop 머지로 분석 API가 나가지 않는다.
 - 배포 순서(`infra/ci/deploy.sh`): 쉬는 색 빌드 → `alembic upgrade head` → 새 색 기동(health 통과까지 대기) → nginx 전환 → 서버 안 주소로 `/api/v1/health`와 `/` 확인(실패하면 이전 색으로 되돌림) → worker 재생성 → 이전 색 정지.
@@ -44,15 +46,15 @@
 ## 3. 저장소로는 알 수 없는 것 (허정원에게 확인)
 
 1. 운영 배포(develop → master 머지, `deploy_prod` 수동 실행)를 언제 누가 하는가.
-2. 지금 운영(8080)에 올라가 있는 커밋이 무엇인가.
-3. 바깥 주소가 어느 환경을 보는가. 개발 환경(8082)에도 바깥 주소가 있는가.
+2. 지금 운영(8080)에 올라가 있는 커밋이 무엇인가. 278 전의 코드라는 것까지만 확인했다(4.0).
+3. 바깥 주소는 최신 develop이 아니었다(4.0). 운영(8080)을 보는 것이 맞는가. 개발 환경(8082)에도 바깥 주소가 있는가.
 4. 호스트 nginx의 `client_max_body_size`가 100m 이상인가(기본값은 1m이다).
 5. 운영 `.env`(`ENV_FILE`)의 아래 값. 기본값이 서버와 맞지 않는 것들이다.
 
    | 값 | 기본값 | 서버에서 필요한 것 |
    | --- | --- | --- |
    | `ANALYSIS_API_MODE` | `mock` | 운영은 `http`. `ANALYSIS_API_BASE_URL`과 `ANALYSIS_API_KEY`(GPU 서버와 같은 값)도 같이 |
-   | `CORS_ORIGINS` | `http://localhost:5173` | 앱(Capacitor Android)의 `https://localhost`가 들어 있어야 한다(`frontend/capacitor.config.ts`의 주석). 없으면 앱에서 로그인부터 막힌다 |
+   | `CORS_ORIGINS` | `http://localhost:5173` | 앱(Capacitor Android)의 `https://localhost`가 들어 있어야 한다(`frontend/capacitor.config.ts`의 주석). 없으면 앱에서 로그인부터 막힌다. 11-12에 운영 주소에서 허용되는 것을 확인했다(4.0의 5번) |
    | `FRONTEND_BASE_URL` | `http://localhost:5173` | 비밀번호 재설정 메일의 링크 앞부분이다. 웹이 `/web/` 아래에 있으므로 `https://<주소>/web` |
    | `SMTP_HOST` 등 | 비어 있음 | 비어 있으면 재설정 요청이 503 `MAIL_UNAVAILABLE`이다. 시연에서 재설정을 보일 때만 필요하다 |
    | `METRICS_ENABLED` | `false` | Prometheus가 읽게 하려면 `true` |
@@ -64,6 +66,21 @@
 7. 11-04에 넘긴 3번(과제 종료 때 돌릴 전체 파기 명령)이 정해졌는가.
 
 ## 4. 배포 뒤 점검 (운영 배포가 끝난 뒤에 채운다)
+
+### 4.0 배포 전에 미리 돌린 결과 (2026-11-12 13:51, 운영 주소)
+
+4.1의 여섯을 운영 배포 전에 한 번 돌렸다. 조영운의 허락을 받고 불렀다.
+
+| 번호 | 결과 | 뜻 |
+| --- | --- | --- |
+| 1 | 200, `{"status":"ok","db":"ok","storage":"ok","version":"1.0.0"}` | 서버와 DB, 저장소가 정상이다. HTTPS로 붙는다(11-04에는 안 됐다) |
+| 2 | `/` 200, `/web/` 200 | 화면이 뜬다 |
+| 3 | 401 `AUTH_REQUIRED` | 토큰 없이는 막힌다 |
+| 4 | `/metrics`·`/docs`·`/openapi.json` 모두 화면의 HTML | 운영용 경로가 밖에 열려 있지 않다 |
+| 5 | 200, `access-control-allow-origin: https://localhost` | 운영 `.env`의 `CORS_ORIGINS`에 앱의 주소가 들어 있다 |
+| 6 | 422 `VALIDATION_ERROR`, `detail.fields`는 `code`·`login_id`·`password`·`name`·`email`. **`terms`가 없다** | 운영의 백엔드는 약관 동의 필수(278, 명세 v1.58) 전의 코드다 |
+
+1\~5는 기대와 같다. 6은 1절에서 저장소로 본 것(운영에 278이 없다)과 맞는다. 운영 배포 뒤에 4.1을 다시 돌리면 6번에 `terms`가 나와야 한다.
 
 ### 4.1 밖에서 부르는 점검 (로그인 없음, 아무것도 만들지 않는다)
 
@@ -89,7 +106,7 @@ BASE=https://k15a404.p.ssafy.io
 ```bash
 BASE=https://k15a404.p.ssafy.io
 echo "1 서버 상태";   curl -sS -w '\n%{http_code}\n' $BASE/api/v1/health
-echo "2 화면";        curl -sS -o /dev/null -w '/ %{http_code}\n' $BASE/; curl -sS -o /dev/null -w '/web/ %{http_code}\n' $BASE/web/
+echo "2 화면";        curl -sS -o /dev/null -w 'app %{http_code}\n' $BASE/; curl -sS -o /dev/null -w 'web %{http_code}\n' $BASE/web/
 echo "3 토큰 없이";   curl -sS -w '\n%{http_code}\n' $BASE/api/v1/dogs
 echo "4 운영용 경로"; for p in metrics docs openapi.json; do printf '/%s: ' $p; curl -sS $BASE/$p | head -c 60 | tr '\n' ' '; echo; done
 echo "5 앱의 CORS";   curl -sS -i -X OPTIONS $BASE/api/v1/auth/login -H 'Origin: https://localhost' -H 'Access-Control-Request-Method: POST' | grep -i '^access-control-allow-origin' || echo "(헤더 없음)"
