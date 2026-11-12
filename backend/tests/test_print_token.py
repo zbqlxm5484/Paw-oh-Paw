@@ -1,8 +1,9 @@
-"""인쇄 토큰(명세 11.6, 15.2의 2·3·8·9·17·18·22·23·55·62번, S15P31A404-276. 23번은 278에서 열었다).
+"""인쇄 토큰(명세 11.6, 15.2의 2·3·8·9·13·17·18·22·23·55·62번, S15P31A404-276. 13·23번은 278에서 열었다).
 
 웹의 보고서 인쇄 화면이 로그인 없이 그 기관의 자료를 읽을 때 쓰는 토큰이다(박규원 11-10 결정 (가): 인쇄 화면이
 보고서 화면과 같은 자료로 그린다). 토큰 자체(만들기·풀기)와, 받는 조회가 로그인한 그 기관의 CLIENT와 같은 것을
-읽는지, 그 밖의 API와 쓰기는 받지 않는지를 본다. 보고서 내용(62번)은 test_report_content_api.py가 본다.
+읽는지, 그 밖의 API와 쓰기는 받지 않는지를 본다. 촬영 상세(13번)는 토큰을 만든 회차의 촬영만 여는지도 본다.
+보고서 내용(62번)은 test_report_content_api.py가 본다.
 """
 
 from __future__ import annotations
@@ -114,7 +115,7 @@ def test_wrong_type_or_claims_is_rejected(payload: dict) -> None:
 
 
 def _readable(dog, first, second, shot) -> list[tuple[str, dict | None]]:
-    """인쇄 토큰이 여는 조회(62번은 test_report_content_api.py). 2번(내 정보)은 응답이 달라 따로 본다."""
+    """인쇄 토큰이 여는 조회(62번은 test_report_content_api.py). 2번(내 정보)과 13번(촬영 상세)은 따로 본다."""
     return [
         (DOGS, None),
         (HISTORY.format(dog.id), None),
@@ -142,7 +143,10 @@ def test_reads_what_a_logged_in_client_reads(client: TestClient, db: Session, st
 
 
 def test_no_file_address_comes_with_a_print_token(client: TestClient, db: Session, staff, dog, two_sessions) -> None:
-    """결과 영상이 READY이고 보고서가 DONE이어도, 인쇄 토큰으로 받는 응답에는 파일을 여는 서명 주소가 없다(11.6)."""
+    """결과 영상이 READY이고 보고서가 DONE이어도, 아래 조회의 응답에는 파일을 여는 서명 주소가 없다(11.6).
+
+    결과 영상 주소는 촬영 상세(13번)에만 있고, 보고서 파일 주소는 인쇄 토큰으로 받는 어느 응답에도 없다.
+    """
     first, second = two_sessions
     shot = add_shot(db, second, 1, passes={"LEFT": (2, 0)})
     shot.video_status, shot.result_key = "READY", "some/result.mp4"
@@ -178,12 +182,21 @@ def test_me_looks_like_a_client_of_that_institution(client: TestClient, db: Sess
 
 
 def test_print_token_of_another_institution_opens_nothing(
-    client: TestClient, staff, other_staff, dog, two_sessions
+    client: TestClient, db: Session, staff, other_staff, dog, two_sessions
 ) -> None:
     """기관이 다른 토큰은 ID가 맞아도 열리지 않고, 목록은 그 토큰의 기관 것만 준다(기관 필터는 그대로다)."""
     _, second = two_sessions
+    shot = add_shot(db, second, 1, passes={"LEFT": (1, 0)})
     headers = _print_headers(second, other_staff)
-    for url in (RESULT.format(second.id), SESSION.format(second.id), HISTORY.format(dog.id), COMPARE.format(dog.id)):
+    closed = (
+        RESULT.format(second.id),
+        SESSION.format(second.id),
+        HISTORY.format(dog.id),
+        COMPARE.format(dog.id),
+        ANGLES.format(shot.id),
+        SHOT.format(shot.id),  # 토큰의 회차는 맞지만 기관이 다르다
+    )
+    for url in closed:
         assert _code(client.get(url, headers=headers)) == (404, "NOT_FOUND"), url
     assert _code(client.get(TRENDS.format(dog.id), params=TREND_QUERY, headers=headers)) == (404, "NOT_FOUND")
     assert client.get(DOGS, headers=headers).json()["total"] == 0
@@ -199,7 +212,14 @@ def test_trashed_dog_is_404_like_a_login(client: TestClient, db: Session, staff,
     db.flush()
     headers = _print_headers(second, staff)
 
-    for url in (SESSION.format(second.id), RESULT.format(second.id), ANGLES.format(shot.id), HISTORY.format(dog.id)):
+    urls = (
+        SESSION.format(second.id),
+        RESULT.format(second.id),
+        ANGLES.format(shot.id),
+        SHOT.format(shot.id),
+        HISTORY.format(dog.id),
+    )
+    for url in urls:
         assert _code(client.get(url, headers=headers)) == (404, "NOT_FOUND"), url
         assert _code(client.get(url, headers=bearer(staff))) == (404, "NOT_FOUND"), url
     for who in (headers, bearer(staff)):
@@ -227,17 +247,57 @@ def test_print_token_ignores_contract_state(client: TestClient, db: Session, sta
     assert client.get(DOGS, headers=_print_headers(second, staff)).status_code == 200
 
 
+# ---- 촬영 상세(13번): 토큰을 만든 회차의 촬영만 ----
+
+
+def test_shot_detail_opens_only_for_the_session_of_the_token(
+    client: TestClient, db: Session, staff, dog, two_sessions
+) -> None:
+    """촬영 상세에는 결과 영상 주소가 실린다. 그래서 인쇄 토큰은 그 토큰을 만든 회차의 촬영만 연다(11.6)."""
+    first, second = two_sessions
+    mine = add_shot(db, second, 1, passes={"LEFT": (2, 0)})
+    other = add_shot(db, first, 1, passes={"LEFT": (1, 0)})
+    headers = _print_headers(second, staff)
+
+    by_print = client.get(SHOT.format(mine.id), headers=headers)
+    by_login = client.get(SHOT.format(mine.id), headers=bearer(staff))
+    assert by_print.status_code == by_login.status_code == 200
+    assert by_print.json() == by_login.json()
+
+    # 같은 기관이어도 다른 회차의 촬영은 없는 것과 같다. 로그인한 담당자에게는 열린다
+    assert _code(client.get(SHOT.format(other.id), headers=headers)) == (404, "NOT_FOUND")
+    assert client.get(SHOT.format(other.id), headers=bearer(staff)).status_code == 200
+    # 각도(17번)는 주소가 실리지 않는 조회라 회차로 좁히지 않는다
+    assert client.get(ANGLES.format(other.id), headers=headers).status_code == 200
+
+
+def test_result_video_address_comes_only_with_that_shot_detail(
+    client: TestClient, db: Session, staff, dog, two_sessions
+) -> None:
+    """결과 영상이 READY면 그 회차의 촬영 상세에 서명 주소가 실린다. 인쇄 화면이 그 영상에서 장면을 잘라 싣는다."""
+    first, second = two_sessions
+    shot = add_shot(db, second, 1, passes={"LEFT": (2, 0)})
+    shot.video_status, shot.result_key = "READY", "some/result.mp4"
+    db.flush()
+
+    body = client.get(SHOT.format(shot.id), headers=_print_headers(second, staff)).json()
+    assert body["video_status"] == "READY"
+    assert f"/shots/{shot.id}/video?" in body["video_url"] and "sig=" in body["video_url"]
+
+    # 다른 회차로 만든 토큰으로는 같은 촬영이 열리지 않는다
+    assert _code(client.get(SHOT.format(shot.id), headers=_print_headers(first, staff))) == (404, "NOT_FOUND")
+
+
 # ---- 그 밖의 조회와 쓰기는 받지 않는다 ----
 
 
 def test_other_reads_and_every_write_are_closed(client: TestClient, db: Session, staff, dog, two_sessions) -> None:
-    """인쇄 토큰은 로그인이 아니다. 받는 조회 열 말고는 401이고, 그 요청으로 바뀌는 것이 없다."""
+    """인쇄 토큰은 로그인이 아니다. 받는 조회 열하나 말고는 401이고, 그 요청으로 바뀌는 것이 없다."""
     first, second = two_sessions
     shot = add_shot(db, second, 1, passes={"LEFT": (1, 0)})
     headers = _print_headers(second, staff)
     closed = [
-        # 조회: 파일 주소가 실리는 것, 차트 자료, 관리자
-        ("GET", SHOT.format(shot.id)),
+        # 조회: 보고서 목록(파일 주소가 실린다), 차트 자료, 관리자
         ("GET", f"/api/v1/sessions/{second.id}/reports"),
         ("GET", f"{DOGS}/{dog.id}"),
         ("GET", f"{DOGS}/{dog.id}/vitals"),

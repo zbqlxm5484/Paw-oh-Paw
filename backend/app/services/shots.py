@@ -112,13 +112,17 @@ def get_shot(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID) -> Shot
     return shot
 
 
-def shot_detail(db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID) -> ShotDetailOut:
-    """GET /shots/{id}(BE-08·11). 통과 행은 selectinload로 한 번에 읽고, 다시 부를 때마다 DB에서 새로 채운다."""
-    shot = db.scalars(
-        _shot_query(institution_id, shot_id)
-        .options(selectinload(Shot.passes))
-        .execution_options(populate_existing=True)
-    ).one_or_none()
+def shot_detail(
+    db: Session, institution_id: uuid.UUID, shot_id: uuid.UUID, *, only_session: uuid.UUID | None = None
+) -> ShotDetailOut:
+    """GET /shots/{id}(BE-08·11). 통과 행은 selectinload로 한 번에 읽고, 다시 부를 때마다 DB에서 새로 채운다.
+
+    only_session을 주면 그 회차의 촬영만 연다(인쇄 토큰, 11.6). 다른 회차의 촬영은 없는 것과 같이 404다.
+    """
+    query = _shot_query(institution_id, shot_id)
+    if only_session is not None:
+        query = query.where(Shot.session_id == only_session)
+    shot = db.scalars(query.options(selectinload(Shot.passes)).execution_options(populate_existing=True)).one_or_none()
     if shot is None:
         raise AppError(ErrorCode.NOT_FOUND)
     return to_shot_detail_out(shot)
