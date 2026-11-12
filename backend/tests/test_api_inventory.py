@@ -1,7 +1,8 @@
 """명세 15.2 엔드포인트 표와 앱에 등록된 경로 대조(S15P31A404-198 API 테스트 보강).
 
-구현된 65개가 빠짐없이 등록돼 있는지 보고, 아직 없는 하나(26 metrics)를 적어 둔다. 생기면
-NOT_YET에서 IMPLEMENTED로 옮긴다. 라우터를 main.py에 등록하지 않아 API가 통째로 빠지는 실수를 잡는다.
+`/api/v1` 아래의 65개가 빠짐없이 등록돼 있는지 본다. 나머지 하나(26 metrics)는 루트 `/metrics`이고
+METRICS_ENABLED를 켰을 때만 있어 여기서 세지 않는다(tests/test_metrics.py가 본다). NOT_YET은 그 표시다.
+라우터를 main.py에 등록하지 않아 API가 통째로 빠지는 실수를 잡는다.
 거꾸로 15.2에 없는 경로가 앱에 등록돼 있어도 걸린다(S15P31A404-277 기능 동결 점검에서 62~66번을 더함).
 """
 
@@ -79,7 +80,7 @@ IMPLEMENTED: set[tuple[str, str]] = {
     ("GET", "/auth/me/device"),  # 66
 }
 NOT_YET: set[tuple[str, str]] = {
-    ("GET", "/metrics"),  # 26, 선택
+    ("GET", "/metrics"),  # 26, 선택. /api/v1 아래가 아니라 루트이고 기본은 꺼짐이다
 }
 
 
@@ -96,7 +97,7 @@ def _registered(app: FastAPI) -> set[tuple[str, str]]:
 def test_every_implemented_endpoint_of_15_2_is_registered(api_app: FastAPI) -> None:
     registered = _registered(api_app)
     assert IMPLEMENTED - registered == set()
-    assert len(IMPLEMENTED) == 65  # 66개 중 26이 아직 없다
+    assert len(IMPLEMENTED) == 65  # 66개 중 26(/metrics)은 /api/v1 밖이다
 
 
 def test_the_missing_endpoint_is_still_missing(api_app: FastAPI) -> None:

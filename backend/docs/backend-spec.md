@@ -47,6 +47,7 @@ Oct 19, 2026 · @조영운
 | v1.52 | 2026-11-11 | 보고서 표기(S15P31A404-277, 11-11 프론트 요청 '보고서 표기'): ① 직전 회차를 적는 문장 넷과 보고서 내용 API의 `previous.label`에 회차 번호를 붙이고, 직전 회차가 이번 회차와 같은 날이면 만든 시각도 붙인다(`직전 회차(2회차, 2026년 11월 10일 오전 9:38)`). 보고서 입력에 `previous_session`(`round`, `created_at`)을 더했다(15.7 62번) ② 용어 목록에 '좌우 대칭 점수'와 '등 길이'를 더하고, 보고서에 보이는 단위 이름을 '몸통 길이 기준'·'몸통 길이/초'에서 '등 길이 기준'·'등 길이/초'로 바꿨다. 몸통 길이 L의 정의(T13~장골능)와 단위 코드, 값, KPI-06 기준은 그대로다. 마이그레이션·환경 변수·오류 코드 변경 없음 |
 | v1.53 | 2026-11-12 | `/metrics` 경로를 루트로 정정(S15P31A404-308, 팀 결정 11-12): 15.1 인증 줄과 15.9, 16절 `METRICS_ENABLED`의 `/api/v1/metrics`를 루트 `/metrics`로 바꿈. `apiRoutingConvention.md`·`api-spec.md`·`openapi.yaml`은 이미 루트였다. |
 | v1.54 | 2026-11-12 | API 명세서 최종본(S15P31A404-278): `docs/api-spec.md`(v1.2)와 `docs/openapi.yaml`을 이 문서의 15절과 코드에 맞췄다. 두 문서에 없던 다섯(62\~66번: 보고서 내용, 바이탈·메모 삭제, 그날 기록, 측정 기기)과 `visited_on`·`VitalOut.dog_id`·`withdrawn_at`, 로그인 잠금·비밀번호를 바꾼 뒤의 토큰 끊김·인쇄 토큰·`STAFF`에게 가린 코드(v1.44\~v1.48), 회차 비교의 오차 범위 값(v1.49), 409 `REPORT_CHECK_FAILED`와 `LOGIN_FAILED` 문구를 넣었다. `/metrics`가 `/api/v1` 아래가 아니라 루트라는 것(v1.53)도 두 문서에 분명히 적었다(두 문서는 주소에서 `/api/v1`을 빼고 적어 `/metrics`가 어느 쪽인지 드러나지 않았다). 15절 머리말의 엔드포인트 수를 66개로 고쳤다(54개로 남아 있었다). 서버 동작·API·환경 변수·오류 코드는 바뀌지 않았다 |
+| v1.55 | 2026-11-12 | `/metrics` 구현(S15P31A404-278, 허정원 308 모니터링, MR 195 리뷰): 15.9에 내는 지표 셋과 라벨 규칙, 11.8의 `/metrics` 줄, 16절 `METRICS_ENABLED` 설명. 그 전에는 설정값만 있고 경로가 없었다. 패키지는 더하지 않았다(`app/core/metrics.py`가 Prometheus 텍스트를 직접 쓴다). 기본값은 꺼짐이라 서버 `.env`에 `METRICS_ENABLED=true`를 넣어야 열린다. `docs/api-spec.md`(9절)와 `docs/openapi.yaml`의 `/metrics` 설명도 같이 고쳤다. 마이그레이션·오류 코드 변경 없음 |
 | v1.7 | 2026-10-26 | 82·69 MR 리뷰와 87·88 반영: 11.5(요청 본문 전체가 없으면 `fields`는 `body`, CORS 거부 preflight는 Starlette의 400 그대로), 15절 머리말·16절 `API_DOCS_ENABLED`(배포에서는 `/docs` 닫음), 6절 AnalysisClient 네 동작(`get_keypoints`, 검토 답변 Q4), 12.4 잠금(워커가 회차 행을 잠근 채 SUBMITTED로 가져간 뒤 분석 API를 부름)·제출 재시도 규칙, 13.3 취소가 UPLOADED를 막지 않아도 되는 이유 |
 | v1.6 | 2026-10-22 | PostgreSQL 18 → 17(66 MR 리뷰 반영, 팀 서버 compose와 통일): 11.1 표, 12.5 도구, 16절 Docker 줄(볼륨 경로 `/var/lib/postgresql/data`), 설치 절차. 기업 세부명세서는 버전을 정하지 않았다("PostgreSQL 등 규모에 맞춰 선정"). 본문 수정은 66 브랜치, 이 줄은 70 브랜치에 있다 |
 | v1.5 | 2026-10-22 | 회차 시점 체급(팀 회의 10-22 결정): `measure_session.size_class` 추가(12.2, 마이그레이션 0002), 회차 시작 때 그날 체중(없으면 등록 체중)으로 정함(12.5 6번, 13.3, 15.6), SessionOut에 `size_class`(15.3), 4절 BE-04, 17.3 BE-04 |
@@ -673,7 +674,7 @@ DbSession = Annotated[Session, Depends(get_db, scope="function")]
 - 표준 `logging`을 쓴다. 한 줄에 시각, 레벨, 요청 ID, 메시지를 남긴다. 요청 ID는 미들웨어가 만들고 응답 헤더 `X-Request-ID`로도 돌려준다.
 - 로그에 남기지 않는 것: 반려견 이름, 담당자 이름, 비밀번호, 토큰, 파일 경로(PR-C-02), 디바이스 코드, 재설정 토큰, 이메일 주소(v1.12), 보호자 이름·연락처, 메모·진료 기록의 본문, 진단 이력의 제목·수의사 이름(v1.36).
 - 보안과 관련된 일은 ID만으로 남긴다(v1.48): 로그인 실패(계정이 있으면 담당자 ID와 실패 횟수, 없으면 없는 계정이라는 것만), 잠금(담당자 ID와 풀리는 시각), 잠긴 계정에 온 로그인 시도, 비밀번호 변경·재설정(담당자 ID), 디바이스 코드 발급·회수(코드 행의 ID, 기관 ID, 그 일을 한 관리자의 ID). 입력한 아이디와 비밀번호, 코드 값, 이름, 이메일은 남기지 않는다. 입력한 아이디를 남기지 않는 것은 아이디 칸에 비밀번호를 잘못 넣는 일이 있어서다. 잠금은 WARNING, 나머지는 INFO다.
-- (선택) `/metrics`로 요청 수·처리 시간을 Prometheus 형식으로 낸다. 수집 방식은 허정원과 정한다.
+- (선택) `/metrics`로 요청 수·처리 시간을 Prometheus 형식으로 낸다(15.9, v1.55). 라벨의 경로는 실제 주소가 아니라 라우트 틀(`/api/v1/dogs/{dog_id}`)이라 ID·이름·쿼리가 남지 않는다. 수집은 허정원의 `infra/monitoring/`이 한다.
 
 **로그로 새지 않게**: uvicorn 접근 로그는 끈다(`--no-access-log`). 쿼리 문자열에 반려견 이름·보호자 이름(`q`)과 서명(`sig`)이 들어가기 때문이다. 대신 요청 로그 미들웨어가 메서드, 쿼리를 뺀 경로, 상태 코드, 처리 시간, 요청 ID(UUID4 16진수 32자)만 남긴다. SQLAlchemy 엔진은 `hide_parameters=True`로 만들어 오류 메시지에 값이 찍히지 않게 한다. 그것만으로는 PostgreSQL이 오류에 붙여 보내는 글이 남는다: 제약을 어긴 행 전체(`Failing row contains (…)`), 겹친 키의 값(`Key (…)=(…)`), 형식이 틀린 값(`invalid input syntax …: "…"`). 그래서 DB 오류가 날 때 그 예외에서 SQLSTATE와 스키마·테이블·칸·제약 이름만 남기고 나머지 칸을 뺀다(v1.46, `core/db.py`의 `scrub_db_error`, 모든 엔진에 건다). 메시지 칸은 값이 들어가지 않는 종류(연결 08, 제약 23, 교착 40, 문법·이름 42, 자원 53·55·57)에서만 남긴다. 오류 종류를 가리는 코드(11.7)는 SQLSTATE만 보므로 그대로 동작한다.
 
@@ -2455,6 +2456,10 @@ stance_ratio: 5.8 # pct
 **`GET /metrics`** — 요청 수·처리 시간 (BE-20, 선택)
 
 - Prometheus 텍스트 형식. 경로는 `/api/v1` 아래가 아니라 루트 `/metrics`다. nginx는 `/api/`만 백엔드로 넘기므로 밖에서는 닿지 않고, Docker 내부망의 Prometheus만 읽는다(허정원 `infra/monitoring/`, S15P31A404-308). `METRICS_ENABLED=true`일 때만 등록한다.
+- 내는 지표(v1.55, `app/core/metrics.py`): `http_requests_total{method,path,status}`(요청 수), `http_request_duration_seconds`(처리 시간 히스토그램, `method`·`path`별. 구간은 0.025초부터 30초까지 열 개), `app_info{version}`(값은 언제나 1).
+- `path` 라벨은 라우트 틀이다(`/api/v1/dogs/{dog_id}`). 라우트에 맞지 않은 요청은 모두 `unmatched`로 센다. `/metrics`를 읽는 요청은 세지 않는다. 쿼리 문자열과 실제 ID는 어디에도 남지 않는다(11.8).
+- 값은 API 프로세스가 켜진 뒤의 누계이고 다시 뜨면 0부터다. 배포 전환(blue·green) 때는 색마다 따로 센다. 워커는 요청을 받지 않으므로 지표가 없다.
+- `METRICS_ENABLED`가 꺼져 있으면 경로가 없다(404). 요청도 세지 않는다.
 
 ### 15.10 이번 API에 없는 것
 
@@ -2681,7 +2686,7 @@ stance_ratio: 5.8 # pct
 | `REPORT_RENDER_TIMEOUT_SEC` | `60` | 렌더러의 답을 기다리는 시간(초). 넘으면 그 판본은 기본 템플릿으로 만든다 | 8절 6번 |
 | `MESSAGES_FILE` | `messages/ko.yaml` | 화면 문구 | 14.5 |
 | `LOG_LEVEL` | `INFO` | 로그 수준 | 11.8 |
-| `METRICS_ENABLED` | `false` | 루트 `/metrics`를 켜는지(선택) | 15.9 |
+| `METRICS_ENABLED` | `false` | 루트 `/metrics`를 열고 요청을 세는지(선택). 끄면 404 | 15.9 |
 | `API_DOCS_ENABLED` | `false` | `/docs`·`/redoc`·`/openapi.json`을 여는지. 개발 환경에서만 `true`. 공식 명세는 `docs/openapi.yaml` | 15절 |
 | `AUTH_CACHE_TTL_SEC` | `60` | 담당자 스냅샷을 프로세스 메모리에 두는 시간(초). 0이면 요청마다 DB를 읽는다. 테스트는 0 | 11.6 인증 캐시 |
 | `SMTP_HOST` | (빈 값) | 메일 서버. 비어 있으면 메일을 보내지 않는다(재설정 요청은 503) | 11.6 메일 |

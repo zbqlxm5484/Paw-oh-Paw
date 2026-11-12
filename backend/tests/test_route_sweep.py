@@ -69,7 +69,7 @@ def test_sets_name_only_registered_routes(api_app: FastAPI) -> None:
     registered = set(_routes(api_app))
     assert PUBLIC - registered == set()
     assert GUEST_ALLOWED - registered == set()
-    assert len(registered) == 65  # 15.2의 66개 중 26(/metrics, 선택)이 없다
+    assert len(registered) == 65  # 15.2의 66개 중 26(/metrics, 선택)은 루트이고 기본은 꺼짐이다
 
 
 def test_every_route_but_the_public_ones_needs_a_token(client: TestClient, api_app: FastAPI) -> None:
