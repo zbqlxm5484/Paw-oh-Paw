@@ -8,6 +8,7 @@
 
 설정(환경변수)
 - ANALYSIS_API_KEY: 비어 있으면 인증을 끈다(로컬 개발). 있으면 X-API-Key 헤더가 같아야 한다
+- ANALYSIS_DOCS_ENABLED: true일 때만 /docs·/redoc·/openapi.json을 연다. 기본 false(배포에서는 닫는다). 로컬 개발에서만 true
 - ANALYSIS_UPLOAD_MAX_MB: 영상 한 건 상한. 팀 서비스 UPLOAD_MAX_MB(100)와 맞춘다
 - ANALYSIS_STORAGE_DIR: 올린 영상을 두는 곳. 기본은 저장소의 data/analysis_api (git에 안 올라감)
 - ANALYSIS_POSE_SOURCE 등 분석 설정은 pipeline.py 참고
@@ -49,6 +50,7 @@ HERE = Path(__file__).resolve().parent
 CHUNK_BYTES = 1024 * 1024
 
 API_KEY = os.environ.get("ANALYSIS_API_KEY", "")
+DOCS_ENABLED = os.environ.get("ANALYSIS_DOCS_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 MAX_BYTES = int(os.environ.get("ANALYSIS_UPLOAD_MAX_MB", "100")) * 1024 * 1024
 STORAGE_DIR = Path(os.environ.get("ANALYSIS_STORAGE_DIR", HERE.parent / "data" / "analysis_api"))
 # 분석이 이보다 오래 running이면 failed(TIMEOUT)로 본다. 팀 서비스 ANALYSIS_TIMEOUT_SEC(600)보다 길게 둔다.
@@ -79,7 +81,14 @@ async def lifespan(app: FastAPI):
 
 
 # 상태값: queued(대기) → running(분석 중) → done(완료) / failed(실패)
-app = FastAPI(title="크림오프 분석 API", version=API_VERSION, lifespan=lifespan)
+def docs_urls(enabled: bool) -> dict:
+    """시험 화면(/docs·/redoc)과 생성 명세(/openapi.json)를 여닫는 FastAPI 인자. 이 셋은 인증 없이 열리므로 기본은 닫는다"""
+    if enabled:
+        return {}
+    return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
+app = FastAPI(title="크림오프 분석 API", version=API_VERSION, lifespan=lifespan, **docs_urls(DOCS_ENABLED))
 JOBS: dict = {}   # 디스크(store)의 작업을 읽어 둔 것. 서버를 다시 켜면 비고, 조회할 때 디스크에서 다시 읽는다
 _LOCK = threading.Lock()
 

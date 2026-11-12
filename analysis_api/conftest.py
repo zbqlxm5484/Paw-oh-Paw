@@ -10,6 +10,7 @@ import os
 import tempfile
 
 os.environ["ANALYSIS_STORAGE_DIR"] = tempfile.mkdtemp(prefix="analysis_api_test_")
+os.environ.pop("ANALYSIS_DOCS_ENABLED", None)   # 개발 PC에 켜져 있어도 테스트는 배포 기본(닫힘)으로 돈다
 
 import main  # noqa: E402
 import pytest  # noqa: E402
