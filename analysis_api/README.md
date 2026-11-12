@@ -2,6 +2,8 @@
 
 영상 한 건을 받아 분석하고, 진행 상태와 결과(관절점·판별·보행 수치)를 돌려주는 FastAPI 서버다. 팀 서비스(`backend/`)는 `backend/app/clients/analysis.py`의 `HttpAnalysisClient`로 이 API를 부른다. 납품 때는 기업 서버가 같은 자리에서 부른다.
 
+부르는 쪽을 위한 명세(엔드포인트·오류·상태·부르는 순서)는 `docs/analysisApi/apiSpec.md`다. 이 README는 서버를 띄우고 운영하는 법을 적는다.
+
 형식 근거: `docs/analysisApi/resultFormat.md`(결과 JSON v1), 「분석 API 형식과 구현 계획」(10-21), 「분석 API 초안 검토 답변」(10-22)
 
 ## 단계 (4/4 완료)
@@ -26,6 +28,7 @@
 | --- | --- | --- |
 | `sample` (기본) | `samples/`의 견본 결과를 돌려준다. `model.name`이 `sample-pipeline` | 팀 서비스 연동 시험. 모델·관절점 파일 없이 |
 | `track` | 미리 뽑아 둔 관절점 파일(고른 모델의 `track_file`, 기업 `video_kpi.py track` 형식)에서 올린 영상을 찾아 **실제 엔진**을 돌린다 | GPU·모델 없이 실제 판별 결과를 볼 때 |
+| `model` | 올린 영상의 프레임마다 기업 모델(RTMDet 개 탐지 + RTMPose 관절 22점, `ANALYSIS_MODEL_DIR`의 `run.py`)로 관절점을 뽑아 같은 엔진을 돌린다. 동시에 추론하는 수는 `ANALYSIS_MODEL_WORKERS`(기본 1, 한 건씩) | GPU 서버 운영(허정원 S15P31A404-229) |
 
 `track`은 올린 영상의 SHA-256과 같은 영상을 먼저 찾고, 없으면 파일 이름으로 찾는다. 둘 다 없으면 `failed` + `POSE_UNAVAILABLE`이다.
 
@@ -43,8 +46,6 @@
 - 모델을 바꾸면 결과의 `model.name`·`model.version`이 바뀐다. 팀 서비스는 모델이 다른 회차끼리 변화를 판단하지 않는다(`MODEL_CHANGED`)
 - `models.yaml`에 없는 이름을 고르면 다른 모델로 바꿔 돌리지 않고 `POSE_UNAVAILABLE`로 실패한다. `/health`의 `model_known`이 false로 보인다
 - `pipeline.py`의 `API_VERSION`은 결과가 바뀌는 변경(엔진·결과 형식)일 때만 올린다. `model.version`에 들어가서, 올리면 그 전 회차와 비교하지 않게 되기 때문이다. 4/4는 결과를 바꾸지 않아 0.4.0 그대로였고, 보행 수치를 채운 #183에서 0.5.0, 가동 범위를 채운 #184에서 0.6.0으로 올렸다. 발 높이를 더한 #259는 있던 수치의 값을 바꾸지 않아 0.6.0 그대로 두고 `versions.gait_metrics`만 v2로 올렸다(지난 회차와 비교가 끊기지 않게)
-
-영상에서 바로 관절점을 뽑는 경로(MMPose)는 실행 환경이 정해지면 `pipeline.py`에 더한다.
 
 지금 결과에서 비어 있는 것: `metrics`의 발 경사·발 움직임 범위(걸음 길이·입각기 비율·보행 속도·주기 수(#183), 가동 범위·각도 중앙값·무릎 주기별 가동 범위(#184), 발 높이와 측정 불가 문장(#259)은 채움), `gait`는 null(보행 유형 판별 뒤), `input.codec`는 null.
 
@@ -85,8 +86,9 @@ ANALYSIS_API_KEY=
 | `ANALYSIS_STORAGE_DIR` | 저장소의 `data/analysis_api` | 올린 영상을 `{작업 ID}/video.mp4`(또는 `.mov`)로 둔다. `data/`는 git에 올라가지 않는다 |
 | `ANALYSIS_POSE_SOURCE` | `sample` | 위 표 |
 | `ANALYSIS_MODEL` | `models.yaml`의 `default` | 쓸 모델 이름. 결과 `model.name`이 된다 |
+| `ANALYSIS_MODEL_DIR` | 홈의 `models/company-orig` | `model`일 때 기업 모델 폴더(`run.py`, `det.py`, `pose.py`, `det.pth`, `pose.pth`). 하나라도 없으면 `/health`의 `model_known`이 false, 분석은 `POSE_UNAVAILABLE` |
 | `ANALYSIS_TRACK_FILE` | 고른 모델의 `track_file` | `track`일 때 읽을 관절점 파일. 주면 `models.yaml` 값보다 먼저 쓴다 |
-| `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256` | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.6.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
+| `ANALYSIS_WEIGHTS_SHA256` | 고른 모델의 `weights_sha256`, `model`이면 `pose.pth`에서 계산 | 관절점을 뽑은 가중치의 SHA-256. 주면 `models.yaml` 값보다 먼저 쓴다. 앞 8자가 `model.version` 끝에 붙는다(`0.6.0/v1/a4261a10`). 비어 있으면 버전 끝은 `unknown`, `model.weights_sha256`은 null |
 | `ANALYSIS_MODEL_WORKERS` | 1 | `model` 모드에서 영상을 동시에 추론하는 워커 프로세스 수. 1이면 한 건씩(기존 동작). 2 이상이면 워커마다 모델을 따로 올려(VRAM 약 1.1~1.5GB씩, 첫 요청에서 로드) 영상 N건을 동시에 돌린다. 워커 수 × 모델 VRAM이 GPU 여유보다 작아야 한다. 워커가 죽으면 그 건은 `INTERNAL`로 실패하고 풀을 새로 만든다 |
 | `ANALYSIS_JOB_TIMEOUT_SEC` | 660 | 분석이 이보다 오래 `running`이면 `failed` + `TIMEOUT`. 팀 서비스 `ANALYSIS_TIMEOUT_SEC`(600)보다 60초 길게 둔다: 팀 서비스가 먼저 실패로 처리하고, 그 뒤 다시 분석·지우기가 409로 막히는 시간이 1분을 넘지 않게 한다. GPU 추론이 멈춰도 작업이 계속 running으로 남아 지우기·다시 분석이 막히지 않게 하려는 것이다 |
 
@@ -137,12 +139,12 @@ data/analysis_api/
 | `DECODE_FAILED` | 영상을 읽을 수 없음 |
 | `POSE_UNAVAILABLE` | 이 영상의 관절점을 얻지 못함 (`track`에서 관절점 파일이 없거나, 영상을 못 찾거나, 관절점 파일의 모델이 다름) |
 | `INTERRUPTED` | 분석 중에 분석 API가 다시 시작됨 |
+| `INTERNAL` | 분석 중 알 수 없는 오류(추론 중 GPU 메모리 부족, 모델 워커 중단 등) |
 | `TIMEOUT` | 분석이 `ANALYSIS_JOB_TIMEOUT_SEC` 안에 끝나지 않음. 상태 조회·지우기 때 판단한다. 시간 초과 뒤에 늦게 끝난 분석의 결과는 버리고, 그사이 지운 작업의 폴더를 다시 만들지 않는다. 멈춘 GPU 추론 자체를 끊지는 못하므로, 계속 멈춰 있으면 분석 API를 다시 켠다 |
 
 등록·조회 말고 지우기에서 나는 오류: 409 `JOB_IN_PROGRESS`(분석 중인 작업은 지울 수 없음), 500 `DELETE_FAILED`(폴더를 다 지우지 못함).
 
 업로드가 도중에 끊기면 그때까지 쓴 영상을 지운다(크기 초과 413과 같다). `analyses.jsonl`에 깨진 줄(쓰는 도중 꺼진 것)이 있으면 읽을 때 건너뛰고, 작업을 지울 때 함께 버린다.
-| `INTERNAL` | 분석 중 알 수 없는 오류 |
 
 ## 테스트
 
@@ -170,8 +172,6 @@ python check_server.py --url ... --video a.mp4 --track ../data/tracks/fs-v4.trac
 
 ## 아직 남은 것
 
-- 영상에서 바로 관절점을 뽑는 경로(MMPose). 실행 환경이 정해지면 `pipeline.py`에 더하고, `models.yaml`의 `config`를 쓴다
-- 지금은 응답 뒤 같은 프로세스 안에서 분석한다(FastAPI `BackgroundTasks`). 모델 추론이 붙어 무거워지면 작업 큐로 옮긴다
+- 지금은 응답 뒤 같은 프로세스 안에서 분석을 시작한다(FastAPI `BackgroundTasks`). 모델 추론은 `ANALYSIS_MODEL_WORKERS`개까지 동시에 돌고, 넘치면 차례로 기다린다. 더 늘어나면 작업 큐로 옮긴다
 - 오래된 작업·영상을 기간이 지나면 저절로 지우기(지금은 지우기 API·전체 파기 명령으로만)
-- 팀 서비스 파기가 지우는 촬영의 작업 ID로 `DELETE /analyses/{id}`를 부르는 자리(조영운과 정함)
-- Dockerfile과 compose 서비스, CI에서 이 폴더 테스트 돌리기는 허정원과 정한다. 이미지에는 `engine/`도 함께 넣고, `data/`는 볼륨으로 둔다
+- `/docs`·`/openapi.json`이 인증 없이 열려 있다. 외부에 여는 서버라면 앞단에서 막는다(`apiSpec.md` 7.4)
