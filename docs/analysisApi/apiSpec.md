@@ -80,7 +80,7 @@ POST /analyses ─▶ queued ─▶ running ─▶ done
 - 작업은 디스크에 남는다. 서버를 다시 켜도 `done`·`failed` 작업은 그대로 조회된다
 - 분석 중에 서버가 꺼진 작업은 다시 켤 때 `failed` + `INTERRUPTED`가 된다
 - `running`이 `ANALYSIS_JOB_TIMEOUT_SEC`(기본 660초)를 넘으면 조회·지우기 때 `failed` + `TIMEOUT`이 된다. 그 뒤 늦게 끝난 분석 결과는 버린다
-- 모델 추론은 `ANALYSIS_MODEL_WORKERS`개(기본 1)까지 동시에 돈다. 넘치게 등록하면 차례로 분석되고, 기다리는 동안은 `running`이다
+- 모델 추론은 `ANALYSIS_MODEL_WORKERS`개(기본 1)까지 동시에 돈다. 넘치게 등록하면 차례로 분석되고, 기다리는 동안은 `running`이다. **기다린 시간도 `ANALYSIS_JOB_TIMEOUT_SEC`에 들어간다.** 한꺼번에 많이 등록하면 뒤쪽 작업은 추론을 시작하기 전에 `TIMEOUT`이 될 수 있다
 
 ### 3.2 분석 실패 사유 (`error.code`)
 
@@ -119,7 +119,7 @@ POST /analyses ─▶ queued ─▶ running ─▶ done
 | 부분 | 필수 | 내용 |
 | --- | --- | --- |
 | `video` | 예 | 영상 파일. `Content-Type`이 `video/`로 시작해야 한다(`video/mp4`, `video/quicktime`). 확장자 `.mp4`·`.mov`로 저장하고 그 밖은 `.mp4`로 둔다 |
-| `meta` | 아니오 | JSON 객체 문자열. `shot_id`(촬영 ID, 문자열)를 넣으면 촬영 단위 지우기(4.7)에 쓴다. 팀 서비스는 `{"shot_id": "...", "size_class": "SMALL"}`을 보낸다. 다른 키는 저장만 하고 분석에 쓰지 않는다 |
+| `meta` | 아니오 | JSON 객체 문자열. `shot_id`(촬영 ID)를 넣으면 촬영 단위 지우기(4.7)에 쓴다. **`shot_id`는 문자열로 보낸다**(`"s-001"`, UUID 문자열). 숫자(`123`)로 보내면 그대로 저장돼, 쿼리 문자열과 비교하는 촬영 단위 지우기에 걸리지 않는다. 팀 서비스는 `{"shot_id": "...", "size_class": "SMALL"}`을 보낸다. 다른 키는 저장만 하고 분석에 쓰지 않는다 |
 
 응답 202:
 
@@ -209,6 +209,7 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 ```
 
 - 하나라도 분석 중이면 **아무것도 지우지 않고** 409 `JOB_IN_PROGRESS`
+- 등록 때 `meta.shot_id`를 문자열로 보낸 작업만 걸린다(4.2)
 - `shot_id`가 없거나 비면 400 `INVALID_REQUEST`, 지우다 실패하면 500 `DELETE_FAILED`
 - 이 경로는 0.6.0의 S15P31A404-258부터 있다. 그 전 판은 405를 낸다(6.3)
 - 서버의 작업 상태 파일을 모두 훑는다. 작업 300개에서 약 0.07초다
@@ -274,13 +275,20 @@ curl -X POST http://127.0.0.1:8010/analyses -H "X-API-Key: $ANALYSIS_API_KEY" \
 
 ### 7.3 배포와 점검
 
-- GPU 서버 배포는 `v*` 태그를 찍을 때 CI가 한다(S15P31A404-239, `infra/ci/deploy_gpu.sh`). develop에 머지만 해서는 올라가지 않는다
+- GPU 서버 배포는 CI의 `deploy_gpu`가 한다(허정원, 태그 배포 S15P31A404-239, master 배포와 동결 S15P31A404-307. `.gitlab-ci.yml`, `infra/ci/deploy_gpu.sh`). 두 경우에 돈다
+  - `v*` 태그를 찍을 때. 릴리스 폴더 이름은 태그 이름
+  - master에 머지됐는데 `analysis_api/`, `engine/`, `infra/ci/deploy_gpu.sh` 중 하나라도 바뀌었을 때. 릴리스 폴더 이름은 `master-{커밋 SHA 8자}`
+- develop에 머지만 해서는 올라가지 않는다
+- CI/CD 변수 `GPU_DEPLOY_FREEZE=1`이면 태그·master 배포가 모두 멈춘다(동결 중에는 태그를 찍어도 배포되지 않는다). 시연 직전처럼 서버를 바꾸면 안 될 때 쓴다
+- 배포가 실패하면 스크립트가 이전 릴리스로 되돌린다
 - 배포 뒤 `analysis_api/check_server.py`로 등록부터 지우기까지 한 바퀴 돌려 본다(`gpuCheck.md` 4절)
 
 ### 7.4 보안
 
 - 인증 키를 꼭 넣는다. 팀 서버와 GPU 서버 사이는 터널로만 잇고 포트를 밖에 열지 않는다
-- `/docs`·`/openapi.json`은 인증 없이 열려 있다. 엔드포인트 목록만 보이고 자료는 없지만, 외부에 여는 서버라면 앞단(nginx 등)에서 막는다
+- `/docs`·`/openapi.json`은 인증 없이 열려 있다. 엔드포인트 목록만 보이고 자료는 없다
+- GPU 서버는 팀 서비스 워커만 부르는 내부 서버라 외부에 공개하지 않는다(허정원 11-12). 지금은 터널로만 이어 밖에서 닿지 않아 그대로 둔다
+- 호출 인증 보강과 `/docs` 비공개(개발·스테이징에서만 공개) 여부는 허정원이 후속 MR로 정한다
 - 영상과 결과는 반려견·기관 자료다. 저장 폴더는 서버 밖으로 복사하지 않고, 과제가 끝나면 전체 파기한다
 
 ## 8. 버전
