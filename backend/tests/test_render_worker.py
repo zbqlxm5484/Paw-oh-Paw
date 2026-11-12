@@ -39,7 +39,12 @@ from tests.test_video_render import HEIGHT, WIDTH, _grid_points
 
 def _settings(**overrides: Any) -> Settings:
     return get_settings().model_copy(
-        update={"WORKER_RENDER_CONCURRENCY": 1, "WORKER_MAX_IN_FLIGHT_PER_INSTITUTION": 100, **overrides}
+        update={
+            "WORKER_RENDER_CONCURRENCY": 1,
+            "WORKER_QUEUE_PER_INSTITUTION": 100,
+            "WORKER_HOURLY_PER_INSTITUTION": 1000,
+            **overrides,
+        }
     )
 
 

@@ -27,13 +27,21 @@ def test_defaults_follow_section_16(monkeypatch: pytest.MonkeyPatch) -> None:
     assert (settings.SMTP_HOST, settings.SMTP_PORT, settings.SMTP_USER, settings.SMTP_FROM) == ("", 587, "", "")
     assert settings.SMTP_PASSWORD.get_secret_value() == ""
     assert settings.FRONTEND_BASE_URL == "http://localhost:5173"
+    # v1.59 분석 줄: 전체는 촬영 16건, 줄은 기관마다 4회차, 접수는 기관마다 1시간에 10회차
+    caps = (
+        settings.WORKER_MAX_IN_FLIGHT,
+        settings.WORKER_QUEUE_PER_INSTITUTION,
+        settings.WORKER_HOURLY_PER_INSTITUTION,
+    )
+    assert caps == (16, 4, 10)
 
 
 @pytest.mark.parametrize(
     "name",
     [
         "WORKER_MAX_IN_FLIGHT",
-        "WORKER_MAX_IN_FLIGHT_PER_INSTITUTION",
+        "WORKER_QUEUE_PER_INSTITUTION",
+        "WORKER_HOURLY_PER_INSTITUTION",
         "WORKER_RENDER_CONCURRENCY",
         "WORKER_REPORT_CONCURRENCY",
     ],

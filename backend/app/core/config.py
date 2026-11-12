@@ -79,9 +79,12 @@ class Settings(DbSettings):
     MOCK_ANALYSIS_DELAY_SEC: float = 5
 
     WORKER_POLL_INTERVAL_SEC: float = 2
-    # 16절: 둘 다 1 이상. 0이면 워커가 오류 없이 아무것도 가져가지 않으므로 시작 자체를 막는다
+    # 16절: 셋 다 1 이상. 0이면 워커가 오류 없이 아무것도 가져가지 않으므로 시작 자체를 막는다
     WORKER_MAX_IN_FLIGHT: int = Field(16, ge=1)
-    WORKER_MAX_IN_FLIGHT_PER_INSTITUTION: int = Field(4, ge=1)
+    # 분석 줄(12.4, v1.59): 기관마다 줄에 세워 둘 수 있는 회차 수(분석 중인 회차는 빼고)와 1시간에 줄에 세울 수
+    # 있는 회차 수. 넘치는 회차는 거절하지 않고 줄 밖에서 기다린다
+    WORKER_QUEUE_PER_INSTITUTION: int = Field(4, ge=1)
+    WORKER_HOURLY_PER_INSTITUTION: int = Field(10, ge=1)
     # 결과 영상 프로세스 풀의 크기(12.4). 0이면 결과 영상이 영영 PENDING이므로 같은 이유로 시작을 막는다
     WORKER_RENDER_CONCURRENCY: int = Field(1, ge=1)
     # 보고서 프로세스 풀의 크기(12.4). 2면 한 회차의 두 판본(보호자용·수의사용)을 함께 만든다. 한 부를 만드는 동안

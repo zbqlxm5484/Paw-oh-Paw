@@ -28,8 +28,9 @@
 
 | 항목 | 결과 | 본 곳 |
 | --- | --- | --- |
-| 마이그레이션 head | 하나다(`0022`) | `alembic heads` |
+| 마이그레이션 head | 하나다(`0023`. develop은 `0022`이고 이 브랜치가 분석 줄의 `0023`을 더한다) | `alembic heads` |
 | 0022가 옛 코드와 같이 돌아도 되는가 | 된다. `staff`에 칸 셋을 더하기만 하고, NOT NULL인 `login_fail_count`에는 서버 기본값 0이 있다. 배포는 마이그레이션을 먼저 돌리고 색을 바꾸므로 잠깐 옛 코드가 새 스키마를 쓴다 | `0022_staff_login_lock.py`, `deploy.sh` |
+| 0023이 옛 코드와 같이 돌아도 되는가 | 된다. `measure_session`에 NULL을 허용하는 칸 하나(`queued_at`)와 인덱스를 더하기만 한다. 옛 워커는 이 칸을 모르고 그대로 돈다 | `0023_session_queued_at.py` |
 | 이미지의 OS 패키지 | ffmpeg, Pango 둘, `fonts-nanum`이 있다(11-04에 넘긴 2번이 반영됨) | `backend/Dockerfile` |
 | 시간대 | `tzdata`가 고정돼 있고 `APP_TIMEZONE` 기본값이 `Asia/Seoul`이다 | `requirements.txt`, `app/core/config.py` |
 | worker | 한 대다. api와 같은 이미지·`.env`·업로드 볼륨을 쓴다. 배포 때 api 전환 뒤에 다시 만들고, 기동 직후 죽어 있으면 배포 실패로 본다(11-04에 넘긴 1번이 반영됨) | `compose.yaml`, `deploy.sh` |
@@ -141,9 +142,9 @@ echo "6 약관 필수";   curl -sS -w '\n%{http_code}\n' -X POST $BASE/api/v1/au
 | 번호 | 무엇을 | 기대하는 결과 | 결과 |
 | --- | --- | --- | --- |
 | 1 | `docker compose -p creamoff ps` | nginx, api 한 색, web 한 색, worker 하나, postgres, redis가 떠 있다. worker는 둘이면 안 된다 | |
-| 2 | `docker compose -p creamoff run --rm --no-deps api-<색> alembic current` | `0022 (head)` | |
+| 2 | `docker compose -p creamoff run --rm --no-deps api-<색> alembic current` | `0023 (head)`(이 브랜치가 머지되기 전의 배포라면 `0022`) | |
 | 3 | 3절 5번의 `.env` 값 | 표와 같다 | |
 | 4 | worker 로그 | 기동 뒤 오류가 없다. 보고서 완료 로그에 `made_by=template`이 찍힌다(Gotenberg가 없을 때) | |
 | 5 | Prometheus의 `api` 대상 | `METRICS_ENABLED=true` 뒤에 up이고 `ApiDown`이 꺼진다 | |
-| 6 | 운영 배포 전의 DB 백업 | 있다(배포 때 0022가 돈다) | |
+| 6 | 운영 배포 전의 DB 백업 | 있다(배포 때 0022와 0023이 돈다) | |
 | 7 | 시연 자료(`python -m scripts.seed_demo`) | 시연 날 운영 DB에 넣는다. `demo_seed` 폴더에 `face_masks.json`이 있어야 한다 | |

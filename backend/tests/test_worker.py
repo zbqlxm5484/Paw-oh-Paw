@@ -1,4 +1,4 @@
-"""워커 분석 제출·조회·결과 저장·기관별 상한(명세 3절, 6절, 12.4, 13.3, 14.2, 14.3, 17.3 BE-06·07·08·11, 17.6)."""
+"""워커 분석 제출·조회·결과 저장·분석 줄(명세 3절, 6절, 12.4, 13.3, 14.2, 14.3, 17.3 BE-06·07·08·11, 17.6)."""
 
 import json
 import logging
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlalchemy import delete, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.clients.analysis import AnalysisClientError, AnalysisStatus, MockAnalysisClient, SubmitInfo, load_fixture
@@ -26,8 +26,9 @@ from app.worker.main import Worker, clean_worker_tmp, run_once
 
 
 def _settings(**overrides: Any) -> Settings:
-    # 기관별 상한(기본 4)은 그 절의 테스트에서만 건다. 다른 테스트는 촬영이 모두 한 기관이라 상한에 걸리지 않게 둔다
-    return get_settings().model_copy(update={"WORKER_MAX_IN_FLIGHT_PER_INSTITUTION": 100, **overrides})
+    # 분석 줄의 기관별 제한(줄 4, 1시간 10)은 그 절의 테스트에서만 건다. 다른 테스트는 걸리지 않게 크게 둔다
+    open_queue = {"WORKER_QUEUE_PER_INSTITUTION": 100, "WORKER_HOURLY_PER_INSTITUTION": 1000}
+    return get_settings().model_copy(update={**open_queue, **overrides})
 
 
 def _session(db: Session, dog, staff) -> MeasureSession:
@@ -68,7 +69,7 @@ def _fresh(db: Session, shot: Shot) -> Shot | None:
 
 
 def _other_dog(db: Session, other_staff) -> Dog:
-    """other_staff 기관(T02)의 반려견. 기관별 상한 확인용."""
+    """other_staff 기관(T02)의 반려견. 분석 줄 확인용."""
     row = Dog(
         institution_id=other_staff.institution_id,
         name="콩이",
@@ -209,54 +210,160 @@ def test_in_flight_cap_limits_claims(db: Session, dog, staff) -> None:
     assert _fresh(db, shots[2]).status == "SUBMITTED"
 
 
-# ---- 기관별 상한 (12.4, 17.6) ----
+# ---- 분석 줄 (12.4, 17.6): 회차를 줄에 세우고 줄에 선 순서대로 가져간다 ----
 
 
-def test_institution_cap_leaves_room_for_other_institutions(db: Session, dog, staff, other_staff) -> None:
-    # 17.6: 한 기관이 30건을 한꺼번에 올려도 그 기관은 상한까지만, 다른 기관의 새 촬영은 바로 SUBMITTED.
-    # 30건은 전체 자리 16보다 많아야 한다: 앞에서 16행만 보는 구현이면 T02의 촬영을 못 본다
-    mine = _session(db, dog, staff)
-    many = [_shot(db, mine, seq_no) for seq_no in range(1, 31)]  # T01이 30건을 먼저 올림
-    theirs = _session(db, _other_dog(db, other_staff), other_staff)
-    late = _shot(db, theirs, 1, uploaded_at=datetime.now(UTC) + timedelta(seconds=60))  # T02가 가장 늦게 1건
-    settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
-    client = FakeClient()
-
-    stats = run_once(db, client, settings, get_storage())
-
-    assert stats.claimed == 5 and stats.submitted == 5
-    assert [_fresh(db, s).status for s in many] == ["SUBMITTED"] * 4 + ["UPLOADED"] * 26  # 올린 순서대로 4건
-    assert _fresh(db, late).status == "SUBMITTED"
-    # 분석이 안 끝났으면 다음 바퀴에도 T01은 더 못 가져간다(SQL이 그 기관의 남은 자리를 0으로 본다)
-    assert run_once(db, client, settings, get_storage()).claimed == 0
+def _queue_settings(**overrides: Any) -> Settings:
+    """명세의 기본값: 전체는 촬영 16건, 줄은 기관마다 4회차, 접수는 기관마다 1시간에 10회차."""
+    defaults = {"WORKER_MAX_IN_FLIGHT": 16, "WORKER_QUEUE_PER_INSTITUTION": 4, "WORKER_HOURLY_PER_INSTITUTION": 10}
+    return _settings(**{**defaults, **overrides})
 
 
-def test_institution_cap_counts_shots_already_in_flight(db: Session, dog, staff) -> None:
+def _sessions(db: Session, institution_id: uuid.UUID, staff, count: int) -> list[MeasureSession]:
+    """그 기관의 서로 다른 반려견 count마리에 회차를 하나씩 연다(한 반려견에 열린 회차는 하나다)."""
+    rows = []
+    for _ in range(count):
+        row = Dog(institution_id=institution_id, name="줄", breed="푸들", weight_kg=Decimal("6.20"), size_class="SMALL")
+        db.add(row)
+        db.flush()
+        rows.append(_session(db, row, staff))
+    return rows
+
+
+def _fill(db: Session, session: MeasureSession, base: datetime, count: int = 16) -> list[Shot]:
+    """회차에 촬영 count건을 base 뒤로 1초 간격으로 올린다."""
+    return [_shot(db, session, n, uploaded_at=base + timedelta(seconds=n)) for n in range(1, count + 1)]
+
+
+def _in_analysis(db: Session) -> dict[uuid.UUID, int]:
+    """분석 중(SUBMITTED·ANALYZING)인 촬영 수를 회차별로."""
+    db.expire_all()
+    in_flight = Shot.status.in_(("SUBMITTED", "ANALYZING"))
+    return dict(db.execute(select(Shot.session_id, func.count()).where(in_flight).group_by(Shot.session_id)).all())
+
+
+def _finish_all(db: Session, client: "FakeClient") -> None:
+    """분석 중인 촬영을 모두 끝낸다(분석 API가 실패라고 답하게 해 자리를 비운다)."""
+    for job_id in db.scalars(select(Shot.job_id).where(Shot.status.in_(("SUBMITTED", "ANALYZING")))):
+        client.statuses[job_id] = AnalysisStatus("failed", error_code="DECODE_FAILED", error_message="x")
+
+
+def _queued(db: Session, sessions: list[MeasureSession]) -> list[bool]:
+    db.expire_all()
+    return [db.get(MeasureSession, s.id).queued_at is not None for s in sessions]
+
+
+def test_all_shots_of_one_session_go_at_once(db: Session, dog, staff) -> None:
+    # v1.59: 한 회차의 촬영 16건은 한꺼번에 간다(그전에는 기관별로 4건씩). 17번째는 전체 자리(촬영 16건)가 없어 기다린다
     session = _session(db, dog, staff)
-    busy = [_shot(db, session, seq_no, status="ANALYZING", job_id=f"old-{seq_no}") for seq_no in (1, 2, 3)]
-    waiting = [_shot(db, session, seq_no) for seq_no in (4, 5)]
-    client = FakeClient(statuses={f"old-{n}": AnalysisStatus("running") for n in (1, 2, 3)})
-    settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+    shots = [_shot(db, session, seq_no) for seq_no in range(1, 18)]
+
+    stats = run_once(db, FakeClient(), _queue_settings(), get_storage())
+
+    assert stats.queued == 1 and stats.claimed == 16 and stats.submitted == 16
+    assert [_fresh(db, s).status for s in shots] == ["SUBMITTED"] * 16 + ["UPLOADED"]
+
+
+def test_queue_holds_four_sessions_per_institution_besides_the_one_in_analysis(db: Session, dog, staff) -> None:
+    # 17.6: 16건짜리 회차 일곱을 올리면 하나는 분석에 들어가고, 넷은 줄에 서고, 둘은 줄 밖에서 기다린다
+    base = datetime.now(UTC)
+    sessions = _sessions(db, dog.institution_id, staff, 7)
+    for index, session in enumerate(sessions):
+        _fill(db, session, base + timedelta(seconds=index * 100))
+    settings, client = _queue_settings(), FakeClient()
 
     first = run_once(db, client, settings, get_storage())
 
-    assert first.claimed == 1 and first.submitted == 1
-    assert [_fresh(db, s).status for s in waiting] == ["SUBMITTED", "UPLOADED"]
-    assert {_fresh(db, s).status for s in busy} == {"ANALYZING"}
-    # 하나가 끝나 그 기관에 자리가 나면 다음 바퀴에 가져온다
-    client.statuses["old-1"] = AnalysisStatus("failed", error_code="DECODE_FAILED", error_message="x")
+    assert first.queued == 4 and first.claimed == 16
+    assert _in_analysis(db) == {sessions[0].id: 16}
+    assert _queued(db, sessions) == [True] * 4 + [False] * 3
+    # 첫 회차가 분석에 들어가 줄에서 빠졌으므로 다음 바퀴에 다섯째가 줄에 선다. 분석 자리는 없어 가져가지는 않는다
     second = run_once(db, client, settings, get_storage())
-    assert second.failed == 1 and second.claimed == 1
-    assert _fresh(db, waiting[1]).status == "SUBMITTED"
+    assert second.queued == 1 and second.claimed == 0
+    assert _queued(db, sessions) == [True] * 5 + [False] * 2
+    # 줄이 찼으므로 더는 세우지 않는다. 줄 밖의 촬영은 UPLOADED로 남는다(거절하지 않는다)
+    third = run_once(db, client, settings, get_storage())
+    assert third.queued == 0 and third.claimed == 0
+    assert _queued(db, sessions) == [True] * 5 + [False] * 2
+
+
+def test_another_institution_waits_only_for_the_sessions_already_in_the_queue(
+    db: Session, dog, staff, other_staff
+) -> None:
+    # 17.6: 기관 A가 회차 일곱을 먼저 올리고 기관 B가 하나를 올린다. B는 A의 줄에 있던 넷 다음에 들어가고,
+    # A의 나머지 셋은 B 뒤다(줄에 선 순서). 올린 순서대로만 하면 B는 A의 일곱이 다 끝나야 들어간다
+    base = datetime.now(UTC)
+    mine = _sessions(db, dog.institution_id, staff, 7)
+    for index, session in enumerate(mine):
+        _fill(db, session, base + timedelta(seconds=index * 100))
+    theirs = _session(db, _other_dog(db, other_staff), other_staff)
+    _fill(db, theirs, base + timedelta(seconds=900))
+    names = {session.id: f"A{index}" for index, session in enumerate(mine, 1)} | {theirs.id: "B1"}
+    settings, client = _queue_settings(), FakeClient()
+
+    order = []
+    for _ in range(8):
+        run_once(db, client, settings, get_storage())
+        in_analysis = _in_analysis(db)
+        assert list(in_analysis.values()) == [16]  # 한 번에 한 회차, 16건이 한꺼번에
+        order.append(names[next(iter(in_analysis))])
+        _finish_all(db, client)
+
+    assert order == ["A1", "A2", "A3", "A4", "B1", "A5", "A6", "A7"]
+
+
+def test_hourly_limit_holds_the_eleventh_session_until_an_hour_has_passed(db: Session, dog, staff) -> None:
+    # 17.6: 한 기관이 1시간에 줄에 세울 수 있는 회차는 열까지다. 열한째부터는 1시간이 지나야 줄에 선다
+    base = datetime.now(UTC)
+    sessions = _sessions(db, dog.institution_id, staff, 12)
+    shots = [
+        _shot(db, session, 1, uploaded_at=base + timedelta(seconds=index)) for index, session in enumerate(sessions)
+    ]
+    settings = _queue_settings(WORKER_QUEUE_PER_INSTITUTION=100)  # 줄 크기는 걸리지 않게
+    client = FakeClient()
+
+    first = run_once(db, client, settings, get_storage())
+
+    assert first.queued == 10 and first.claimed == 10
+    assert [_fresh(db, s).status for s in shots] == ["SUBMITTED"] * 10 + ["UPLOADED"] * 2
+    assert run_once(db, client, settings, get_storage()).queued == 0  # 같은 시간 안에는 더 세우지 않는다
+    # 1시간이 지난 것으로 만든다: 줄에 선 시각을 61분 앞으로 옮긴다
+    db.execute(
+        update(MeasureSession)
+        .where(MeasureSession.queued_at.is_not(None))
+        .values(queued_at=MeasureSession.queued_at - timedelta(minutes=61))
+    )
+    db.commit()
+    later = run_once(db, client, settings, get_storage())
+    assert later.queued == 2 and later.claimed == 2
+    assert [_fresh(db, s).status for s in shots] == ["SUBMITTED"] * 12
+
+
+def test_more_shots_of_a_queued_session_do_not_use_the_hourly_limit(db: Session, dog, staff) -> None:
+    # 이미 줄에 선 회차에 더 올린 촬영은 그대로 간다. 접수 수에 더하지 않는다
+    base = datetime.now(UTC)
+    first_session, second_session = _sessions(db, dog.institution_id, staff, 2)
+    _shot(db, first_session, 1, uploaded_at=base)
+    held = _shot(db, second_session, 1, uploaded_at=base + timedelta(seconds=1))
+    settings = _queue_settings(WORKER_HOURLY_PER_INSTITUTION=1)
+    client = FakeClient()
+
+    first = run_once(db, client, settings, get_storage())
+    assert first.queued == 1 and first.claimed == 1 and _fresh(db, held).status == "UPLOADED"
+
+    more = _shot(db, first_session, 2, uploaded_at=base + timedelta(seconds=5))
+    second = run_once(db, client, settings, get_storage())
+    assert second.queued == 0 and second.claimed == 1
+    assert _fresh(db, more).status == "SUBMITTED" and _fresh(db, held).status == "UPLOADED"
 
 
 def test_global_cap_still_applies_across_institutions(db: Session, dog, staff, other_staff) -> None:
-    # 기관별 자리가 남아도 전체 자리(WORKER_MAX_IN_FLIGHT)가 없으면 못 가져간다. 올린 순서대로
+    # 줄에 서 있어도 전체 자리(WORKER_MAX_IN_FLIGHT)가 없으면 못 가져간다. 줄에 선 순서대로
     mine = _session(db, dog, staff)
     theirs = _session(db, _other_dog(db, other_staff), other_staff)
     first = [_shot(db, mine, n) for n in (1, 2, 3)]
     second = [_shot(db, theirs, n, uploaded_at=datetime.now(UTC) + timedelta(seconds=10 + n)) for n in (1, 2, 3)]
-    settings = _settings(WORKER_MAX_IN_FLIGHT=4, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=3)
+    settings = _settings(WORKER_MAX_IN_FLIGHT=4)
 
     stats = run_once(db, FakeClient(), settings, get_storage())
 
@@ -265,29 +372,8 @@ def test_global_cap_still_applies_across_institutions(db: Session, dog, staff, o
     assert [_fresh(db, s).status for s in second] == ["SUBMITTED", "UPLOADED", "UPLOADED"]
 
 
-def test_two_partially_full_institutions_get_their_remaining_room(db: Session, dog, staff, other_staff) -> None:
-    # T01은 3건, T02는 2건이 이미 진행 중(상한 4) → 올린 순서대로 각각 1건·2건만 더
-    mine = _session(db, dog, staff)
-    theirs = _session(db, _other_dog(db, other_staff), other_staff)
-    for seq_no in (1, 2, 3):
-        _shot(db, mine, seq_no, status="ANALYZING", job_id=f"m{seq_no}")
-    for seq_no in (1, 2):
-        _shot(db, theirs, seq_no, status="ANALYZING", job_id=f"t{seq_no}")
-    base = datetime.now(UTC) + timedelta(seconds=100)
-    waiting_mine = [_shot(db, mine, n, uploaded_at=base + timedelta(seconds=n)) for n in (4, 5, 6)]
-    waiting_theirs = [_shot(db, theirs, n, uploaded_at=base + timedelta(seconds=10 + n)) for n in (3, 4, 5)]
-    client = FakeClient(statuses={k: AnalysisStatus("running") for k in ("m1", "m2", "m3", "t1", "t2")})
-    settings = _settings(WORKER_MAX_IN_FLIGHT=16, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
-
-    stats = run_once(db, client, settings, get_storage())
-
-    assert stats.claimed == 3
-    assert [_fresh(db, s).status for s in waiting_mine] == ["SUBMITTED", "UPLOADED", "UPLOADED"]
-    assert [_fresh(db, s).status for s in waiting_theirs] == ["SUBMITTED", "SUBMITTED", "UPLOADED"]
-
-
-def test_global_cap_reached_mid_loop_then_upload_order_for_the_rest(db: Session, dog, staff, other_staff) -> None:
-    # 전체 5·기관별 4: A 4건, B 2건, C 1건 순으로 올림 → A4·B1, C는 기다린다. 자리가 하나 나면 C보다 먼저 올린 B의 둘째
+def test_global_cap_reached_mid_loop_then_queue_order_for_the_rest(db: Session, dog, staff, other_staff) -> None:
+    # 전체 자리 5: A 4건, B 2건, C 1건 순으로 올림 → A4·B1, C는 기다린다. 자리가 하나 나면 C보다 먼저 줄에 선 B의 둘째
     a = _session(db, dog, staff)
     other = _other_dog(db, other_staff)
     b = _session(db, other, other_staff)
@@ -299,11 +385,10 @@ def test_global_cap_reached_mid_loop_then_upload_order_for_the_rest(db: Session,
     base = datetime.now(UTC) + timedelta(seconds=100)
     a_shots = [_shot(db, a, n, uploaded_at=base + timedelta(seconds=n)) for n in (1, 2, 3, 4)]
     b_shots = [_shot(db, b, n, uploaded_at=base + timedelta(seconds=4 + n)) for n in (1, 2)]
-    # C는 세 번째 기관이어야 하는데 테스트 기관이 둘뿐이라, B와 같은 기관의 다른 회차로 "그 뒤에 올린 촬영"만 본다
     c = _session(db, c_dog, other_staff)
     c_shot = _shot(db, c, 1, uploaded_at=base + timedelta(seconds=7))
     client = FakeClient()
-    settings = _settings(WORKER_MAX_IN_FLIGHT=5, WORKER_MAX_IN_FLIGHT_PER_INSTITUTION=4)
+    settings = _settings(WORKER_MAX_IN_FLIGHT=5)
 
     first = run_once(db, client, settings, get_storage())
 

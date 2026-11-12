@@ -10,8 +10,10 @@
 2. 회차 집계(BE-13): AGGREGATING 회차 중 촬영이 모두 DONE·FAILED인 것을 services/aggregation.py로 집계해 DONE으로 둔다.
    analysis.json을 읽을 수 없으면 FAILED(AGGREGATION_FAILED), DB 오류는 다음 바퀴에 다시.
 3. UPLOADED 촬영 가져오기(BE-06): 그 회차 행을 잠근 채 조건을 건 UPDATE로 SUBMITTED로 바꾸고 commit한다. 측정 취소·촬영
-   삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). 전체로는 WORKER_MAX_IN_FLIGHT, 기관별로는
-   WORKER_MAX_IN_FLIGHT_PER_INSTITUTION까지만 가져와 한 기관이 자리를 다 차지하지 못하게 한다(3절, 12.4 기관별 상한).
+   삭제도 같은 회차 행을 잠그므로 둘 중 하나만 먼저 간다(12.4 잠금, 13.3). 가져오기 전에 회차를 분석 줄에 세운다
+   (queued_at): 기관마다 줄에 서 있는 회차는 WORKER_QUEUE_PER_INSTITUTION개까지, 1시간에 줄에 세우는 회차는
+   WORKER_HOURLY_PER_INSTITUTION개까지다. 줄에 선 순서대로, 전체로는 촬영 WORKER_MAX_IN_FLIGHT건까지 가져온다.
+   한 회차의 촬영은 나누지 않는다(3절, 12.4 분석 줄).
 4. 가져온 촬영(SUBMITTED인데 job_id가 없는 것)을 분석 API에 보낸다. 되면 job_id를 적고, 못 보내면 SUBMITTED에 둔 채
    attempt_count를 올려 다음 바퀴에 다시 보내며, ANALYSIS_SUBMIT_MAX_ATTEMPTS번 실패하면 FAILED(ANALYSIS_SUBMIT_FAILED).
    분석 API가 요청 자체를 거부하면(400·413·415 같은 4xx) 다시 보내지 않고 바로 FAILED다. 인증 키가 틀리면(401·403)
@@ -81,6 +83,7 @@ SWEEP_RESUME_SEC = 300
 class WorkerStats:
     """한 바퀴에서 한 일의 개수. 로그와 테스트용."""
 
+    queued: int = 0  # 회차를 분석 줄에 세움(queued_at)
     claimed: int = 0  # UPLOADED → SUBMITTED (아직 안 보냄)
     submitted: int = 0  # 분석 API가 받아 job_id를 적음
     submit_attempt_failed: int = 0  # 제출 실패했지만 아직 다시 보낼 차례가 남음
@@ -109,21 +112,9 @@ def _now() -> datetime:
 # ---- 상태 조회 ----
 
 
-def _in_flight_by_institution():
-    """기관별 SUBMITTED·ANALYZING 수를 세는 SELECT(shot → measure_session → dog를 join해 GROUP BY, 12.4)."""
-    return (
-        select(Dog.institution_id.label("institution_id"), func.count().label("busy"))
-        .select_from(Shot)
-        .join(MeasureSession, Shot.session_id == MeasureSession.id)
-        .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(Shot.status.in_(IN_FLIGHT))
-        .group_by(Dog.institution_id)
-    )
-
-
-def count_in_flight_by_institution(db: Session) -> dict[uuid.UUID, int]:
-    """기관별 SUBMITTED·ANALYZING 수. 전체 수는 값의 합이다."""
-    return {institution_id: busy for institution_id, busy in db.execute(_in_flight_by_institution()).all()}
+def count_in_flight(db: Session) -> int:
+    """분석 API에 맡겨 둔(SUBMITTED·ANALYZING) 촬영 수. 전체 자리는 WORKER_MAX_IN_FLIGHT에서 이 수를 뺀 것이다."""
+    return db.scalar(select(func.count()).select_from(Shot).where(Shot.status.in_(IN_FLIGHT))) or 0
 
 
 def _fail(db: Session, shot_id: uuid.UUID, reason: FailReason) -> bool:
@@ -325,50 +316,112 @@ def _lock_session(db: Session, session_id: uuid.UUID) -> bool:
     return row is not None
 
 
-def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
-    """UPLOADED 촬영을 올린 순서대로 SUBMITTED로 가져온다. 전체 자리(WORKER_MAX_IN_FLIGHT)와 그 기관의 자리
-    (WORKER_MAX_IN_FLIGHT_PER_INSTITUTION)가 둘 다 있는 것만(12.4 기관별 상한).
+# 기관별 접수 제한을 세는 기간(12.4 분석 줄): 지난 1시간에 줄에 세운 회차를 센다
+QUEUE_WINDOW = timedelta(hours=1)
 
-    후보는 SQL에서 기관별 남은 자리만큼만 뽑는다(12.4): 기관별로 올린 순서에 번호를 매겨(row_number) 그 기관의 남은
-    자리(상한 − 진행 중) 이하인 것만 남기고, 전체는 올린 순서로 room개까지(LIMIT). 그래서 한 기관이 앞에 많이 올려도 그
-    뒤 다른 기관의 촬영이 보이고, 대기열이 아무리 길어도 읽어 오는 행은 room개다(3절 "한 기관의 대량 업로드").
 
-    회차 행을 잠근 채 바꾼다(12.4 잠금). 측정 취소·촬영 삭제가 같은 행을 잠그므로, 취소가 먼저면 여기서 바뀐 행이
-    0개이고 여기가 먼저면 취소가 SUBMITTED를 보고 409 SHOT_IN_PROGRESS를 낸다. 분석 API는 아직 부르지 않아 잠금이 짧다.
+def admit_to_queue(db: Session, settings: Settings, stats: WorkerStats) -> None:
+    """UPLOADED 촬영이 있는데 아직 분석 줄에 서지 않은 회차를 줄에 세운다(queued_at, 12.4 분석 줄).
+
+    기관마다 두 가지를 넘지 않게 한다.
+    - 줄에 서 있는 회차는 WORKER_QUEUE_PER_INSTITUTION개까지. 분석 중인 촬영이 있는 회차는 세지 않는다.
+    - 지난 1시간에 줄에 세운 회차는 WORKER_HOURLY_PER_INSTITUTION개까지.
+
+    넘치는 회차는 거절하지 않는다. 촬영은 UPLOADED로 남고(화면에는 대기 중) 자리가 나면 다음 바퀴에 줄에 선다.
+    줄에 선 순서가 분석 순서다. 한 기관이 회차를 많이 올려도 앞에 세울 수 있는 회차는 줄 크기까지이고, 그 뒤에 온 다른
+    기관의 회차가 그다음에 선다. queued_at은 이미 있는 값보다 늘 뒤가 되게 적는다(시계가 같은 값을 주어도 순서가 선다).
     """
-    in_flight = count_in_flight_by_institution(db)
-    room = settings.WORKER_MAX_IN_FLIGHT - sum(in_flight.values())
-    if room <= 0:
-        return
-    per_institution = settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION
-    busy = _in_flight_by_institution().subquery("in_flight")
-    ranked = (
+    in_flight = select(Shot.session_id).where(Shot.status.in_(IN_FLIGHT))
+    queued = dict(
+        db.execute(
+            select(Dog.institution_id, func.count(func.distinct(MeasureSession.id)))
+            .select_from(Shot)
+            .join(MeasureSession, Shot.session_id == MeasureSession.id)
+            .join(Dog, MeasureSession.dog_id == Dog.id)
+            .where(
+                Shot.status == UPLOADED,
+                MeasureSession.queued_at.is_not(None),
+                MeasureSession.id.not_in(in_flight),
+            )
+            .group_by(Dog.institution_id)
+        ).all()
+    )
+    recent = dict(
+        db.execute(
+            select(Dog.institution_id, func.count())
+            .select_from(MeasureSession)
+            .join(Dog, MeasureSession.dog_id == Dog.id)
+            .where(MeasureSession.queued_at > _now() - QUEUE_WINDOW)
+            .group_by(Dog.institution_id)
+        ).all()
+    )
+    # 아직 줄에 서지 않은 회차를 기관별로 처음 올린 순서대로. 한 바퀴에 기관마다 줄 크기까지만 읽는다
+    first_uploaded = func.min(Shot.uploaded_at)
+    waiting = (
         select(
-            Shot.id.label("shot_id"),
-            Shot.session_id.label("session_id"),
+            MeasureSession.id.label("session_id"),
             Dog.institution_id.label("institution_id"),
-            Shot.uploaded_at.label("uploaded_at"),
-            func.row_number().over(partition_by=Dog.institution_id, order_by=(Shot.uploaded_at, Shot.id)).label("rank"),
+            first_uploaded.label("first_uploaded"),
+            func.row_number()
+            .over(partition_by=Dog.institution_id, order_by=(first_uploaded, MeasureSession.id))
+            .label("rank"),
         )
         .select_from(Shot)
         .join(MeasureSession, Shot.session_id == MeasureSession.id)
         .join(Dog, MeasureSession.dog_id == Dog.id)
-        .where(Shot.status == UPLOADED)
-    ).subquery("ranked")
+        .where(Shot.status == UPLOADED, MeasureSession.queued_at.is_(None))
+        .group_by(MeasureSession.id, Dog.institution_id)
+    ).subquery("waiting")
+    rows = db.execute(
+        select(waiting.c.session_id, waiting.c.institution_id)
+        .where(waiting.c.rank <= settings.WORKER_QUEUE_PER_INSTITUTION)
+        .order_by(waiting.c.first_uploaded, waiting.c.session_id)
+    ).all()
+    if not rows:
+        return
+    last = db.scalar(select(func.max(MeasureSession.queued_at)))
+    at = _now()
+    if last is not None and last >= at:
+        at = last + timedelta(microseconds=1)
+    for session_id, institution_id in rows:
+        if queued.get(institution_id, 0) >= settings.WORKER_QUEUE_PER_INSTITUTION:
+            continue
+        if recent.get(institution_id, 0) >= settings.WORKER_HOURLY_PER_INSTITUTION:
+            continue
+        changed = db.execute(
+            update(MeasureSession)
+            .where(MeasureSession.id == session_id, MeasureSession.queued_at.is_(None))
+            .values(queued_at=at)
+        ).rowcount
+        db.commit()
+        if changed:
+            at += timedelta(microseconds=1)
+            queued[institution_id] = queued.get(institution_id, 0) + 1
+            recent[institution_id] = recent.get(institution_id, 0) + 1
+            stats.queued += 1
+
+
+def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
+    """분석 줄에 선 회차의 UPLOADED 촬영을 줄에 선 순서대로 SUBMITTED로 가져온다(12.4 분석 줄).
+
+    전체 자리는 촬영 수다(WORKER_MAX_IN_FLIGHT − 분석 중인 촬영 수). 한 회차의 촬영은 나누지 않으므로, 자리가 있으면 한
+    회차에 올린 16건이 한꺼번에 간다. 줄에 선 순서(queued_at)가 먼저이고 같은 회차 안에서는 올린 순서다. 읽는 행은 남은
+    자리 수까지다(LIMIT). 그래서 대기열이 아무리 길어도 읽어 오는 행은 남은 자리 수다.
+
+    회차 행을 잠근 채 바꾼다(12.4 잠금). 측정 취소·촬영 삭제가 같은 행을 잠그므로, 취소가 먼저면 여기서 바뀐 행이
+    0개이고 여기가 먼저면 취소가 SUBMITTED를 보고 409 SHOT_IN_PROGRESS를 낸다. 분석 API는 아직 부르지 않아 잠금이 짧다.
+    """
+    room = settings.WORKER_MAX_IN_FLIGHT - count_in_flight(db)
+    if room <= 0:
+        return
     query = (
-        select(ranked.c.shot_id, ranked.c.session_id, ranked.c.institution_id)
-        .outerjoin(busy, busy.c.institution_id == ranked.c.institution_id)
-        .where(ranked.c.rank <= per_institution - func.coalesce(busy.c.busy, 0))
-        .order_by(ranked.c.uploaded_at, ranked.c.shot_id)
+        select(Shot.id, Shot.session_id)
+        .join(MeasureSession, Shot.session_id == MeasureSession.id)
+        .where(Shot.status == UPLOADED, MeasureSession.queued_at.is_not(None))
+        .order_by(MeasureSession.queued_at, Shot.uploaded_at, Shot.id)
         .limit(room)
     )
-    claimed = 0
-    for shot_id, session_id, institution_id in db.execute(query).all():
-        # 아래 두 검사는 안전망이다. SQL이 자리를 맞춰 뽑았으므로 보통은 걸리지 않는다
-        if claimed >= room:
-            break
-        if in_flight.get(institution_id, 0) >= per_institution:
-            continue
+    for shot_id, session_id in db.execute(query).all():
         if not _lock_session(db, session_id):  # 그사이 회차가 지워졌다(촬영도 함께)
             db.commit()
             continue
@@ -379,8 +432,6 @@ def claim_uploaded(db: Session, settings: Settings, stats: WorkerStats) -> None:
         ).rowcount
         db.commit()  # 잠금을 바로 푼다
         if changed:
-            claimed += 1
-            in_flight[institution_id] = in_flight.get(institution_id, 0) + 1
             stats.claimed += 1
 
 
@@ -474,14 +525,15 @@ def run_once(
     renderer: VideoRenderer | None = None,
     reporter: ReportGenerator | None = None,
 ) -> WorkerStats:
-    """한 바퀴. 상태를 조회해 자리를 비우고 → 끝난 회차를 집계하고 → 새 촬영을 가져오고 → 가져온 것을 보내고
-    → 결과 영상을 거두고 맡긴다.
+    """한 바퀴. 상태를 조회해 자리를 비우고 → 끝난 회차를 집계하고 → 회차를 분석 줄에 세우고 → 줄에 선 순서대로
+    새 촬영을 가져오고 → 가져온 것을 보내고 → 결과 영상을 거두고 맡긴다.
 
     renderer·reporter가 없으면 결과 영상·보고서는 건너뛴다(분석 쪽만 보는 테스트용). Worker는 늘 넘긴다.
     """
     stats = WorkerStats()
     poll_in_flight(db, client, settings, storage, stats)
     aggregate_finished(db, storage, stats)
+    admit_to_queue(db, settings, stats)
     claim_uploaded(db, settings, stats)
     send_claimed(db, client, settings, storage, stats)
     if renderer is not None:
@@ -647,12 +699,13 @@ def main() -> int:
     signal.signal(signal.SIGINT, worker.stop)
     signal.signal(signal.SIGTERM, worker.stop)
     logger.info(
-        "worker started mode=%s interval=%ss max_in_flight=%d per_institution=%d timeout=%ss render_concurrency=%d "
-        "report_concurrency=%d sweep_max=%ss",
+        "worker started mode=%s interval=%ss max_in_flight=%d queue_per_institution=%d hourly_per_institution=%d "
+        "timeout=%ss render_concurrency=%d report_concurrency=%d sweep_max=%ss",
         settings.ANALYSIS_API_MODE,
         settings.WORKER_POLL_INTERVAL_SEC,
         settings.WORKER_MAX_IN_FLIGHT,
-        settings.WORKER_MAX_IN_FLIGHT_PER_INSTITUTION,
+        settings.WORKER_QUEUE_PER_INSTITUTION,
+        settings.WORKER_HOURLY_PER_INSTITUTION,
         settings.ANALYSIS_TIMEOUT_SEC,
         settings.WORKER_RENDER_CONCURRENCY,
         settings.WORKER_REPORT_CONCURRENCY,
