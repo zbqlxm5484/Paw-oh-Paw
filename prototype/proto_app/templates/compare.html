@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ dog.name }} 경과 비교 · Paw oh Paw{% endblock %}
+{% block content %}
+<main style="max-width:none;margin:0;padding:24px 80px 96px;display:flex;flex-direction:column;gap:20px">
+  <a class="lk" href="/dogs/{{ dog.id }}" style="align-self:flex-start;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:600;color:#5B6472"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#w-back"></use></svg>{{ dog.name }} 차트</a>
+  <div style="display:flex;flex-direction:column;gap:6px"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px">{{ cp.name }} 경과 비교</h1></div>
+  {% if not cp.has %}
+  <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:40px 32px;font-size:15px;color:#5B6472">비교하려면 유효한 회차가 2개 이상 필요해요.</div>
+  {% else %}
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="display:grid;grid-template-columns:1fr 1fr;padding:4px;border-radius:12px;background:#EEE8DF;width:380px;max-width:100%">
+      {% for g in segs %}<a class="lk" href="?cmp={{ g.key }}&tk={{ tk }}" style="height:42px;border-radius:9px;background:{{ g.bg }};color:{{ g.c }};box-shadow:{{ g.sh }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;transition:background .2s">{{ g.label }}</a>{% endfor %}
+    </div>
+    <div style="flex:1 1 360px;min-width:0;background:#fff;border:1px solid #ECE8E2;border-radius:14px;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div><span style="font-size:12.5px;color:#5B6472;font-weight:600">{{ cp.baseLabel }}</span><b style="display:block;font-size:16px;font-variant-numeric:tabular-nums">{{ cp.baseDate }}</b></div>
+      <svg width="22" height="22" viewBox="0 0 24 24" style="color:#A0A7B2"><path d="M3 12h17M14 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      <div><span style="font-size:12.5px;color:#5B6472;font-weight:600">최근 회차</span><b style="display:block;font-size:16px;font-variant-numeric:tabular-nums">{{ cp.tDate }}</b></div>
+    </div>
+  </div>
+  {% if cp.modelChanged %}
+  <div style="background:#FAF1DF;border-radius:12px;padding:14px 18px;font-size:14.5px;line-height:1.5;color:#7A5410;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap"><span>{{ cp.modelMsg }}</span><span data-toast="새 모델로 재분석을 요청했어요" style="font-weight:700;text-decoration:underline;cursor:pointer">새 모델로 재분석</span></div>
+  {% endif %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px;align-items:start">
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:4px 22px">
+      {% for r in cp.rows %}
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-top:{{ r.bt }}">
+        <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:15.5px;font-weight:600">{{ r.n }}</span><span style="font-size:12.5px;font-weight:700;color:{{ r.lc }}">{{ r.limb }}</span></div><div style="font-size:13.5px;color:#5B6472;margin-top:3px;font-variant-numeric:tabular-nums">{{ r.vals }}</div></div>
+        <span style="height:28px;padding:0 10px;border-radius:7px;background:{{ r.bg }};color:{{ r.c }};font-size:13px;font-weight:700;display:flex;align-items:center;white-space:nowrap;font-variant-numeric:tabular-nums;flex:none">{{ r.j }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px 18px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">회차별 추이</b>{% if cp.two %}<div style="display:flex;gap:12px;font-size:13px;font-weight:600;color:#5B6472"><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#3B6FE0"></span>왼쪽</span><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:#E5604D"></span>오른쪽</span></div>{% endif %}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        {% for c in trend %}<a class="lk" href="?cmp={{ cmp }}&tk={{ c.key }}" style="height:36px;padding:0 14px;border-radius:18px;background:{{ '#1B2433' if c.on else '#fff' }};color:{{ '#fff' if c.on else '#3A4250' }};border:1px solid {{ '#1B2433' if c.on else '#ECE8E2' }};display:flex;align-items:center;font-size:14px;font-weight:600">{{ c.label }}</a>{% endfor %}
+      </div>
+      <svg viewBox="0 0 320 150" style="width:100%;display:block">
+        <g stroke="#ECE8E2" stroke-dasharray="3 4"><line x1="20" y1="20" x2="300" y2="20"></line><line x1="20" y1="75" x2="300" y2="75"></line><line x1="20" y1="130" x2="300" y2="130"></line></g>
+        <polyline points="{{ cp.tl }}" fill="none" stroke="#3B6FE0" stroke-width="2.2" stroke-linejoin="round"></polyline>
+        <polyline points="{{ cp.tr }}" fill="none" stroke="#E5604D" stroke-width="2.2" stroke-dasharray="5 4" stroke-linejoin="round"></polyline>
+        {% for p in cp.dl %}<circle cx="{{ p.x }}" cy="{{ p.y }}" r="3.6" fill="#fff" stroke="{{ p.c }}" stroke-width="2"></circle>{% endfor %}
+      </svg>
+      <div style="display:flex;justify-content:space-between;padding:0 2px;margin-top:-6px;font-size:12.5px;color:#A0A7B2;font-variant-numeric:tabular-nums">{% for x in cp.xl %}<span>{{ x }}</span>{% endfor %}</div>
+      <span style="font-size:13px;color:#5B6472">{{ cp.focusNote }}</span>
+    </div>
+  </div>
+  <span style="font-size:13px;color:#8E949C">증가·감소는 측정 오차 범위(±1)를 넘을 때만 표시해요. 변화의 의미는 수의사가 판단해요.</span>
+  {% endif %}
+</main>
+{% endblock %}

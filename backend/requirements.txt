@@ -1,0 +1,46 @@
+# 명세 11.1 기술 스택. 정확한 버전으로 고정한다(PR-C-07).
+# 지금은 작업 단위 1~7(서버 뼈대, DB, 로그인, 반려견, 회차·업로드, 워커, 결과 영상)에 필요한 것만 있다.
+# 보고서·S3 라이브러리는 그 작업을 시작할 때 11.1 표의 버전으로 더한다. ffmpeg·ffprobe는 라이브러리가 아니라 실행 파일이다(16절 FFPROBE_PATH·FFMPEG_PATH).
+
+# 설정
+pydantic==2.14.1
+pydantic-settings==2.16.1
+
+# 웹 서버 (Starlette는 FastAPI가 함께 쓴다. 15.6 때문에 0.49.1 이상이어야 한다)
+fastapi==0.146.0
+starlette==1.9.0
+uvicorn==0.54.0
+# 파일 업로드(13.1 multipart). FastAPI의 UploadFile이 이것을 쓴다
+python-multipart==0.0.32
+
+# HTTP 클라이언트: 분석 API 호출(6절). FastAPI TestClient도 이것을 쓴다
+httpx==0.28.1
+
+# 설정·문구 파일 읽기 (messages/ko.yaml, config/breeds.yaml, config/tolerance.yaml)
+PyYAML==6.0.3
+
+# 시간대 데이터(16절 APP_TIMEZONE). Windows에는 OS 시간대 DB가 없어 zoneinfo가 이 패키지를 쓴다. Linux에서는 있어도 해가 없다
+tzdata==2026.5
+
+# DB (PostgreSQL 17)
+sqlalchemy==2.1.5
+pg8000==1.31.5
+alembic==1.20.0
+
+# 비밀번호 해시 (seed.py, 로그인)
+bcrypt==5.0.0
+# JWT (11.6). 서명 URL은 표준 라이브러리 hmac으로 만든다
+PyJWT==2.15.1
+
+# 결과 영상(7절, 12.4): 원본 프레임 읽기와 골격 그리기. 인코딩은 ffmpeg 실행 파일(FFMPEG_PATH)이 한다. numpy가 함께 깔린다.
+# headless: 창을 띄우는 GUI 라이브러리가 없어 서버(python:3.11-slim)에서 추가 OS 패키지 없이 import된다
+opencv-python-headless==5.0.0.93
+
+# 보고서(8절): HTML 템플릿, 차트, PDF. WeasyPrint는 시스템 라이브러리(Pango·Cairo. python:3.11-slim은 libpango-1.0-0
+# libpangoft2-1.0-0, Windows는 GTK 런타임)가 있어야 import된다. 없으면 HTML까지만 되고 PDF는 REPORT_FAILED다
+jinja2==3.1.6
+matplotlib==3.11.2
+weasyprint==70.0
+
+# 테스트
+pytest==9.1.1

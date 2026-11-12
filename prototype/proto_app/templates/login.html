@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}로그인 · Paw oh Paw{% endblock %}
+{% block topbar %}{% include "_authbar.html" %}{% endblock %}
+{% block content %}
+<main style="max-width:600px;margin:6vh auto 96px;padding:0 24px">
+  <form method="post" action="/login" id="loginForm" style="background:#fff;border:1px solid #ECE8E2;border-radius:24px;padding:52px 48px;display:flex;flex-direction:column;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px">로그인</h1><p style="margin:0;font-size:17px;color:#5B6472">동물병원·재활센터 계정으로 로그인해요.</p></div>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:16px;font-weight:600">아이디</span><input class="inp" name="login_id" id="liId" autocomplete="username" placeholder="가입할 때 만든 아이디 (기관 코드는 넣지 않아요)" style="height:60px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:17px;color:#1B2433;outline:none"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:16px;font-weight:600">비밀번호</span><input class="inp" type="password" name="password" id="liPw" autocomplete="current-password" placeholder="비밀번호" style="height:60px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:17px;color:#1B2433;outline:none"></label>
+    <button class="bt" type="submit" id="liBtn" style="height:62px;border-radius:14px;background:#C3C8CF;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700">로그인</button>
+    <div style="display:flex;justify-content:space-between;align-items:center"><a class="lk" href="/forgot" style="font-size:15px;color:#5B6472">비밀번호를 잊으셨나요?</a><a class="lk" href="/signup" style="font-size:15px;font-weight:600;color:#D2601A">디바이스 코드로 회원가입</a></div>
+  </form>
+  <form method="post" action="/login/demo" style="margin-top:16px;text-align:center"><button type="submit" style="border:0;background:none;font-size:15px;color:#5B6472;text-decoration:underline;cursor:pointer">시연용 예시 기관으로 둘러보기</button></form>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var id = document.getElementById('liId'), pw = document.getElementById('liPw'), btn = document.getElementById('liBtn');
+  function ok() { return id.value.length >= 1 && pw.value.length >= 1; }
+  function paint() { btn.style.background = ok() ? '#D2601A' : '#C3C8CF'; }
+  id.addEventListener('input', paint); pw.addEventListener('input', paint);
+  document.getElementById('loginForm').addEventListener('submit', function (e) {
+    if (!ok()) { e.preventDefault(); window.ppToast('아이디와 비밀번호를 입력해 주세요'); }
+  });
+})();
+</script>
+{% endblock %}

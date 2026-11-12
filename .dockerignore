@@ -1,0 +1,38 @@
+# Git 정보
+.git
+.gitignore
+
+# 실제 환경 변수 및 비밀키
+.env
+*.pem
+
+# 데이터 및 실행 결과
+logs/
+*.log
+
+# Python 가상환경 및 캐시
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Java 빌드 결과 및 캐시
+.gradle/
+build/
+
+# 프론트엔드 의존성 및 빌드 결과
+node_modules/
+
+# IDE 및 운영체제 파일
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+# 영상·업로드 임시 파일 (backend STORAGE_ROOT·UPLOAD_TMP_DIR 로컬 기본값)
+data/
+**/data/
+
+# 하위 폴더 가상환경 (backend/.venv 등)
+**/.venv/
+**/venv/
+**/__pycache__/

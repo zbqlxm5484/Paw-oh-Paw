@@ -1,0 +1,3424 @@
+openapi: 3.1.0
+info:
+  title: 크림오프 팀 서비스 API
+  version: 1.0.0
+  description: |
+    크림오프 팀 서비스(결과 조회 웹 D-06)의 API.
+    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.58" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
+
+    - 모든 주소는 `/api/v1`로 시작한다(servers 참고). `/metrics`만 예외로 루트(`/metrics`)다.
+    - 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 파일 셋(결과 영상, 보고서 PDF, 사진)을 빼고 `Authorization: Bearer <token>`이 필요하다.
+    - 계약이 끝난 CLIENT(effective_role이 GUEST)는 로그인과 내 정보·탈퇴·측정 기기 정보(`GET /auth/me`, `DELETE /auth/me`, `GET /auth/me/device`)만 쓸 수 있고, 나머지는 403 CONTRACT_EXPIRED다.
+    - 비밀번호를 5회 틀리면 그 계정은 30분 동안 로그인할 수 없다. 잠긴 동안에도 응답은 401 LOGIN_FAILED 하나다.
+    - 비밀번호를 바꾸거나 재설정하면 그전에 받은 토큰은 다음 요청부터 401 AUTH_EXPIRED다(바꾼 본인도 다시 로그인한다).
+    - 조회 열하나(`GET /auth/me`, `GET /dogs`, `GET /dogs/{dog_id}/sessions`, `GET /sessions`, `GET /sessions/{session_id}`,
+      `GET /sessions/{session_id}/result`, `GET /sessions/{session_id}/report-content`, `GET /shots/{shot_id}/angles`,
+      `GET /dogs/{dog_id}/compare`, `GET /dogs/{dog_id}/trends`, `GET /shots/{shot_id}`)는 로그인 토큰 대신 인쇄 토큰도 받는다. 인쇄 토큰은 서버가 보고서 PDF를 만들 때 웹의 인쇄 화면에
+      넘기는 5분짜리 읽기 전용 토큰이고, 내주는 API는 없다. `GET /shots/{shot_id}`만은 그 토큰을 만든 회차의 촬영만 열린다.
+    - `/admin/*` 조회는 ADMIN·STAFF, 쓰기는 ADMIN만 쓸 수 있다.
+    - 시각은 UTC ISO 8601(`Z`로 끝남), 날짜는 `YYYY-MM-DD`, ID는 UUID 문자열이다.
+    - 값이 없는 필드도 키를 빼지 않고 `null`로 보낸다.
+    - 오류는 모두 `{"error": {"code", "message", "detail"}}` 모양이다.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: 로컬 개발 서버
+tags:
+  - name: 인증
+  - name: 반려견
+  - name: 차트 자료
+  - name: 회차 측정
+  - name: 회차 결과·보고서
+  - name: 이력·비교·추이
+  - name: 운영
+  - name: 크림오프 관리자
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [인증]
+      operationId: login
+      summary: 로그인, 토큰 발급 (BE-01)
+      description: 아이디·비밀번호 중 무엇이 틀려도 401 LOGIN_FAILED 하나로 답한다. 아이디는 대소문자를 구분한다. 계약이 끝난 CLIENT도 로그인되고 staff.effective_role이 GUEST다. 있는 아이디에 비밀번호를 5회 틀리면 30분 동안 잠기고, 잠긴 동안에는 비밀번호가 맞아도 같은 401 LOGIN_FAILED다(풀리는 시각은 응답에 없다). 로그인에 성공하면 실패 횟수가 0으로 돌아간다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginOut'}
+        '401':
+          description: LOGIN_FAILED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: LOGIN_FAILED, message: "아이디 또는 비밀번호가 맞지 않습니다. 5회 틀리면 30분 동안 로그인할 수 없습니다.", detail: null}}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/me:
+    get:
+      tags: [인증]
+      operationId: getMe
+      summary: 내 정보, effective_role 포함. GUEST도 된다 (BE-01)
+      description: >-
+        새로고침 뒤 토큰을 아직 쓸 수 있는지 확인할 때도 쓴다. 인쇄 토큰으로 부르면 사람이 없으므로 그 기관의 CLIENT처럼 보이는 값을 준다
+        (institution은 토큰의 기관, role과 effective_role은 CLIENT, id는 0으로 찬 UUID, login_id와 name은 print, email은 null, notif_on은 false).
+      responses:
+        '200':
+          description: 담당자
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    patch:
+      tags: [인증]
+      operationId: updateMe
+      summary: 이름·이메일·알림 설정 수정 (BE-26)
+      description: 보낸 필드만 바꾼다. null은 받지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MeUpdate'}
+      responses:
+        '200':
+          description: 바뀐 담당자
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [인증]
+      operationId: withdraw
+      summary: 회원 탈퇴 (BE-26). GUEST도 된다
+      description: 계정을 지우지 않고 중지한다. 그 뒤 로그인과 받은 토큰은 403 ACCOUNT_DISABLED다. 기관의 자료는 그대로 남는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WithdrawIn'}
+      responses:
+        '204':
+          description: 탈퇴함. 본문 없음
+        '400':
+          description: PASSWORD_MISMATCH
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: PASSWORD_MISMATCH, message: "현재 비밀번호가 맞지 않습니다.", detail: null}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '409':
+          description: LAST_ACCOUNT(기관의 마지막 활성 계정)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: LAST_ACCOUNT, message: "기관의 마지막 계정이라 탈퇴할 수 없습니다. 관리자에게 문의해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/me/device:
+    get:
+      tags: [인증]
+      operationId: getMyDevice
+      summary: 내 기관의 측정 기기(디바이스 코드, 가려서). GUEST도 된다 (BE-36)
+      description: >-
+        측정 기기는 내 기관의 쓸 수 있는(회수하지 않은) 디바이스 코드이고 기관마다 하나다. 코드는 가입에 쓰는 값이라
+        가운데 두 묶음을 가려서 준다. 쓸 수 있는 코드가 없으면 device가 null이다. 운영 메모(note)는 주지 않는다.
+      responses:
+        '200':
+          description: 측정 기기
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MyDeviceOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/password:
+    patch:
+      tags: [인증]
+      operationId: changePassword
+      summary: 비밀번호 변경 (BE-26)
+      description: >-
+        바꾸면 그전에 받은 토큰은 다음 요청부터 401 AUTH_EXPIRED다. 다른 기기의 토큰도, 이 요청에 쓴 토큰도 끊긴다.
+        응답은 StaffOut이고 새 토큰을 주지 않으므로 화면은 200을 받으면 토큰을 버리고 로그인 화면으로 보낸다.
+        로그인 잠금의 실패 횟수도 지운다. 새 비밀번호가 현재 비밀번호와 같으면 422(fields에 new_password)다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordChangeIn'}
+      responses:
+        '200':
+          description: 담당자
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffOut'}
+        '400':
+          description: PASSWORD_MISMATCH
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: PASSWORD_MISMATCH, message: "현재 비밀번호가 맞지 않습니다.", detail: null}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/device-codes/verify:
+    post:
+      tags: [인증]
+      operationId: verifyDeviceCode
+      summary: 디바이스 코드 확인 (BE-22, 토큰 없음)
+      description: 코드 형식이 틀렸거나, 없거나, 회수됐거나, 기관 계약이 끝났으면 모두 404 DEVICE_CODE_INVALID 하나로 답한다. DB를 바꾸지 않아 몇 번 불러도 같다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCodeVerifyIn'}
+      responses:
+        '200':
+          description: 가입할 수 있는 코드
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeVerifyOut'}
+        '404':
+          description: DEVICE_CODE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_INVALID, message: "유효한 디바이스 코드가 아닙니다.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/signup:
+    post:
+      tags: [인증]
+      operationId: signup
+      summary: 회원가입 (BE-22, 토큰 없음)
+      description: 가입 계정은 모두 CLIENT이고 코드의 기관에 속한다. 응답은 로그인과 같아 가입 즉시 로그인된 상태다. 이메일은 형식만 검사하고 인증 메일은 보내지 않는다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignupIn'}
+      responses:
+        '201':
+          description: 가입 성공
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginOut'}
+        '404':
+          description: DEVICE_CODE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_INVALID, message: "유효한 디바이스 코드가 아닙니다.", detail: null}}
+        '409':
+          description: LOGIN_ID_TAKEN(다른 기관의 아이디와 겹쳐도)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: LOGIN_ID_TAKEN, message: "이미 사용 중인 아이디입니다.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /auth/password-reset/request:
+    post:
+      tags: [인증]
+      operationId: requestPasswordReset
+      summary: 재설정 링크 메일 보내기 (BE-27, 토큰 없음)
+      description: 계정이 있든 없든, 이메일이 있든 없든 같은 204다. 메일의 링크는 30분 동안 쓸 수 있다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordResetRequestIn'}
+      responses:
+        '204': {description: 받아들였다}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: MAIL_UNAVAILABLE(메일 서버 미설정 또는 발송 실패)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: MAIL_UNAVAILABLE, message: "지금은 메일을 보낼 수 없습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /auth/password-reset/confirm:
+    post:
+      tags: [인증]
+      operationId: confirmPasswordReset
+      summary: 링크의 토큰으로 비밀번호 바꾸기 (BE-27, 토큰 없음)
+      description: 바꾸면 그전에 받은 로그인 토큰이 끊기고(401 AUTH_EXPIRED) 로그인 잠금도 풀린다. 화면은 로그인 화면으로 보낸다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordResetConfirmIn'}
+      responses:
+        '204': {description: 바꿨다. 화면은 로그인 화면으로 보낸다}
+        '400':
+          description: RESET_TOKEN_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: RESET_TOKEN_INVALID, message: "재설정 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs:
+    get:
+      tags: [반려견]
+      operationId: listDogs
+      summary: 반려견 목록·검색 (BE-03, S1)
+      description: 정렬은 last_measured_on 내림차순(한 번도 안 잰 반려견은 뒤), 같으면 created_at 내림차순. trash=true면 휴지통 목록이고 최근에 넣은 것부터다.
+      parameters:
+        - name: q
+          in: query
+          description: 이름·동물번호·보호자 이름·병명·수술명(진단 이력의 title) 중 하나에 포함되면 찾는다(대소문자 무시). 연락처로는 찾지 않는다.
+          schema: {type: string, maxLength: 50}
+          example: 보리
+        - name: trash
+          in: query
+          description: true면 휴지통에 있는 반려견만 준다. 기본은 휴지통에 없는 반려견만.
+          schema: {type: boolean, default: false}
+        - name: changed_within_days
+          in: query
+          description: 보내면 최근 N일(그날 포함) 안에 변동(changes)이 있는 반려견만 주고 changes도 그 기간으로 계산한다. 보내지 않으면 거르지 않고 changes는 7일로 계산한다. trash=true와 함께 보내면 무시한다.
+          schema: {type: integer, minimum: 1, maximum: 30}
+          example: 7
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 반려견 목록 한 페이지
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [반려견]
+      operationId: createDog
+      summary: 반려견 등록 (BE-02, S2)
+      description: size_class를 빼면 체중으로 자동 분류한다(10kg 미만 SMALL, 25kg 미만 MEDIUM, 25kg 이상 LARGE). 보내면 그 값을 쓰고 size_class_manual이 true가 된다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DogCreate'}
+      responses:
+        '201':
+          description: 등록된 반려견
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [반려견]
+      operationId: getDog
+      summary: 반려견 상세 (BE-02, S2·S7)
+      responses:
+        '200':
+          description: 반려견
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    patch:
+      tags: [반려견]
+      operationId: updateDog
+      summary: 반려견 수정, 기준 회차 지정 (BE-02)
+      description: |
+        version은 필수이고, 나머지는 보낸 필드만 바꾼다. 값을 비우려면 null을 보낸다(name·breed·weight_kg은 비울 수 없다).
+        version이 저장된 값과 다르면 409 DOG_MODIFIED이고 아무것도 바뀌지 않는다. 응답의 version은 1 늘어 있다.
+        size_class에 null을 보내면 자동 분류로 돌아간다. baseline_session_id는 이 반려견의 DONE 회차여야 한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DogUpdate'}
+      responses:
+        '200':
+          description: 수정된 반려견
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogOut'}
+        '400':
+          description: BASELINE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: BASELINE_INVALID, message: "기준 회차는 이 반려견의 완료된 회차여야 합니다.", detail: null}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: DOG_MODIFIED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DOG_MODIFIED, message: "다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [반려견]
+      operationId: deleteDog
+      summary: 반려견을 휴지통에 넣기 (BE-19)
+      description: 지우지 않고 휴지통에 넣는다. 그때부터 이 반려견과 그 아래 회차·촬영·보고서는 404다. 30일 뒤 서버가 영구 삭제하고 그 전에는 복원할 수 있다.
+      responses:
+        '204':
+          description: 휴지통에 넣음. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    post:
+      tags: [반려견]
+      operationId: restoreDog
+      summary: 휴지통에서 복원 (BE-19)
+      description: 휴지통에 있는 반려견만 된다(아니면 404). 회차·영상·보고서가 그대로 돌아온다.
+      responses:
+        '200':
+          description: 복원한 반려견
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/permanent:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    delete:
+      tags: [반려견]
+      operationId: deleteDogPermanently
+      summary: 휴지통의 반려견 영구 삭제 (BE-19)
+      description: 반려견과 그 아래 회차·촬영·수치·보고서, 파일, 분석 서버의 사본을 모두 지운다. 되돌릴 수 없다. 휴지통에 있는 반려견만 된다(아니면 404).
+      responses:
+        '204':
+          description: 지움. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 휴지통에 그대로 남고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /dogs/{dog_id}/vitals:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [차트 자료]
+      operationId: listVitals
+      summary: 바이탈 목록 (BE-28)
+      description: measured_on 내림차순(최신이 앞)이고 전부 준다.
+      responses:
+        '200':
+          description: 바이탈 전부
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VitalList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/vitals/{measured_on}:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+      - name: measured_on
+        in: path
+        required: true
+        description: 날짜(YYYY-MM-DD). 형식이 아니면 404 NOT_FOUND. 저장(PUT)에서 미래 날짜는 422
+        schema: {type: string, format: date}
+        example: '2026-11-06'
+    put:
+      tags: [차트 자료]
+      operationId: putVital
+      summary: 그날 바이탈 저장 (BE-28)
+      description: >-
+        그날 줄이 없으면 만들고 있으면 보낸 값만 바꾼다. 어느 쪽이든 200이다. 보내지 않은 값은 그대로이고 null은 그 값을 비운다.
+        바꾸면 staff는 바꾼 담당자가 되고 session_id는 그대로다. 그날 줄에 값이 하나도 남지 않거나 혈압이 한쪽만 남으면 422다.
+        체중을 보냈고 그날보다 뒤에 체중이 적힌 줄이 없으면 반려견의 weight_kg도 그 값이 되고 반려견의 version이 1 는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VitalPut'}
+      responses:
+        '200':
+          description: 저장된 바이탈
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VitalOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+    delete:
+      tags: [차트 자료]
+      operationId: deleteVital
+      summary: 그날 바이탈 지우기 (BE-28)
+      description: >-
+        그날 줄을 통째로 지운다. 되돌릴 수 없다. 값 하나만 비우려면 저장(PUT)에 null을 보낸다. 그날 줄이 없으면 404다.
+        반려견의 등록 체중과 회차의 체중은 바꾸지 않는다. 회차를 시작하며 적은 줄(session_id가 있는 줄)도 지울 수 있다.
+      responses:
+        '204':
+          description: 지움. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /dogs/{dog_id}/history:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [차트 자료]
+      operationId: listDogHistory
+      summary: 진단 이력 (BE-29)
+      description: 진단·수술·재활. occurred_on 오름차순(오래된 것부터), 같으면 적은 순서. 측정 이력은 GET /dogs/{dog_id}/sessions다.
+      responses:
+        '200':
+          description: 진단 이력 전부
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogHistoryList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [차트 자료]
+      operationId: addDogHistory
+      summary: 진단·수술·재활 추가 (BE-29)
+      description: stage를 보내면 반려견의 단계를 함께 바꾼다. 값이 지금과 다르면 반려견의 version이 1 는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DogHistoryCreate'}
+      responses:
+        '201':
+          description: 더한 줄
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogHistoryOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/history/{history_id}:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+      - name: history_id
+        in: path
+        required: true
+        description: 진단 이력 한 줄의 ID. 그 반려견의 줄이 아니면 404 NOT_FOUND
+        schema: {$ref: '#/components/schemas/Uuid'}
+    patch:
+      tags: [차트 자료]
+      operationId: updateDogHistory
+      summary: 진단 이력 한 줄 고치기 (BE-29)
+      description: 보낸 것만 바꾼다. staff(적은 담당자)와 created_at은 그대로다. 반려견의 단계는 바꾸지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DogHistoryUpdate'}
+      responses:
+        '200':
+          description: 고친 줄
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DogHistoryOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [차트 자료]
+      operationId: deleteDogHistory
+      summary: 진단 이력 한 줄 지우기 (BE-29)
+      description: 되돌릴 수 없다. 이력을 더하며 함께 바꾼 반려견의 단계는 되돌리지 않는다.
+      responses:
+        '204':
+          description: 지웠다. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/notes:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [차트 자료]
+      operationId: listNotes
+      summary: 메모·진료 기록 목록 (BE-30)
+      description: 방문일(visited_on) 내림차순, 같으면 쓴 시각(created_at) 내림차순이다.
+      parameters:
+        - name: kind
+          in: query
+          description: memo(CAUTION·GUARDIAN·BOOKING·OTHER) 또는 chart(S·O·A·P). 빼면 둘 다
+          schema: {type: string, enum: [memo, chart]}
+        - name: session_id
+          in: query
+          description: 그 회차에 단 것만. 이 반려견의 회차가 아니면 빈 목록
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/Page'
+        - name: size
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+      responses:
+        '200':
+          description: 메모·진료 기록 한 페이지
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotePage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [차트 자료]
+      operationId: createNote
+      summary: 메모·진료 기록 한 건 쓰기 (BE-30)
+      description: 쓴 사람은 로그인한 담당자다. session_id가 이 반려견의 회차가 아니면 422다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NoteCreate'}
+      responses:
+        '201':
+          description: 쓴 것
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NoteOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/notes/batch:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    post:
+      tags: [차트 자료]
+      operationId: createNotes
+      summary: 여러 건을 같은 시각으로 쓰기 (BE-30)
+      description: SOAP에서 채운 칸들을 한 번에 쓴다. 모두 created_at이 같다. 하나라도 규칙에 어긋나면 아무것도 저장하지 않는다. session_id와 visited_on은 묶음 전체에 하나다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NoteBatchCreate'}
+      responses:
+        '201':
+          description: 쓴 것들(보낸 순서)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NoteBatchOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /notes/{note_id}:
+    parameters:
+      - $ref: '#/components/parameters/NoteId'
+    patch:
+      tags: [차트 자료]
+      operationId: updateNote
+      summary: 메모·진료 기록 고치기 (BE-30)
+      description: 고치기 전 내용을 수정 이력에 한 줄 남긴다. 바뀐 값이 없으면 그대로 돌려준다. 분류는 같은 종류 안에서만 바꾼다. 방문일(visited_on)은 바꿀 수 없고 보내도 무시한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/NoteUpdate'}
+      responses:
+        '200':
+          description: 고친 것
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NoteOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+    delete:
+      tags: [차트 자료]
+      operationId: deleteNote
+      summary: 메모·진료 기록 한 건 지우기 (BE-30)
+      description: 그 한 건과 수정 이력을 함께 지운다. 되돌릴 수 없다.
+      responses:
+        '204':
+          description: 지움. 본문 없음
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /notes/{note_id}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/NoteId'
+    get:
+      tags: [차트 자료]
+      operationId: listNoteRevisions
+      summary: 수정 이력 (BE-30)
+      description: 고치기 전 내용들. 최근에 바뀐 것부터다.
+      responses:
+        '200':
+          description: 수정 이력 전부
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NoteRevisionList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/images:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [차트 자료]
+      operationId: listDogImages
+      summary: 반려견 사진 목록 (BE-34)
+      description: 찍은 날이 이른 순서, 같으면 올린 순서다. 페이지는 없다. file_url은 서명 URL이다.
+      responses:
+        '200':
+          description: 사진 전부
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ImageList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [차트 자료]
+      operationId: uploadDogImage
+      summary: 사진 올리기 (BE-34)
+      description: |
+        사람 얼굴을 찾아 가린 사진만 저장하고 원본은 두지 않는다. kind가 XRAY면 가리지 않는다.
+        저장하면서 EXIF가 빠지고 방향이 바로 선다. 검사 순서: 크기(20 MB) → 형식(JPEG·PNG, 내용으로 가림)
+        → 화소(4,000만) → 읽기. 처음 걸린 하나만 온다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, kind]
+              properties:
+                file: {type: string, format: binary, description: JPEG 또는 PNG 사진}
+                kind: {$ref: '#/components/schemas/ImageKind'}
+                taken_on: {type: string, format: date, description: 찍은 날. 기본 오늘, 미래 날짜 불가}
+                caption: {type: string, maxLength: 100}
+      responses:
+        '201':
+          description: 저장한 사진
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ImageOut'}
+        '400':
+          description: IMAGE_FORMAT, IMAGE_UNREADABLE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: IMAGE_FORMAT, message: "JPG 또는 PNG 사진만 올릴 수 있습니다.", detail: null}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '413':
+          description: IMAGE_TOO_LARGE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: IMAGE_TOO_LARGE, message: "사진이 너무 큽니다. 20 MB, 40백만 화소까지 올릴 수 있습니다.", detail: {max_mb: 20, max_mp: 40}}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /images/{image_id}/file:
+    parameters:
+      - $ref: '#/components/parameters/ImageId'
+    get:
+      tags: [차트 자료]
+      operationId: getDogImageFile
+      summary: 사진 열기, 서명 URL (BE-34)
+      description: 로그인 토큰 없이 서명(exp·sig)으로 연다. ImageOut의 file_url을 그대로 쓴다.
+      security: []
+      parameters:
+        - {name: exp, in: query, required: true, schema: {type: string}, description: 만료 시각(초)}
+        - {name: sig, in: query, required: true, schema: {type: string}, description: 서명}
+      responses:
+        '200':
+          description: 사진 파일
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+        '403': {$ref: '#/components/responses/FileLinkExpired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /images/{image_id}:
+    parameters:
+      - $ref: '#/components/parameters/ImageId'
+    delete:
+      tags: [차트 자료]
+      operationId: deleteDogImage
+      summary: 사진 지우기 (BE-34)
+      description: 파일을 지우고 행을 지운다. 되돌릴 수 없다.
+      responses:
+        '204': {description: 지움}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /daily-records:
+    get:
+      tags: [차트 자료]
+      operationId: getDailyRecords
+      summary: 기관의 그날 바이탈·메모·진료 기록·회차 (BE-35)
+      description: >-
+        vitals는 measured_on이 그날인 줄, notes는 visited_on이 그날인 메모·진료 기록, sessions는 measured_on이 그날인 회차(모든 상태)다.
+        휴지통에 있는 반려견의 것은 빠진다. 셋 다 적은 시각(created_at) 오름차순이고 하루치라 페이지가 없다.
+        어느 반려견의 것인지는 VitalOut.dog_id, NoteOut.dog_id, SessionListItem.dog로 안다. 반려견별로 묶는 일은 화면이 한다.
+      parameters:
+        - name: date
+          in: query
+          description: 날짜(YYYY-MM-DD). 빼면 오늘(한국 날짜)
+          schema: {type: string, format: date}
+          example: '2026-11-10'
+      responses:
+        '200':
+          description: 그날 기록
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DailyRecordsOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    post:
+      tags: [회차 측정]
+      operationId: startSession
+      summary: 회차 시작 (BE-04, S3)
+      description: 이미 MEASURING 회차가 있으면 409 SESSION_ALREADY_OPEN이고 detail.session_id에 그 회차 ID가 온다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SessionCreate'}
+      responses:
+        '201':
+          description: 시작된 회차(status는 MEASURING)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_ALREADY_OPEN
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SESSION_ALREADY_OPEN, message: "이 반려견은 이미 측정 중인 회차가 있습니다.", detail: {session_id: "3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90"}}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    get:
+      tags: [이력·비교·추이]
+      operationId: listDogSessions
+      summary: 측정 이력 (BE-17, S7)
+      description: 정렬은 measured_on 내림차순, 같으면 created_at 내림차순.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 회차 목록 한 페이지
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionHistoryPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /sessions:
+    get:
+      tags: [회차 측정]
+      operationId: listSessions
+      summary: 기관 회차 목록 (BE-33, 홈)
+      description: 기관의 모든 회차를 measured_on 내림차순, 같으면 created_at 내림차순으로 준다. 휴지통에 있는 반려견의 회차는 빠진다.
+      parameters:
+        - name: staff_id
+          in: query
+          description: 그 담당자가 측정한 회차만. 다른 기관의 담당자 ID면 빈 목록이다.
+          schema: {type: string, format: uuid}
+        - name: status
+          in: query
+          description: 그 상태의 회차만.
+          schema: {$ref: '#/components/schemas/SessionStatus'}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 회차 목록 한 페이지
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionListPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /sessions/{session_id}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [회차 측정]
+      operationId: getSession
+      summary: 회차 상태·방향별 진행·촬영 목록 (BE-07·09, S3, 2~3초마다)
+      description: status가 MEASURING·AGGREGATING인 동안 계속 부른다. DONE이면 결과 화면으로, FAILED면 fail_reason을 보여 주고 멈춘다.
+      responses:
+        '200':
+          description: 회차 상세
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionDetailOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [회차 측정]
+      operationId: cancelSession
+      summary: 측정 취소 (BE-10)
+      description: 회차와 그 안의 촬영을 모두 지운다. 서버가 분석 서버에 남은 사본을 먼저 지우고, 지우지 못하면 503이다.
+      responses:
+        '204': {description: 회차와 그 안의 촬영을 모두 지웠다}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_CLOSED 또는 SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 회차는 그대로이고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /sessions/{session_id}/shots:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [회차 측정]
+      operationId: uploadShot
+      summary: 영상 업로드 (BE-05·06, S3)
+      description: |
+        multipart/form-data로 file 하나를 받는다. 검사 순서: 회차 상태 → 크기(최대 100MB) → 확장자(.mp4·.mov) →
+        읽기 → 코덱(h264·hevc) → 가로 → 길이(1~30초) → 최저 사양(경고) → 16:9(경고). 처음 걸린 하나만 오류로 준다.
+        통과하면 UPLOADED로 저장하고 바로 답한다. 분석은 뒤에서 이어진다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: mp4 또는 mov 영상
+      responses:
+        '201':
+          description: 올라간 촬영 + 경고
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ShotUploadOut'}
+        '400':
+          description: VIDEO_FORMAT, VIDEO_UNREADABLE, VIDEO_CODEC, VIDEO_PORTRAIT, VIDEO_DURATION
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: VIDEO_PORTRAIT, message: "가로로 촬영한 영상만 올릴 수 있습니다.", detail: {width: 1080, height: 1920}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_CLOSED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SESSION_CLOSED, message: "측정이 끝난 회차입니다.", detail: null}}
+        '413':
+          description: VIDEO_TOO_LARGE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: VIDEO_TOO_LARGE, message: "영상 파일이 너무 큽니다. 최대 100 MB까지 올릴 수 있습니다.", detail: {max_mb: 100}}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /sessions/{session_id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [회차 측정]
+      operationId: completeSession
+      summary: 측정 종료 → 집계 → 보고서 (BE-13)
+      description: 본문 없음. 마지막 촬영의 분석을 기다리지 않고 바로 AGGREGATING으로 답한다.
+      responses:
+        '200':
+          description: 종료된 회차(status는 AGGREGATING, completed_at 채움)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_CLOSED 또는 SESSION_EMPTY
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SESSION_EMPTY, message: "촬영이 1건 이상 있어야 측정을 끝낼 수 있습니다.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /shots/{shot_id}:
+    parameters:
+      - $ref: '#/components/parameters/ShotId'
+    get:
+      tags: [회차 측정]
+      operationId: getShot
+      summary: 촬영 상세 (BE-08·11, S4)
+      description: >-
+        인쇄 토큰으로도 부를 수 있다. 그때는 그 토큰을 만든 회차의 촬영만 열리고, 같은 기관이어도 다른 회차의 촬영은 404다.
+      responses:
+        '200':
+          description: 촬영 상세
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ShotDetailOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      tags: [회차 측정]
+      operationId: deleteShot
+      summary: 촬영 삭제 (BE-10)
+      description: 남은 촬영의 seq_no는 다시 매기지 않는다. 서버가 분석 서버에 남은 사본을 먼저 지우고, 지우지 못하면 503이다.
+      responses:
+        '204': {description: 지웠다}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_CLOSED 또는 SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SESSION_CLOSED, message: "측정이 끝난 회차입니다.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 촬영은 그대로이고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /shots/{shot_id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/ShotId'
+    post:
+      tags: [회차 측정]
+      operationId: retryShot
+      summary: 실패한 촬영 다시 분석 (BE-10)
+      description: 서버가 실패했던 분석의 사본을 분석 서버에서 먼저 지운다. 지우지 못하면 503, 분석 서버가 그 촬영을 아직 처리하고 있으면 409 SHOT_IN_PROGRESS다.
+      responses:
+        '200':
+          description: 다시 대기열에 넣은 촬영(status는 UPLOADED)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ShotOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_NOT_FAILED, SESSION_CLOSED 또는 SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_NOT_FAILED, message: "실패한 촬영만 다시 분석할 수 있습니다.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 촬영은 FAILED 그대로이고 다시 부르면 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /shots/{shot_id}/video:
+    parameters:
+      - $ref: '#/components/parameters/ShotId'
+    get:
+      tags: [회차 측정]
+      operationId: getShotVideo
+      summary: 결과 영상 재생 (BE-12, 서명 주소)
+      description: |
+        화면이 직접 부르지 않고 ShotDetailOut.video_url을 <video src>에 넣는다. 토큰 없이 서명(exp, sig)으로 연다.
+        Range 요청(206)을 받는다. 저장소가 S3면 video_url이 S3 주소라 이 API는 쓰이지 않는다.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Exp'
+        - $ref: '#/components/parameters/Sig'
+        - name: Range
+          in: header
+          required: false
+          schema: {type: string, example: 'bytes=0-'}
+      responses:
+        '200':
+          description: 결과 영상 전체
+          content:
+            video/mp4:
+              schema: {type: string, format: binary}
+        '206':
+          description: 결과 영상 일부(Range)
+          content:
+            video/mp4:
+              schema: {type: string, format: binary}
+        '403': {$ref: '#/components/responses/FileLinkExpired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /shots/{shot_id}/angles:
+    parameters:
+      - $ref: '#/components/parameters/ShotId'
+    get:
+      tags: [회차 결과·보고서]
+      operationId: getShotAngles
+      summary: 통과별 프레임 관절 각도 (BE-14, S5 그래프, 권장)
+      description: |
+        유효 통과의 유효 구간(수치를 잰 구간)만 담는다. 배열의 i번째 값은 start_frame + i 프레임의 각도(°), 못 찾은 프레임은 null.
+        passes가 빈 배열일 수 있다: 촬영이 DONE이 아닐 때, 유효 통과가 없을 때, 각도 자료가 아직 없을 때
+        (DONE 직후 결과 영상을 만들기 시작하기 전의 잠깐, 이 기능 전에 분석한 촬영). 오류로 답하지 않는다.
+      responses:
+        '200':
+          description: 관절 각도
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnglesOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /sessions/{session_id}/result:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [회차 결과·보고서]
+      operationId: getSessionResult
+      summary: 회차 수치·다리 비교 요약 (BE-14·21, S5)
+      responses:
+        '200':
+          description: 회차 결과
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionResultOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_NOT_DONE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SESSION_NOT_DONE, message: "회차 집계가 끝난 뒤에 할 수 있습니다.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /sessions/{session_id}/reports:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [회차 결과·보고서]
+      operationId: listSessionReports
+      summary: 판본별 보고서 상태 (BE-15·16, S6)
+      description: 3초마다 부른다. session_status가 DONE이 되고 PENDING·GENERATING인 판본이 없어지면 멈춘다(DONE 전에는 reports가 빈 배열).
+      responses:
+        '200':
+          description: 보고서 판본들
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionReportsOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /sessions/{session_id}/report-content:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [회차 결과·보고서]
+      operationId: getReportContent
+      summary: 보고서 내용, 판본 하나의 글·표·숫자 (BE-15)
+      description: >-
+        PDF와 같은 함수로 만들고 같은 검사(금지 표현·용어 설명·고정 문구, 실린 숫자와 DB 값의 대조)를 지난 것만 낸다.
+        하나라도 걸리면 내용을 내지 않고 409 REPORT_CHECK_FAILED다. 글은 화면에 그대로 찍는 문자열이고 value는 그림을 그릴 때만 쓴다.
+        로그인 토큰 또는 인쇄 토큰으로 부른다. 그 판본의 보고서 행이 없으면 404다.
+      parameters:
+        - name: edition
+          in: query
+          required: true
+          description: 판본. 그 밖의 값은 422
+          schema: {$ref: '#/components/schemas/Edition'}
+      responses:
+        '200':
+          description: 보고서 내용
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReportContentOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SESSION_NOT_DONE(회차가 DONE이 아님) 또는 REPORT_CHECK_FAILED(글 검사·수치 대조에 걸림)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: REPORT_CHECK_FAILED, message: "보고서 검사를 통과하지 못해 내보내지 않았습니다.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /reports/{report_id}/regenerate:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    post:
+      tags: [회차 결과·보고서]
+      operationId: regenerateReport
+      summary: 보고서 다시 만들기 (BE-15)
+      responses:
+        '200':
+          description: 다시 대기열에 넣은 판본(status는 PENDING)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReportOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: REPORT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: REPORT_IN_PROGRESS, message: "보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요.", detail: null}}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /reports/{report_id}/file:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [회차 결과·보고서]
+      operationId: getReportFile
+      summary: PDF 미리보기·내려받기 (BE-16, 서명 주소)
+      description: |
+        화면이 직접 부르지 않고 ReportOut.file_url(미리보기)·download_url(내려받기)을 그대로 쓴다. 토큰 없이 서명으로 연다.
+        download=true면 Content-Disposition: attachment, 파일 이름은 {반려견 이름}_{측정일}_{보호자용|수의사용}.pdf.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Exp'
+        - $ref: '#/components/parameters/Sig'
+        - name: download
+          in: query
+          required: false
+          schema: {type: boolean}
+      responses:
+        '200':
+          description: 보고서 PDF
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+        '403': {$ref: '#/components/responses/FileLinkExpired'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/compare:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [이력·비교·추이]
+      operationId: compareSessions
+      summary: 회차 비교 (BE-18, S8)
+      parameters:
+        - name: target
+          in: query
+          description: 비교할 회차 ID. 기본은 가장 최근 DONE 회차.
+          schema: {type: string, format: uuid}
+        - name: base
+          in: query
+          description: BASELINE(기본, 기준 회차), PREVIOUS(target 바로 앞 DONE 회차), 또는 회차 ID.
+          schema:
+            anyOf:
+              - {type: string, enum: [BASELINE, PREVIOUS]}
+              - {type: string, format: uuid}
+          example: BASELINE
+        - name: gait_type
+          in: query
+          description: 주면 그 보행 유형만 낸다.
+          schema: {$ref: '#/components/schemas/GaitType'}
+      responses:
+        '200':
+          description: 비교 결과
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CompareOut'}
+        '400':
+          description: COMPARE_INVALID. detail.reason은 NO_DONE_SESSION, SAME_SESSION, NO_PREVIOUS, NOT_DONE 중 하나.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: COMPARE_INVALID, message: "비교할 수 없는 회차입니다.", detail: {reason: SAME_SESSION}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /dogs/{dog_id}/trends:
+    parameters:
+      - $ref: '#/components/parameters/DogId'
+    get:
+      tags: [이력·비교·추이]
+      operationId: getTrends
+      summary: 수치 추이 (BE-18, S8)
+      parameters:
+        - name: metric_code
+          in: query
+          required: true
+          schema: {$ref: '#/components/schemas/MetricCode'}
+        - name: gait_type
+          in: query
+          required: true
+          schema: {$ref: '#/components/schemas/GaitType'}
+        - name: limb
+          in: query
+          schema: {$ref: '#/components/schemas/Limb'}
+        - name: from
+          in: query
+          description: measured_on 시작(포함)
+          schema: {type: string, format: date}
+        - name: to
+          in: query
+          description: measured_on 끝(포함)
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: 추이
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TrendsOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccountDisabled'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/purge:
+    post:
+      tags: [운영]
+      operationId: purge
+      summary: 자료 파기 (BE-19, 관리자만)
+      description: dry_run 기본값은 true다. 실제로 지우려면 false를 보낸다. 여러 기관을 지우는 ALL은 API로 열지 않는다. 실제로 지울 때는 분석 서버의 사본을 먼저 지우고, 지우지 못하면 팀 서비스 자료는 그대로 둔 채 503이다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PurgeRequest'}
+      responses:
+        '200':
+          description: 파기 결과(또는 dry_run 집계)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PurgeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403':
+          description: FORBIDDEN(관리자 아님) 또는 ACCOUNT_DISABLED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: FORBIDDEN, message: "이 기능을 사용할 권한이 없습니다.", detail: null}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SHOT_IN_PROGRESS
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SHOT_IN_PROGRESS, message: "분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503':
+          description: ANALYSIS_UNAVAILABLE(분석 서버의 사본을 지우지 못함. 다시 부르면 이어서 끝난다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: ANALYSIS_UNAVAILABLE, message: "분석 서버의 자료를 지우지 못했습니다. 잠시 뒤 다시 시도해 주세요.", detail: null}}
+
+  /admin/institutions:
+    get:
+      tags: [크림오프 관리자]
+      operationId: listInstitutions
+      summary: 기관 목록 (BE-24, ADMIN·STAFF)
+      responses:
+        '200':
+          description: 페이지 없이 전체, name 오름차순
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InstitutionListOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [크림오프 관리자]
+      operationId: createInstitution
+      summary: 기관 만들기 (BE-24, ADMIN)
+      description: 기관 코드가 겹치면 422 VALIDATION_ERROR(fields에 code)다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InstitutionCreate'}
+      responses:
+        '201':
+          description: 만든 기관
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InstitutionAdminOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/institutions/{institution_id}:
+    parameters:
+      - $ref: '#/components/parameters/InstitutionId'
+    patch:
+      tags: [크림오프 관리자]
+      operationId: updateInstitution
+      summary: 기관 이름·계약 종료일 수정 (BE-24, ADMIN)
+      description: 보낸 필드만 바꾼다. contract_ends_at의 null은 기한 없음이고 name은 비울 수 없다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InstitutionUpdate'}
+      responses:
+        '200':
+          description: 바뀐 기관
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InstitutionAdminOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/institutions/{institution_id}/device-codes:
+    parameters:
+      - $ref: '#/components/parameters/InstitutionId'
+    get:
+      tags: [크림오프 관리자]
+      operationId: listDeviceCodes
+      summary: 코드 목록 (BE-24, ADMIN·STAFF)
+      description: 회수된 코드도 들어 있다(revoked_at으로 구분). code는 ADMIN에게는 전체, STAFF에게는 가운데 두 묶음을 가린 값이다.
+      responses:
+        '200':
+          description: 회수된 코드도 포함한다(revoked_at으로 구분)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeListOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      tags: [크림오프 관리자]
+      operationId: createDeviceCode
+      summary: 코드 발급 (BE-24, ADMIN)
+      description: 기관마다 쓸 수 있는 코드는 하나다. 회수하지 않은 코드가 있으면 409다. 본문은 비워도 된다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCodeCreate'}
+      responses:
+        '201':
+          description: 발급한 코드
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: DEVICE_CODE_EXISTS(이 기관에 회수하지 않은 코드가 이미 있다)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: DEVICE_CODE_EXISTS, message: "이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/institutions/{institution_id}/staff:
+    parameters:
+      - $ref: '#/components/parameters/InstitutionId'
+    get:
+      tags: [크림오프 관리자]
+      operationId: listInstitutionStaff
+      summary: 기관의 계정 목록 (BE-24, ADMIN·STAFF)
+      responses:
+        '200':
+          description: 계정 목록
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffListOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/device-codes/{device_code_id}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceCodeId'
+    patch:
+      tags: [크림오프 관리자]
+      operationId: updateDeviceCode
+      summary: 메모 수정 (BE-24, ADMIN)
+      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCodeUpdate'}
+      responses:
+        '200':
+          description: 바뀐 코드
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/device-codes/{device_code_id}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/DeviceCodeId'
+    post:
+      tags: [크림오프 관리자]
+      operationId: revokeDeviceCode
+      summary: 코드 회수, 멱등 (BE-24, ADMIN)
+      description: 본문 없음. 기존 계정은 그대로 쓴다(막으려면 계정 중지).
+      responses:
+        '200':
+          description: 회수된 코드. 이미 회수됐으면 그대로 200
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCodeOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /admin/staff/{staff_id}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    patch:
+      tags: [크림오프 관리자]
+      operationId: updateStaff
+      summary: 계정 중지·재개 (BE-24, ADMIN)
+      description: 역할을 바꾸거나 비밀번호를 건드리는 필드는 없다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StaffUpdate'}
+      responses:
+        '200':
+          description: 바뀐 계정
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StaffAdminOut'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: SELF_DISABLE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {error: {code: SELF_DISABLE, message: "자기 계정은 중지할 수 없습니다.", detail: null}}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /health:
+    get:
+      tags: [운영]
+      operationId: health
+      summary: 서버 상태 (BE-20)
+      security: []
+      responses:
+        '200':
+          description: 정상
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HealthOut'}
+        '503':
+          description: DB 또는 저장소에 문제가 있다. 실패한 항목이 error다.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HealthOut'}
+              example: {status: error, db: ok, storage: error, version: 1.0.0}
+
+  /metrics:
+    servers:
+      - url: http://localhost:8000
+        description: 루트. /api/v1 아래가 아니다
+    get:
+      tags: [운영]
+      operationId: metrics
+      summary: 요청 수·처리 시간 (BE-20, 선택, 내부망만)
+      description: >-
+        경로는 /api/v1 아래가 아니라 루트 /metrics다. 서버 앞의 nginx는 /api/만 서버로 넘기므로 밖에서는 닿지 않고 내부망의 수집기만 읽는다.
+        서버 설정 METRICS_ENABLED=true일 때만 생기는 선택 항목이다(기본은 꺼짐, 꺼져 있으면 404).
+        내는 값은 http_requests_total{method,path,status}, http_request_duration_seconds(히스토그램), app_info{version}이고,
+        path는 실제 주소가 아니라 주소 틀(/api/v1/dogs/{dog_id})이다.
+      security: []
+      responses:
+        '200':
+          description: Prometheus 텍스트 형식
+          content:
+            text/plain:
+              schema: {type: string}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 로그인·가입 응답의 access_token. 조회 열하나는 서버가 웹의 인쇄 화면에 넘기는 인쇄 토큰도 같은 헤더로 받는다(맨 위 설명).
+
+  parameters:
+    DogId:
+      name: dog_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    ShotId:
+      name: shot_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    ReportId:
+      name: report_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    InstitutionId:
+      name: institution_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    DeviceCodeId:
+      name: device_code_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    StaffId:
+      name: staff_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    ImageId:
+      name: image_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    NoteId:
+      name: note_id
+      in: path
+      required: true
+      description: UUID 형식이 아니면 404 NOT_FOUND
+      schema: {type: string, format: uuid}
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    Size:
+      name: size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    Exp:
+      name: exp
+      in: query
+      required: true
+      description: 만료 시각(Unix 초)
+      schema: {type: integer, example: 1792455600}
+    Sig:
+      name: sig
+      in: query
+      required: true
+      description: HMAC-SHA256 서명(소문자 16진수 64자)
+      schema: {type: string}
+
+  responses:
+    Unauthorized:
+      description: AUTH_REQUIRED(토큰 없음·잘못됨) 또는 AUTH_EXPIRED(만료, 또는 비밀번호를 바꾸기 전에 받은 토큰)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: AUTH_EXPIRED, message: "로그인 시간이 지났습니다. 다시 로그인해 주세요.", detail: null}}
+    AccountDisabled:
+      description: ACCOUNT_DISABLED, 또는 계약이 끝난 CLIENT의 CONTRACT_EXPIRED(GET /auth/me, DELETE /auth/me, GET /auth/me/device는 제외)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: ACCOUNT_DISABLED, message: "사용이 중지된 계정입니다.", detail: null}}
+    Forbidden:
+      description: FORBIDDEN(권한이 없는 역할), ACCOUNT_DISABLED 또는 CONTRACT_EXPIRED
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: FORBIDDEN, message: "이 기능을 사용할 권한이 없습니다.", detail: null}}
+    NotFound:
+      description: NOT_FOUND(없는 ID, 다른 기관의 ID, UUID 형식이 아닌 경로 ID)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: NOT_FOUND, message: "요청한 정보를 찾을 수 없습니다.", detail: null}}
+    FileLinkExpired:
+      description: FILE_LINK_EXPIRED(서명 주소 만료·변조)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: FILE_LINK_EXPIRED, message: "링크가 만료되었습니다. 화면을 새로 불러와 주세요.", detail: null}}
+    ValidationError:
+      description: VALIDATION_ERROR. detail.fields에 필드별 사유
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: VALIDATION_ERROR, message: "입력값을 확인해 주세요.", detail: {fields: [{field: weight_kg, type: less_than_equal}]}}}
+    InternalError:
+      description: INTERNAL_ERROR
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: INTERNAL_ERROR, message: "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", detail: null}}
+
+  schemas:
+    # ---------- 기본 값 ----------
+    Uuid:
+      type: string
+      format: uuid
+      example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90
+    Role:
+      type: string
+      description: ADMIN·STAFF는 크림오프, CLIENT는 고객 기관의 계정
+      enum: [ADMIN, STAFF, CLIENT]
+    EffectiveRole:
+      type: string
+      description: 화면은 이 값으로 분기한다. role이 CLIENT이고 기관 계약이 끝났으면 GUEST, 아니면 role 그대로
+      enum: [ADMIN, STAFF, CLIENT, GUEST]
+    ContractStatus:
+      type: string
+      description: 계약 종료일이 없거나 오늘(한국 날짜) 이후면 ACTIVE, 아니면 EXPIRED. 계산값이다
+      enum: [ACTIVE, EXPIRED]
+    SizeClass:
+      type: string
+      enum: [SMALL, MEDIUM, LARGE]
+    Sex:
+      type: string
+      enum: [MALE, FEMALE, MALE_NEUTERED, FEMALE_SPAYED]
+    FocusLimb:
+      type: string
+      description: LF 왼앞, RF 오른앞, LH 왼뒤, RH 오른뒤
+      enum: [LF, RF, LH, RH]
+    Limb:
+      type: string
+      description: NONE은 몸 전체 수치(walk_speed, gait_cycles)
+      enum: [LF, RF, LH, RH, NONE]
+    CameraSide:
+      type: string
+      description: 카메라 쪽에 보인 몸의 방향. LEFT면 LF·LH, RIGHT면 RF·RH를 잰다.
+      enum: [LEFT, RIGHT]
+    GaitType:
+      type: string
+      description: WALK 평보, TROT 속보, PACE 측대보, OTHER 기타
+      enum: [WALK, TROT, PACE, OTHER]
+    SessionStatus:
+      type: string
+      enum: [MEASURING, AGGREGATING, DONE, FAILED]
+    ShotStatus:
+      type: string
+      enum: [UPLOADED, SUBMITTED, ANALYZING, DONE, FAILED]
+    Validity:
+      type: string
+      description: VALID 유효, PARTIAL 일부 유효, INVALID 무효
+      enum: [VALID, PARTIAL, INVALID]
+    VideoStatus:
+      type: string
+      enum: [PENDING, READY, FAILED]
+    ReportStatus:
+      type: string
+      enum: [PENDING, GENERATING, DONE, FAILED]
+    Edition:
+      type: string
+      description: OWNER 보호자용, VET 수의사용
+      enum: [OWNER, VET]
+    Pair:
+      type: string
+      description: FORE 앞다리(LF·RF), HIND 뒷다리(LH·RH)
+      enum: [FORE, HIND]
+    Unit:
+      type: string
+      description: >-
+        deg(°), pct(%), pct_body(몸통 길이 대비 %), body_per_sec(몸통 길이/초), count(회).
+        몸통 길이는 등 가운데(13번째 등뼈)부터 골반 윗부분까지라 흔히 말하는 몸길이의 절반쯤이다. 화면과 보고서에는 '등 길이'로 적는다.
+      enum: [deg, pct, pct_body, body_per_sec, count]
+    MetricCode:
+      type: string
+      description: 백엔드 명세 12.3. 분석 결과 JSON v1에 맞춰 정해졌다.
+      enum:
+        - rom_shoulder
+        - rom_elbow
+        - rom_carpus
+        - rom_hip
+        - rom_stifle
+        - rom_tarsus
+        - angle_median_shoulder
+        - angle_median_elbow
+        - angle_median_carpus
+        - angle_median_hip
+        - angle_median_stifle
+        - angle_median_tarsus
+        - stifle_cv
+        - paw_lift
+        - paw_excursion
+        - stride_length
+        - stance_ratio
+        - walk_speed
+        - gait_cycles
+      example: rom_stifle
+    Judgement:
+      type: string
+      enum: [INCREASE, DECREASE, WITHIN_RANGE, UNKNOWN, NOT_COMPARABLE]
+
+    # ---------- 오류와 사유 ----------
+    ErrorCode:
+      type: string
+      enum:
+        - VIDEO_FORMAT
+        - VIDEO_UNREADABLE
+        - VIDEO_CODEC
+        - VIDEO_PORTRAIT
+        - VIDEO_DURATION
+        - BASELINE_INVALID
+        - COMPARE_INVALID
+        - PASSWORD_MISMATCH
+        - RESET_TOKEN_INVALID
+        - AUTH_REQUIRED
+        - AUTH_EXPIRED
+        - LOGIN_FAILED
+        - ACCOUNT_DISABLED
+        - CONTRACT_EXPIRED
+        - FORBIDDEN
+        - FILE_LINK_EXPIRED
+        - NOT_FOUND
+        - DEVICE_CODE_INVALID
+        - SESSION_CLOSED
+        - SESSION_ALREADY_OPEN
+        - SESSION_EMPTY
+        - SESSION_NOT_DONE
+        - SHOT_IN_PROGRESS
+        - SHOT_NOT_FAILED
+        - REPORT_IN_PROGRESS
+        - REPORT_CHECK_FAILED
+        - DEVICE_CODE_EXISTS
+        - LOGIN_ID_TAKEN
+        - DOG_MODIFIED
+        - SELF_DISABLE
+        - LAST_ACCOUNT
+        - VIDEO_TOO_LARGE
+        - VALIDATION_ERROR
+        - INTERNAL_ERROR
+        - MAIL_UNAVAILABLE
+        - ANALYSIS_UNAVAILABLE
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, detail]
+          properties:
+            code: {$ref: '#/components/schemas/ErrorCode'}
+            message:
+              type: string
+              description: 화면에 그대로 보여 줄 문구
+            detail:
+              description: 추가 정보. 없으면 null. VALIDATION_ERROR면 fields, SESSION_ALREADY_OPEN이면 session_id, COMPARE_INVALID면 reason.
+              oneOf:
+                - type: object
+                  additionalProperties: true
+                - type: 'null'
+    Reason:
+      type: object
+      description: 사유 객체. code는 백엔드 명세 14절의 값, message는 화면에 보여 줄 문구.
+      required: [code, message]
+      properties:
+        code: {type: string, example: STOPPED}
+        message: {type: string, example: 중간에 멈췄습니다.}
+    NullableReason:
+      oneOf:
+        - $ref: '#/components/schemas/Reason'
+        - type: 'null'
+
+    # ---------- 인증 ----------
+    LoginRequest:
+      type: object
+      description: institution_code가 와도 무시한다.
+      required: [login_id, password]
+      properties:
+        login_id: {type: string, minLength: 1, maxLength: 50, example: kim01}
+        password: {type: string, description: '로그인에서는 길이를 검사하지 않는다. 틀리면 401 LOGIN_FAILED', example: password1234}
+    LoginOut:
+      type: object
+      required: [access_token, token_type, expires_at, staff]
+      properties:
+        access_token: {type: string, example: eyJhbGciOiJIUzI1NiJ9.e30.sig}
+        token_type: {type: string, const: bearer, example: bearer}
+        expires_at: {type: string, format: date-time, example: '2026-10-20T12:10:00Z'}
+        staff: {$ref: '#/components/schemas/StaffOut'}
+    StaffOut:
+      type: object
+      required: [id, login_id, name, email, role, effective_role, notif_on, institution]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        login_id: {type: string, example: kim01}
+        name: {type: string, example: 김담당}
+        email: {type: [string, 'null'], example: kim01@example.com}
+        role: {$ref: '#/components/schemas/Role'}
+        effective_role: {$ref: '#/components/schemas/EffectiveRole'}
+        notif_on: {type: boolean, description: 알림을 받을지. 설정값만 저장한다, example: true}
+        institution:
+          type: object
+          required: [id, code, name, contract_ends_at, contract_status]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+            code: {type: string, example: INST-7F3K2Q}
+            name: {type: string, example: 크림 재활센터}
+            contract_ends_at: {type: [string, 'null'], format: date, description: 계약 마지막 날(당일 포함). null은 기한 없음, example: '2027-10-30'}
+            contract_status: {$ref: '#/components/schemas/ContractStatus'}
+    MyDeviceOut:
+      type: object
+      required: [device]
+      properties:
+        device:
+          oneOf: [{$ref: '#/components/schemas/DeviceOut'}, {type: 'null'}]
+          description: 내 기관의 쓸 수 있는(회수하지 않은) 디바이스 코드. 없으면 null
+    DeviceOut:
+      type: object
+      required: [code_masked, issued_at]
+      properties:
+        code_masked:
+          type: string
+          description: 다섯 자씩 네 묶음에서 가운데 두 묶음을 별표로 가린 코드. 스무 자 중 열 자가 보인다. 전체 코드는 주지 않는다
+          example: 'ABCDE-*****-*****-PQRST'
+        issued_at:
+          type: string
+          format: date-time
+          description: 그 코드를 발급한 시각
+          example: '2026-11-01T02:00:00Z'
+    DeviceCodeVerifyIn:
+      type: object
+      required: [code]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 40, description: 하이픈·공백·소문자는 서버가 정리한다, example: 7f3k2-qw9pa-x2m8n-h4cde}
+    DeviceCodeVerifyOut:
+      type: object
+      required: [institution]
+      properties:
+        institution:
+          type: object
+          required: [id, name]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+            name: {type: string, example: 크림 재활센터}
+    SignupIn:
+      type: object
+      required: [code, login_id, password, name, email, terms]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 40, example: 7F3K2-QW9PA-X2M8N-H4CDE}
+        login_id: {type: string, pattern: '^[a-z0-9._-]{4,50}$', description: '4~50자, 영문 소문자·숫자·.·_·-만. 다른 기관의 아이디와도 겹칠 수 없다', example: kim01}
+        password: {type: string, minLength: 8, description: '8자 이상, UTF-8로 72바이트 이하', example: password1234}
+        name: {type: string, minLength: 1, maxLength: 50, example: 김담당}
+        terms: {$ref: '#/components/schemas/TermsIn'}
+        email: {type: string, minLength: 5, maxLength: 254, description: '소문자로 저장한다. 형식만 검사하고 인증 메일은 보내지 않는다', example: kim01@example.com}
+    TermsIn:
+      type: object
+      description: 가입 화면의 약관 동의. 필수다(없으면 422). 필수 셋은 true여야 하고 marketing만 선택이다.
+      required: [version, service, privacy, device_location]
+      properties:
+        version: {type: string, minLength: 1, maxLength: 20, description: 화면이 보여 준 약관의 버전, example: '2026-11-01'}
+        service: {type: boolean, description: '[필수] 서비스 이용약관. true가 아니면 422', example: true}
+        privacy: {type: boolean, description: '[필수] 개인정보 수집 및 이용. true가 아니면 422', example: true}
+        device_location: {type: boolean, description: '[필수] 측정 기기 연동 및 위치정보 이용. true가 아니면 422', example: true}
+        marketing: {type: boolean, default: false, description: '[선택] 마케팅 정보 수신'}
+    WithdrawIn:
+      type: object
+      required: [password]
+      properties:
+        password: {type: string, description: '현재 비밀번호. 틀리면 400 PASSWORD_MISMATCH', example: password1234}
+    MeUpdate:
+      type: object
+      description: 보낸 필드만 바꾼다. null은 받지 않는다.
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50, example: 김담당}
+        email: {type: string, minLength: 5, maxLength: 254, example: kim01@example.com}
+        notif_on: {type: boolean, description: 알림을 받을지, example: false}
+    PasswordChangeIn:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: {type: string, description: '길이를 검사하지 않는다. 틀리면 400 PASSWORD_MISMATCH', example: password1234}
+        new_password: {type: string, minLength: 8, description: '8자 이상, UTF-8로 72바이트 이하. 현재 비밀번호와 달라야 한다', example: newpassword5678}
+    PasswordResetRequestIn:
+      type: object
+      required: [login_id]
+      properties:
+        login_id: {type: string, minLength: 1, maxLength: 50, example: kim01}
+    PasswordResetConfirmIn:
+      type: object
+      required: [token, new_password]
+      properties:
+        token: {type: string, minLength: 1, maxLength: 100, description: 메일 링크의 token}
+        new_password: {type: string, minLength: 8, description: '8자 이상, UTF-8로 72바이트 이하', example: newpassword5678}
+
+    # ---------- 크림오프 관리자 ----------
+    InstitutionAdminOut:
+      type: object
+      required: [id, code, name, contract_ends_at, contract_status, staff_count, device_code_count, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        code: {type: string, example: INST-7F3K2Q}
+        name: {type: string, example: 크림 재활센터}
+        contract_ends_at: {type: [string, 'null'], format: date, description: 계약 마지막 날(당일 포함). null은 기한 없음, example: '2027-10-30'}
+        contract_status: {$ref: '#/components/schemas/ContractStatus'}
+        staff_count: {type: integer, example: 2}
+        device_code_count: {type: integer, example: 1}
+        created_at: {type: string, format: date-time, example: '2026-10-30T02:00:00Z'}
+    InstitutionListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/InstitutionAdminOut'}
+    InstitutionCreate:
+      type: object
+      required: [name]
+      properties:
+        code: {type: [string, 'null'], minLength: 1, maxLength: 20, description: '유일. 비우면 서버가 INST- + 6자로 만든다', example: null}
+        name: {type: string, minLength: 1, maxLength: 100, example: 크림 재활센터}
+        contract_ends_at: {type: [string, 'null'], format: date, description: 과거 날짜도 받는다(즉시 만료시키는 용도), example: '2027-10-30'}
+    InstitutionUpdate:
+      type: object
+      description: 보낸 필드만 바꾼다. contract_ends_at의 null은 기한 없음이고 name은 비울 수 없다.
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100, example: 크림 재활센터}
+        contract_ends_at: {type: [string, 'null'], format: date, example: '2028-10-30'}
+    DeviceCodeOut:
+      type: object
+      description: 코드 전체가 든 자리는 발급 응답과 ADMIN이 본 코드 목록뿐이다. STAFF가 본 코드 목록의 code는 가운데 두 묶음을 가린 값이다.
+      required: [id, code, institution_id, active_accounts, revoked_at, note, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        code: {type: string, example: 7F3K2-QW9PA-X2M8N-H4CDE}
+        institution_id: {$ref: '#/components/schemas/Uuid'}
+        active_accounts: {type: integer, example: 2}
+        revoked_at: {type: [string, 'null'], format: date-time, example: null}
+        note: {type: [string, 'null'], example: null}
+        created_at: {type: string, format: date-time, example: '2026-10-30T02:00:00Z'}
+    DeviceCodeListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DeviceCodeOut'}
+    DeviceCodeCreate:
+      type: object
+      properties:
+        note: {type: [string, 'null'], maxLength: 100, example: 2호기}
+    DeviceCodeUpdate:
+      type: object
+      description: 보낸 필드만 바꾼다. note의 null은 메모 지우기다.
+      properties:
+        note: {type: [string, 'null'], maxLength: 100, example: null}
+    StaffAdminOut:
+      type: object
+      required: [id, login_id, name, email, role, is_active, withdrawn_at, device_code_id, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        login_id: {type: string, example: kim01}
+        name: {type: string, example: 김담당}
+        email: {type: [string, 'null'], example: kim01@example.com}
+        role: {$ref: '#/components/schemas/Role'}
+        is_active: {type: boolean, example: true}
+        withdrawn_at:
+          type: [string, 'null']
+          format: date-time
+          description: 스스로 탈퇴한 시각. 탈퇴하지 않았으면 null이다. 관리자가 계정을 다시 켜면 null로 돌아간다
+          example: null
+        device_code_id:
+          type: [string, 'null']
+          format: uuid
+          description: 가입에 쓴 코드. 관리자가 만든 계정은 null
+          example: null
+        created_at: {type: string, format: date-time, example: '2026-10-30T02:00:00Z'}
+    StaffListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/StaffAdminOut'}
+    StaffUpdate:
+      type: object
+      required: [is_active]
+      properties:
+        is_active: {type: boolean, description: 자기 자신을 false로 하면 409 SELF_DISABLE, example: false}
+
+    # ---------- 반려견 ----------
+    DogOut:
+      type: object
+      required: [id, name, breed, weight_kg, size_class, size_class_manual, birth_year, sex, rehab_start_date,
+                 focus_limb, baseline_session_id, memo, chart_no, owner_name, owner_phone, owner_phone_last4, stage,
+                 stage_changed_on, latest_vital, badges, changes, last_symmetry, last_surgery, last_diagnosis,
+                 version, session_count,
+                 last_measured_on, open_session_id,
+                 deleted_at, purge_at, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string, example: 보리}
+        breed: {type: string, example: 골든 리트리버}
+        weight_kg: {type: number, example: 28.4}
+        size_class: {$ref: '#/components/schemas/SizeClass'}
+        size_class_manual: {type: boolean, example: false}
+        birth_year: {type: [integer, 'null'], example: 2019}
+        sex:
+          oneOf: [{$ref: '#/components/schemas/Sex'}, {type: 'null'}]
+        rehab_start_date: {type: [string, 'null'], format: date, example: '2026-10-01'}
+        focus_limb:
+          oneOf: [{$ref: '#/components/schemas/FocusLimb'}, {type: 'null'}]
+        baseline_session_id:
+          type: [string, 'null']
+          format: uuid
+          description: 저장된 값 그대로. null이면 가장 이른 DONE 회차가 기준.
+          example: null
+        memo: {type: [string, 'null'], description: 내부 메모. 보고서에 넣지 않는다., example: null}
+        chart_no: {type: [string, 'null'], description: 동물번호(병원 차트 번호), example: A-1024}
+        owner_name: {type: [string, 'null'], description: 보호자 이름. 보고서에 넣지 않는다., example: 김보호}
+        owner_phone:
+          type: [string, 'null']
+          description: 보호자 연락처. 상세·등록·수정 응답에만 값이 있고 목록에서는 null이다.
+          example: 010-1234-5678
+        owner_phone_last4: {type: [string, 'null'], description: 연락처의 숫자 중 뒤 4자리, example: '5678'}
+        stage: {$ref: '#/components/schemas/DogStage'}
+        stage_changed_on:
+          type: [string, 'null']
+          format: date
+          description: 단계가 바뀐 날. 바뀐 적이 없으면 null. 서버가 적는다.
+          example: null
+        latest_vital:
+          oneOf: [{$ref: '#/components/schemas/VitalOut'}, {type: 'null'}]
+          description: 가장 최근 날짜의 바이탈. 없으면 null. 그날 재지 않은 값은 null이다.
+        badges:
+          type: array
+          description: 홈 배지. 수술(없으면 진단) 하나와 중요 메모. 휴지통 목록에서는 빈 배열.
+          items: {$ref: '#/components/schemas/DogBadgeOut'}
+        changes:
+          type: array
+          description: 최근 변동(기본 7일, changed_within_days를 보내면 그 날수). on이 늦은 순서. 휴지통 목록에서는 빈 배열.
+          items: {$ref: '#/components/schemas/DogChangeOut'}
+        last_symmetry:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 대칭 점수가 있는 완료 회차 중 가장 최근 것의 점수. 없으면 null
+          example: 91
+        last_surgery:
+          oneOf: [{$ref: '#/components/schemas/DogHistoryBriefOut'}, {type: 'null'}]
+          description: 가장 최근 수술. 없으면 null. 휴지통 목록에서는 null
+        last_diagnosis:
+          oneOf: [{$ref: '#/components/schemas/DogHistoryBriefOut'}, {type: 'null'}]
+          description: 가장 최근 진단. badges와 달리 수술이 있어도 준다. 없으면 null. 휴지통 목록에서는 null
+        version: {type: integer, description: 수정할 때 그대로 돌려보낸다(PATCH의 version), example: 0}
+        session_count: {type: integer, description: 상태 상관없이 회차 수, example: 3}
+        last_measured_on: {type: [string, 'null'], format: date, example: '2026-10-20'}
+        open_session_id:
+          type: [string, 'null']
+          format: uuid
+          description: MEASURING 회차의 ID
+          example: null
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+          description: 휴지통에 넣은 시각. 휴지통에 없으면 null
+          example: null
+        purge_at:
+          type: [string, 'null']
+          format: date-time
+          description: 영구 삭제 예정 시각(deleted_at + 30일). 휴지통에 없으면 null
+          example: null
+        created_at: {type: string, format: date-time, example: '2026-10-19T00:30:00Z'}
+        updated_at: {type: string, format: date-time, example: '2026-10-19T00:30:00Z'}
+    DogBrief:
+      type: object
+      required: [id, name, breed, weight_kg, size_class]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string, example: 보리}
+        breed: {type: string, example: 골든 리트리버}
+        weight_kg: {type: number, example: 28.4}
+        size_class: {$ref: '#/components/schemas/SizeClass'}
+    DogCreate:
+      type: object
+      required: [name, breed, weight_kg]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50, example: 보리}
+        breed: {type: string, minLength: 1, maxLength: 50, example: 골든 리트리버}
+        weight_kg: {type: number, minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 28.4}
+        size_class:
+          oneOf: [{$ref: '#/components/schemas/SizeClass'}, {type: 'null'}]
+          description: 보내면 size_class_manual=true
+        birth_year: {type: [integer, 'null'], minimum: 1990, description: 1990~올해, example: 2019}
+        sex:
+          oneOf: [{$ref: '#/components/schemas/Sex'}, {type: 'null'}]
+        rehab_start_date: {type: [string, 'null'], format: date, description: 오늘(한국 날짜)까지, example: '2026-10-01'}
+        focus_limb:
+          oneOf: [{$ref: '#/components/schemas/FocusLimb'}, {type: 'null'}]
+        memo: {type: [string, 'null'], maxLength: 1000, example: null}
+        chart_no: {type: [string, 'null'], minLength: 1, maxLength: 30, example: A-1024}
+        owner_name: {type: [string, 'null'], minLength: 1, maxLength: 50, example: 김보호}
+        owner_phone:
+          type: [string, 'null']
+          minLength: 7
+          maxLength: 20
+          pattern: '^[0-9+\- ]+$'
+          example: 010-1234-5678
+        stage:
+          allOf: [{$ref: '#/components/schemas/DogStage'}]
+          default: REHAB
+    DogUpdate:
+      type: object
+      description: version은 필수이고, 나머지는 보낸 필드만 바꾼다. null을 보내면 비운다. name·breed·weight_kg·stage는 null 불가.
+      required: [version]
+      properties:
+        version: {type: integer, description: 읽었을 때의 값. 저장된 값과 다르면 409 DOG_MODIFIED, example: 3}
+        name: {type: string, minLength: 1, maxLength: 50}
+        breed: {type: string, minLength: 1, maxLength: 50}
+        weight_kg: {type: number, minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 27.9}
+        size_class:
+          oneOf: [{$ref: '#/components/schemas/SizeClass'}, {type: 'null'}]
+          description: 값이면 직접 고친 것으로, null이면 자동 분류로 돌아간다.
+        birth_year: {type: [integer, 'null'], minimum: 1990}
+        sex:
+          oneOf: [{$ref: '#/components/schemas/Sex'}, {type: 'null'}]
+        rehab_start_date: {type: [string, 'null'], format: date}
+        focus_limb:
+          oneOf: [{$ref: '#/components/schemas/FocusLimb'}, {type: 'null'}]
+        baseline_session_id:
+          type: [string, 'null']
+          format: uuid
+          description: 이 반려견의 DONE 회차. 아니면 400 BASELINE_INVALID. null이면 지정 해제.
+        memo: {type: [string, 'null'], maxLength: 1000}
+        chart_no: {type: [string, 'null'], minLength: 1, maxLength: 30, example: A-1024}
+        owner_name: {type: [string, 'null'], minLength: 1, maxLength: 50, example: 김보호}
+        owner_phone:
+          type: [string, 'null']
+          minLength: 7
+          maxLength: 20
+          pattern: '^[0-9+\- ]+$'
+          example: 010-1234-5678
+        stage:
+          allOf: [{$ref: '#/components/schemas/DogStage'}]
+          description: 지금과 다른 값이면 stage_changed_on이 오늘이 된다.
+    DogPage:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DogOut'}
+        total: {type: integer, example: 45}
+        page: {type: integer, example: 1}
+        size: {type: integer, example: 20}
+
+    # ---------- 차트 자료 ----------
+    DogStage:
+      type: string
+      description: PRE 수술 전, REHAB 재활 중, DONE 종결
+      enum: [PRE, REHAB, DONE]
+    NoteCategory:
+      type: string
+      description: 메모 CAUTION(주의)·GUARDIAN(보호자)·BOOKING(예약)·OTHER(기타), 진료 기록 S·O·A·P
+      enum: [S, O, A, P, CAUTION, GUARDIAN, BOOKING, OTHER]
+    StaffBrief:
+      type: object
+      required: [id, name]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string, example: 김담당}
+    VitalIn:
+      type: object
+      description: 회차 시작의 vital. 다섯 값 모두 필수. 범위는 제안 값이다.
+      required: [weight_kg, temp_c, heart_rate, sbp, dbp]
+      properties:
+        weight_kg: {type: number, minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 28.1}
+        temp_c: {type: number, minimum: 30.0, maximum: 45.0, description: 체온(℃). 소수 첫째 자리까지, example: 38.6}
+        heart_rate: {type: integer, minimum: 20, maximum: 300, description: 심박(회/분), example: 92}
+        sbp: {type: integer, minimum: 30, maximum: 300, description: 수축기 혈압(mmHg), example: 132}
+        dbp: {type: integer, minimum: 10, maximum: 250, description: 이완기 혈압(mmHg). sbp보다 작아야 한다, example: 84}
+    VitalPut:
+      type: object
+      description: 그날 바이탈로 잰 값만 보낸다. 하나는 보내야 한다. null은 그 값을 비운다. 혈압은 sbp·dbp를 함께 보낸다.
+      minProperties: 1
+      properties:
+        weight_kg: {type: [number, 'null'], minimum: 0.5, maximum: 100.0, description: 소수 둘째 자리까지, example: 28.1}
+        temp_c: {type: [number, 'null'], minimum: 30.0, maximum: 45.0, description: 체온(℃). 소수 첫째 자리까지, example: 38.6}
+        heart_rate: {type: [integer, 'null'], minimum: 20, maximum: 300, description: 심박(회/분), example: 92}
+        sbp: {type: [integer, 'null'], minimum: 30, maximum: 300, description: 수축기 혈압(mmHg), example: 132}
+        dbp: {type: [integer, 'null'], minimum: 10, maximum: 250, description: 이완기 혈압(mmHg). sbp보다 작아야 한다, example: 84}
+    DogHistoryBriefOut:
+      type: object
+      required: [occurred_on, title, site]
+      description: 가장 최근 수술·진단 한 줄. 글은 화면이 만든다.
+      properties:
+        occurred_on: {type: string, format: date, example: '2026-08-27'}
+        title: {type: string, example: TPLO}
+        site: {type: [string, 'null'], enum: [LF, RF, LH, RH, SP, null], example: RH}
+    DogBadgeOut:
+      type: object
+      required: [code, title, site, 'on']
+      description: 홈 배지 하나. 글은 화면이 만든다.
+      properties:
+        code: {type: string, enum: [SURGERY, DIAGNOSIS, IMPORTANT_NOTE]}
+        title: {type: [string, 'null'], description: 수술·진단 이름. IMPORTANT_NOTE는 null, example: TPLO}
+        site: {type: [string, 'null'], enum: [LF, RF, LH, RH, SP, null], example: RH}
+        'on': {type: string, format: date, description: '수술·진단한 날, 중요 메모를 쓴 날', example: '2026-08-27'}
+    DogChangeOut:
+      type: object
+      required: [code, 'on', delta]
+      description: 최근 변동 하나.
+      properties:
+        code: {type: string, enum: [RESHOOT_NEEDED, GAIT_WORSE, GAIT_BETTER, SURGERY_ADDED, IMPORTANT_NOTE]}
+        'on': {type: string, format: date, description: 그 일이 있은 날, example: '2026-11-05'}
+        delta: {type: [integer, 'null'], description: 'GAIT_WORSE·GAIT_BETTER에서만 대칭 점수 차(이번 − 앞)', example: 4}
+    VitalOut:
+      type: object
+      required: [id, dog_id, measured_on, weight_kg, temp_c, heart_rate, sbp, dbp, staff, session_id, created_at,
+                 updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        dog_id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-11-06'}
+        weight_kg: {type: [number, 'null'], description: 재지 않았으면 null, example: 28.1}
+        temp_c: {type: [number, 'null'], example: 38.6}
+        heart_rate: {type: [integer, 'null'], example: 92}
+        sbp: {type: [integer, 'null'], example: 132}
+        dbp: {type: [integer, 'null'], example: 84}
+        staff:
+          allOf: [{$ref: '#/components/schemas/StaffBrief'}]
+          description: 마지막으로 저장한 담당자
+        session_id:
+          type: [string, 'null']
+          format: uuid
+          description: 회차를 시작하며 함께 보낸 값이면 그 회차. 회차를 취소하면 null
+          example: null
+        created_at: {type: string, format: date-time, example: '2026-11-06T01:10:00Z'}
+        updated_at: {type: string, format: date-time, example: '2026-11-06T01:10:00Z'}
+    VitalList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/VitalOut'}
+    DogHistoryCreate:
+      type: object
+      required: [occurred_on, kind, title]
+      properties:
+        occurred_on: {type: string, format: date, description: 오늘(한국 날짜)까지, example: '2026-08-27'}
+        kind: {type: string, enum: [DIAGNOSIS, SURGERY, REHAB]}
+        title: {type: string, minLength: 1, maxLength: 100, example: TPLO}
+        site:
+          type: [string, 'null']
+          enum: [LF, RF, LH, RH, SP, null]
+          description: 네 다리 또는 척추(SP)
+        clinician: {type: [string, 'null'], minLength: 1, maxLength: 50, example: 박수의}
+        stage:
+          oneOf: [{$ref: '#/components/schemas/DogStage'}, {type: 'null'}]
+          description: 보내면 반려견의 단계를 함께 바꾼다.
+    DogHistoryUpdate:
+      type: object
+      description: 바꿀 것만 보낸다. 하나는 보내야 한다. occurred_on·kind·title은 null로 비울 수 없다.
+      minProperties: 1
+      properties:
+        occurred_on: {type: string, format: date, description: 오늘(한국 날짜)까지, example: '2026-08-27'}
+        kind: {type: string, enum: [DIAGNOSIS, SURGERY, REHAB]}
+        title: {type: string, minLength: 1, maxLength: 100, example: TPLO}
+        site:
+          type: [string, 'null']
+          enum: [LF, RF, LH, RH, SP, null]
+          description: 네 다리 또는 척추(SP). null이면 비운다
+        clinician: {type: [string, 'null'], minLength: 1, maxLength: 50, description: null이면 비운다, example: 박수의}
+    DogHistoryOut:
+      type: object
+      required: [id, occurred_on, kind, title, site, clinician, staff, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        occurred_on: {type: string, format: date, example: '2026-08-27'}
+        kind: {type: string, enum: [DIAGNOSIS, SURGERY, REHAB]}
+        title: {type: string, example: TPLO}
+        site: {type: [string, 'null'], example: RH}
+        clinician: {type: [string, 'null'], example: 박수의}
+        staff:
+          allOf: [{$ref: '#/components/schemas/StaffBrief'}]
+          description: 적은 담당자
+        created_at: {type: string, format: date-time, example: '2026-08-27T05:00:00Z'}
+    DogHistoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DogHistoryOut'}
+    NoteItemIn:
+      type: object
+      required: [category, body]
+      properties:
+        category: {$ref: '#/components/schemas/NoteCategory'}
+        body: {type: string, minLength: 1, maxLength: 2000, example: 입질 있음. 입마개 필요}
+        important: {type: boolean, default: false}
+    NoteCreate:
+      allOf:
+        - $ref: '#/components/schemas/NoteItemIn'
+        - type: object
+          properties:
+            session_id:
+              type: [string, 'null']
+              format: uuid
+              description: 이 반려견의 회차. 아니면 422
+            visited_on:
+              type: string
+              format: date
+              description: 방문일. 빼면 오늘(한국 날짜)이고 미래 날짜는 422다
+              example: '2026-11-06'
+    NoteBatchCreate:
+      type: object
+      required: [notes]
+      properties:
+        session_id:
+          type: [string, 'null']
+          format: uuid
+          description: 묶음 전체에 하나. 이 반려견의 회차가 아니면 422
+        visited_on:
+          type: string
+          format: date
+          description: 방문일. 묶음 전체에 하나. 빼면 오늘(한국 날짜)이고 미래 날짜는 422다
+          example: '2026-11-06'
+        notes:
+          type: array
+          minItems: 1
+          maxItems: 8
+          description: 같은 category가 두 번 있으면 422
+          items: {$ref: '#/components/schemas/NoteItemIn'}
+    NoteUpdate:
+      type: object
+      description: 보낸 것만 바꾼다. 셋 다 null은 안 된다. category는 같은 종류 안에서만 바꾼다.
+      properties:
+        body: {type: string, minLength: 1, maxLength: 2000}
+        category: {$ref: '#/components/schemas/NoteCategory'}
+        important: {type: boolean}
+    NoteOut:
+      type: object
+      required: [id, dog_id, session_id, category, body, important, visited_on, staff, revision_count, created_at,
+                 updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        dog_id: {$ref: '#/components/schemas/Uuid'}
+        session_id: {type: [string, 'null'], format: uuid, example: null}
+        category: {$ref: '#/components/schemas/NoteCategory'}
+        body: {type: string, example: 입질 있음. 입마개 필요}
+        important: {type: boolean, example: true}
+        visited_on:
+          type: string
+          format: date
+          description: 방문일. 쓸 때 정하고 고칠 수 없다. 목록은 이 날짜가 늦은 것부터다
+          example: '2026-11-06'
+        staff:
+          allOf: [{$ref: '#/components/schemas/StaffBrief'}]
+          description: 지금 내용을 쓴 담당자(고치면 고친 사람)
+        revision_count: {type: integer, description: 고친 횟수, example: 0}
+        created_at: {type: string, format: date-time, example: '2026-11-06T01:10:00Z'}
+        updated_at: {type: string, format: date-time, example: '2026-11-06T01:10:00Z'}
+    NotePage:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/NoteOut'}
+        total: {type: integer, example: 12}
+        page: {type: integer, example: 1}
+        size: {type: integer, example: 50}
+    NoteBatchOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/NoteOut'}
+    NoteRevisionOut:
+      type: object
+      description: 고치기 전 내용 한 줄
+      required: [id, body, category, important, staff, revised_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        body: {type: string}
+        category: {$ref: '#/components/schemas/NoteCategory'}
+        important: {type: boolean}
+        staff:
+          allOf: [{$ref: '#/components/schemas/StaffBrief'}]
+          description: 그 내용을 쓴 담당자
+        revised_at: {type: string, format: date-time, description: 그 내용이 바뀐 시각, example: '2026-11-06T02:00:00Z'}
+    NoteRevisionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/NoteRevisionOut'}
+    ImageKind:
+      type: string
+      enum: [PRE_OP, POST_OP, XRAY, PHOTO]
+      description: 수술 전, 수술 후, 방사선, 사진. XRAY는 얼굴을 가리지 않는다.
+    ImageOut:
+      type: object
+      required: [id, taken_on, kind, caption, width, height, masked_faces, staff, created_at, file_url,
+                 url_expires_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        taken_on: {type: string, format: date, example: '2026-08-27'}
+        kind: {$ref: '#/components/schemas/ImageKind'}
+        caption: {type: [string, 'null'], example: 수술 직후}
+        width: {type: integer, description: 저장한 사진의 너비(픽셀), example: 1600}
+        height: {type: integer, example: 1200}
+        masked_faces: {type: integer, description: 올릴 때 가린 얼굴 수, example: 0}
+        staff: {$ref: '#/components/schemas/StaffBrief'}
+        created_at: {type: string, format: date-time, example: '2026-08-27T05:10:00Z'}
+        file_url: {type: string, description: 서명 URL. 토큰 없이 열린다, example: '/api/v1/images/…/file?exp=1790000000&sig=…'}
+        url_expires_at: {type: string, format: date-time, example: '2026-08-27T05:25:00Z'}
+    ImageList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ImageOut'}
+
+    # ---------- 회차 ----------
+    DailyRecordsOut:
+      type: object
+      required: [date, vitals, notes, sessions]
+      properties:
+        date:
+          type: string
+          format: date
+          description: 실제로 쓴 날짜. date를 빼고 부르면 오늘(한국 날짜)이다
+          example: '2026-11-10'
+        vitals:
+          type: array
+          description: measured_on이 그날인 바이탈. 적은 시각 오름차순
+          items: {$ref: '#/components/schemas/VitalOut'}
+        notes:
+          type: array
+          description: visited_on이 그날인 메모·진료 기록. 쓴 시각 오름차순
+          items: {$ref: '#/components/schemas/NoteOut'}
+        sessions:
+          type: array
+          description: measured_on이 그날인 회차(모든 상태). created_at 오름차순. 기관 회차 목록의 한 줄과 같은 모양이다
+          items: {$ref: '#/components/schemas/SessionListItem'}
+    SessionCreate:
+      type: object
+      properties:
+        measured_on: {type: [string, 'null'], format: date, description: '기본 오늘(한국 날짜). 미래 날짜 불가', example: '2026-10-20'}
+        weight_kg: {type: [number, 'null'], minimum: 0.5, maximum: 100.0, description: 그날 체중, example: 28.1}
+        vital:
+          oneOf: [{$ref: '#/components/schemas/VitalIn'}, {type: 'null'}]
+          description: 보내면 그날 바이탈로 함께 저장한다. weight_kg와 vital.weight_kg가 다르면 422
+    SessionOut:
+      type: object
+      required: [id, dog_id, staff, measured_on, weight_kg, size_class, status, fail_reason, model_name, model_version,
+                 completed_at, aggregated_at, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        dog_id: {$ref: '#/components/schemas/Uuid'}
+        staff:
+          type: object
+          required: [id, name]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+            name: {type: string, example: 김담당}
+        measured_on: {type: string, format: date, example: '2026-10-20'}
+        weight_kg: {type: [number, 'null'], example: 28.1}
+        size_class:
+          allOf: [{$ref: '#/components/schemas/SizeClass'}]
+          description: 회차를 시작한 시점의 체급. 그날 체중(없으면 등록 체중)으로 정하며 반려견의 지금 체급과 다를 수 있다
+        status: {$ref: '#/components/schemas/SessionStatus'}
+        fail_reason: {$ref: '#/components/schemas/NullableReason'}
+        model_name: {type: [string, 'null'], example: null}
+        model_version: {type: [string, 'null'], example: null}
+        completed_at: {type: [string, 'null'], format: date-time, example: null}
+        aggregated_at: {type: [string, 'null'], format: date-time, example: null}
+        created_at: {type: string, format: date-time, example: '2026-10-20T00:10:00Z'}
+    SideProgress:
+      type: object
+      required: [valid_passes, recommended]
+      properties:
+        valid_passes: {type: integer, example: 5}
+        recommended: {type: integer, description: 권장 유효 통과 수(지금 8), example: 8}
+    SessionDetailOut:
+      allOf:
+        - $ref: '#/components/schemas/SessionOut'
+        - type: object
+          required: [dog, progress, notices, shots]
+          properties:
+            dog: {$ref: '#/components/schemas/DogBrief'}
+            progress:
+              type: object
+              required: [LEFT, RIGHT]
+              properties:
+                LEFT: {$ref: '#/components/schemas/SideProgress'}
+                RIGHT: {$ref: '#/components/schemas/SideProgress'}
+            notices:
+              type: array
+              description: RECOMMENDED_MET, ONE_SIDE_ONLY
+              items: {$ref: '#/components/schemas/Reason'}
+            shots:
+              type: array
+              description: seq_no 내림차순(최신이 위)
+              items: {$ref: '#/components/schemas/ShotOut'}
+
+    # ---------- 촬영 ----------
+    PassOut:
+      type: object
+      required: [pass_no, camera_side, gait_type, is_valid, exclude_reason, start_frame, end_frame]
+      properties:
+        pass_no: {type: integer, example: 1}
+        camera_side: {$ref: '#/components/schemas/CameraSide'}
+        gait_type: {$ref: '#/components/schemas/GaitType'}
+        is_valid: {type: boolean, example: true}
+        exclude_reason: {$ref: '#/components/schemas/NullableReason'}
+        start_frame: {type: integer, description: 유효 구간 시작 프레임, example: 30}
+        end_frame: {type: integer, description: 유효 구간 끝 프레임, example: 171}
+    ShotOut:
+      type: object
+      required: [id, seq_no, status, fail_reason, validity, validity_reason, video_status, below_min_spec, passes,
+                 uploaded_at, analyzed_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        seq_no: {type: integer, example: 6}
+        status: {$ref: '#/components/schemas/ShotStatus'}
+        fail_reason: {$ref: '#/components/schemas/NullableReason'}
+        validity:
+          oneOf: [{$ref: '#/components/schemas/Validity'}, {type: 'null'}]
+          description: DONE일 때만 값이 있다
+        validity_reason: {$ref: '#/components/schemas/NullableReason'}
+        video_status: {$ref: '#/components/schemas/VideoStatus'}
+        below_min_spec: {type: boolean, example: false}
+        passes:
+          type: array
+          description: DONE 전에는 빈 배열. pass_no 오름차순.
+          items: {$ref: '#/components/schemas/PassOut'}
+        uploaded_at: {type: string, format: date-time, example: '2026-10-20T00:14:02Z'}
+        analyzed_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T00:14:31Z'}
+    ShotUploadOut:
+      allOf:
+        - $ref: '#/components/schemas/ShotOut'
+        - type: object
+          required: [warnings]
+          properties:
+            warnings:
+              type: array
+              description: BELOW_MIN_SPEC, ASPECT_NOT_16_9. 있어도 분석은 진행된다.
+              items: {$ref: '#/components/schemas/Reason'}
+    ShotDetailOut:
+      allOf:
+        - $ref: '#/components/schemas/ShotOut'
+        - type: object
+          required: [width, height, fps, duration_sec, bitrate_kbps, codec, model_name, model_version, submitted_at,
+                     video_ready_at, video_url, url_expires_at]
+          properties:
+            width: {type: integer, description: 화면에 보이는 방향 기준, example: 1920}
+            height: {type: integer, example: 1080}
+            fps: {type: number, example: 59.94}
+            duration_sec: {type: number, example: 4.2}
+            bitrate_kbps: {type: integer, example: 15800}
+            codec: {type: string, enum: [h264, hevc], example: hevc}
+            model_name: {type: [string, 'null'], example: pga-pose}
+            model_version: {type: [string, 'null'], example: v1}
+            submitted_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T00:14:03Z'}
+            video_ready_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T00:14:48Z'}
+            video_url:
+              type: [string, 'null']
+              description: 'video_status가 READY일 때만. /api/v1로 시작하면 서버 주소(예: http://localhost:8000)만 앞에 붙이고, http로 시작하면(S3) 그대로 쓴다.'
+              example: /api/v1/shots/3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90/video?exp=1792455600&sig=71dc0ee5f533d3459657e501b062aefcaec8867af045a52eaab5b75bb3c98b95
+            url_expires_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T00:20:00Z'}
+    AnglesOut:
+      type: object
+      required: [shot_id, fps, passes]
+      properties:
+        shot_id: {$ref: '#/components/schemas/Uuid'}
+        fps: {type: number, example: 59.94}
+        passes:
+          type: array
+          items:
+            type: object
+            required: [pass_no, camera_side, gait_type, start_frame, angles]
+            properties:
+              pass_no: {type: integer, example: 1}
+              camera_side: {$ref: '#/components/schemas/CameraSide'}
+              gait_type: {$ref: '#/components/schemas/GaitType'}
+              start_frame: {type: integer, example: 42}
+              angles:
+                type: object
+                description: 관절별 프레임 각도(°). i번째 = start_frame + i 프레임, 못 찾으면 null.
+                required: [shoulder, elbow, carpus, hip, stifle, tarsus]
+                properties:
+                  shoulder: {$ref: '#/components/schemas/AngleSeries'}
+                  elbow: {$ref: '#/components/schemas/AngleSeries'}
+                  carpus: {$ref: '#/components/schemas/AngleSeries'}
+                  hip: {$ref: '#/components/schemas/AngleSeries'}
+                  stifle: {$ref: '#/components/schemas/AngleSeries'}
+                  tarsus: {$ref: '#/components/schemas/AngleSeries'}
+    AngleSeries:
+      type: array
+      items: {type: [number, 'null']}
+      example: [112.4, 113.0, null, 114.1]
+
+    # ---------- 회차 결과 ----------
+    MetricOut:
+      type: object
+      required: [metric_code, limb, value, unit, measurable, unmeasurable_reason, n_passes]
+      properties:
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        limb: {$ref: '#/components/schemas/Limb'}
+        value: {type: [number, 'null'], description: 측정 불가면 null(0이 아니다), example: 38.2}
+        unit: {$ref: '#/components/schemas/Unit'}
+        measurable: {type: boolean, example: true}
+        unmeasurable_reason: {$ref: '#/components/schemas/NullableReason'}
+        n_passes: {type: integer, description: 계산에 쓴 유효 통과 수, example: 6}
+    LimbCompareOut:
+      type: object
+      required: [pair, metric_code, unit, left, right, diff, symmetry_index, comparable, reason]
+      properties:
+        pair: {$ref: '#/components/schemas/Pair'}
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        unit: {$ref: '#/components/schemas/Unit'}
+        left: {type: [number, 'null'], example: 31.0}
+        right: {type: [number, 'null'], example: 38.2}
+        diff: {type: [number, 'null'], description: 왼쪽 − 오른쪽(소수 넷째 자리), example: -7.2}
+        symmetry_index: {type: [number, 'null'], description: '좌우 차이 비율 %(소수 둘째 자리). comparable이 true여도 왼쪽 + 오른쪽이 0이면 null', example: 20.81}
+        comparable: {type: boolean, example: true}
+        reason: {$ref: '#/components/schemas/NullableReason'}
+    GaitResult:
+      type: object
+      required: [gait_type, metrics, limb_compare]
+      properties:
+        gait_type: {$ref: '#/components/schemas/GaitType'}
+        metrics:
+          type: array
+          items: {$ref: '#/components/schemas/MetricOut'}
+        limb_compare:
+          type: array
+          description: symmetry_index 큰 순서로 먼저(맨 위가 "차이가 가장 큰 다리"), 그다음 비교는 되지만 symmetry_index가 null인 항목(왼쪽 + 오른쪽이 0), 마지막에 비교할 수 없는 항목(comparable false).
+          items: {$ref: '#/components/schemas/LimbCompareOut'}
+    SessionResultOut:
+      allOf:
+        - $ref: '#/components/schemas/SessionOut'
+        - type: object
+          required: [pass_counts, shot_counts, exclude_summary, notices, symmetry_score, gaits]
+          properties:
+            symmetry_score:
+              type: [integer, 'null']
+              minimum: 0
+              maximum: 100
+              description: 대칭 점수. 100 − 평균(대상 쌍의 symmetry_index), 100에 가까울수록 좌우가 비슷하다. 계산할 쌍이 없으면 null.
+              example: 87
+            pass_counts:
+              type: object
+              required: [measured, used, excluded]
+              properties:
+                measured: {type: integer, example: 18}
+                used: {type: integer, example: 12}
+                excluded: {type: integer, example: 6}
+            shot_counts:
+              type: object
+              required: [total, failed, invalid]
+              properties:
+                total: {type: integer, example: 16}
+                failed: {type: integer, example: 1}
+                invalid: {type: integer, example: 2}
+            exclude_summary:
+              type: array
+              description: 제외 사유별 개수, 많은 순서
+              items:
+                type: object
+                required: [code, message, count]
+                properties:
+                  code: {type: string, example: RUNNING}
+                  message: {type: string, example: 뛰었습니다. 천천히 걷게 해 주세요.}
+                  count: {type: integer, example: 4}
+            notices:
+              type: array
+              description: ONE_SIDE_ONLY
+              items: {$ref: '#/components/schemas/Reason'}
+            gaits:
+              type: array
+              description: WALK, TROT, OTHER 순서, 값이 있는 유형만. OTHER에는 보행 유형을 아직 판별하지 못한 유효 통과가 들어간다. 분석이 끝났는데 유효 통과가 하나도 없으면 빈 배열이다.
+              items: {$ref: '#/components/schemas/GaitResult'}
+
+    # ---------- 보고서 ----------
+    ReportOut:
+      type: object
+      required: [id, session_id, edition, status, fail_reason, generation_ms, template_version, model_version,
+                 updated_at, file_url, download_url, url_expires_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        edition: {$ref: '#/components/schemas/Edition'}
+        status: {$ref: '#/components/schemas/ReportStatus'}
+        fail_reason: {$ref: '#/components/schemas/NullableReason'}
+        generation_ms: {type: [integer, 'null'], example: 8400}
+        template_version: {type: string, example: '1.0'}
+        model_version: {type: [string, 'null'], example: v1}
+        updated_at: {type: string, format: date-time, example: '2026-10-20T00:31:10Z'}
+        file_url:
+          type: [string, 'null']
+          description: 미리보기 주소. DONE일 때만.
+          example: /api/v1/reports/3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90/file?exp=1792456800&sig=71dc0ee5f533d3459657e501b062aefcaec8867af045a52eaab5b75bb3c98b95
+        download_url:
+          type: [string, 'null']
+          description: 내려받기 주소. DONE일 때만.
+          example: /api/v1/reports/3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90/file?exp=1792456800&sig=71dc0ee5f533d3459657e501b062aefcaec8867af045a52eaab5b75bb3c98b95&download=true
+        url_expires_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T00:40:00Z'}
+    SessionReportsOut:
+      type: object
+      required: [session_id, session_status, reports]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        session_status: {$ref: '#/components/schemas/SessionStatus'}
+        reports:
+          type: array
+          description: OWNER, VET 순서. 회차가 DONE이 되기 전에는 빈 배열.
+          items: {$ref: '#/components/schemas/ReportOut'}
+
+    # ---------- 이력·비교·추이 ----------
+    ReportContentOut:
+      type: object
+      description: 판본 하나의 글·표·숫자. 글은 서버가 만든 문자열이라 화면은 그대로 찍는다.
+      required: [session_id, edition, template_version, session, dog, previous, baseline, history, legs, sentences, gaits]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        edition: {$ref: '#/components/schemas/Edition'}
+        template_version: {type: string, example: '0.5'}
+        session: {$ref: '#/components/schemas/ContentSession'}
+        dog: {$ref: '#/components/schemas/ContentDog'}
+        previous:
+          oneOf: [{$ref: '#/components/schemas/ContentPrevious'}, {type: 'null'}]
+          description: 바로 앞 DONE 회차. 없으면 null이고 이때 gaits의 changes는 모두 빈 배열이다
+        baseline:
+          oneOf: [{$ref: '#/components/schemas/ContentBaseline'}, {type: 'null'}]
+          description: 기준 회차. 없거나 이 회차 자신이면 null
+        history:
+          type: array
+          description: 이 회차까지(이 회차 포함) 끝난 회차. 오래된 순으로 최대 8개
+          items: {$ref: '#/components/schemas/ContentHistoryItem'}
+        legs:
+          type: array
+          description: 몸 그림용 다리 쌍 요약. 비교할 수 있는 대상 수치가 없는 쌍은 빠진다
+          items: {$ref: '#/components/schemas/ContentLeg'}
+        sentences: {$ref: '#/components/schemas/ContentSentences'}
+        gaits:
+          type: array
+          description: 보행 유형별 묶음
+          items: {$ref: '#/components/schemas/ContentGait'}
+    DifferenceLevel:
+      type: string
+      description: 차이 단계. 5 미만 SIMILAR, 10 미만 SLIGHT, 그 이상 LARGE. 화면에 찍히는 소수 첫째 자리 값으로 가른다
+      enum: [SIMILAR, SLIGHT, LARGE]
+    ContentSession:
+      type: object
+      required: [measured_on, round, model_name, model_version, weight_kg, size_class, symmetry_score, symmetry_level]
+      properties:
+        measured_on: {type: string, format: date, example: '2026-11-04'}
+        round:
+          type: integer
+          description: 같은 반려견의 끝난 회차(DONE·FAILED)를 측정일·만든 시각 순으로 센 번호. 1부터
+          example: 3
+        model_name: {type: [string, 'null'], example: fs-v4}
+        model_version: {type: [string, 'null'], example: v1}
+        weight_kg: {type: [number, 'null'], example: 12.5}
+        size_class:
+          oneOf: [{$ref: '#/components/schemas/SizeClass'}, {type: 'null'}]
+        symmetry_score:
+          type: [integer, 'null']
+          description: 대칭 점수(0~100). 회차 결과의 값과 같다. 계산할 쌍이 없으면 null
+          example: 92
+        symmetry_level:
+          oneOf: [{$ref: '#/components/schemas/DifferenceLevel'}, {type: 'null'}]
+          description: 100에서 대칭 점수를 뺀 값의 차이 단계. 점수가 없으면 null
+    ContentDog:
+      type: object
+      required: [name, breed, sex, birth_year, focus_limb]
+      properties:
+        name: {type: string, example: 보리}
+        breed: {type: [string, 'null'], example: 웰시코기}
+        sex:
+          oneOf: [{$ref: '#/components/schemas/Sex'}, {type: 'null'}]
+        birth_year: {type: [integer, 'null'], example: 2021}
+        focus_limb:
+          oneOf: [{$ref: '#/components/schemas/FocusLimb'}, {type: 'null'}]
+          description: 관심 다리. 없으면 null
+    ContentPrevious:
+      type: object
+      description: 직전 DONE 회차. model_changed면 값만 나란히 적고 차이·변화를 판단하지 않는다.
+      required: [session_id, measured_on, round, label, model_changed]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-14'}
+        round:
+          type: integer
+          description: 직전 회차의 회차 번호. 사이에 FAILED 회차가 있으면 session.round에서 1을 뺀 값이 아니다
+          example: 2
+        label:
+          type: string
+          description: >-
+            직전 회차를 가리키는 글. "{round}회차, {측정일}" 모양이고, 직전 회차의 측정일이 이번 회차와 같으면 그 회차를 만든 시각(한국 시간)이 붙는다
+            (예: 2회차, 2026년 11월 10일 오전 9:38). sentences의 "직전 회차(…)" 괄호 안과 같은 글이다.
+          example: '2회차, 2026년 10월 14일'
+        model_changed: {type: boolean, example: false}
+    ContentBaseline:
+      type: object
+      description: 기준 회차(지정한 회차, 없으면 가장 이른 DONE 회차).
+      required: [session_id, measured_on, round, symmetry_score, diff]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-01'}
+        round: {type: integer, example: 1}
+        symmetry_score: {type: [integer, 'null'], example: 88}
+        diff:
+          type: [integer, 'null']
+          description: 이 회차의 대칭 점수에서 기준 회차의 대칭 점수를 뺀 값. 한쪽이라도 없으면 null
+          example: 4
+    ContentHistoryItem:
+      type: object
+      required: [measured_on, round, symmetry_score]
+      properties:
+        measured_on: {type: string, format: date, example: '2026-10-01'}
+        round: {type: integer, example: 1}
+        symmetry_score:
+          type: [integer, 'null']
+          description: FAILED 회차는 null
+          example: 88
+    ContentLeg:
+      type: object
+      description: 다리 한 쌍에서 좌우 차이(대칭 지수)가 가장 큰 수치.
+      required: [pair, gait_type, metric_code, label, symmetry_index, symmetry_value, weak_limb, level]
+      properties:
+        pair: {$ref: '#/components/schemas/Pair'}
+        gait_type: {$ref: '#/components/schemas/GaitType'}
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        label: {type: string, example: 무릎 가동 범위}
+        symmetry_index: {type: string, example: '9.3%'}
+        symmetry_value: {type: number, example: 9.3}
+        weak_limb:
+          oneOf: [{$ref: '#/components/schemas/FocusLimb'}, {type: 'null'}]
+          description: 그 수치의 값이 작은 쪽 다리. level이 SIMILAR면 null
+        level: {$ref: '#/components/schemas/DifferenceLevel'}
+    GlossaryItem:
+      type: object
+      required: [term, explanation]
+      properties:
+        term: {type: string, example: 가동 범위}
+        explanation: {type: string, example: 걸을 때 관절을 접었다 펴는 각도의 폭}
+    ContentSentences:
+      type: object
+      description: 보고서의 문장. 금지 표현·용어 검사를 지난 글이다.
+      required: [title, edition_label, intro, summary, previous_note, previous_gaps, caution, glossary, disclaimer]
+      properties:
+        title: {type: string, example: 보리 보행 평가 보고서}
+        edition_label: {type: string, example: 보호자용}
+        intro: {type: string}
+        summary:
+          type: array
+          items: {type: string}
+        previous_note:
+          type: [string, 'null']
+          description: 직전 회차 비교 표의 안내. 비교 표가 없으면 null
+        previous_gaps:
+          type: array
+          description: 보행 유형이 달라 직전 회차와 비교하지 않은 묶음의 안내
+          items: {type: string}
+        caution:
+          type: array
+          items: {type: string}
+        glossary:
+          type: array
+          description: 보호자용에서 쓰인 전문 용어의 설명. 수의사용은 빈 배열
+          items: {$ref: '#/components/schemas/GlossaryItem'}
+        disclaimer:
+          type: string
+          example: 이 보고서는 보행 평가 보조 자료이며 진단을 대신하지 않습니다.
+    ContentCell:
+      type: object
+      description: 수치 표의 한 칸.
+      required: [value, text, reason]
+      properties:
+        value:
+          type: [number, 'null']
+          description: 그림을 그릴 때만 쓰는 숫자. 측정하지 못했으면 null
+          example: 38.6
+        text:
+          type: string
+          description: 화면에 찍는 글. 단위와 소수 자리까지 서버가 붙인다
+          example: '38.6°'
+        reason:
+          type: [string, 'null']
+          description: 측정하지 못한 사유 문장
+          example: null
+    ContentRow:
+      type: object
+      required: [metric_code, label, unit, cells]
+      properties:
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        label: {type: string, example: 무릎 가동 범위}
+        unit: {$ref: '#/components/schemas/Unit'}
+        cells:
+          type: object
+          description: 다리 코드(LF·RF·LH·RH·NONE)를 키로 하는 칸
+          additionalProperties: {$ref: '#/components/schemas/ContentCell'}
+    ContentCompare:
+      type: object
+      description: 좌우 비교 한 줄. 회차 결과의 다리 비교와 같은 값이다.
+      required: [pair, pair_label, metric_code, label, left, right, diff, symmetry_index, diff_value, symmetry_value,
+                 comparable, reason]
+      properties:
+        pair: {$ref: '#/components/schemas/Pair'}
+        pair_label: {type: string, example: 뒷다리}
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        label: {type: string, example: 무릎 가동 범위}
+        left: {type: string, example: '38.6°'}
+        right: {type: string, example: '36.9°'}
+        diff: {type: string, example: '1.7°'}
+        symmetry_index: {type: string, example: '4.5%'}
+        diff_value:
+          type: [number, 'null']
+          description: diff의 숫자 값. 비교할 수 없으면 null
+          example: 1.7
+        symmetry_value:
+          type: [number, 'null']
+          description: symmetry_index의 숫자 값. 비교할 수 없으면 null
+          example: 4.5
+        comparable: {type: boolean, example: true}
+        reason:
+          type: [string, 'null']
+          description: 비교하지 못한 사유 문장
+          example: null
+    ContentChangeCell:
+      type: object
+      description: 직전 회차 비교의 한 칸.
+      required: [previous, current, diff, change, change_label, note]
+      properties:
+        previous: {type: string, example: '38.0°'}
+        current: {type: string, example: '47.3°'}
+        diff:
+          type: [string, 'null']
+          description: 이번 값에서 직전 값을 뺀 것. 차이를 내지 않았으면 null
+          example: '+9.3°'
+        change:
+          type: [string, 'null']
+          description: 오차 범위와 견준 변화. 판단하지 않았으면 null
+          enum: [INCREASE, DECREASE, WITHIN_RANGE, null]
+          example: INCREASE
+        change_label:
+          type: [string, 'null']
+          description: 화면에 찍는 말(증가·감소·범위 안)
+          example: 증가
+        note:
+          type: [string, 'null']
+          description: 비교하지 못한 사유 문장
+          example: null
+    ContentChangeRow:
+      type: object
+      required: [metric_code, label, unit, cells]
+      properties:
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        label: {type: string, example: 무릎 가동 범위}
+        unit: {$ref: '#/components/schemas/Unit'}
+        cells:
+          type: object
+          description: 다리 코드를 키로 하는 칸
+          additionalProperties: {$ref: '#/components/schemas/ContentChangeCell'}
+    ContentGait:
+      type: object
+      required: [gait_type, label, notes, rows, compare, changes]
+      properties:
+        gait_type: {$ref: '#/components/schemas/GaitType'}
+        label: {type: string, example: 속보}
+        notes:
+          type: array
+          items: {type: string}
+        rows:
+          type: array
+          description: 수치 표
+          items: {$ref: '#/components/schemas/ContentRow'}
+        compare:
+          type: array
+          description: 좌우 비교
+          items: {$ref: '#/components/schemas/ContentCompare'}
+        changes:
+          type: array
+          description: 직전 회차와 비교. 직전 회차에 같은 보행 유형이 없으면 빈 배열
+          items: {$ref: '#/components/schemas/ContentChangeRow'}
+    SessionHistoryItem:
+      type: object
+      required: [id, measured_on, weight_kg, status, is_baseline, valid_passes, model_version, symmetry_score,
+                 reports]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-20'}
+        weight_kg: {type: [number, 'null'], example: 28.1}
+        status: {$ref: '#/components/schemas/SessionStatus'}
+        is_baseline: {type: boolean, example: true}
+        valid_passes:
+          type: object
+          required: [LEFT, RIGHT]
+          properties:
+            LEFT: {type: integer, example: 8}
+            RIGHT: {type: integer, example: 8}
+        model_version: {type: [string, 'null'], example: v1}
+        symmetry_score:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 대칭 점수. DONE이 아니거나 계산할 쌍이 없으면 null
+          example: 87
+        reports:
+          type: object
+          required: [OWNER, VET]
+          description: 판본별 status. 행이 없으면 null.
+          properties:
+            OWNER:
+              oneOf: [{$ref: '#/components/schemas/ReportStatus'}, {type: 'null'}]
+            VET:
+              oneOf: [{$ref: '#/components/schemas/ReportStatus'}, {type: 'null'}]
+    SessionHistoryPage:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/SessionHistoryItem'}
+        total: {type: integer, example: 5}
+        page: {type: integer, example: 1}
+        size: {type: integer, example: 20}
+    SessionListItem:
+      type: object
+      required: [id, measured_on, status, fail_reason, dog, staff, weight_kg, model_version, symmetry_score,
+                 completed_at, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-20'}
+        status: {$ref: '#/components/schemas/SessionStatus'}
+        fail_reason:
+          oneOf: [{$ref: '#/components/schemas/Reason'}, {type: 'null'}]
+        dog:
+          type: object
+          required: [id, name]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+            name: {type: string, example: 보리}
+        staff: {$ref: '#/components/schemas/StaffBrief'}
+        weight_kg: {type: [number, 'null'], example: 28.1}
+        model_version: {type: [string, 'null'], example: v1}
+        symmetry_score:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 대칭 점수. DONE이 아니거나 계산할 쌍이 없으면 null
+          example: 87
+        completed_at: {type: [string, 'null'], format: date-time, example: '2026-10-20T01:12:00Z'}
+        created_at: {type: string, format: date-time, example: '2026-10-20T01:00:00Z'}
+    SessionListPage:
+      type: object
+      required: [items, total, page, size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/SessionListItem'}
+        total: {type: integer, example: 132}
+        page: {type: integer, example: 1}
+        size: {type: integer, example: 20}
+    CompareSessionRef:
+      type: object
+      required: [session_id, measured_on, model_version]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-20'}
+        model_version: {type: [string, 'null'], example: v1}
+    CompareItem:
+      type: object
+      required: [metric_code, limb, gait_type, unit, base_value, target_value, diff, judgement, note]
+      properties:
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        limb: {$ref: '#/components/schemas/Limb'}
+        gait_type: {$ref: '#/components/schemas/GaitType'}
+        unit: {$ref: '#/components/schemas/Unit'}
+        base_value: {type: [number, 'null'], example: 38.2}
+        target_value: {type: [number, 'null'], example: 42.0}
+        diff: {type: [number, 'null'], description: target_value − base_value, example: 3.8}
+        judgement: {$ref: '#/components/schemas/Judgement'}
+        note: {$ref: '#/components/schemas/NullableReason'}
+    CompareOut:
+      type: object
+      required: [dog_id, base, target, model_changed, items]
+      properties:
+        dog_id: {$ref: '#/components/schemas/Uuid'}
+        base:
+          allOf:
+            - $ref: '#/components/schemas/CompareSessionRef'
+            - type: object
+              required: [kind]
+              properties:
+                kind: {type: string, enum: [BASELINE, PREVIOUS, SESSION], example: BASELINE}
+        target: {$ref: '#/components/schemas/CompareSessionRef'}
+        model_changed: {type: boolean, example: false}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/CompareItem'}
+    TrendPoint:
+      type: object
+      required: [session_id, measured_on, value, measurable, unmeasurable_reason, model_version]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-01'}
+        value: {type: [number, 'null'], example: 38.2}
+        measurable: {type: boolean, example: true}
+        unmeasurable_reason: {$ref: '#/components/schemas/NullableReason'}
+        model_version: {type: [string, 'null'], example: v1}
+    LrDiffPoint:
+      type: object
+      required: [session_id, measured_on, diff, symmetry_index]
+      properties:
+        session_id: {$ref: '#/components/schemas/Uuid'}
+        measured_on: {type: string, format: date, example: '2026-10-01'}
+        diff: {type: number, example: -7.2}
+        symmetry_index: {type: [number, 'null'], example: 20.81}
+    TrendsOut:
+      type: object
+      required: [dog_id, metric_code, unit, gait_type, series, lr_diff]
+      properties:
+        dog_id: {$ref: '#/components/schemas/Uuid'}
+        metric_code: {$ref: '#/components/schemas/MetricCode'}
+        unit: {$ref: '#/components/schemas/Unit'}
+        gait_type: {$ref: '#/components/schemas/GaitType'}
+        series:
+          type: array
+          description: 관심 다리 먼저, 나머지는 LF·RF·LH·RH
+          items:
+            type: object
+            required: [limb, points]
+            properties:
+              limb: {$ref: '#/components/schemas/Limb'}
+              points:
+                type: array
+                description: DONE 회차만, measured_on 오름차순
+                items: {$ref: '#/components/schemas/TrendPoint'}
+        lr_diff:
+          type: array
+          description: 양쪽이 모두 측정된 회차만. walk_speed·gait_cycles는 빈 배열.
+          items:
+            type: object
+            required: [pair, points]
+            properties:
+              pair: {$ref: '#/components/schemas/Pair'}
+              points:
+                type: array
+                items: {$ref: '#/components/schemas/LrDiffPoint'}
+
+    # ---------- 운영 ----------
+    PurgeRequest:
+      type: object
+      required: [scope]
+      if:
+        properties:
+          scope: {const: DOG}
+      then:
+        required: [target_id]
+        properties:
+          target_id: {type: string, format: uuid}
+      properties:
+        scope: {type: string, enum: [DOG, INSTITUTION], example: DOG}
+        target_id:
+          type: [string, 'null']
+          format: uuid
+          description: scope가 DOG면 반려견 ID(필수). INSTITUTION이면 생략.
+        institution_id:
+          type: [string, 'null']
+          format: uuid
+          description: 지울 자료가 있는 기관. 생략하면 부른 관리자의 기관. 없는 기관이면 404.
+        dry_run: {type: boolean, default: true, description: 기본 true. 실제로 지우려면 false.}
+    PurgeOut:
+      type: object
+      required: [scope, target_id, dry_run, rows, files, bytes, analysis_jobs, purge_log_id]
+      properties:
+        scope: {type: string, enum: [DOG, INSTITUTION], example: DOG}
+        target_id: {type: [string, 'null'], format: uuid, example: 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90}
+        dry_run: {type: boolean, example: true}
+        rows: {type: integer, example: 214}
+        files: {type: integer, example: 49}
+        bytes: {type: integer, example: 391000000}
+        analysis_jobs: {type: integer, description: 분석 서버에서 지운(또는 지울) 작업 수. 이미 없던 작업도 센다, example: 12}
+        purge_log_id: {type: [string, 'null'], format: uuid, description: 실제로 지웠을 때만, example: null}
+    HealthOut:
+      type: object
+      required: [status, db, storage, version]
+      properties:
+        status: {type: string, enum: [ok, error], description: '정상이면 ok, 503이면 error(백엔드 명세 v1.4에 반영 예정)', example: ok}
+        db: {type: string, enum: [ok, error], example: ok}
+        storage: {type: string, enum: [ok, error], example: ok}
+        version: {type: string, example: 1.0.0}

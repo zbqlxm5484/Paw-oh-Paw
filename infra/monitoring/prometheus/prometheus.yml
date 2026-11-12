@@ -1,0 +1,40 @@
+# Prometheus 수집 설정. 대상은 모두 Docker 내부망(또는 EC2 호스트 터널)이고 밖으로 열리지 않는다.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 백엔드 api. 환경이 둘(운영 creamoff, 개발 creamoff-dev)이고 각각 blue/green 중 한 색만 떠 있다(deploy.sh).
+  # 두 환경 모두 서비스 이름이 api-blue·api-green 이라 둘 다 붙은 이 컨테이너에서는 이름이 겹친다.
+  # 그래서 겹치지 않는 컨테이너 이름(<프로젝트>-<서비스>-1)으로 읽는다.
+  # 내려간 색은 항상 up==0 이라 정상이다. 경보는 색별이 아니라 환경별 합계 sum by (env)(up{job="api"}) 로 건다(rules.yml).
+  # 경로는 루트 /metrics(기능명세 v1.3, apiRoutingConvention). 백엔드 /metrics 가 구현되고 METRICS_ENABLED=true 가 되기 전에는 모두 down 이다.
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["creamoff-api-blue-1:8000"]
+        labels: {env: prod, color: blue}
+      - targets: ["creamoff-api-green-1:8000"]
+        labels: {env: prod, color: green}
+      - targets: ["creamoff-dev-api-blue-1:8000"]
+        labels: {env: dev, color: blue}
+      - targets: ["creamoff-dev-api-green-1:8000"]
+        labels: {env: dev, color: green}
+
+  # EC2 서버 자원
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # GPU 서버 exporter(nvidia_gpu_exporter, 포트 9835). GPU 서버가 건 역방향 터널이 EC2 호스트 172.18.0.1:19835 에 닿는다.
+  # 터널·exporter 를 설정하기 전에는 down 이다. 터널이 끊겨도 down 이라 GPU 서버 다운 신호로도 쓴다.
+  - job_name: gpu
+    static_configs:
+      - targets: ["host.docker.internal:19835"]

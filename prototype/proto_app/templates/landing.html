@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Paw oh Paw · 걷는 영상 하나로, 반려견 보행 분석{% endblock %}
+{% block topbar %}{% endblock %}
+{% block content %}
+{% set img = url_for('static', path='assets/') %}
+<section style="position:relative;height:100vh;min-height:620px;max-height:960px;overflow:hidden;background:#EEE2CE">
+  <video id="heroVid" src="{{ img }}landing-walk.mp4" autoplay muted loop playsinline style="position:absolute;top:0;left:0;width:calc(100% + 140px);height:calc(100% - 120px);max-width:none;object-fit:cover"></video>
+  <div style="position:absolute;left:0;right:0;bottom:120px;height:140px;background:linear-gradient(180deg,rgba(238,226,206,0),#EEE2CE);pointer-events:none"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,36,51,.35) 0%,rgba(27,36,51,0) 22%);pointer-events:none"></div>
+  <header style="position:absolute;top:0;left:0;right:0;z-index:2">
+    <div style="padding:25px 25px 0;display:flex;align-items:center;justify-content:space-between;gap:16px">
+      <a class="lk" href="{{ '/home' if acct else '/' }}" style="display:flex;align-items:center;gap:8px;color:#fff;font-size:19px;font-weight:800;letter-spacing:-0.4px"><img src="{{ img }}logo.png" alt="" style="width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.25))">Paw oh Paw</a>
+      <nav style="display:flex;align-items:center;gap:8px">
+        <a class="lk" href="/about" style="height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)">서비스 소개</a>
+        {% if acct %}
+        <a class="lk" href="/home" style="height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)">홈</a>
+        {% else %}
+        <a class="lk" href="/login" style="height:40px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)">로그인</a>
+        <a class="lk hv-orange" href="/signup" style="height:42px;padding:0 18px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700">회원가입</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <div style="position:absolute;left:0;right:0;bottom:0;height:120px;display:flex;align-items:center">
+    <div style="width:100%;padding:0 80px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <span style="font-size:clamp(18px,1.8vw,26px);font-weight:700;letter-spacing:-0.6px;color:#1B2433">걷는 영상 하나로, 반려견 보행 분석</span>
+      <div style="display:flex;align-items:center;gap:28px">
+        <a class="lk hv-orange" href="{{ '/upload' if acct else '/signup' }}" style="height:60px;padding:0 32px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:18px;font-weight:700;transition:background .2s">{{ '보행 분석 시작하기' if acct else '기관으로 시작하기' }}</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background:linear-gradient(180deg,#FAF9F6 0%,#FFF3EA 18%,#FFF3EA 82%,#FAF9F6 100%);color:#1B2433">
+  <div style="max-width:none;margin:0;padding:160px 80px 160px;display:flex;flex-direction:column;gap:180px">
+    <div class="rv" style="display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)">
+      <span style="font-size:20px;font-weight:700;color:#D2601A;letter-spacing:-0.2px">Main Service</span>
+      <h2 style="margin:0;font-size:clamp(36px,4.6vw,68px);line-height:1.22;font-weight:800;letter-spacing:-2px;text-wrap:balance">걷는 영상 하나로<br>반려견의 보행을<br>분석해 드려요</h2>
+    </div>
+    <div class="rv-group" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:48px 64px">
+      <div class="rv" style="flex:1 1 420px;min-width:0;max-width:820px;aspect-ratio:5 / 4;border-radius:32px;overflow:hidden;background:#FBE5D6;box-shadow:0 30px 60px -30px rgba(210,96,26,.25);opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)"><img src="{{ img }}landing-shoot.jpg" alt="휴대폰으로 걷는 반려견을 촬영하는 모습" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+      <div class="rv" style="flex:1 1 340px;min-width:0;max-width:560px;display:flex;flex-direction:column;gap:22px;opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1) .15s,transform 1s cubic-bezier(.2,.7,.2,1) .15s">
+        <span style="font-size:19px;font-weight:700;color:#D2601A">촬영</span>
+        <h3 style="margin:0;font-size:clamp(34px,3.9vw,58px);line-height:1.22;font-weight:800;letter-spacing:-1.6px">휴대폰으로<br>걷는 옆모습만</h3>
+        <p style="margin:0;font-size:19px;line-height:1.75;color:#5B6472;text-wrap:pretty">휴대폰을 가로로 들고<br>반려견이 평소처럼 걷는 모습을<br>옆에서 10초만 찍어 주세요.</p>
+      </div>
+    </div>
+    <div class="rv-group" style="display:flex;flex-wrap:wrap-reverse;align-items:center;justify-content:space-between;gap:48px 64px">
+      <div class="rv" style="flex:1 1 340px;min-width:0;max-width:560px;display:flex;flex-direction:column;opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1) .15s,transform 1s cubic-bezier(.2,.7,.2,1) .15s">
+        <div style="display:flex;flex-direction:column;gap:22px;max-width:100%">
+          <span style="font-size:19px;font-weight:700;color:#D2601A">AI 분석</span>
+          <h3 style="margin:0;font-size:clamp(34px,3.9vw,58px);line-height:1.22;font-weight:800;letter-spacing:-1.6px">AI가 관절점을<br>찾아냅니다</h3>
+          <p style="margin:0;font-size:19px;line-height:1.75;color:#5B6472;text-wrap:pretty">영상 속 관절 위치를 프레임마다 추적해<br>관절 각도와 좌우 차이,<br>보행 패턴을 계산합니다.</p>
+        </div>
+      </div>
+      <div class="rv" style="flex:1 1 420px;min-width:0;max-width:820px;aspect-ratio:5 / 4;border-radius:32px;overflow:hidden;background:#FBE5D6;box-shadow:0 30px 60px -30px rgba(210,96,26,.25);opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)"><img src="{{ img }}landing-keypoints.jpg" alt="관절점이 표시된 반려견" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+    </div>
+    <div class="rv-group" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:48px 64px">
+      <div class="rv" style="flex:1 1 420px;min-width:0;max-width:820px;aspect-ratio:5 / 4;border-radius:32px;overflow:hidden;background:#FBE5D6;box-shadow:0 30px 60px -30px rgba(210,96,26,.25);opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)"><img src="{{ img }}landing-report.jpg" alt="리포트를 설명하는 수의사와 반려견" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+      <div class="rv" style="flex:1 1 340px;min-width:0;max-width:560px;display:flex;flex-direction:column;gap:22px;opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1) .15s,transform 1s cubic-bezier(.2,.7,.2,1) .15s">
+        <span style="font-size:19px;font-weight:700;color:#D2601A">리포트</span>
+        <h3 style="margin:0;font-size:clamp(34px,3.9vw,58px);line-height:1.22;font-weight:800;letter-spacing:-1.6px">결과는 리포트로,<br>PDF로 간편하게</h3>
+        <p style="margin:0;font-size:19px;line-height:1.75;color:#5B6472;text-wrap:pretty">측정한 수치와 그래프를<br>한눈에 볼 수 있는 리포트로 정리하고<br>PDF로 저장해 공유할 수 있습니다.</p>
+      </div>
+    </div>
+    <div class="rv" style="display:flex;justify-content:center;opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1),transform 1s cubic-bezier(.2,.7,.2,1)"><a class="lk hv-orange" href="/about" style="height:56px;padding:0 28px;border-radius:6px;background:#D2601A;color:#fff;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700">서비스 소개 자세히 보기<svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a></div>
+  </div>
+</section>
+<footer style="border-top:1px solid #E8E4DC;background:#F3F1EC;padding:72px 24px 88px;display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center">
+  <div style="display:flex;align-items:center;gap:10px"><img src="{{ img }}logo.png" alt="" style="width:36px;height:36px;object-fit:contain"><span style="font-size:26px;font-weight:800;letter-spacing:-0.6px;color:#1B2433">Paw oh Paw</span></div>
+  <div style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px;font-size:15px;font-weight:700;color:#5B6472">
+    <span class="hv-dark" style="cursor:pointer" data-toast="준비 중이에요">개인정보 처리방침</span><span style="width:1.5px;height:14px;background:#A0A7B2"></span><span class="hv-dark" style="cursor:pointer" data-toast="준비 중이에요">이용약관</span><span style="width:1.5px;height:14px;background:#A0A7B2"></span><span class="hv-dark" style="cursor:pointer" data-toast="준비 중이에요">사업자 정보 확인</span>
+  </div>
+  <span style="font-size:13px;color:#A0A7B2">© 2026 Paw oh Paw. All rights reserved.</span>
+</footer>
+{% endblock %}
+{% block scripts %}
+<script>
+// 스크롤해서 보이면 나타나기 (디자인의 checkReveal)
+(function () {
+  var groups = [];
+  document.querySelectorAll('.rv').forEach(function (el) {
+    var g = el.closest('.rv-group') || el;
+    if (groups.indexOf(g) < 0) groups.push(g);
+  });
+  function check() {
+    groups.forEach(function (g) {
+      if (g.dataset.seen) return;
+      if (g.getBoundingClientRect().top < window.innerHeight * 0.82) {
+        g.dataset.seen = '1';
+        (g.classList.contains('rv') ? [g] : g.querySelectorAll('.rv')).forEach(function (el) { el.style.opacity = 1; el.style.transform = 'translateY(0px)'; });
+      }
+    });
+  }
+  window.addEventListener('scroll', check, { passive: true });
+  window.addEventListener('resize', check);
+  check();
+  var v = document.getElementById('heroVid');
+  v.muted = true; v.play().catch(function () {});
+})();
+</script>
+{% endblock %}

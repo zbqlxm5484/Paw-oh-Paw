@@ -1,0 +1,6 @@
+# smoke 전용. 배포 스택(8080)과 포트가 겹치지 않게 한다
+# SMOKE_PORT 는 .gitlab-ci.yml 의 smoke 가 러너 슬롯 번호(CI_CONCURRENT_ID)로 정해, 동시에 도는 smoke 끼리 포트가 겹치지 않는다
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:${SMOKE_PORT:-18080}:80"

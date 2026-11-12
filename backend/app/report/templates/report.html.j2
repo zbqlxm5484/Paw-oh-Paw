@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>{{ s.title }} ({{ s.edition_label }})</title>
+<style>
+  @page {
+    size: A4; margin: 18mm 16mm 20mm 16mm;
+    font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif;  /* 여백 상자(쪽 번호)는 body가 아니라 여기서 글꼴을 물려받는다. body와 같은 목록을 쓴다 */
+    @bottom-left { content: element(footer); }
+    @bottom-right { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #555; }
+  }
+  body { font-family: "Noto Sans KR", "Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", sans-serif; color: #222; font-size: 10.5pt; line-height: 1.45; }
+  h1 { font-size: 18pt; margin: 0 0 2mm 0; }
+  h2 { font-size: 13pt; margin: 6mm 0 2mm 0; border-bottom: 1px solid #999; padding-bottom: 1mm; }
+  .edition { color: #555; font-size: 10pt; margin-bottom: 4mm; }
+  .meta { color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 3mm 0; font-size: 10pt; }
+  th, td { border: 1px solid #bbb; padding: 1.2mm 2mm; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #f0f0f0; }
+  tr { break-inside: avoid; }  /* 한 줄이 쪽 경계에서 갈라지지 않게 한다 */
+  .reason { color: #8a4b00; font-size: 9pt; }
+  h3 { font-size: 11pt; margin: 3mm 0 1mm 0; }
+  .delta { color: #555; font-size: 9pt; white-space: nowrap; }
+  .changes { font-size: 9.5pt; }  /* 칸이 좁으면 값 한 쌍은 화살표 뒤에서 줄이 갈라진다 */
+  .pair { white-space: nowrap; }
+  .chart { margin: 1mm 0 2mm 0; text-align: center; }
+  .chart img { max-width: 92%; }
+  .note p { margin: 0 0 1.5mm 0; }
+  .glossary dt { font-weight: bold; }
+  .glossary dd { margin: 0 0 1mm 0; }
+  footer { position: running(footer); font-size: 8.5pt; color: #555; }  /* 매 쪽 아래 여백에 놓인다 */
+  @media screen { footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 2mm 16mm; background: #fff; border-top: 1px solid #999; } body { padding-bottom: 12mm; } }
+</style>
+</head>
+<body>
+{# running 요소는 자기보다 앞 쪽에는 나오지 않으므로 본문 맨 앞에 둔다(매 쪽 아래 여백) #}
+<footer>{{ s.disclaimer }}</footer>
+<h1>{{ s.title }}</h1>
+<div class="edition">{{ s.edition_label }} · 측정일 {{ session.measured_on }}{% if session.model_name %} · 분석 모델 {{ session.model_name }}{% if session.model_version %} {{ session.model_version }}{% endif %}{% endif %} · 템플릿 {{ template_version }}</div>
+<p class="meta">{{ s.intro }}</p>
+
+<h2>요약</h2>
+<div class="note">
+{% for line in s.summary %}<p>{{ line }}</p>{% endfor %}
+</div>
+
+{% for table in tables %}
+<h2>{{ table.label }} 수치</h2>
+<div class="note">{% for line in s.gait_notes.get(table.gait_type, []) %}<p>{{ line }}</p>{% endfor %}</div>
+{% if table.rows %}
+<table>
+  <thead>
+    <tr><th>수치</th>{% for limb in table_limbs[table.gait_type] %}<th>{{ limb_labels[limb] }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for row in table.rows %}
+    <tr>
+      <td>{{ row.label }}</td>
+      {% for limb in table_limbs[table.gait_type] %}
+        {% set cell = row.cells.get(limb) %}
+        <td>{% if cell %}{{ cell.text }}{% if cell.reason %}<br><span class="reason">{{ cell.reason }}</span>{% endif %}{% else %}-{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% if charts.get(table.gait_type) %}<div class="chart"><img src="{{ charts[table.gait_type] }}" alt="가동 범위 좌우 비교"></div>{% endif %}
+{% if table.compare %}
+<table>
+  <thead><tr><th>좌우 비교</th><th>왼쪽</th><th>오른쪽</th><th>차이</th>{% if edition == "VET" %}<th>대칭 지수</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for line in table.compare %}
+    <tr>
+      <td>{{ line.pair_label }} {{ line.label }}</td>
+      <td>{{ line.left }}</td><td>{{ line.right }}</td>
+      <td>{{ line.diff }}{% if not line.comparable and line.reason %}<br><span class="reason">{{ line.reason }}</span>{% endif %}</td>
+      {% if edition == "VET" %}<td>{{ line.symmetry_index }}</td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+{% if not tables %}
+<div class="note">{% for line in s.gait_notes.get("NONE", []) %}<p>{{ line }}</p>{% endfor %}</div>
+{% endif %}
+
+{% if s.previous_note or s.previous_gaps %}
+<h2>직전 회차와 비교</h2>
+<div class="note">
+{% if s.previous_note %}<p>{{ s.previous_note }}</p>{% endif %}
+{% for line in s.previous_gaps %}<p>{{ line }}</p>{% endfor %}
+</div>
+{% for table in tables %}{% if table.changes %}
+<h3>{{ table.label }}</h3>
+<table class="changes">
+  <thead>
+    <tr><th>수치(직전 → 이번)</th>{% for limb in table.change_limbs %}<th>{{ limb_labels[limb] }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for row in table.changes %}
+    <tr>
+      <td>{{ row.label }}</td>
+      {% for limb in table.change_limbs %}
+        {% set pair = row.cells.get(limb) %}
+        <td>{% if pair %}<span class="pair">{{ pair.previous }} →</span> <span class="pair">{{ pair.current }}</span>{% if pair.diff %}<br><span class="delta">{{ pair.diff }}{% if pair.change_label %} {{ pair.change_label }}{% endif %}</span>{% endif %}{% if pair.note %}<br><span class="reason">{{ not_comparable }}. {{ pair.note }}</span>{% endif %}{% else %}-{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}{% endfor %}
+{% endif %}
+
+<h2>참고</h2>
+<div class="note">{% for line in s.caution %}<p>{{ line }}</p>{% endfor %}</div>
+
+{% if s.glossary %}
+<h2>용어 설명</h2>
+<dl class="glossary">
+{% for term, explanation in s.glossary %}<dt>{{ term }}</dt><dd>{{ explanation }}</dd>{% endfor %}
+</dl>
+{% endif %}
+</body>
+</html>

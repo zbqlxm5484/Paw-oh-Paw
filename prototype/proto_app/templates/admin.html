@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}크림오프 관리 · Paw oh Paw{% endblock %}
+{% block topbar %}{% include "_authbar.html" %}{% endblock %}
+{% set btn = "height:40px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:600;cursor:pointer" %}
+{% set inp = "height:40px;border-radius:10px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:14px;color:#1B2433" %}
+{% block content %}
+<main style="max-width:1100px;margin:0 auto;padding:36px 32px 96px;display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:14px;color:#5B6472">크림오프 운영</span><h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.8px">기관·디바이스 코드·계정</h1></div>
+    <span style="margin-left:auto;font-size:14px;color:#5B6472">{{ me.name }} · {{ '관리자' if can_write else '임시 스태프 (보기만)' }}</span>
+    <form method="post" action="/logout"><button type="submit" style="{{ btn }}">로그아웃</button></form>
+  </div>
+  {% if can_write %}
+  <form method="post" action="/admin/institutions" style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <b style="font-size:16px">기관 추가</b>
+    <input name="name" placeholder="기관명" style="{{ inp }};flex:1;min-width:200px">
+    <label style="font-size:14px;color:#5B6472;display:flex;gap:8px;align-items:center">계약 종료일<input type="date" name="ends" style="{{ inp }}"></label>
+    <button type="submit" style="{{ btn }};background:#1B2433;color:#fff;border:0">만들기</button>
+  </form>
+  {% endif %}
+  {% for i in insts %}
+  <section style="background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0;font-size:20px;font-weight:800">{{ i.name }}</h2><span style="font-size:13px;color:#A0A7B2">{{ i.code }}</span>
+      <span style="height:26px;padding:0 10px;border-radius:999px;font-size:13px;font-weight:700;display:flex;align-items:center;background:{{ '#E6F4EC' if i.status == 'ACTIVE' else '#FBEAE6' }};color:{{ '#2E8B57' if i.status == 'ACTIVE' else '#C2412D' }}">{{ '계약 중' if i.status == 'ACTIVE' else '계약 만료' }}</span>
+      <form method="post" action="/admin/institutions/{{ i.id }}" style="margin-left:auto;display:flex;gap:8px;align-items:center"><span style="font-size:14px;color:#5B6472">계약 종료일</span><input type="date" name="ends" value="{{ i.ends }}" {{ 'disabled' if not can_write }} style="{{ inp }}">{% if can_write %}<button type="submit" style="{{ btn }}">저장</button>{% endif %}</form>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:8px"><b style="font-size:15px">디바이스 코드</b>
+        {% for c in i.codes %}
+        <div style="display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:{{ '.5' if c.revoked else '1' }}">
+          <code style="font-size:14px;letter-spacing:.5px">{{ c.code }}</code><span style="font-size:13px;color:#5B6472">{{ c.note }}</span>
+          <span style="margin-left:auto;font-size:13px;color:#5B6472">{{ '회수됨' if c.revoked else '계정 ' ~ c.used ~ ' / ' ~ c.max }}</span>
+          {% if can_write and not c.revoked %}
+          <form method="post" action="/admin/codes/{{ c.id }}" style="display:flex;gap:6px"><input type="number" name="max_accounts" min="1" max="10" value="{{ c.max }}" style="{{ inp }};width:64px"><button type="submit" style="{{ btn }}">상한</button><button type="submit" name="revoke" value="1" style="{{ btn }};color:#C2412D">회수</button></form>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% if can_write %}<form method="post" action="/admin/institutions/{{ i.id }}/codes" style="display:flex;gap:8px;margin-top:4px"><input name="note" placeholder="메모 (예: 2호기)" style="{{ inp }};flex:1"><input type="number" name="max_accounts" min="1" max="10" value="3" style="{{ inp }};width:64px"><button type="submit" style="{{ btn }}">코드 발급</button></form>{% endif %}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px"><b style="font-size:15px">담당자 계정</b>
+        {% for s in i.staff %}
+        <div style="display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:{{ '1' if s.active else '.5' }}">
+          <b style="font-size:14px">{{ s.name }}</b><span style="font-size:13px;color:#5B6472">{{ s.login_id }} · {{ s.email }}</span>
+          <span style="margin-left:auto;font-size:13px;color:#5B6472">{{ '사용 중' if s.active else '중지됨' }}</span>
+          {% if can_write %}<form method="post" action="/admin/staff/{{ s.id }}"><button type="submit" style="{{ btn }}">{{ '중지' if s.active else '재개' }}</button></form>{% endif %}
+        </div>
+        {% else %}<span style="font-size:14px;color:#A0A7B2">아직 가입한 담당자가 없어요</span>{% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+  <p style="margin:0;font-size:13px;color:#A0A7B2">크림오프 계정은 기관의 반려견·측정 자료를 열람하지 않아요(기관별 분리). 관리자·스태프 계정은 운영 스크립트로만 만들어요.</p>
+</main>
+{% endblock %}

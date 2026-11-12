@@ -1,0 +1,147 @@
+// admin.html: 크림오프 관리 (ADMIN 은 전부, STAFF 는 보기만). ?demo=1 은 관리자 계정(s_admin)으로 들어간다
+import { useEffect, useRef } from 'react'
+import { Base } from '../app/Base'
+import { css } from '../app/css'
+import { PostForm, useTitle } from '../app/page'
+import { currentStaff, redirect, setLogin } from '../app/session'
+import { activeCount, codesOf, contractStatus, db, show_code, staffOf } from '../store/db'
+import type { Staff } from '../store/types'
+import { isRemote, MOCK } from '../store/backend'
+import AuthBar, { usePublicPage } from './parts/AuthBar'
+
+const BTN = 'height:44px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none'
+const INP = 'height:44px;border-radius:10px;border:1px solid #ECE8E2;background:#fff;padding:0 12px;font-size:14px;color:#1B2433'
+
+interface CodeRow { id: string; code: string; used: number; revoked: boolean; note: string }
+interface StaffRow { id: string; login_id: string; name: string; email: string; active: boolean; joined: string }
+interface InstRow { id: string; code: string; name: string; ends: string; status: string; codes: CodeRow[]; staff: StaffRow[] }
+
+/** main.py admin_staff: 크림오프 계정(ADMIN·STAFF)만 */
+function admin_staff(demo: string): Staff | undefined {
+  const s = demo ? db.staff['s_admin'] : currentStaff()
+  return s && (s.role === 'ADMIN' || s.role === 'STAFF') ? s : undefined
+}
+
+/** main.py admin_rows: 크림오프를 뺀 기관을 이름순(파이썬 문자열 비교)으로.
+ *  백엔드 계정으로 들어왔으면 백엔드가 준 기관만(시연 기관은 버튼을 눌러도 서버에 없어 404). 시연 관리자(?demo=1)는 시연 기관 그대로 */
+function admin_rows(me: Staff): InstRow[] {
+  const onlyRemote = !MOCK && isRemote(me.inst)
+  return Object.values(db.accounts)
+    .filter((x) => x.id !== 'creamoff' && (!onlyRemote || isRemote(x.id)))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map((a) => ({
+      id: a.id, code: a.code || '-', name: a.name, ends: a.contract_ends || '', status: contractStatus(a),
+      codes: codesOf(a.id).map((c) => ({ id: c.id, code: show_code(c.code), used: activeCount(c.id), revoked: c.revoked, note: c.note })),
+      staff: staffOf(a.id).map((s) => ({ id: s.id, login_id: s.login_id, name: s.name, email: s.email, active: s.active, joined: s.joined })),
+    }))
+}
+
+/** 글자를 클립보드에 넣는다. https·localhost 가 아니면 navigator.clipboard 가 없어 숨긴 textarea 를 골라 복사한다 */
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // 아래 방식으로
+    }
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+  document.body.appendChild(ta)
+  ta.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  ta.remove()
+  return ok
+}
+
+// 코드 한 줄: 상한·회수 버튼이 같은 폼이라 누른 버튼(revoke=1)을 폼 값에 넣는다(FormData 는 누른 버튼을 안 담는다)
+function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
+  const revoke = useRef(false)
+  return (
+    <div style={css(`display:flex;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${c.revoked ? '.5' : '1'}`)}>
+      <code style={css('font-size:14px;letter-spacing:.5px')}>{c.code}</code>{!c.revoked && !c.code.includes('*') && <button type="button" onClick={async () => window.ppToast((await copyText(c.code)) ? '코드를 복사했습니다' : '복사하지 못했습니다. 코드를 직접 선택해 주세요')} style={css(BTN)}>복사</button>}<span style={css('font-size:13px;color:#5B6472')}>{c.note}</span>
+      <span style={css('margin-left:auto;font-size:13px;color:#5B6472')}>{c.revoked ? '회수됨' : `가입 계정 ${c.used}`}</span>
+      {can_write && !c.revoked && (
+        <PostForm action={`/admin/codes/${c.id}`} style={css('display:flex;flex-wrap:wrap;gap:6px')}
+          onBefore={(fd) => {
+            if (revoke.current && !fd.has('revoke')) fd.set('revoke', '1')
+            revoke.current = false
+          }}><input name="note" defaultValue={c.note} placeholder="메모" style={css(`${INP};width:120px`)} /><button type="submit" onClick={() => { revoke.current = false }} style={css(BTN)}>메모</button><button type="submit" name="revoke" value="1" onClick={() => { revoke.current = true }} style={css(`${BTN};color:#B4501A`)}>회수</button></PostForm>
+      )}
+    </div>
+  )
+}
+
+export default function Admin() {
+  useTitle('서비스 관리 · Paw oh Paw')
+  const { toast, query, go } = usePublicPage()
+  const demo = query.get('demo') || ''
+  const s = admin_staff(demo)
+  useEffect(() => {
+    if (!s) go(redirect('/login', '관리자 계정으로 로그인해 주세요'))
+    else if (demo) {
+      // 바로가기: 관리자 계정으로 들어간다(login_as)
+      setLogin(s.id)
+      go(redirect('/admin'))
+    }
+  })
+  if (!s || demo) return null
+  const me = s
+  const can_write = s.role === 'ADMIN'
+  const insts = admin_rows(me)
+
+  return (
+    <Base me={me} toast={toast} topbar={<AuthBar />}>
+      <main style={css('max-width:1100px;margin:0 auto;padding:36px 32px 96px;display:flex;flex-direction:column;gap:24px')}>
+        <div style={css('display:flex;align-items:flex-end;gap:16px')}>
+          <div style={css('display:flex;flex-direction:column;gap:6px')}><span style={css('font-size:14px;color:#5B6472')}>서비스 운영</span><h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.8px')}>기관·디바이스 코드·계정</h1></div>
+          <span style={css('margin-left:auto;font-size:14px;color:#5B6472')}>{me.name} · {can_write ? '관리자' : '임시 스태프 (보기만)'}</span>
+          <PostForm action="/logout"><button type="submit" style={css(BTN)}>로그아웃</button></PostForm>
+        </div>
+        {can_write && (
+          <PostForm action="/admin/institutions" style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap')}>
+            <b style={css('font-size:15px')}>기관 추가</b>
+            <input name="name" placeholder="기관명" style={css(`${INP};flex:1;min-width:200px`)} />
+            <label style={css('font-size:14px;color:#5B6472;display:flex;gap:8px;align-items:center')}>계약 종료일<input type="date" name="ends" style={css(INP)} /></label>
+            <button type="submit" style={css(`${BTN};background:#1B2433;color:#fff;border:0`)}>만들기</button>
+          </PostForm>
+        )}
+        {insts.map((i) => (
+          <section key={i.id} style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:22px 24px;display:flex;flex-direction:column;gap:14px')}>
+            <div style={css('display:flex;align-items:center;gap:12px;flex-wrap:wrap')}>
+              <h2 style={css('margin:0;font-size:18px;font-weight:800')}>{i.name}</h2><span style={css('font-size:13px;color:#5B6472')}>{i.code}</span>
+              <span style={css(`height:26px;padding:0 10px;border-radius:999px;font-size:13px;font-weight:700;display:flex;align-items:center;background:${i.status === 'ACTIVE' ? '#E6F4EC' : '#FBEAE6'};color:${i.status === 'ACTIVE' ? '#2E8B57' : '#C2412D'}`)}>{i.status === 'ACTIVE' ? '계약 중' : '계약 만료'}</span>
+              <PostForm action={`/admin/institutions/${i.id}`} style={css('margin-left:auto;display:flex;gap:8px;align-items:center')}><span style={css('font-size:14px;color:#5B6472')}>계약 종료일</span><input type="date" name="ends" defaultValue={i.ends} disabled={!can_write} style={css(INP)} />{can_write && <button type="submit" style={css(BTN)}>저장</button>}</PostForm>
+            </div>
+            <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px')}>
+              <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>디바이스 코드</b>
+                {i.codes.map((c) => <CodeLine key={c.id} c={c} can_write={can_write} />)}
+                {can_write && <PostForm action={`/admin/institutions/${i.id}/codes`} style={css('display:flex;gap:8px;margin-top:4px')}><input name="note" placeholder="메모 (예: 2호기)" style={css(`${INP};flex:1`)} /><button type="submit" style={css(BTN)}>코드 발급</button></PostForm>}
+                <span style={css('font-size:12px;color:#5B6472')}>기관마다 쓸 수 있는 코드는 하나입니다. 새로 발급하려면 먼저 회수하세요. 가입 계정 수에 제한은 없습니다.</span>
+              </div>
+              <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>담당자 계정</b>
+                {i.staff.map((st) => (
+                  <div key={st.id} style={css(`display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${st.active ? '1' : '.5'}`)}>
+                    <b style={css('font-size:14px;white-space:nowrap')}>{st.name}</b><span style={css('font-size:13px;color:#5B6472;min-width:0;flex:1 1 140px;overflow-wrap:anywhere')}>{st.login_id} · {st.email}</span>
+                    <span style={css('margin-left:auto;font-size:13px;color:#5B6472;white-space:nowrap')}>{st.active ? '사용 중' : '중지됨'}</span>
+                    {can_write && <PostForm action={`/admin/staff/${st.id}`}><button type="submit" style={css(BTN)}>{st.active ? '중지' : '재개'}</button></PostForm>}
+                  </div>
+                ))}
+                {i.staff.length === 0 && <span style={css('font-size:14px;color:#5B6472')}>아직 가입한 담당자가 없습니다</span>}
+              </div>
+            </div>
+          </section>
+        ))}
+        <p style={css('margin:0;font-size:13px;color:#5B6472')}>운영 계정은 기관의 반려견·측정 자료를 열람하지 않아요(기관별 분리). 관리자·스태프 계정은 운영 스크립트로만 만듭니다.</p>
+      </main>
+    </Base>
+  )
+}

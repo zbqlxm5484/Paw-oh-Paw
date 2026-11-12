@@ -1,0 +1,222 @@
+"""비밀번호 해시(13.4), JWT(11.6), 서명 URL(11.6), 인쇄 토큰(11.6). 명세 11.2 security.py.
+
+Spring에 빗대면 PasswordEncoder + JwtTokenProvider + 서명 URL 도우미를 한 파일에 둔 것이다.
+HTTP 오류로 바꾸는 일은 api/deps.py가 한다. 이 파일은 TokenError 같은 자기 예외만 낸다.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+import bcrypt
+import jwt
+
+from app.core.config import get_settings
+
+PASSWORD_MIN_CHARS = 8
+# bcrypt 5.0은 72바이트를 넘는 비밀번호를 받으면 오류를 낸다. 한글 한 글자는 UTF-8로 3바이트다.
+PASSWORD_MAX_BYTES = 72
+
+JWT_ALGORITHM = "HS256"
+
+
+# ---- 비밀번호 (13.4) ----
+
+
+class PasswordRuleError(ValueError):
+    """비밀번호가 13.4 규칙에 맞지 않을 때."""
+
+
+def check_password_rule(password: str) -> None:
+    """계정을 만들 때만 검사한다. 로그인에서는 길이를 검사하지 않는다(13.4)."""
+    if len(password) < PASSWORD_MIN_CHARS:
+        raise PasswordRuleError(f"비밀번호는 {PASSWORD_MIN_CHARS}자 이상이어야 합니다")
+    if len(password.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise PasswordRuleError(
+            f"비밀번호는 UTF-8로 {PASSWORD_MAX_BYTES}바이트 이하여야 합니다(한글 한 글자는 3바이트)"
+        )
+
+
+def hash_password(password: str) -> str:
+    """규칙을 검사한 뒤 bcrypt 해시를 돌려준다. DB에는 이 값만 저장한다."""
+    check_password_rule(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """비밀번호가 해시와 맞으면 True. 72바이트를 넘으면 bcrypt를 부르지 않고 False다(13.4)."""
+    data = password.encode("utf-8")
+    if len(data) > PASSWORD_MAX_BYTES:
+        return False
+    return bcrypt.checkpw(data, password_hash.encode("ascii"))
+
+
+# ---- JWT (11.6) ----
+
+
+class TokenError(Exception):
+    """토큰이 없거나 잘못되었다. deps.py가 401 AUTH_REQUIRED로 바꾼다."""
+
+
+class TokenExpiredError(TokenError):
+    """토큰이 만료되었다. deps.py가 401 AUTH_EXPIRED로 바꾼다."""
+
+
+@dataclass(frozen=True)
+class TokenClaims:
+    """토큰 안의 값(11.6): sub(담당자 ID), inst(기관 ID), role, iat(발급 시각), exp.
+
+    issued_at은 비밀번호를 바꾼 시각과 견주는 값이다(deps.get_current_staff). iat가 없는 토큰이면 None이다.
+    """
+
+    staff_id: uuid.UUID
+    institution_id: uuid.UUID
+    role: str
+    expires_at: datetime
+    issued_at: datetime | None = None
+
+
+def create_access_token(
+    *, staff_id: uuid.UUID, institution_id: uuid.UUID, role: str, now: datetime | None = None
+) -> tuple[str, datetime]:
+    """로그인 토큰과 만료 시각. 만료는 JWT_EXPIRE_HOURS(기본 12시간) 뒤이고, 새로 받는 기능은 없다(16절).
+
+    iat는 소수점 아래까지 적는다(11.6, v1.48). 초로 자르면 비밀번호를 바꾼 것과 같은 초에 받은 옛 토큰을 가릴 수 없다.
+    JWT의 시각 값은 정수가 아니어도 된다(RFC 7519 NumericDate).
+    """
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    expires_at = (now + timedelta(hours=settings.JWT_EXPIRE_HOURS)).replace(microsecond=0)
+    payload = {
+        "sub": str(staff_id),
+        "inst": str(institution_id),
+        "role": role,
+        "iat": now.timestamp(),
+        "exp": int(expires_at.timestamp()),
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET.get_secret_value(), algorithm=JWT_ALGORITHM)
+    return token, expires_at
+
+
+def decode_access_token(token: str) -> TokenClaims:
+    """토큰을 검증해 값을 꺼낸다. 만료면 TokenExpiredError, 그 밖의 문제는 TokenError."""
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET.get_secret_value(),
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["sub", "inst", "role", "exp"]},
+        )
+    except jwt.ExpiredSignatureError as error:
+        raise TokenExpiredError("token expired") from error
+    except jwt.InvalidTokenError as error:
+        raise TokenError("invalid token") from error
+    try:
+        issued = payload.get("iat")
+        return TokenClaims(
+            staff_id=uuid.UUID(str(payload["sub"])),
+            institution_id=uuid.UUID(str(payload["inst"])),
+            role=str(payload["role"]),
+            expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
+            issued_at=None if issued is None else datetime.fromtimestamp(float(issued), tz=UTC),
+        )
+    except (KeyError, ValueError, TypeError, OverflowError, OSError) as error:
+        raise TokenError("invalid claims") from error
+
+
+# ---- 인쇄 토큰 (11.6) ----
+
+PRINT_TOKEN_TYPE = "print"
+
+
+@dataclass(frozen=True)
+class PrintClaims:
+    """인쇄 토큰 안의 값(11.6): sid(회차 ID), inst(기관 ID), exp."""
+
+    session_id: uuid.UUID
+    institution_id: uuid.UUID
+    expires_at: datetime
+
+
+def create_print_token(
+    *, session_id: uuid.UUID, institution_id: uuid.UUID, now: datetime | None = None
+) -> tuple[str, datetime]:
+    """회차 하나를 FILE_URL_TTL_SEC(기본 300초) 동안 읽을 수 있는 토큰과 만료 시각.
+
+    서명 키가 FILE_URL_SECRET이라 로그인 토큰(JWT_SECRET)으로는 풀리지 않고, 로그인 토큰도 이 토큰으로 풀리지 않는다.
+    Spring에 빗대면 사람용 JWT와 따로 둔, 범위가 회차 하나인 일회성 액세스 토큰이다.
+    """
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    expires_at = now.replace(microsecond=0) + timedelta(seconds=settings.FILE_URL_TTL_SEC)
+    payload = {
+        "typ": PRINT_TOKEN_TYPE,
+        "sid": str(session_id),
+        "inst": str(institution_id),
+        "exp": int(expires_at.timestamp()),
+    }
+    token = jwt.encode(payload, settings.FILE_URL_SECRET.get_secret_value(), algorithm=JWT_ALGORITHM)
+    return token, expires_at
+
+
+def decode_print_token(token: str) -> PrintClaims:
+    """인쇄 토큰을 검증해 값을 꺼낸다. 만료면 TokenExpiredError, 그 밖의 문제(로그인 토큰을 준 것 포함)는 TokenError."""
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token,
+            settings.FILE_URL_SECRET.get_secret_value(),
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["typ", "sid", "inst", "exp"]},
+        )
+    except jwt.ExpiredSignatureError as error:
+        raise TokenExpiredError("print token expired") from error
+    except jwt.PyJWTError as error:
+        raise TokenError("invalid print token") from error
+    if payload["typ"] != PRINT_TOKEN_TYPE:
+        raise TokenError("not a print token")
+    try:
+        return PrintClaims(
+            session_id=uuid.UUID(str(payload["sid"])),
+            institution_id=uuid.UUID(str(payload["inst"])),
+            expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
+        )
+    except (ValueError, TypeError) as error:
+        raise TokenError("invalid print claims") from error
+
+
+# ---- 서명 URL (11.6) ----
+
+
+def _signature(secret: str, path: str, exp: int) -> str:
+    """서명할 문자열은 경로 + 줄바꿈 + exp. HMAC-SHA256의 소문자 16진수 64자."""
+    message = f"{path}\n{exp}".encode()
+    return hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def make_signed_url(path: str, *, now: datetime | None = None) -> tuple[str, datetime]:
+    """FILE_URL_TTL_SEC(기본 300초) 동안 열리는 주소와 만료 시각.
+
+    path는 /api/v1부터 쓴 전체 경로이고 쿼리는 넣지 않는다. download는 서명에 들어가지 않는다(11.6).
+    """
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    expires_at = now.replace(microsecond=0) + timedelta(seconds=settings.FILE_URL_TTL_SEC)
+    exp = int(expires_at.timestamp())
+    sig = _signature(settings.FILE_URL_SECRET.get_secret_value(), path, exp)
+    return f"{path}?exp={exp}&sig={sig}", expires_at
+
+
+def verify_signed_url(path: str, exp: int, sig: str, *, now: datetime | None = None) -> bool:
+    """서명이 맞고 아직 만료되지 않았으면 True. 비교는 hmac.compare_digest로 한다(11.6)."""
+    settings = get_settings()
+    now = now or datetime.now(UTC)
+    if now.timestamp() >= exp:
+        return False
+    expected = _signature(settings.FILE_URL_SECRET.get_secret_value(), path, exp)
+    return hmac.compare_digest(expected, sig)

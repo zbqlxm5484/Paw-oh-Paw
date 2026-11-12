@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}분석 중 · Paw oh Paw{% endblock %}
+{% block content %}
+{% set p = job.progress() %}
+<main style="max-width:none;margin:0;padding:80px 80px 96px">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+    <b style="font-size:38px;letter-spacing:-1px">분석 중입니다</b>
+    <span style="font-size:17px;color:#5B6472;font-variant-numeric:tabular-nums">{{ dog_name }} · <span id="anaStep">{{ STEPS[[4, p|int]|min] }}</span> · <span id="anaPct">{{ (p / 5 * 100)|round|int }}</span>%</span>
+    <div style="position:relative;width:100%;max-width:1400px;height:340px;margin:64px 0 24px">
+      {% for i in range(8) %}
+      {% set up = i % 2 == 0 %}
+      {% set jy = [0, 4, -5, 3, -3, 6, -2, 4][i] %}
+      <img class="print" src="{{ url_for('static', path='assets/paw-print.png') }}" alt="" style="position:absolute;left:{{ 1 + i * 12.6 }}%;top:{{ (60 if up else 180) + jy * 2 }}px;width:96px;height:96px;transform:rotate({{ 98 if up else 82 }}deg) scale(.85);opacity:0;transition:opacity .35s ease,transform .35s ease">
+      {% endfor %}
+    </div>
+  </div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  // 발자국이 하나씩 찍혔다 사라지는 반복 (디자인의 prints)
+  var prints = document.querySelectorAll('.print');
+  setInterval(function () {
+    var ph = Math.floor(Date.now() / 420) % 11;
+    prints.forEach(function (p, i) {
+      var on = ph <= 8 ? i < ph : ph === 9, up = i % 2 === 0;
+      p.style.opacity = on ? 1 : 0;
+      p.style.transform = 'rotate(' + (up ? 98 : 82) + 'deg) scale(' + (on ? 1 : 0.85) + ')';
+    });
+  }, 100);
+  // 분석 상태 조회. 끝나면 회차 결과로 이동
+  function poll() {
+    fetch('/api/jobs/{{ job.id }}').then(function (r) { return r.json(); }).then(function (d) {
+      if (d.done) { location.href = d.url; return; }
+      document.getElementById('anaStep').textContent = d.step;
+      document.getElementById('anaPct').textContent = d.pct;
+      setTimeout(poll, 400);
+    }).catch(function () { setTimeout(poll, 1500); });
+  }
+  poll();
+})();
+</script>
+{% endblock %}

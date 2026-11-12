@@ -1,0 +1,70 @@
+{% import "_vital.html" as vt_ %}
+{# 메모 = 환자에 붙는 짧은 특이사항. 차트 위 고정 줄과 분석 결과 오른쪽 칸에서 같은 모양으로 바로 쓴다(인쇄에서는 빠짐). #}
+
+{# 메모 한 장: 분류 색 태그, 2줄까지, 아래에 날짜·작성자. edit_url 이 있으면 눌러서 고친다 #}
+{% macro memo_card(x, edit_url='') -%}
+<a class="lk memo-card" {% if edit_url and x.id %}href="{{ edit_url }}{{ x.id }}"{% endif %} title="{{ x.text }}">
+  <span class="memo-text">{% if x.imp %}<b style="color:#C2412D">●</b> {% endif %}{{ x.text }}</span>
+  <span class="memo-foot"><b style="padding:1px 7px;border-radius:6px;background:{{ x.bg }};color:{{ x.c }}">{{ x.cat }}</b>{% if x.at %}<span>{{ x.at }}{% if x.author %} · {{ x.author.split(' ')[0] }}{% endif %}</span>{% endif %}</span>
+</a>
+{%- endmacro %}
+
+{# 메모 쓰기·고치기. edit 이 메모면 그 내용으로 열린다 #}
+{% macro memo_form(dog_id, next_url, memo_cat, edit=None, open=False) -%}
+<details class="memo-add" {% if edit or open %}open{% endif %}>
+  <summary>{{ '메모 고치기' if edit else '+ 메모' }}</summary>
+  <form method="post" action="/dogs/{{ dog_id }}/notes" style="display:flex;flex-direction:column;gap:8px;margin:0">
+    <input type="hidden" name="next_url" value="{{ next_url }}">
+    <input type="hidden" class="author-inp" name="author" value="">
+    {% if edit %}<input type="hidden" name="note_id" value="{{ edit.id }}">{% endif %}
+    {% if not edit %}
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      {% for k, (bg, c) in memo_cat.items() %}<label class="memo-chip" style="--bg:{{ bg }};--c:{{ c }}"><input type="radio" name="cat" value="{{ k }}" {% if loop.first %}checked{% endif %}>{{ k }}</label>{% endfor %}
+    </div>
+    {% endif %}
+    <textarea class="inp" name="text" rows="2" placeholder="예) 입질 있음, 입마개 착용 후 촬영" style="border-radius:10px;border:1px solid #E2DCD3;padding:9px 11px;font-size:14px;line-height:1.5;font-family:inherit;outline:none;resize:vertical;width:100%">{{ edit.text if edit else '' }}</textarea>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      {% if not edit %}<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#3A4250;cursor:pointer"><input type="checkbox" name="important" value="1"> 중요 (홈 목록에 표시)</label>{% else %}<a class="lk" href="{{ next_url }}" style="font-size:13px;color:#7A808A">취소</a>{% endif %}
+      <button class="bt" type="submit" style="height:34px;padding:0 14px;border-radius:9px;background:#1B2433;color:#fff;font-size:13.5px;font-weight:700">{{ '저장' if edit else '남기기' }}</button>
+    </div>
+    {% if edit and edit.revs %}<details style="font-size:12.5px;color:#7A808A"><summary style="cursor:pointer">고친 이력 {{ edit.revs|length }}건</summary>{% for r in edit.revs|reverse %}<div style="padding:4px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:4px">{{ r.at }} · {{ r.author }}<div style="text-decoration:line-through">{{ r.text }}</div></div>{% endfor %}</details>{% endif %}
+  </form>
+</details>
+{%- endmacro %}
+
+{# 분석 결과 화면 오른쪽 칸: 누구인지, 메모(바로 쓰기), 이 회차 진료 기록 #}
+{% macro dog_panel(panel, next_url) -%}
+{% set tone = {'surg': ('#FCEEE3', '#A8481A'), 'diag': ('#EEF1F6', '#4A5A78'), 'warn': ('#FAF1DF', '#9A6A12')} %}
+<aside class="no-print" style="width:340px;flex:none;position:sticky;top:96px;border-radius:18px;background:#fff;border:1px solid #ECE8E2;padding:18px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 120px);overflow-y:auto">
+  <div style="display:flex;flex-direction:column;gap:2px">
+    <span style="font-size:12.5px;color:#8E949C">{{ panel.no }}</span>
+    <b style="font-size:20px">{{ panel.name }} <span style="padding:2px 8px;border-radius:7px;background:{{ panel.st_bg }};color:{{ panel.st_c }};font-size:12px;vertical-align:3px">{{ panel.stage }}</span></b>
+    <span style="font-size:13.5px;color:#3A4250">{{ panel.breed }} · {{ panel.size }} · {{ panel.age }} · {{ panel.sex }}</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;row-gap:2px;font-variant-numeric:tabular-nums">
+    {% for k in ['체중', '체온', '심박', '혈압'] %}<span style="font-size:11.5px;color:#8E949C">{{ k }}</span>{% endfor %}
+    {% for key in ['kg', 'temp', 'hr', 'bp'] %}{{ vt_.vv(panel.v[key], panel.v.f[key], 15) }}{% endfor %}
+  </div>
+  {% if panel.badges %}<div style="display:flex;flex-wrap:wrap;gap:5px">{% for b in panel.badges %}<span style="padding:4px 9px;border-radius:8px;background:{{ tone[b.kind][0] }};color:{{ tone[b.kind][1] }};font-size:12.5px;font-weight:700">{{ b.full or b.t }}</span>{% endfor %}</div>{% endif %}
+
+  <div class="memo-col" style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #F2EFEA">
+    <b style="font-size:14px">메모 <span style="color:#8E949C;font-weight:600">{{ panel.memos|length }}</span></b>
+    {{ memo_form(panel.id, next_url, panel.memo_cat) }}
+    {% for x in panel.memos %}{{ memo_card(x) }}{% endfor %}
+    {% if not panel.memos %}<span style="font-size:13.5px;color:#A0A7B2">메모가 없어요.</span>{% endif %}
+  </div>
+  {% if panel.rid %}
+  <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #F2EFEA">
+    <b style="font-size:14px">이 회차 진료 기록</b>
+    {% for g in panel.run_soap %}
+    <div style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;background:#FAF8F5">
+      <span style="font-size:12px;color:#8E949C">{{ g.at }}{% if g.author %} · {{ g.author }}{% endif %}</span>
+      {% for n in g.parts %}<span style="display:grid;grid-template-columns:18px 1fr;gap:6px;font-size:13.5px;line-height:1.5"><b style="color:#8E949C">{{ n.cat }}</b><span style="white-space:pre-line">{{ n.text }}</span></span>{% endfor %}
+    </div>
+    {% endfor %}
+    {% if not panel.run_soap %}<span style="font-size:13.5px;color:#A0A7B2">이 회차에 남긴 진료 기록이 없어요.</span>{% endif %}
+  </div>
+  {% endif %}
+  <a class="lk" href="/dogs/{{ panel.id }}" style="height:42px;border-radius:10px;border:1px solid #E2DCD3;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">반려견 차트 (분석 {{ panel.n_res }})</a>
+</aside>
+{%- endmacro %}

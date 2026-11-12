@@ -1,0 +1,9 @@
+{# 바이탈 값 하나: 참고 범위를 벗어나면 빨간 글자 + H/L(EMR 검사 결과 표시와 같은 방식), 마우스를 올리면 참고 범위 #}
+{% macro vv(value, f, size=16, badge=True) -%}
+<b title="{{ f.ref if f else '' }}" style="font-size:{{ size }}px;white-space:nowrap;{{ 'color:' ~ f.c if f and f.c else '' }}">{{ value }}{% if badge and f and f.m %}<span style="margin-left:3px;padding:0 5px;border-radius:5px;background:{{ '#FBE0D9' if f.c == '#C2412D' else '#FBEBC8' }};font-size:11px;font-weight:800;vertical-align:2px">{{ f.m }}</span>{% endif %}</b>
+{%- endmacro %}
+
+{# 표시만 따로(좁은 칸에서 값 옆이 아니라 항목 이름 옆에 둘 때) #}
+{% macro vflag(f) -%}
+{% if f and f.m %}<span style="margin-left:4px;padding:0 5px;border-radius:5px;background:{{ '#FBE0D9' if f.c == '#C2412D' else '#FBEBC8' }};color:{{ f.c }};font-size:11px;font-weight:800">{{ f.m }}</span>{% endif %}
+{%- endmacro %}

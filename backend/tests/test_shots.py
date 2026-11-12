@@ -1,0 +1,607 @@
+"""촬영 상세·다시 분석·삭제·결과 영상 재생(13.3, 15.3, 15.6, 17.3 BE-06·10·11·12)."""
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from app.clients.analysis import AnalysisClientError
+from app.core.config import get_settings
+from app.core.security import make_signed_url, verify_signed_url
+from app.models import MeasureSession, Shot, WalkPass
+from app.services import shots as shot_service
+from app.storage.base import get_storage
+from app.storage.keys import shot_prefix
+from app.worker.main import run_once
+from tests.conftest import bearer
+from tests.test_purge import (
+    _FakeAnalysis,
+    analysis,  # noqa: F401  (픽스처)
+)
+from tests.test_sessions import _pass, _shot, _start
+from tests.test_worker import FakeClient, _settings
+from tests.test_worker import _session as _worker_session
+from tests.test_worker import _shot as _worker_shot
+
+SHOT_OUT_KEYS = {
+    "id",
+    "seq_no",
+    "status",
+    "fail_reason",
+    "validity",
+    "validity_reason",
+    "video_status",
+    "below_min_spec",
+    "passes",
+    "uploaded_at",
+    "analyzed_at",
+}
+DETAIL_ONLY_KEYS = {
+    "width",
+    "height",
+    "fps",
+    "duration_sec",
+    "bitrate_kbps",
+    "codec",
+    "model_name",
+    "model_version",
+    "submitted_at",
+    "video_ready_at",
+    "video_url",
+    "url_expires_at",
+}
+
+
+def _open_session(client: TestClient, db: Session, headers: dict, dog) -> MeasureSession:
+    return db.get(MeasureSession, _start(client, headers, dog.id).json()["id"])
+
+
+# ---- 촬영 상세 (BE-08·11·12) ----
+
+
+def test_shot_detail_shape_and_passes(client: TestClient, db: Session, auth_headers: dict, dog) -> None:
+    # 17.3 BE-11: 통과별 start_frame·end_frame·exclude_reason이 저장된 값과 같다. BE-12: 원본 주소·키는 어디에도 없다
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.validity, shot.model_name, shot.model_version = "PARTIAL", "fs-v4", "0.1.0/v1"
+    shot.submitted_at = datetime.now(UTC)
+    _pass(db, shot, 2, "RIGHT", False, "RUNNING")
+    _pass(db, shot, 1, "LEFT", True)
+    db.flush()
+
+    response = client.get(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == SHOT_OUT_KEYS | DETAIL_ONLY_KEYS
+    assert body["id"] == str(shot.id) and body["status"] == "DONE" and body["validity"] == "PARTIAL"
+    assert (body["width"], body["height"], body["codec"], body["bitrate_kbps"]) == (1920, 1080, "h264", 8000)
+    assert body["fps"] == 30.0 and body["duration_sec"] == 4.5  # NUMERIC → JSON 숫자(15.1)
+    assert (body["model_name"], body["model_version"]) == ("fs-v4", "0.1.0/v1")
+    assert body["submitted_at"].endswith("Z") and body["analyzed_at"].endswith("Z")
+    assert body["video_status"] == "PENDING" and body["video_url"] is None and body["url_expires_at"] is None
+    assert [
+        (p["pass_no"], p["camera_side"], p["is_valid"], p["start_frame"], p["end_frame"]) for p in body["passes"]
+    ] == [
+        (1, "LEFT", True, 10, 19),
+        (2, "RIGHT", False, 20, 29),
+    ]
+    assert body["passes"][1]["exclude_reason"]["code"] == "RUNNING" and body["passes"][1]["exclude_reason"]["message"]
+    assert "original" not in response.text and shot.original_key not in response.text
+
+
+def test_shot_detail_signs_the_video_url_only_when_ready(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 15.3: video_url은 video_status가 READY일 때만 서명 URL(11.6)이고 url_expires_at은 그 만료 시각이다
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.video_status = "READY"
+    shot.result_key = f"{shot_prefix(dog.institution_id, dog.id, session.id, shot.id)}result.mp4"
+    shot.video_ready_at = datetime.now(UTC)
+    db.flush()
+
+    body = client.get(f"/api/v1/shots/{shot.id}", headers=auth_headers).json()
+
+    path = f"/api/v1/shots/{shot.id}/video"
+    parts = urlsplit(body["video_url"])
+    query = parse_qs(parts.query)
+    assert parts.path == path and set(query) == {"exp", "sig"}
+    exp, sig = int(query["exp"][0]), query["sig"][0]
+    assert verify_signed_url(path, exp, sig)
+    assert not verify_signed_url(path, exp, sig[:-1] + ("0" if sig[-1] != "0" else "1"))  # 한 글자만 바꿔도 안 열린다
+    assert datetime.fromisoformat(body["url_expires_at"].replace("Z", "+00:00")) == datetime.fromtimestamp(exp, UTC)
+    assert body["video_ready_at"].endswith("Z")
+    assert "result.mp4" not in response_text(body)  # 파일 키는 응답에 없다
+
+
+def response_text(body: dict) -> str:
+    import json
+
+    return json.dumps(body, ensure_ascii=False)
+
+
+def test_shot_detail_not_found_cases(client: TestClient, db: Session, auth_headers: dict, dog, other_staff) -> None:
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "UPLOADED")
+    assert client.get(f"/api/v1/shots/{shot.id}", headers=bearer(other_staff)).status_code == 404  # 다른 기관
+    assert client.get(f"/api/v1/shots/{uuid.uuid4()}", headers=auth_headers).status_code == 404
+    assert client.get("/api/v1/shots/not-a-uuid", headers=auth_headers).status_code == 404  # 15.1
+
+
+# ---- 다시 분석 (BE-10) ----
+
+
+def test_retry_resets_the_failed_shot_and_the_worker_sends_it_again(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    # 15.6: fail_reason·job_id를 비우고 attempt_count 0, video_status PENDING, 남은 통과 행 삭제.
+    # 17.3 BE-06: 다시 분석하면 워커가 처음부터 다시 보낸다
+    # 199 리뷰(조유진): job_id를 비우기 전에 실패했던 작업의 분석 API 사본을 지운다
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(
+        db,
+        session,
+        1,
+        "FAILED",
+        fail_reason="ANALYSIS_SUBMIT_FAILED",
+        job_id="old-job",
+        attempt_count=3,
+        video_status="FAILED",
+    )
+    db.add(
+        WalkPass(
+            shot_id=shot.id, pass_no=1, camera_side="LEFT", gait_type="TROT", is_valid=True, start_frame=0, end_frame=9
+        )
+    )
+    db.flush()
+
+    response = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == SHOT_OUT_KEYS
+    assert body["status"] == "UPLOADED" and body["fail_reason"] is None and body["passes"] == []
+    assert body["video_status"] == "PENDING"
+    db.expire_all()
+    row = db.get(Shot, shot.id)
+    assert (row.status, row.fail_reason, row.job_id, row.attempt_count, row.video_status) == (
+        "UPLOADED",
+        None,
+        None,
+        0,
+        "PENDING",
+    )
+    assert db.scalar(select(WalkPass.id).where(WalkPass.shot_id == shot.id)) is None
+    assert analysis.deleted == ["old-job"]
+
+    stats = run_once(db, FakeClient(), _settings(), get_storage())
+    assert stats.claimed == 1 and stats.submitted == 1
+    db.expire_all()
+    row = db.get(Shot, shot.id)
+    assert row.status == "SUBMITTED" and row.job_id == "job-1" and row.attempt_count == 1
+
+
+@pytest.mark.parametrize("status", ["UPLOADED", "SUBMITTED", "ANALYZING", "DONE"])
+def test_retry_requires_a_failed_shot(client: TestClient, db: Session, auth_headers: dict, dog, status: str) -> None:
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, status)
+    response = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert response.status_code == 409 and response.json()["error"]["code"] == "SHOT_NOT_FAILED"
+    db.expire_all()
+    assert db.get(Shot, shot.id).status == status
+
+
+def test_retry_rules_closed_session_and_other_institution(
+    client: TestClient, db: Session, auth_headers: dict, dog, other_staff
+) -> None:
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "FAILED")
+    assert client.post(f"/api/v1/shots/{shot.id}/retry", headers=bearer(other_staff)).status_code == 404
+
+    session.status = "DONE"
+    db.flush()
+    closed = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert closed.status_code == 409 and closed.json()["error"]["code"] == "SESSION_CLOSED"
+    db.expire_all()
+    assert db.get(Shot, shot.id).status == "FAILED"
+
+
+# ---- 촬영 삭제 (BE-10) ----
+
+
+def test_delete_shot_removes_its_files_and_rows_and_keeps_other_seq_no(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 12.5·15.6: 파일 → 통과 → 촬영 순서로 지우고, 남은 촬영의 seq_no는 다시 매기지 않는다. 17.3 BE-10: 파일이 사라진다
+    session = _open_session(client, db, auth_headers, dog)
+    first = _shot(db, session, 1, "DONE")
+    _pass(db, first, 1, "LEFT", True)
+    second = _shot(db, session, 2, "DONE")
+    _pass(db, second, 1, "RIGHT", True)
+    storage = get_storage()
+    first_prefix = shot_prefix(dog.institution_id, dog.id, session.id, first.id)
+    second_prefix = shot_prefix(dog.institution_id, dog.id, session.id, second.id)
+    storage.write_bytes(f"{first_prefix}original.mp4", b"video")
+    storage.write_bytes(f"{first_prefix}analysis.json", b"{}")
+    storage.write_bytes(f"{second_prefix}original.mp4", b"v")
+
+    response = client.delete(f"/api/v1/shots/{first.id}", headers=auth_headers)
+
+    assert response.status_code == 204
+    assert storage.stat_prefix(first_prefix) == (0, 0)
+    assert storage.stat_prefix(second_prefix) == (1, 1)  # 다른 촬영의 파일은 그대로
+    assert db.scalar(select(Shot.id).where(Shot.id == first.id)) is None
+    assert db.scalar(select(WalkPass.id).where(WalkPass.shot_id == first.id)) is None
+    db.expire_all()
+    assert db.get(Shot, second.id).seq_no == 2 and len(db.get(Shot, second.id).passes) == 1
+    detail = client.get(f"/api/v1/sessions/{session.id}", headers=auth_headers).json()
+    assert [s["seq_no"] for s in detail["shots"]] == [2]
+    assert client.get(f"/api/v1/shots/{first.id}", headers=auth_headers).status_code == 404
+    assert client.delete(f"/api/v1/shots/{first.id}", headers=auth_headers).status_code == 404
+
+
+@pytest.mark.parametrize("status", ["SUBMITTED", "ANALYZING"])
+def test_delete_shot_in_progress_is_409(client: TestClient, db: Session, auth_headers: dict, dog, status: str) -> None:
+    # 13.3: 분석 중인 촬영을 지우면 워커가 없는 행에 결과를 쓰려 하므로 막는다
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, status)
+    response = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+    assert response.status_code == 409 and response.json()["error"]["code"] == "SHOT_IN_PROGRESS"
+    assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) == shot.id
+
+
+@pytest.mark.parametrize("status", ["UPLOADED", "DONE", "FAILED"])
+def test_delete_shot_allowed_statuses(client: TestClient, db: Session, auth_headers: dict, dog, status: str) -> None:
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, status)
+    assert client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers).status_code == 204
+    assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) is None
+
+
+def test_delete_shot_rules_closed_session_and_other_institution(
+    client: TestClient, db: Session, auth_headers: dict, dog, other_staff
+) -> None:
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    assert client.delete(f"/api/v1/shots/{shot.id}", headers=bearer(other_staff)).status_code == 404
+
+    session.status = "DONE"
+    db.flush()
+    closed = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+    assert closed.status_code == 409 and closed.json()["error"]["code"] == "SESSION_CLOSED"
+    assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) == shot.id
+
+
+# ---- 결과 영상 재생 (BE-12) ----
+
+VIDEO_BYTES = bytes(range(256)) * 4  # 1,024바이트. Range로 자른 조각을 바이트 값으로 맞춰 본다
+
+
+def _ready_shot(db: Session, dog, session: MeasureSession, seq_no: int = 1, data: bytes = VIDEO_BYTES) -> Shot:
+    """결과 영상이 READY인 촬영. 파일은 저장소의 result_key 자리에 실제로 둔다."""
+    shot = _shot(db, session, seq_no, "DONE")
+    shot.video_status = "READY"
+    shot.result_key = f"{shot_prefix(dog.institution_id, dog.id, session.id, shot.id)}result.mp4"
+    shot.video_ready_at = datetime.now(UTC)
+    db.flush()
+    get_storage().write_bytes(shot.result_key, data)
+    return shot
+
+
+def _video_url(client: TestClient, headers: dict, shot: Shot) -> str:
+    """촬영 상세가 준 video_url. 화면은 이 값을 <video src>에 그대로 넣는다(15.1)."""
+    return client.get(f"/api/v1/shots/{shot.id}", headers=headers).json()["video_url"]
+
+
+def _signed(path: str) -> str:
+    return make_signed_url(path)[0]
+
+
+def _not_found(response) -> bool:
+    return response.status_code == 404 and response.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_video_url_from_shot_detail_plays_without_a_token(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 15.6: 상세가 준 video_url을 그대로 부르면 토큰 없이 video/mp4가 온다. Cache-Control은 private에 서명 유효 시간만큼
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _ready_shot(db, dog, session)
+
+    response = client.get(_video_url(client, auth_headers, shot))  # Authorization 없음
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["accept-ranges"] == "bytes"
+    assert response.headers["cache-control"] == f"private, max-age={get_settings().FILE_URL_TTL_SEC}"
+    assert int(response.headers["content-length"]) == len(VIDEO_BYTES)
+    assert response.content == VIDEO_BYTES
+
+
+def test_video_range_request_is_206_with_only_the_requested_bytes(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 17.3 BE-12: 앞뒤로 넘기기. Range는 Starlette FileResponse가 처리한다(15.6)
+    session = _open_session(client, db, auth_headers, dog)
+    url = _video_url(client, auth_headers, _ready_shot(db, dog, session))
+    size = len(VIDEO_BYTES)
+
+    middle = client.get(url, headers={"Range": "bytes=100-355"})
+    assert middle.status_code == 206
+    assert middle.headers["content-range"] == f"bytes 100-355/{size}"
+    assert middle.headers["content-type"] == "video/mp4"
+    assert middle.content == VIDEO_BYTES[100:356]
+
+    tail = client.get(url, headers={"Range": "bytes=-16"})  # 끝에서 16바이트
+    assert tail.status_code == 206 and tail.content == VIDEO_BYTES[-16:]
+
+    beyond = client.get(url, headers={"Range": f"bytes={size}-"})  # 파일 끝을 넘긴 구간
+    assert beyond.status_code == 416 and beyond.headers["content-range"] == f"bytes */{size}"
+
+
+def test_video_link_expired_or_tampered_is_403_before_looking_at_the_shot(
+    client: TestClient, db: Session, auth_headers: dict, dog
+) -> None:
+    # 17.3 BE-12: 5분이 지나거나 sig를 한 글자만 바꿔도 403 FILE_LINK_EXPIRED.
+    # 서명을 DB보다 먼저 보므로 없는 촬영도 403이다
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _ready_shot(db, dog, session)
+    path = f"/api/v1/shots/{shot.id}/video"
+    query = parse_qs(urlsplit(_video_url(client, auth_headers, shot)).query)
+    exp, sig = int(query["exp"][0]), query["sig"][0]
+    flipped = sig[:-1] + ("0" if sig[-1] != "0" else "1")
+    ttl = get_settings().FILE_URL_TTL_SEC
+    expired, _ = make_signed_url(path, now=datetime.now(UTC) - timedelta(seconds=ttl + 1))
+    other_path = f"/api/v1/shots/{uuid.uuid4()}/video"
+    urls = {
+        "만료": expired,
+        "sig 한 글자 바꿈": f"{path}?exp={exp}&sig={flipped}",
+        "exp만 늘림": f"{path}?exp={exp + 1}&sig={sig}",
+        "exp가 정수 아님": f"{path}?exp={exp}x&sig={sig}",
+        "exp 음수": f"{path}?exp=-{exp}&sig={sig}",
+        "sig 없음": f"{path}?exp={exp}",
+        "exp 없음": f"{path}?sig={sig}",
+        "쿼리 없음": path,
+        "다른 촬영의 서명": f"{path}?{urlsplit(_signed(other_path)).query}",
+        "없는 촬영에 이 촬영의 서명": f"{other_path}?exp={exp}&sig={sig}",
+    }
+    for name, url in urls.items():
+        response = client.get(url)
+        assert response.status_code == 403, name
+        assert response.json()["error"]["code"] == "FILE_LINK_EXPIRED", name
+    assert client.get(f"{path}?exp={exp}&sig={sig}").status_code == 200  # 바른 서명은 그대로 열린다
+
+
+def test_video_is_404_when_not_ready_gone_or_not_on_local_storage(
+    client: TestClient, db: Session, auth_headers: dict, dog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 15.6: 서명이 맞아도 video_status가 READY가 아니면 404. 촬영·파일이 없어도 404. 저장소가 S3면 이 API는 404(11.11)
+    session = _open_session(client, db, auth_headers, dog)
+
+    pending = _shot(db, session, 1, "DONE")  # video_status는 PENDING
+    assert _not_found(client.get(_signed(f"/api/v1/shots/{pending.id}/video")))
+    assert _not_found(client.get(_signed(f"/api/v1/shots/{uuid.uuid4()}/video")))  # 지워진 촬영
+    assert client.get("/api/v1/shots/not-a-uuid/video?exp=1&sig=x").status_code == 404  # 15.1
+
+    ready = _ready_shot(db, dog, session, seq_no=2)
+    url = _video_url(client, auth_headers, ready)
+    assert client.get(url).status_code == 200
+    get_storage().delete(ready.result_key)
+    assert _not_found(client.get(url))  # READY인데 파일이 없다
+
+    on_s3 = _ready_shot(db, dog, session, seq_no=3)
+    url = _video_url(client, auth_headers, on_s3)
+    monkeypatch.setattr(shot_service, "get_storage", lambda: object())  # LocalStorage가 아닌 저장소
+    assert _not_found(client.get(url))
+
+
+# ---- 분석 API 사본(15.6, 199 리뷰 조유진) ----
+
+
+@pytest.mark.parametrize(
+    ("answer", "http_status", "code"),
+    [(None, 503, "ANALYSIS_UNAVAILABLE"), (500, 503, "ANALYSIS_UNAVAILABLE"), (409, 409, "SHOT_IN_PROGRESS")],
+)
+def test_retry_stops_when_the_analysis_copy_cannot_be_deleted(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+    answer: int | None,
+    http_status: int,
+    code: str,
+) -> None:
+    """job_id를 비우면 그 사본을 다시 찾을 수 없으므로, 못 지우면 멈추고 촬영은 FAILED 그대로 둔다.
+
+    409는 팀 서비스가 시간 초과로 FAILED로 둔 촬영을 분석 API가 아직 돌리고 있는 경우다.
+    """
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_TIMEOUT", job_id="old-job", attempt_count=1)
+    analysis.fail["old-job"] = AnalysisClientError("거절", status_code=answer)
+
+    response = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert response.status_code == http_status, response.text
+    assert response.json()["error"]["code"] == code
+    db.expire_all()
+    row = db.get(Shot, shot.id)
+    assert (row.status, row.job_id, row.fail_reason) == ("FAILED", "old-job", "ANALYSIS_TIMEOUT")
+
+
+def test_retry_of_a_shot_without_a_job_id_deletes_what_the_analysis_api_still_holds(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """제출 응답을 못 받고 끝난 촬영은 job_id가 없지만 분석 API에는 작업이 있을 수 있다. 촬영 ID로 지운다."""
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_SUBMIT_FAILED", attempt_count=3)
+    analysis.shot_jobs[shot.id] = ["lost-job"]
+    analysis.hook = lambda job_id: pytest.fail("모르는 작업인데 작업 단위로 불렀다")
+    assert client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers).status_code == 200
+    assert analysis.shot_calls == [shot.id] and analysis.deleted == ["lost-job"]
+
+
+def test_retry_waits_while_a_job_the_team_service_does_not_know_is_still_running(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_SUBMIT_FAILED", attempt_count=3)
+    analysis.shot_fail[shot.id] = AnalysisClientError("JOB_IN_PROGRESS", retryable=False, status_code=409)
+    response = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "SHOT_IN_PROGRESS")
+    db.expire_all()
+    assert db.get(Shot, shot.id).status == "FAILED"
+
+
+def test_retry_also_deletes_a_job_that_changed_while_waiting(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    staff,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """분석 API는 회차 행을 잠그기 전에 부른다. 그사이 작업이 바뀌었으면 잠근 뒤 그것도 지운다."""
+    session = _worker_session(db, dog, staff)
+    shot = _worker_shot(db, session, 1, "FAILED", fail_reason="ANALYSIS_FAILED", job_id="old-job", attempt_count=1)
+    shot_id = shot.id
+
+    def meanwhile(job_id: str) -> None:
+        if job_id == "old-job":
+            db.execute(update(Shot).where(Shot.id == shot_id).values(job_id="new-job"))
+
+    analysis.hook = meanwhile
+    assert client.post(f"/api/v1/shots/{shot_id}/retry", headers=auth_headers).status_code == 200
+    assert analysis.deleted == ["old-job", "new-job"]
+    assert analysis.shot_calls == [shot_id, shot_id]  # 잠근 뒤에도 촬영 단위로 다시 묻는다
+    db.expire_all()
+    assert db.get(Shot, shot_id).job_id is None
+
+
+def test_delete_shot_deletes_the_analysis_copy_first_and_stops_if_it_cannot(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """행을 지우면 그 사본을 다시 찾을 수 없으므로 먼저 지운다. 못 지우면 503이고 파일·행은 그대로다."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.job_id = "job-9"
+    db.flush()
+    storage = get_storage()
+    prefix = shot_prefix(dog.institution_id, dog.id, session.id, shot.id)
+    storage.write_bytes(f"{prefix}original.mp4", b"video")
+    analysis.fail["job-9"] = AnalysisClientError("연결 실패")
+
+    stopped = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+    assert stopped.status_code == 503, stopped.text
+    assert stopped.json()["error"]["code"] == "ANALYSIS_UNAVAILABLE"
+    assert storage.stat_prefix(prefix) == (1, 5)
+    assert db.scalar(select(Shot.job_id).where(Shot.id == shot.id)) == "job-9"
+
+    analysis.fail.clear()
+    assert client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers).status_code == 204
+    assert analysis.deleted == ["job-9"]
+    assert storage.stat_prefix(prefix) == (0, 0)
+    assert db.scalar(select(Shot.id).where(Shot.id == shot.id)) is None
+
+
+def test_delete_shot_also_deletes_jobs_the_team_service_does_not_know(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """다시 보내기 전의 작업처럼 job_id에 없는 작업도 같은 촬영 ID로 지워진다. 아는 작업을 또 부르지 않는다."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.job_id = "job-9"
+    db.flush()
+    analysis.shot_jobs[shot.id] = ["job-lost", "job-9"]
+    analysis.hook = lambda job_id: pytest.fail("촬영 단위 답에 든 작업을 작업 단위로 또 불렀다")
+    assert client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls == [shot.id] and analysis.deleted == ["job-lost", "job-9"]
+
+
+def test_delete_shot_asks_about_a_failed_shot_without_a_job_id_but_not_one_never_sent(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """제출 응답을 못 받고 끝난 촬영은 job_id가 없어도 묻는다. 워커가 가져가지 않은 촬영은 묻지 않는다."""
+    session = _open_session(client, db, auth_headers, dog)
+    lost, waiting = _shot(db, session, 1, "FAILED"), _shot(db, session, 2, "UPLOADED")
+    analysis.shot_jobs[lost.id] = ["job-lost"]
+    assert client.delete(f"/api/v1/shots/{lost.id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls == [lost.id] and analysis.deleted == ["job-lost"]
+
+    analysis.shot_error = AnalysisClientError("연결 실패")  # 분석 API가 꺼져 있어도 지울 수 있다
+    assert client.delete(f"/api/v1/shots/{waiting.id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls == [lost.id]
+
+
+def test_delete_shot_asks_again_when_the_worker_sent_the_shot_while_waiting(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """분석 API는 회차 행을 잠그기 전에 부른다. 그사이 촬영이 달라졌으면 잠근 뒤 다시 묻는다(12.4)."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "FAILED")
+    shot_id = shot.id
+
+    def meanwhile(asked: uuid.UUID) -> None:  # 첫 호출이 빈 목록을 받은 직후: 워커가 보냈다가 응답을 못 받고 끝났다
+        if len(analysis.shot_calls) == 1:
+            db.execute(update(Shot).where(Shot.id == shot_id).values(attempt_count=3))
+            analysis.shot_jobs[shot_id] = ["job-lost"]
+
+    analysis.shot_hook = meanwhile
+    assert client.delete(f"/api/v1/shots/{shot_id}", headers=auth_headers).status_code == 204
+    assert analysis.shot_calls == [shot_id, shot_id] and analysis.deleted == ["job-lost"]
+
+
+def test_requests_that_will_be_refused_leave_the_analysis_copy_alone(
+    client: TestClient,
+    db: Session,
+    auth_headers: dict,
+    dog,
+    analysis: _FakeAnalysis,  # noqa: F811
+) -> None:
+    """조건이 안 맞는 요청은 분석 API를 부르기 전에 걸러진다. 거절될 요청 때문에 사본이 지워지면 안 된다."""
+    session = _open_session(client, db, auth_headers, dog)
+    shot = _shot(db, session, 1, "DONE")
+    shot.job_id = "job-1"
+    session.status = "DONE"
+    db.flush()
+    closed = client.delete(f"/api/v1/shots/{shot.id}", headers=auth_headers)
+    assert (closed.status_code, closed.json()["error"]["code"]) == (409, "SESSION_CLOSED")
+    not_failed = client.post(f"/api/v1/shots/{shot.id}/retry", headers=auth_headers)
+    assert (not_failed.status_code, not_failed.json()["error"]["code"]) == (409, "SHOT_NOT_FAILED")
+    assert analysis.deleted == [] and analysis.shot_calls == []

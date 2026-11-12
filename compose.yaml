@@ -1,0 +1,94 @@
+# 무중단(blue-green) 배포: api/web 을 blue·green 두 벌로 두고 nginx 가 한 벌만 바라본다. 전환은 infra/ci/deploy.sh
+# api/web 은 profiles 라서 `docker compose up` 만으로는 안 뜬다. 전체 기동은 `bash infra/ci/deploy.sh`
+x-api: &api
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  restart: unless-stopped
+  env_file: .env
+  # GPU 서버 분석 API로 가는 SSH 역방향 터널은 EC2 호스트의 compose 네트워크 게이트웨이(172.18.0.1:18010)에 열린다.
+  # host-gateway 는 docker0(172.17.0.1)로 풀려 터널과 어긋나므로 IP를 직접 적는다.
+  # 네트워크(creamoff_default)를 지우고 다시 만들어 게이트웨이가 바뀌면 터널의 -R 주소·ufw 규칙·authorized_keys permitlisten 도 같이 바꾼다
+  extra_hosts:
+    - "host.docker.internal:172.18.0.1"
+  volumes:
+    - api-data:/data/files          # 두 벌이 같은 업로드 파일을 본다(STORAGE_ROOT 기본값)
+  depends_on:
+    postgres:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+    interval: 5s
+    timeout: 5s
+    retries: 12
+    start_period: 10s
+  profiles: [bluegreen]               # 평소 `compose up` 으로는 안 뜬다. deploy.sh 가 이름으로 지정해 올린다
+
+x-web: &web
+  build:
+    context: .
+    dockerfile: infra/docker/web.Dockerfile   # 앱(frontend/)은 /, 병원용 웹(web/)은 /web/
+  restart: unless-stopped
+  profiles: [bluegreen]
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NGINX_PORT:-8080}:80"   # 운영 8080, 개발(deploy_dev) 8082. 외부 공개는 EC2 호스트 nginx(80/443)가 proxy
+    volumes:
+      - ./infra/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - upstream:/etc/nginx/upstream      # active.conf(현재 서비스 중인 색)를 deploy.sh 가 쓴다
+
+  # nginx가 /api/ 를 api_backend(= 현재 색의 api:8000)로 넘긴다 (docs/convention/apiRoutingConvention.md)
+  api-blue:
+    <<: *api
+  api-green:
+    <<: *api
+  web-blue:
+    <<: *web
+  web-green:
+    <<: *web
+
+  # 백엔드 worker(명세 3절, 12.4): 촬영 제출·분석 상태 조회·집계·결과 영상을 도는 별도 프로세스. 반드시 한 대만 둔다
+  # (작업 큐가 DB라 두 대면 같은 촬영을 같이 집는다). 그래서 blue/green 으로 나누지 않고 deploy.sh 가 api 전환 뒤 재생성한다.
+  # api 와 같은 이미지·env·extra_hosts(분석 API 터널)·업로드 볼륨(api-data)을 쓴다
+  worker:
+    <<: *api
+    command: ["python", "-m", "app.worker.main"]
+    healthcheck:
+      disable: true            # HTTP 포트가 없다. 살아 있는지는 deploy.sh 가 기동 직후 상태로 본다
+    stop_grace_period: 60s     # SIGTERM 이면 하던 바퀴를 끝내고 멈춘다
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 내부 네트워크 전용(ports 미공개, 비밀번호 없음). api·worker는 REDIS_URL(redis://redis:6379/0)로 접속
+  # maxmemory는 EC2 사양 확인 전 잠정값. noeviction이라 가득 차면 쓰기를 거부한다(큐·작업 상태 유실 방지)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
+  api-data:
+  upstream:

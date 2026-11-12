@@ -1,0 +1,15 @@
+/* 자동 생성. AppView 의 style-hover / style-focus. 인라인 스타일을 이기려고 !important 를 쓴다 */
+.appview-h0:hover{background:#fff !important}
+.appview-f0:focus{border-color:#D2601A !important;box-shadow:0 0 0 4px #FCEEE3 !important}
+.appview-h1:hover{background:#B4501A !important}
+.appview-h2:hover{background:#FAF6F0 !important}
+
+/* 손으로 더함(11-05): 촬영 화면 카메라 로딩 표시 */
+@keyframes pp-spin{to{transform:rotate(360deg)}}
+.pp-spin{animation:pp-spin .8s linear infinite}
+
+/* 썸네일 자리표시: 그림이 오기 전 옅게 반짝임 */
+.pp-skel{background:linear-gradient(90deg,#E9E4DC 25%,#F4F0EA 50%,#E9E4DC 75%);background-size:200% 100%;animation:pp-skel 1.2s ease-in-out infinite}
+@keyframes pp-skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* 웹 구성 화면(AppWebScreens)의 세로 스크롤 칸: 내용이 길어도 검색창·카드가 눌려 납작해지지 않게 */
+.aw-col>*{flex-shrink:0}

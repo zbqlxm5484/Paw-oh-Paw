@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}비밀번호 재설정 · Paw oh Paw{% endblock %}
+{% block topbar %}{% include "_authbar.html" %}{% endblock %}
+{% set inp = "height:58px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:17px;color:#1B2433;outline:none" %}
+{% block content %}
+<main style="max-width:560px;margin:6vh auto 96px;padding:0 24px">
+  <form method="post" action="/reset-password" style="background:#fff;border:1px solid #ECE8E2;border-radius:24px;padding:48px 44px;display:flex;flex-direction:column;gap:22px">
+    <div style="display:flex;flex-direction:column;gap:8px"><h1 style="margin:0;font-size:28px;font-weight:800;letter-spacing:-0.6px">새 비밀번호</h1><p style="margin:0;font-size:16px;color:#5B6472">새 비밀번호를 정하면 바로 로그인 화면으로 가요.</p></div>
+    <input type="hidden" name="token" value="{{ token }}">
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:16px;font-weight:600">새 비밀번호</span><input class="inp" type="password" name="pw" autocomplete="new-password" placeholder="8자 이상" style="{{ inp }}"></label>
+    <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:16px;font-weight:600">새 비밀번호 확인</span><input class="inp" type="password" name="pw2" autocomplete="new-password" style="{{ inp }}"></label>
+    <button class="bt" type="submit" style="height:60px;border-radius:14px;background:#D2601A;color:#fff;border:0;font-size:18px;font-weight:700;cursor:pointer">비밀번호 바꾸기</button>
+  </form>
+</main>
+{% endblock %}

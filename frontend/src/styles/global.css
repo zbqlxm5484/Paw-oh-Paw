@@ -1,0 +1,64 @@
+@import './tokens.css';
+
+/* 디자인 폰트(Pretendard Variable). 디자인 내보내기에 들어 있던 파일을 그대로 쓴다. 오프라인·PWA 에서도 같은 글꼴 */
+@font-face {
+  font-family: 'Pretendard Variable';
+  src: url('/pretendard-variable.woff2') format('woff2-variations');
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 디자인 템플릿의 body 규칙 그대로. 화면 자체의 스타일은 생성된 AppView(인라인)에 있다 */
+* {
+  box-sizing: border-box;
+  /* 안드로이드 WebView 가 onClick 요소를 누를 때 덮는 파란 눌림 표시를 끈다(11-06 실기기) */
+  -webkit-tap-highlight-color: transparent;
+}
+/* 화면 글자를 길게 눌러도 선택·복사 메뉴가 안 뜨게. 입력칸만 선택을 살린다 */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  background: #faf9f6;
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  color: #1b2433;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.2px;
+}
+a {
+  color: #b4501a;
+}
+a:hover {
+  color: #8f3f14;
+}
+input,
+textarea {
+  font-family: inherit;
+  letter-spacing: -0.2px;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #a0a7b2;
+}
+/* 앱 v5 가로 스크롤 영역: 스크롤바 숨김 */
+.pp-s::-webkit-scrollbar {
+  display: none;
+}
+.pp-s {
+  scrollbar-width: none;
+}
