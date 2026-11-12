@@ -213,7 +213,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
           {/* 뒷무릎 각도 · 보행 주기: 이 회차의 실제 각도(GET /shots/{id}/angles)로 만든 곡선이 있을 때만. 견본·합성 곡선은 쓰지 않는다 */}
           {knee ? <section className="rep-sec rep-knee"><KneeChart kc={knee} /></section> : null}
           <section className="rep-sec rep-pb" style={css('display:flex;flex-direction:column;gap:8px')}>
-            <h2 style={css(H2)}>직전 회차와 비교{c.previous ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{c.previous.measured_on} · {c.previous.round}회차</span> : null}</h2>
+            <h2 style={css(H2)}>직전 회차와 비교{c.previous ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{c.previous.label ?? `${c.previous.round}회차, ${c.previous.measured_on}`}</span> : null}</h2>
             {previous.map((x, i) => <span key={i} style={css(SUB)}>{x}</span>)}
             {gaits.map((g) => <ChangesTable key={g.gait_type} g={g} />)}
           </section>

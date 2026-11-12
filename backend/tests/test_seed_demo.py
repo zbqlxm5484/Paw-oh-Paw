@@ -10,7 +10,7 @@ import json
 import shutil
 import tempfile
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -19,6 +19,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.dates import local_zone
 from app.core.security import verify_password
 from app.models import (
     Dog,
@@ -202,9 +203,13 @@ def fake_video(monkeypatch: pytest.MonkeyPatch) -> None:
 class _Renders:
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.masks: dict[str, Any] = {}  # 영상 이름 → 넘겨받은 extra_faces(없으면 None)
 
-    def __call__(self, video: Path, keypoints: Path, output: Path, *, ffmpeg_path: str) -> None:
+    def __call__(
+        self, video: Path, keypoints: Path, output: Path, *, ffmpeg_path: str, extra_faces: Any = None
+    ) -> None:
         self.calls.append(video.name)
+        self.masks[video.name] = extra_faces
         output.write_bytes(b"rendered:" + video.read_bytes())
 
 
@@ -331,11 +336,125 @@ def test_same_video_and_keypoints_render_once(db: Session, tmp_path: Path, fake_
     assert renders.calls == ["a.mp4"] and report.rendered == 2
 
 
+def test_face_masks_file_adds_places_to_cover_by_hand(db: Session, tmp_path: Path, fake_video: None) -> None:
+    """검출기가 못 찾는 얼굴을 눈으로 확인해 적은 자리(face_masks.json)를 결과 영상 만들기에 넘긴다(277)."""
+    root = _write(tmp_path)
+    masks = {"a.mp4": [{"from": 18, "to": 40, "box": [0, 130, 90, 275]}, {"from": 100, "to": 100, "box": [5, 5, 9, 9]}]}
+    (root / "face_masks.json").write_text(json.dumps(masks), encoding="utf-8")
+    report, renders = _run(db, root, tmp_path)
+
+    finder = renders.masks["a.mp4"]
+    assert finder(17) == [] and finder(41) == []
+    assert finder(18) == [(0, 130, 90, 275)] and finder(40) == [(0, 130, 90, 275)]  # 끝 프레임까지 가린다
+    assert finder(100) == [(5, 5, 9, 9)]
+    assert any("face_masks.json" in note for note in report.notes)
+
+
+def test_without_the_file_nothing_extra_is_covered(db: Session, tmp_path: Path, fake_video: None) -> None:
+    report, renders = _run(db, _write(tmp_path), tmp_path)
+    assert renders.masks == {"a.mp4": None}
+    assert not any("face_masks.json" in note for note in report.notes)
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("{깨진", "읽지 못했습니다"),
+        ("[]", "영상 파일 이름마다"),
+        ('{"a.mp4": {}}', "목록이어야"),
+        ('{"a.mp4": [{"from": 1, "to": 2}]}', "0 이상의 정수"),
+        ('{"a.mp4": [{"from": 1, "to": 2, "box": [0, 0, 10]}]}', "0 이상의 정수"),
+        ('{"a.mp4": [{"from": 1.5, "to": 2, "box": [0, 0, 10, 10]}]}', "0 이상의 정수"),
+        ('{"a.mp4": [{"from": true, "to": 2, "box": [0, 0, 10, 10]}]}', "0 이상의 정수"),
+        ('{"a.mp4": [{"from": 1, "to": 2, "box": [-1, 0, 10, 10]}]}', "0 이상의 정수"),
+        ('{"a.mp4": [{"from": 3, "to": 2, "box": [0, 0, 10, 10]}]}', "from ≤ to"),
+        ('{"a.mp4": [{"from": 1, "to": 2, "box": [10, 0, 10, 10]}]}', "x0 < x1"),
+        ('{"b.mp4": [{"from": 1, "to": 2, "box": [0, 0, 10, 10]}]}', "demo.json에 없는 영상"),
+    ],
+)
+def test_bad_face_masks_are_refused_before_anything_is_written(
+    db: Session, tmp_path: Path, content: str, message: str
+) -> None:
+    """잘못 적은 가림 자리를 조용히 넘기면 얼굴이 드러난 채 시연 데이터가 들어간다."""
+    root = _write(tmp_path)
+    (root / "face_masks.json").write_text(content, encoding="utf-8")
+    with pytest.raises(SeedDemoError, match=message):
+        _run(db, root, tmp_path)
+    assert db.scalar(select(func.count()).select_from(Institution).where(Institution.code == CODE)) == 0
+
+
 def test_no_render_cache_means_no_result_videos(db: Session, tmp_path: Path, fake_video: None) -> None:
     root = _write(tmp_path)
     seed(db, get_storage(), load_data(root), today=TODAY, password=PASSWORD)
     first = _sessions(db)[TODAY - timedelta(days=28)]
     assert set(db.scalars(select(Shot.video_status).where(Shot.session_id == first.id))) == {"FAILED"}
+
+
+# ---- 오늘(D-0) 기록의 시각 ----
+
+
+def _moments(db: Session) -> dict[str, datetime]:
+    """오늘(D-0) 기록의 시각들과, 견줄 지난 날 회차의 시작 시각."""
+    sessions = _sessions(db)
+    today, old = sessions[TODAY], sessions[TODAY - timedelta(days=28)]
+    shot = db.scalars(select(Shot).where(Shot.session_id == today.id)).one()
+    vital = db.scalars(select(DogVital).where(DogVital.measured_on == TODAY)).one()
+    dog = db.get(Dog, vital.dog_id)
+    note = db.scalars(select(DogNote).where(DogNote.body == "계단 금지")).one()
+    return {
+        "session": today.created_at,
+        "uploaded": shot.uploaded_at,
+        "analyzed": shot.analyzed_at,
+        "vital": vital.created_at,
+        "dog": dog.created_at,
+        "note": note.created_at,
+        "old_session": old.created_at,
+    }
+
+
+def test_todays_records_are_never_later_than_now(
+    db: Session, tmp_path: Path, fake_video: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """시연 당일 아침에 넣어도 오늘(D-0) 기록이 아직 오지 않은 시각으로 찍히지 않는다(277). 지난 날은 그대로다."""
+    morning = datetime(2026, 11, 10, 8, 0, tzinfo=local_zone())
+    monkeypatch.setattr(seed_demo, "_now", lambda: morning)
+    _run(db, _write(tmp_path), tmp_path)
+    moments = _moments(db)
+
+    later = {name: moment for name, moment in moments.items() if moment > morning}
+    assert later == {}
+    # 등록 → 바이탈 → 회차 시작 → 올림 → 분석 순서는 그대로다
+    assert moments["dog"] < moments["vital"] < moments["session"] < moments["uploaded"] < moments["analyzed"]
+    assert moments["old_session"] == datetime(2026, 10, 13, 10, 0, tzinfo=local_zone())
+    note = db.scalars(select(DogNote).where(DogNote.body == "계단 금지")).one()
+    assert note.visited_on == TODAY
+
+
+def test_todays_records_keep_their_usual_times_when_those_have_passed(
+    db: Session, tmp_path: Path, fake_video: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    afternoon = datetime(2026, 11, 10, 15, 0, tzinfo=local_zone())
+    monkeypatch.setattr(seed_demo, "_now", lambda: afternoon)
+    _run(db, _write(tmp_path), tmp_path)
+    moments = _moments(db)
+
+    assert moments["session"] == datetime(2026, 11, 10, 10, 1, tzinfo=local_zone())  # 10시 + 순서(분)
+    assert moments["vital"] == datetime(2026, 11, 10, 9, 30, tzinfo=local_zone())
+    assert moments["dog"] == datetime(2026, 11, 10, 9, 0, tzinfo=local_zone())
+
+
+def test_another_day_given_as_today_is_not_pulled_back(
+    db: Session, tmp_path: Path, fake_video: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--today로 내일을 D-0으로 주면 그 날짜의 기록으로 넣는다. 회차에 붙지 않은 메모도 그날이다."""
+    eve = datetime(2026, 11, 9, 20, 0, tzinfo=local_zone())
+    monkeypatch.setattr(seed_demo, "_now", lambda: eve)
+    _run(db, _write(tmp_path), tmp_path)
+    moments = _moments(db)
+
+    assert moments["session"] == datetime(2026, 11, 10, 10, 1, tzinfo=local_zone())
+    note = db.scalars(select(DogNote).where(DogNote.body == "계단 금지")).one()
+    assert note.visited_on == TODAY and moments["note"].date() == TODAY
 
 
 # ---- 다시 넣기 ----
