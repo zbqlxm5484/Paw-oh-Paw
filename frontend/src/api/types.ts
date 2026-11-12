@@ -83,7 +83,8 @@ export interface SignupIn {
   password: string
   name: string
   email: string
-  terms?: TermsIn
+  /** 약관 동의. 백엔드 v1.58 부터 필수(없으면 422) */
+  terms: TermsIn
 }
 
 export interface TokenOut {

@@ -283,7 +283,7 @@ export const api = {
   changePassword: (current_password: string, new_password: string) =>
     request<StaffOut>('/auth/password', { method: 'PATCH', body: { current_password, new_password } }),
   verifyCode: (code: string) => request<DeviceCodeVerifyOut>('/auth/device-codes/verify', { method: 'POST', body: { code }, auth: false }),
-  signup: (body: { code: string; login_id: string; password: string; name: string; email: string; terms?: TermsIn }) =>
+  signup: (body: { code: string; login_id: string; password: string; name: string; email: string; terms: TermsIn }) =>
     request<TokenOut>('/auth/signup', { method: 'POST', body, auth: false }),
   resetRequest: (login_id: string) => request<void>('/auth/password-reset/request', { method: 'POST', body: { login_id }, auth: false }),
   resetConfirm: (token: string, new_password: string) =>
