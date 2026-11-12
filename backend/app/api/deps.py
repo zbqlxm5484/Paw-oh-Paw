@@ -142,7 +142,7 @@ AdminStaff = Annotated[AuthStaff, Depends(require_admin)]
 CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
 
 
-# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 2·3·8·9·17·18·22·55·62번) ----
+# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 2·3·8·9·17·18·22·23·55·62번) ----
 
 
 @dataclass(frozen=True)

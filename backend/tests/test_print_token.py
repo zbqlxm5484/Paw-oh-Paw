@@ -1,4 +1,4 @@
-"""인쇄 토큰(명세 11.6, 15.2의 2·3·8·9·17·18·22·55·62번, S15P31A404-276).
+"""인쇄 토큰(명세 11.6, 15.2의 2·3·8·9·17·18·22·23·55·62번, S15P31A404-276. 23번은 278에서 열었다).
 
 웹의 보고서 인쇄 화면이 로그인 없이 그 기관의 자료를 읽을 때 쓰는 토큰이다(박규원 11-10 결정 (가): 인쇄 화면이
 보고서 화면과 같은 자료로 그린다). 토큰 자체(만들기·풀기)와, 받는 조회가 로그인한 그 기관의 CLIENT와 같은 것을
@@ -33,6 +33,8 @@ ME = "/api/v1/auth/me"
 SESSIONS = "/api/v1/sessions"
 HISTORY = "/api/v1/dogs/{}/sessions"
 COMPARE = "/api/v1/dogs/{}/compare"
+TRENDS = "/api/v1/dogs/{}/trends"
+TREND_QUERY = {"metric_code": "rom_stifle", "gait_type": "TROT"}
 RESULT = "/api/v1/sessions/{}/result"
 SESSION = "/api/v1/sessions/{}"
 ANGLES = "/api/v1/shots/{}/angles"
@@ -122,6 +124,7 @@ def _readable(dog, first, second, shot) -> list[tuple[str, dict | None]]:
         (RESULT.format(first.id), None),
         (RESULT.format(second.id), None),
         (COMPARE.format(dog.id), {"target": str(second.id), "base": "PREVIOUS"}),
+        (TRENDS.format(dog.id), TREND_QUERY),
         (ANGLES.format(shot.id), None),
     ]
 
@@ -182,6 +185,7 @@ def test_print_token_of_another_institution_opens_nothing(
     headers = _print_headers(second, other_staff)
     for url in (RESULT.format(second.id), SESSION.format(second.id), HISTORY.format(dog.id), COMPARE.format(dog.id)):
         assert _code(client.get(url, headers=headers)) == (404, "NOT_FOUND"), url
+    assert _code(client.get(TRENDS.format(dog.id), params=TREND_QUERY, headers=headers)) == (404, "NOT_FOUND")
     assert client.get(DOGS, headers=headers).json()["total"] == 0
     assert client.get(SESSIONS, headers=headers).json()["total"] == 0
     assert client.get(ME, headers=headers).json()["institution"]["id"] == str(other_staff.institution_id)
@@ -198,6 +202,8 @@ def test_trashed_dog_is_404_like_a_login(client: TestClient, db: Session, staff,
     for url in (SESSION.format(second.id), RESULT.format(second.id), ANGLES.format(shot.id), HISTORY.format(dog.id)):
         assert _code(client.get(url, headers=headers)) == (404, "NOT_FOUND"), url
         assert _code(client.get(url, headers=bearer(staff))) == (404, "NOT_FOUND"), url
+    for who in (headers, bearer(staff)):
+        assert _code(client.get(TRENDS.format(dog.id), params=TREND_QUERY, headers=who)) == (404, "NOT_FOUND")
     assert client.get(DOGS, headers=headers).json()["total"] == 0
     assert client.get(SESSIONS, headers=headers).json()["total"] == 0
 
@@ -225,16 +231,15 @@ def test_print_token_ignores_contract_state(client: TestClient, db: Session, sta
 
 
 def test_other_reads_and_every_write_are_closed(client: TestClient, db: Session, staff, dog, two_sessions) -> None:
-    """인쇄 토큰은 로그인이 아니다. 받는 조회 아홉 말고는 401이고, 그 요청으로 바뀌는 것이 없다."""
+    """인쇄 토큰은 로그인이 아니다. 받는 조회 열 말고는 401이고, 그 요청으로 바뀌는 것이 없다."""
     first, second = two_sessions
     shot = add_shot(db, second, 1, passes={"LEFT": (1, 0)})
     headers = _print_headers(second, staff)
     closed = [
-        # 조회: 파일 주소가 실리는 것, 차트 자료, 추이, 관리자
+        # 조회: 파일 주소가 실리는 것, 차트 자료, 관리자
         ("GET", SHOT.format(shot.id)),
         ("GET", f"/api/v1/sessions/{second.id}/reports"),
         ("GET", f"{DOGS}/{dog.id}"),
-        ("GET", f"{DOGS}/{dog.id}/trends"),
         ("GET", f"{DOGS}/{dog.id}/vitals"),
         ("GET", f"{DOGS}/{dog.id}/notes"),
         ("GET", f"{DOGS}/{dog.id}/history"),

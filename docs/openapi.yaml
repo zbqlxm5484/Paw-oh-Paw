@@ -4,16 +4,16 @@ info:
   version: 1.0.0
   description: |
     크림오프 팀 서비스(결과 조회 웹 D-06)의 API.
-    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.55" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
+    기준 문서는 "크림오프 팀 서비스 백엔드 기능 명세 v1.56" 15절이고, 화면용 설명은 "크림오프 팀 서비스 API 명세 v1.2"에 있다.
 
     - 모든 주소는 `/api/v1`로 시작한다(servers 참고). `/metrics`만 예외로 루트(`/metrics`)다.
     - 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 파일 셋(결과 영상, 보고서 PDF, 사진)을 빼고 `Authorization: Bearer <token>`이 필요하다.
     - 계약이 끝난 CLIENT(effective_role이 GUEST)는 로그인과 내 정보·탈퇴·측정 기기 정보(`GET /auth/me`, `DELETE /auth/me`, `GET /auth/me/device`)만 쓸 수 있고, 나머지는 403 CONTRACT_EXPIRED다.
     - 비밀번호를 5회 틀리면 그 계정은 30분 동안 로그인할 수 없다. 잠긴 동안에도 응답은 401 LOGIN_FAILED 하나다.
     - 비밀번호를 바꾸거나 재설정하면 그전에 받은 토큰은 다음 요청부터 401 AUTH_EXPIRED다(바꾼 본인도 다시 로그인한다).
-    - 조회 아홉(`GET /auth/me`, `GET /dogs`, `GET /dogs/{dog_id}/sessions`, `GET /sessions`, `GET /sessions/{session_id}`,
+    - 조회 열(`GET /auth/me`, `GET /dogs`, `GET /dogs/{dog_id}/sessions`, `GET /sessions`, `GET /sessions/{session_id}`,
       `GET /sessions/{session_id}/result`, `GET /sessions/{session_id}/report-content`, `GET /shots/{shot_id}/angles`,
-      `GET /dogs/{dog_id}/compare`)은 로그인 토큰 대신 인쇄 토큰도 받는다. 인쇄 토큰은 서버가 보고서 PDF를 만들 때 웹의 인쇄 화면에
+      `GET /dogs/{dog_id}/compare`, `GET /dogs/{dog_id}/trends`)은 로그인 토큰 대신 인쇄 토큰도 받는다. 인쇄 토큰은 서버가 보고서 PDF를 만들 때 웹의 인쇄 화면에
       넘기는 5분짜리 읽기 전용 토큰이고, 내주는 API는 없다.
     - `/admin/*` 조회는 ADMIN·STAFF, 쓰기는 ADMIN만 쓸 수 있다.
     - 시각은 UTC ISO 8601(`Z`로 끝남), 날짜는 `YYYY-MM-DD`, ID는 UUID 문자열이다.
@@ -1695,7 +1695,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: 로그인·가입 응답의 access_token. 조회 아홉은 서버가 웹의 인쇄 화면에 넘기는 인쇄 토큰도 같은 헤더로 받는다(맨 위 설명).
+      description: 로그인·가입 응답의 access_token. 조회 열은 서버가 웹의 인쇄 화면에 넘기는 인쇄 토큰도 같은 헤더로 받는다(맨 위 설명).
 
   parameters:
     DogId:
