@@ -86,6 +86,7 @@ def _signup(client: TestClient, code: str, login_id: str):
         "password": GOOD_PASSWORD,
         "name": "담당자",
         "email": f"{login_id}@x.kr",
+        "terms": {"version": "2026-11-01", "service": True, "privacy": True, "device_location": True},
     }
     return client.post(SIGNUP, json=body)
 

@@ -15,7 +15,7 @@ import uuid
 from contextvars import ContextVar
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -24,8 +24,12 @@ from app import __version__
 from app.api.routes import admin, auth, chart, dogs, health, history, images, reports, sessions, shots
 from app.core.config import Settings, get_settings
 from app.core.errors import ErrorCode, error_response, register_exception_handlers
+from app.core.metrics import CONTENT_TYPE as METRICS_CONTENT_TYPE
+from app.core.metrics import UNMATCHED, RequestMetrics
 
 API_PREFIX = "/api/v1"
+# 15.9: 지표는 /api/v1 아래가 아니라 루트다. nginx가 /api/만 넘기므로 밖에서는 닿지 않는다(v1.53)
+METRICS_PATH = "/metrics"
 REQUEST_ID_HEADER = "X-Request-ID"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(request_id)s %(message)s"
 # INFO를 찍지 않을 바깥 라이브러리(11.8). httpx는 워커가 분석 API를 부를 때마다 한 줄씩 찍는다. weasyprint와 fontTools는
@@ -71,8 +75,9 @@ class RequestContextMiddleware:
     로그에는 쿼리 문자열(반려견 이름 q, 서명 sig)을 남기지 않는다(11.8).
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, metrics: RequestMetrics | None = None) -> None:
         self.app = app
+        self.metrics = metrics  # METRICS_ENABLED일 때만 있다(15.9)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -103,9 +108,26 @@ class RequestContextMiddleware:
                 raise
             await error_response(ErrorCode.INTERNAL_ERROR)(scope, receive, send_with_request_id)
         finally:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            request_logger.info("%s %s %d %.0fms", scope["method"], scope["path"], status_code, elapsed_ms)
+            elapsed = time.perf_counter() - started
+            request_logger.info("%s %s %d %.0fms", scope["method"], scope["path"], status_code, elapsed * 1000)
+            if self.metrics is not None and scope["path"] != METRICS_PATH:  # 지표를 읽는 요청은 세지 않는다
+                self.metrics.observe(scope["method"], _route_template(scope), status_code, elapsed)
             request_id_var.reset(token)
+
+
+def _route_template(scope: Scope) -> str:
+    """지표 라벨로 쓸 라우트 틀(`/api/v1/dogs/{dog_id}`). 실제 주소(ID)는 쓰지 않는다(11.8).
+
+    라우터가 맞는 라우트를 찾으면 scope에 넣어 둔다. 없으면(404, 사전 요청 등) 모두 한 이름으로 센다.
+    """
+    route = scope.get("route")
+    path = getattr(route, "path", None)
+    if not isinstance(path, str):
+        return UNMATCHED
+    # include_router로 붙인 라우트는 틀에 접두어가 없다. 실제 주소가 /api/v1로 시작하면 붙여 준다
+    if scope["path"].startswith(API_PREFIX) and not path.startswith(API_PREFIX):
+        return f"{API_PREFIX}{path}"
+    return path
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -132,7 +154,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
         expose_headers=[REQUEST_ID_HEADER],
     )
-    app.add_middleware(RequestContextMiddleware)
+    # 16절 METRICS_ENABLED: 켰을 때만 요청을 세고 루트 /metrics를 연다(15.9). 끄면 경로도 없다(404)
+    metrics = RequestMetrics(__version__) if settings.METRICS_ENABLED else None
+    app.add_middleware(RequestContextMiddleware, metrics=metrics)
 
     register_exception_handlers(app)
     app.include_router(health.router, prefix=API_PREFIX)
@@ -145,6 +169,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(shots.router, prefix=API_PREFIX)
     app.include_router(reports.router, prefix=API_PREFIX)
     app.include_router(admin.router, prefix=API_PREFIX)
+    if metrics is not None:
+
+        @app.get(METRICS_PATH, tags=["운영"], include_in_schema=False)
+        def read_metrics() -> Response:
+            """요청 수와 처리 시간(Prometheus 텍스트). 인증이 없다. 내부망의 Prometheus만 읽는다(15.9)."""
+            return Response(metrics.render(), media_type=METRICS_CONTENT_TYPE)
+
     return app
 
 

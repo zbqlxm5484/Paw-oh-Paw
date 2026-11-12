@@ -2,15 +2,17 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 버전 | v1.1 (2026-11-02) |
-| 기준 | 백엔드 기능 명세 v1.13의 15절(API 상세), 11.5·11.6, 13·14절 |
+| 버전 | v1.2 (2026-11-12, 최종본) |
+| 기준 | 백엔드 기능 명세 v1.58의 15절(API 상세), 11.5·11.6, 13·14절 |
 | 작성 | 조영운(백엔드) |
 | 읽는 사람 | 박규원(화면), 장준환(디자인), 김지윤(API 시험) |
 | 함께 주는 파일 | `openapi.yaml` (같은 내용을 OpenAPI 3.1로 쓴 파일) |
 
-화면이 부를 API 61개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
+화면이 부를 API 66개의 요청·응답 모양을 화면 쪽에서 필요한 것만 모았다. 서버 안쪽(DB, 워커, 파일 저장 방식)은 뺐다. 이 문서와 백엔드 명세가 다르면 백엔드 명세가 맞고, 바뀌면 이 문서와 `openapi.yaml`을 같이 고친다.
 
 v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`에 `CLIENT`를 더하고 계산값 `effective_role`을 추가함(1.2, 10.3). `PATCH /dogs/{dog_id}`에 `version` 필수(5절). 회원가입·비밀번호·크림오프 관리자 API 15개 추가(2절 27~41번). 오류 코드 9개 추가(11.1). `gaits`에 OTHER 추가(7절).
+
+v1.1에서 바뀐 것(v1.2, 최종본): API 42~66번 추가(휴지통 42~44, 회원 탈퇴 45, 차트 자료 46~54·60·61·63·64, 기관 회차 목록 55, 사진 56~59, 보고서 내용 62, 그날 기록 65, 측정 기기 66. 42~61번은 v1.1 뒤에 버전을 올리지 않고 먼저 적어 두었다). 비밀번호를 5회 틀리면 30분 잠금(1.2, 4절). 비밀번호를 바꾸거나 재설정하면 그전에 받은 토큰이 끊김(1.2, 4절). 인쇄 토큰(1.2). 가입의 약관 동의 `terms`가 필수가 됨(4절). `GUEST`가 부를 수 있는 것에 탈퇴·측정 기기 정보 추가(1.2). 메모·진료 기록에 방문일 `visited_on`, 바이탈에 `dog_id`, 관리자 계정 목록에 `withdrawn_at`(5·9절). `STAFF`에게는 디바이스 코드를 가려서 줌(3·9절). 회차 비교의 오차 범위 값이 정해짐(8절). 오류 코드 표에 409 `REPORT_CHECK_FAILED` 추가, `LOGIN_FAILED` 문구 변경(11.1). `GET /metrics`는 루트라는 것을 적음(1.1, 9절).
 
 ---
 
@@ -18,7 +20,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 ### 1.1 주소와 형식
 
-- 주소는 모두 `/api/v1`로 시작한다. 예: `GET /api/v1/dogs`. 이 문서의 주소는 `/api/v1`을 뺀 나머지만 적었다.
+- 주소는 모두 `/api/v1`로 시작한다. 예: `GET /api/v1/dogs`. 이 문서의 주소는 `/api/v1`을 뺀 나머지만 적었다. `GET /metrics`만 예외로 `/api/v1` 아래가 아니라 루트(`/metrics`)다(9절).
 - 요청·응답은 JSON이고 필드 이름은 snake\_case다. 예: `valid_passes`.
 - ID는 UUID 문자열이다. 예: `"3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90"`.
 - 시각은 UTC ISO 8601이고 `Z`로 끝난다. 예: `"2026-10-20T00:30:00Z"`. 한국 시간으로 바꿔 보여 주는 일은 화면이 한다.
@@ -31,16 +33,20 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 1. `POST /auth/login`으로 아이디·비밀번호를 보내면 `access_token`과 만료 시각 `expires_at`이 온다. 회원가입(`POST /auth/signup`)의 응답도 같은 모양이다.
 2. 이후 모든 요청에 `Authorization: Bearer <access_token>` 헤더를 붙인다.
-3. 토큰은 기본 12시간(서버 설정값) 뒤 만료된다. 정확한 시각은 `expires_at`을 본다. 새로 받는 기능(refresh token)은 없다. `expires_at`이 지나거나 401 `AUTH_EXPIRED`가 오면 로그인 화면으로 보낸다.
+3. 토큰은 기본 12시간(서버 설정값) 뒤 만료된다. 정확한 시각은 `expires_at`을 본다. 새로 받는 기능(refresh token)은 없다. `expires_at`이 지나거나 401 `AUTH_EXPIRED`가 오면 로그인 화면으로 보낸다. 비밀번호를 바꾸거나 재설정하면 그전에 받은 토큰도 다음 요청부터 401 `AUTH_EXPIRED`다(4절).
 
-토큰 없이 부르는 것: 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 결과 영상과 보고서 PDF.
+토큰 없이 부르는 것: 로그인, 디바이스 코드 확인, 회원가입, 비밀번호 재설정 둘, `/health`, `/metrics`, 서명 주소로 여는 결과 영상·보고서 PDF·사진.
 
-역할: 화면은 `role`이 아니라 `effective_role`로 분기한다(10.3). 계약이 끝난 `CLIENT`는 `GUEST`로 계산되어 로그인과 `GET /auth/me`만 쓸 수 있고, 나머지는 403 `CONTRACT_EXPIRED`다. `/admin/*` 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만 쓸 수 있다.
+역할: 화면은 `role`이 아니라 `effective_role`로 분기한다(10.3). 계약이 끝난 `CLIENT`는 `GUEST`로 계산되어 로그인과 내 정보·탈퇴·측정 기기 정보(`GET /auth/me`, `DELETE /auth/me`, `GET /auth/me/device`)만 쓸 수 있고, 나머지는 403 `CONTRACT_EXPIRED`다. `/admin/*` 조회는 `ADMIN`·`STAFF`, 쓰기는 `ADMIN`만 쓸 수 있다.
+
+로그인 잠금: 있는 아이디에 비밀번호를 5회 틀리면 그 계정은 30분 동안 로그인할 수 없다. 잠긴 동안에는 비밀번호가 맞아도 401 `LOGIN_FAILED`이고, 응답으로는 잠겼는지와 풀리는 시각을 알 수 없다. 로그인에 성공하거나 비밀번호를 바꾸거나 재설정하면 실패 횟수가 0으로 돌아간다. 관리자가 푸는 API는 없다.
+
+인쇄 토큰: 서버가 보고서 PDF를 만들 때 웹의 보고서 인쇄 화면을 열면서 넘기는 5분짜리 읽기 전용 토큰이다. 내주는 API는 없다. 인쇄 화면은 로그인 토큰처럼 `Authorization: Bearer <토큰>`으로 보낸다. 받는 API는 2·3·8·9·13·17·18·22·23·55·62번(모두 GET)뿐이고, 그 기관에 로그인한 `CLIENT`가 읽는 것과 같은 것을 읽는다(다른 기관의 것과 휴지통에 든 반려견의 것은 404). 13번(촬영 상세)만은 그 토큰을 만든 회차의 촬영만 열린다.
 
 ### 1.3 응답 모양
 
 - **성공**: 객체를 감싸지 않고 그대로 준다. 만들기 201, 조회·수정 200, 삭제 204(본문 없음).
-- **페이지 목록**: 반려견 목록과 측정 이력 두 곳만 이 모양이다. `total`을 보고 쪽 수를 계산한다.
+- **페이지 목록**: 반려견 목록, 측정 이력, 기관 회차 목록, 메모·진료 기록 목록이 이 모양이다. `total`을 보고 쪽 수를 계산한다. 그 밖의 목록은 페이지 없이 `items`만 온다.
 
 ```json
 {"items": [ ... ], "total": 45, "page": 1, "size": 20}
@@ -71,9 +77,9 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 | HTTP | code | 화면에서 할 일 |
 | --- | --- | --- |
-| 401 | `AUTH_REQUIRED`, `AUTH_EXPIRED` | 로그인 화면으로 |
+| 401 | `AUTH_REQUIRED`, `AUTH_EXPIRED` | 로그인 화면으로. `AUTH_EXPIRED`는 토큰이 만료됐거나 비밀번호를 바꾸기 전에 받은 토큰일 때다 |
 | 403 | `ACCOUNT_DISABLED` | 계정이 막혔다고 알리고 로그인 화면으로 |
-| 403 | `CONTRACT_EXPIRED` | 계약 만료 안내. `GET /auth/me`에서는 나지 않는다 |
+| 403 | `CONTRACT_EXPIRED` | 계약 만료 안내. 내 정보·탈퇴·측정 기기 정보(2·45·66번)에서는 나지 않는다 |
 | 404 | `NOT_FOUND` | 없는 ID, 다른 기관의 ID, 주소에 든 ID가 UUID 형식이 아님. 셋을 구분하지 않는다 |
 | 422 | `VALIDATION_ERROR` | `detail.fields`로 틀린 입력칸 표시 |
 | 500 | `INTERNAL_ERROR` | 잠시 후 다시 시도하라고 안내 |
@@ -140,31 +146,31 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 23 | `GET /dogs/{dog_id}/trends` | 수치 추이 | S8 | 200 | — |
 | 24 | `POST /admin/purge` | 자료 파기 (관리자) | — | 200 | 403 `FORBIDDEN`, 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
 | 25 | `GET /health` | 서버 상태 | — | 200·503 | — |
-| 26 | `GET /metrics` | 요청 수·처리 시간 (선택) | — | 200 | — |
+| 26 | `GET /metrics` | 요청 수·처리 시간 (선택. `/api/v1` 아래가 아니라 루트 `/metrics`) | — | 200 | — |
 | 27 | `POST /auth/device-codes/verify` | 디바이스 코드 확인 (토큰 없음) | 가입 | 200 | 404 `DEVICE_CODE_INVALID` |
 | 28 | `POST /auth/signup` | 회원가입 (토큰 없음) | 가입 | 201 | 404 `DEVICE_CODE_INVALID`, 409 `LOGIN_ID_TAKEN` |
 | 29 | `GET /admin/institutions` | 기관 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 30 | `POST /admin/institutions` | 기관 만들기 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN`, 422 `VALIDATION_ERROR`(기관 코드 중복은 `fields`에 `code`) |
 | 31 | `PATCH /admin/institutions/{institution_id}` | 기관 이름·계약 종료일 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
-| 32 | `GET /admin/institutions/{institution_id}/device-codes` | 코드 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
+| 32 | `GET /admin/institutions/{institution_id}/device-codes` | 코드 목록 (`ADMIN`·`STAFF`. `STAFF`에게는 코드를 가려서) | 관리 | 200 | 403 `FORBIDDEN` |
 | 33 | `POST /admin/institutions/{institution_id}/device-codes` | 코드 발급 (`ADMIN`) | 관리 | 201 | 403 `FORBIDDEN`, 409 `DEVICE_CODE_EXISTS` |
 | 34 | `PATCH /admin/device-codes/{device_code_id}` | 메모 수정 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 35 | `POST /admin/device-codes/{device_code_id}/revoke` | 코드 회수, 멱등 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 36 | `GET /admin/institutions/{institution_id}/staff` | 기관의 계정 목록 (`ADMIN`·`STAFF`) | 관리 | 200 | 403 `FORBIDDEN` |
 | 37 | `PATCH /admin/staff/{staff_id}` | 계정 중지·재개 (`ADMIN`) | 관리 | 200 | 403 `FORBIDDEN`, 409 `SELF_DISABLE` |
 | 38 | `PATCH /auth/password` | 비밀번호 변경 | 내 정보 | 200 | 400 `PASSWORD_MISMATCH` |
-| 39 | `PATCH /auth/me` | 이름·이메일 수정 | 내 정보 | 200 | — |
+| 39 | `PATCH /auth/me` | 이름·이메일·알림 설정 수정 | 내 정보 | 200 | — |
 | 40 | `POST /auth/password-reset/request` | 재설정 링크 메일 보내기 (토큰 없음) | 재설정 | 204 | 503 `MAIL_UNAVAILABLE` |
 | 41 | `POST /auth/password-reset/confirm` | 링크의 토큰으로 비밀번호 바꾸기 (토큰 없음) | 재설정 | 204 | 400 `RESET_TOKEN_INVALID` |
 | 42 | `DELETE /dogs/{dog_id}` | 반려견을 휴지통에 넣기 | — | 204 | 409 `SHOT_IN_PROGRESS` |
 | 43 | `POST /dogs/{dog_id}/restore` | 휴지통에서 복원 | — | 200 | — |
 | 44 | `DELETE /dogs/{dog_id}/permanent` | 휴지통의 반려견 영구 삭제(되돌릴 수 없음) | — | 204 | 409 `SHOT_IN_PROGRESS`, 503 `ANALYSIS_UNAVAILABLE` |
-| 45 | `DELETE /auth/me` | 회원 탈퇴 | 계정 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
+| 45 | `DELETE /auth/me` | 회원 탈퇴(`GUEST`도 된다) | 계정 | 204 | 400 `PASSWORD_MISMATCH`, 409 `LAST_ACCOUNT` |
 | 46 | `GET /dogs/{dog_id}/vitals` | 바이탈 목록(최신이 앞) | 차트 | 200 | — |
 | 47 | `PUT /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 저장(있으면 보낸 값만 바꿈) | 차트 | 200 | — |
 | 48 | `GET /dogs/{dog_id}/history` | 진단 이력(오래된 것부터) | 차트 | 200 | — |
 | 49 | `POST /dogs/{dog_id}/history` | 진단·수술·재활 추가, 단계 변경 | 차트 | 201 | — |
-| 50 | `GET /dogs/{dog_id}/notes` | 메모·진료 기록 목록(최신이 앞) | 차트 | 200 | — |
+| 50 | `GET /dogs/{dog_id}/notes` | 메모·진료 기록 목록(방문일이 늦은 것부터) | 차트 | 200 | — |
 | 51 | `POST /dogs/{dog_id}/notes` | 메모·진료 기록 한 건 쓰기 | 차트 | 201 | — |
 | 52 | `POST /dogs/{dog_id}/notes/batch` | 여러 건을 같은 시각으로 쓰기(SOAP) | 차트 | 201 | — |
 | 53 | `PATCH /notes/{note_id}` | 메모·진료 기록 고치기(이전 내용은 이력으로) | 차트 | 200 | — |
@@ -176,10 +182,15 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 | 59 | `DELETE /images/{image_id}` | 사진 지우기 | 차트 | 204 | — |
 | 60 | `PATCH /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 고치기 | 차트 | 200 | — |
 | 61 | `DELETE /dogs/{dog_id}/history/{history_id}` | 진단 이력 한 줄 지우기 | 차트 | 204 | — |
+| 62 | `GET /sessions/{session_id}/report-content` | 보고서 내용(판본 하나의 글·표·숫자) | S6 | 200 | 409 `SESSION_NOT_DONE`, `REPORT_CHECK_FAILED` |
+| 63 | `DELETE /dogs/{dog_id}/vitals/{measured_on}` | 그날 바이탈 지우기 | 차트 | 204 | — |
+| 64 | `DELETE /notes/{note_id}` | 메모·진료 기록 한 건 지우기(수정 이력까지) | 차트 | 204 | — |
+| 65 | `GET /daily-records` | 기관의 그날 바이탈·메모·진료 기록·회차 | — | 200 | — |
+| 66 | `GET /auth/me/device` | 내 기관의 측정 기기(디바이스 코드, 가려서. `GUEST`도 된다) | 내 정보 | 200 | — |
 
 화면 번호: S1 반려견 목록, S2 반려견 등록·상세, S3 측정, S4 촬영 상세, S5 회차 결과, S6 보고서, S7 측정 이력, S8 비교·추이.
 
-26번(`GET /metrics`)만 아직 구현 전이다.
+66개 모두 서버에 있다. 26번(`GET /metrics`)은 선택 항목이라 서버 설정 `METRICS_ENABLED=true`일 때만 열린다(기본은 꺼짐, 9절).
 
 ---
 
@@ -218,7 +229,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 }
 ```
 
-- 코드 전체가 든 자리는 발급 응답과 코드 목록뿐이다.
+- 코드 전체가 든 자리는 발급 응답과 `ADMIN`이 본 코드 목록뿐이다. `STAFF`가 본 코드 목록의 `code`는 가운데 두 묶음을 가린 값(`7F3K2-*****-*****-H4CDE`)이다.
 
 ### InstitutionAdminOut — 기관 (크림오프 관리자 API)
 
@@ -414,6 +425,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ```
 
 - 아이디·비밀번호 중 무엇이 틀려도 401 `LOGIN_FAILED` 하나로 온다. 화면도 어느 칸이 틀렸는지 표시하지 않는다.
+- 있는 아이디에 비밀번호를 5회 틀리면 30분 동안 잠긴다. 잠긴 동안에는 비밀번호가 맞아도 같은 401 `LOGIN_FAILED`이고 풀리는 시각은 응답에 없다. `message`에 잠금 안내가 들어 있으니 그대로 보여 주면 된다(11.1). 로그인에 성공하면 실패 횟수가 0으로 돌아간다.
 - 아이디는 대소문자를 구분한다. 기관 코드는 받지 않는다(보내도 무시한다).
 - 비밀번호까지 맞았는데 사용이 중지된 계정이면 403 `ACCOUNT_DISABLED`다.
 - 계약이 끝난 `CLIENT`도 로그인되고 `staff.effective_role`이 `GUEST`다. 화면은 이 값을 보고 만료 안내로 보낸다.
@@ -422,11 +434,25 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 응답 200 **StaffOut**. 새로고침 뒤 토큰이 아직 쓸 수 있는지 확인할 때도 쓴다. `GUEST`도 부를 수 있다.
 
+- 인쇄 토큰(1.2)으로 부르면 사람이 없으므로 그 기관의 `CLIENT`처럼 보이는 값이 온다: `institution`은 토큰의 기관, `role`과 `effective_role`은 `CLIENT`, `id`는 0으로 찬 UUID, `login_id`와 `name`은 `print`, `email`은 `null`, `notif_on`은 `false`다.
+
 ### `PATCH /auth/me` — 이름·이메일·알림 설정 수정
 
 요청 `{"name"?, "email"?, "notif_on"?}`. 보낸 필드만 바꾸고 `null`은 받지 않는다(규칙은 12.7). 응답 200 **StaffOut**.
 
 - `notif_on`은 알림을 받을지의 설정값(`true`/`false`)이고 계정마다 따로다. 서버는 저장만 하고 알림을 보내지 않는다. **StaffOut**의 `notif_on`으로 돌아온다(로그인 응답 포함).
+
+### `GET /auth/me/device` — 내 기관의 측정 기기
+
+```json
+// 응답 200. 쓸 수 있는 코드가 없으면 {"device": null}
+{"device": {"code_masked": "ABCDE-*****-*****-PQRST", "issued_at": "2026-11-01T02:00:00Z"}}
+```
+
+- 측정 기기는 내 기관의 쓸 수 있는(회수하지 않은) 디바이스 코드다. 기관마다 하나이고, 회수한 코드는 오지 않는다.
+- `code_masked`는 다섯 자씩 네 묶음에서 가운데 두 묶음을 `*`로 가린 값이다. 코드는 가입에 쓰는 값이라 전체를 주지 않는다. 운영 메모(`note`)도 오지 않는다.
+- `issued_at`은 그 코드를 발급한 시각이다.
+- `GUEST`도 부를 수 있다.
 
 ### `DELETE /auth/me` — 회원 탈퇴
 
@@ -446,7 +472,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ```
 
 - 현재 비밀번호가 틀리면 400 `PASSWORD_MISMATCH`다. 새 비밀번호 규칙은 12.7.
-- 이미 받은 토큰은 그대로 쓸 수 있다.
+- **바꾸면 그전에 받은 토큰이 끊긴다.** 다른 기기의 토큰도, 이 요청에 쓴 토큰도 다음 요청부터 401 `AUTH_EXPIRED`다. 응답에 새 토큰은 없다. 화면은 200을 받으면 토큰을 버리고 로그인 화면으로 보낸다(다른 서버 프로세스에는 최대 60초 뒤에 반영된다).
+- 로그인 잠금의 실패 횟수도 지워진다.
 
 ### `POST /auth/device-codes/verify` — 디바이스 코드 확인 (토큰 없음)
 
@@ -473,7 +500,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ```
 
 - `terms`는 약관 동의다. `service`·`privacy`·`device_location`(필수 3개)은 `true`여야 하고 아니면 422다. `marketing`(선택)은 기본 `false`다. `version`은 화면이 보여 준 약관의 버전(1~20자)이다.
-- `terms`를 보내지 않아도 지금은 가입된다. 다만 서버에 동의 기록이 남지 않는다. 웹과 앱이 보내기 시작하면 필수로 바꾼다.
+- `terms`는 필수다. 보내지 않으면 422(`detail.fields`의 `field`는 `terms`)이고 계정이 만들어지지 않는다.
 
 - 가입 계정은 모두 `CLIENT`이고 코드의 기관에 속한다. 가입 즉시 로그인된 상태다. 로그인 화면으로 보내고 싶으면 토큰을 버리면 된다.
 - 코드 오류는 확인 API와 같고, 아이디가 겹치면(다른 기관이어도) 409 `LOGIN_ID_TAKEN`이다. 입력 규칙은 12.5.
@@ -489,6 +516,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 ### `POST /auth/password-reset/confirm` — 토큰으로 비밀번호 바꾸기 (토큰 없음)
 
 요청 `{"token": "…", "new_password": "…"}`. 응답 204(본문 없음)이고 화면은 로그인 화면으로 보낸다. 토큰이 잘못됐거나 만료되면 400 `RESET_TOKEN_INVALID`다.
+
+- 바꾸면 그전에 받은 로그인 토큰이 끊기고(401 `AUTH_EXPIRED`) 로그인 잠금도 풀린다.
 
 ---
 
@@ -564,14 +593,14 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 ### 차트 자료: 바이탈·진단 이력·메모·진료 기록
 
-반려견 차트 화면의 자료다. 모두 자기 기관의 반려견에만 되고, 다른 기관이거나 휴지통에 있는 반려견은 404다. 쓴 담당자(`staff`)는 서버가 로그인한 담당자로 채운다(요청으로 받지 않는다). 입력 규칙은 12.9다. "방문"은 서버에 따로 없고, 같은 날짜의 측정·바이탈·기록을 화면이 묶는다.
+반려견 차트 화면의 자료다. 모두 자기 기관의 반려견에만 되고, 다른 기관이거나 휴지통에 있는 반려견은 404다. 쓴 담당자(`staff`)는 서버가 로그인한 담당자로 채운다(요청으로 받지 않는다). 입력 규칙은 12.9다. "방문"은 서버에 따로 없고, 같은 날짜의 자료(회차와 바이탈의 `measured_on`, 메모·진료 기록의 `visited_on`)를 화면이 묶는다. 기관의 하루치를 한 번에 받으려면 `GET /daily-records`를 쓴다.
 
 **바이탈** — 반려견마다 하루 한 줄이다. 잰 값만 적고, 재지 않은 값은 `null`로 온다.
 
 ```json
 // VitalOut
 {
-  "id": "…", "measured_on": "2026-11-06",
+  "id": "…", "dog_id": "…", "measured_on": "2026-11-06",
   "weight_kg": 28.1, "temp_c": 38.6, "heart_rate": 92, "sbp": 132, "dbp": 84,
   "staff": {"id": "…", "name": "김담당"}, "session_id": null,
   "created_at": "2026-11-06T01:10:00Z", "updated_at": "2026-11-06T01:10:00Z"
@@ -582,6 +611,7 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 - **`PUT /dogs/{dog_id}/vitals/{measured_on}`:** 본문은 `{"weight_kg"?, "temp_c"?, "heart_rate"?, "sbp"?, "dbp"?}` 중 **잰 값만** 보낸다(하나는 있어야 한다). 응답 200 **VitalOut**. 그날 줄이 없으면 만들고, 있으면 **보낸 값만** 바꾼다(어느 쪽이든 200). 보내지 않은 값은 그대로이고 `null`을 보내면 그 값을 비운다. 미래 날짜는 422, 날짜 형식이 아니면 404다.
   - 혈압은 `sbp`·`dbp`를 함께 보낸다. 그날 줄에 한쪽만 남거나 값이 하나도 남지 않으면 422이고 아무것도 바뀌지 않는다.
   - 체중을 보냈고 그날보다 뒤에 체중이 적힌 날이 없으면 반려견의 체중(`DogOut.weight_kg`)도 그 값이 된다. 반려견의 `version`이 1 늘어나므로 **그 뒤 반려견을 다시 읽는다.** 지난 날짜의 체중으로는 바뀌지 않는다.
+- **`DELETE /dogs/{dog_id}/vitals/{measured_on}`:** 응답 204, 본문 없음. 그날 줄을 통째로 지우고 되돌릴 수 없다. 값 하나만 비우려면 저장(PUT)에 `null`을 보낸다. 그날 줄이 없으면 404다. 반려견의 체중(`DogOut.weight_kg`)과 회차의 체중은 바뀌지 않는다. 회차를 시작하며 적은 줄도 지울 수 있다.
 - 회차를 시작할 때 `vital`을 함께 보내면(이때는 다섯 값이 모두 필수다) 그날 바이탈로 저장되고 `session_id`에 그 회차가 들어간다(6절 회차 시작). 회차를 취소해도 바이탈은 남고 `session_id`만 `null`이 된다.
 
 **진단 이력** — 진단·수술·재활. 주소의 `history`는 진단 이력이고, 측정 이력은 `GET /dogs/{dog_id}/sessions`(8절)다.
@@ -607,18 +637,36 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 // NoteOut
 {
   "id": "…", "dog_id": "…", "session_id": null, "category": "CAUTION",
-  "body": "입질 있음. 입마개 필요", "important": true,
+  "body": "입질 있음. 입마개 필요", "important": true, "visited_on": "2026-11-06",
   "staff": {"id": "…", "name": "김담당"}, "revision_count": 0,
   "created_at": "2026-11-06T01:10:00Z", "updated_at": "2026-11-06T01:10:00Z"
 }
 ```
 
-- **`GET /dogs/{dog_id}/notes?kind=memo&session_id=…&page=1&size=50`:** 응답 200 `{"items": [NoteOut, …], "total", "page", "size"}`. 쓴 시각이 늦은 것부터다. `kind`는 `memo` 또는 `chart`(빼면 둘 다), `session_id`를 주면 그 회차에 단 것만, `size`는 1~200(기본 50)이다.
-- **`POST /dogs/{dog_id}/notes`:** 본문 `{"category", "body", "important"?, "session_id"?}`. 응답 201 **NoteOut**. `session_id`가 이 반려견의 회차가 아니면 422다.
-- **`POST /dogs/{dog_id}/notes/batch`:** 본문 `{"session_id"?, "notes": [{"category", "body", "important"?}, …]}`(1~8건, 같은 분류 두 번은 422). 응답 201 `{"items": [NoteOut, …]}`(보낸 순서). 모두 `created_at`이 같아 SOAP 한 기록으로 묶기 쉽다. 하나라도 어긋나면 아무것도 저장되지 않는다.
-- **`PATCH /notes/{note_id}`:** 본문은 `body`·`category`·`important` 중 바꿀 것만. 응답 200 **NoteOut**. 고치기 전 내용이 이력으로 남고 `revision_count`가 1 늘며 `staff`는 고친 담당자가 된다. 바뀐 값이 없으면 그대로 돌려준다. 분류는 같은 종류 안에서만 바꿀 수 있다(메모를 `S`로 바꾸면 422). `session_id`는 바꿀 수 없다.
+- **`GET /dogs/{dog_id}/notes?kind=memo&session_id=…&page=1&size=50`:** 응답 200 `{"items": [NoteOut, …], "total", "page", "size"}`. 방문일(`visited_on`)이 늦은 것부터, 같으면 쓴 시각이 늦은 것부터다. `kind`는 `memo` 또는 `chart`(빼면 둘 다), `session_id`를 주면 그 회차에 단 것만, `size`는 1~200(기본 50)이다.
+- **`POST /dogs/{dog_id}/notes`:** 본문 `{"category", "body", "important"?, "session_id"?, "visited_on"?}`. 응답 201 **NoteOut**. `session_id`가 이 반려견의 회차가 아니면 422다. `visited_on`은 방문일이고 빼면 오늘(한국 날짜), 미래 날짜는 422다.
+- **`POST /dogs/{dog_id}/notes/batch`:** 본문 `{"session_id"?, "visited_on"?, "notes": [{"category", "body", "important"?}, …]}`(1~8건, 같은 분류 두 번은 422). `session_id`와 `visited_on`은 묶음 전체에 하나다. 응답 201 `{"items": [NoteOut, …]}`(보낸 순서). 모두 `created_at`이 같아 SOAP 한 기록으로 묶기 쉽다. 하나라도 어긋나면 아무것도 저장되지 않는다.
+- **`PATCH /notes/{note_id}`:** 본문은 `body`·`category`·`important` 중 바꿀 것만. 응답 200 **NoteOut**. 고치기 전 내용이 이력으로 남고 `revision_count`가 1 늘며 `staff`는 고친 담당자가 된다. 바뀐 값이 없으면 그대로 돌려준다. 분류는 같은 종류 안에서만 바꿀 수 있다(메모를 `S`로 바꾸면 422). `session_id`는 바꿀 수 없다. 방문일(`visited_on`)도 바꿀 수 없고 보내도 무시한다.
 - **`GET /notes/{note_id}/revisions`:** 응답 200 `{"items": [{"id", "body", "category", "important", "staff", "revised_at"}, …]}`. 고치기 전 내용들이고 최근에 바뀐 것부터다. `staff`는 그 내용을 쓴 담당자, `revised_at`은 그 내용이 바뀐 시각이다.
-- 지우는 API는 없다.
+- **`DELETE /notes/{note_id}`:** 응답 204, 본문 없음. 그 한 건과 수정 이력을 함께 지운다. 되돌릴 수 없다. 없거나 다른 기관·휴지통의 반려견의 것이면 404다.
+
+**그날 기록** — 기관의 하루치 바이탈·메모·진료 기록·회차를 한 번에 받는다.
+
+```json
+// GET /daily-records?date=2026-11-10 → 응답 200
+{
+  "date": "2026-11-10",
+  "vitals": ["<VitalOut>"],
+  "notes": ["<NoteOut>"],
+  "sessions": ["<기관 회차 목록의 한 줄>"]
+}
+```
+
+- `date`를 빼면 오늘(한국 날짜)이다. 응답의 `date`는 실제로 쓴 날짜다.
+- `vitals`는 `measured_on`이 그날인 줄, `notes`는 `visited_on`이 그날인 메모·진료 기록, `sessions`는 `measured_on`이 그날인 회차(모든 상태)다. 휴지통에 있는 반려견의 것은 빠진다.
+- 셋 다 적은 시각(`created_at`)이 이른 것부터이고, 하루치라 페이지가 없다.
+- 어느 반려견의 것인지는 `VitalOut.dog_id`, `NoteOut.dog_id`, 회차 줄의 `dog`로 안다. 반려견별로 묶는 일은 화면이 한다.
+- `sessions`의 한 줄은 `GET /sessions`(6절)의 `items` 한 줄과 같은 모양이다.
 
 ### 사진
 
@@ -770,6 +818,8 @@ v1.0에서 바뀐 것: 로그인에서 기관 코드를 뺌(1.2, 4절). `role`�
 
 응답 200 **ShotDetailOut**. 영상 타임라인에 유효 구간을 표시할 때는 `fps`와 각 통과의 `start_frame`·`end_frame`을 쓴다(초 = 프레임 ÷ fps).
 
+인쇄 토큰(1.2)으로도 부를 수 있다. 그때는 그 토큰을 만든 회차의 촬영만 열리고, 같은 기관이어도 다른 회차의 촬영은 404 `NOT_FOUND`다.
+
 ### `POST /shots/{shot_id}/retry` — 실패한 촬영 다시 분석
 
 - 요청 본문 없음. 응답 200 **ShotOut**(`status`는 UPLOADED).
@@ -815,7 +865,7 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 - 유효 통과의 유효 구간만 담는다. 배열의 i번째 값은 `start_frame + i` 프레임의 각도(°)이고, 관절점을 못 찾은 프레임은 `null`이다. 그래프는 `null`에서 선을 끊는다.
 - 다리는 `camera_side` 쪽이다(RIGHT면 오른쪽 앞다리·뒷다리).
 - 유효 구간은 통과 안에서 수치를 잰 구간이다. `start_frame`은 그 구간의 첫 프레임이라 촬영 상세의 통과 `start_frame`(통과 전체의 시작)보다 늦을 수 있다.
-- `passes`가 빈 배열일 수 있다: 촬영이 DONE이 아닐 때, 유효 통과가 없을 때, 각도 자료가 아직 없을 때. 각도 자료는 분석이 끝난 뒤 결과 영상을 만들기 시작할 때 생기므로 DONE 직후 잠깐 비어 있을 수 있다. 이 기능이 들어가기 전에 분석한 촬영은 계속 비어 있다. 오류로 오지 않으니 비어 있으면 그래프를 숨긴다.
+- `passes`가 빈 배열일 수 있다: 촬영이 DONE이 아닐 때, 유효 통과가 없을 때, 각도 자료가 아직 없을 때. 각도 자료는 분석이 끝난 뒤 결과 영상을 만들기 시작할 때 생기므로 DONE 직후 잠깐 비어 있을 수 있다. 이 기능이 들어가기 전에 분석한 촬영은 계속 비어 있다. 서버가 저장소 오류로 각도 자료를 쓰지 못했으면 몇 분 뒤에 다시 만들어 채운다. 오류로 오지 않으니 비어 있으면 그래프를 숨긴다.
 - `fps`로 프레임을 시간으로 바꾼다(초 = 프레임 ÷ `fps`).
 - 한 걸음(보행 주기)으로 자른 곡선은 이 응답에 없다. 걸음 경계가 없어서 화면이 자를 수도 없다(분석 API 쪽 확인 대기).
 
@@ -896,6 +946,61 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 - 내려받는 파일 이름은 `{반려견 이름}_{측정일}_{보호자용|수의사용}.pdf`로 서버가 정한다.
 - 보고서가 DONE이 아니면 404 `NOT_FOUND`, 주소가 만료됐으면 403 `FILE_LINK_EXPIRED`다.
 
+### `GET /sessions/{session_id}/report-content?edition=OWNER` — 보고서 내용
+
+판본 하나의 글·표·숫자를 JSON으로 준다. PDF와 같은 함수로 만들고, 같은 검사(금지 표현·용어 설명·고정 문구, 실린 숫자와 서버 값의 대조)를 지난 것만 준다. 화면은 받은 글을 그대로 찍는다(문장을 만들거나 숫자를 다시 계산하지 않는다).
+
+```json
+// 응답 200
+{
+  "session_id": "…",
+  "edition": "OWNER",
+  "template_version": "0.5",
+  "session": {"measured_on": "2026-11-04", "round": 3, "model_name": "fs-v4", "model_version": "v1",
+              "weight_kg": 12.5, "size_class": "MEDIUM", "symmetry_score": 92, "symmetry_level": "SLIGHT"},
+  "dog": {"name": "보리", "breed": "웰시코기", "sex": "MALE", "birth_year": 2021, "focus_limb": "LH"},
+  "previous": {"session_id": "…", "measured_on": "2026-10-14", "round": 2,
+               "label": "2회차, 2026년 10월 14일", "model_changed": false},
+  "baseline": {"session_id": "…", "measured_on": "2026-10-01", "round": 1, "symmetry_score": 88, "diff": 4},
+  "history": [{"measured_on": "2026-10-01", "round": 1, "symmetry_score": 88},
+              {"measured_on": "2026-10-14", "round": 2, "symmetry_score": 90},
+              {"measured_on": "2026-11-04", "round": 3, "symmetry_score": 92}],
+  "legs": [{"pair": "HIND", "gait_type": "TROT", "metric_code": "rom_stifle", "label": "무릎 가동 범위",
+            "symmetry_index": "9.8%", "symmetry_value": 9.8, "weak_limb": "RH", "level": "SLIGHT"}],
+  "sentences": {
+    "title": "보리 보행 평가 보고서", "edition_label": "보호자용", "intro": "…", "summary": ["…"],
+    "previous_note": "…", "previous_gaps": ["…"], "caution": ["…"],
+    "glossary": [{"term": "가동 범위", "explanation": "…"}],
+    "disclaimer": "이 보고서는 보행 평가 보조 자료이며 진단을 대신하지 않습니다."
+  },
+  "gaits": [{
+    "gait_type": "TROT", "label": "속보", "notes": ["…"],
+    "rows": [{"metric_code": "rom_stifle", "label": "무릎 가동 범위", "unit": "deg",
+              "cells": {"LH": {"value": 38.6, "text": "38.6°", "reason": null},
+                        "RH": {"value": 35.0, "text": "35.0°", "reason": null}}}],
+    "compare": [{"pair": "HIND", "pair_label": "뒷다리", "metric_code": "rom_stifle", "label": "무릎 가동 범위",
+                 "left": "38.6°", "right": "35.0°", "diff": "3.6°", "symmetry_index": "9.8%",
+                 "diff_value": 3.6, "symmetry_value": 9.8, "comparable": true, "reason": null}],
+    "changes": [{"metric_code": "rom_stifle", "label": "무릎 가동 범위", "unit": "deg",
+                 "cells": {"LH": {"previous": "30.1°", "current": "38.6°", "diff": "+8.5°",
+                                  "change": "INCREASE", "change_label": "증가", "note": null}}}]
+  }]
+}
+```
+
+- `edition`은 필수이고 `OWNER`·`VET`다. 그 밖은 422다.
+- 로그인 토큰 또는 인쇄 토큰(1.2)으로 부른다.
+- 회차가 없거나 다른 기관이면 404 `NOT_FOUND`, DONE이 아니면 409 `SESSION_NOT_DONE`이다. 검사에 하나라도 걸리면 내용을 주지 않고 409 `REPORT_CHECK_FAILED`다.
+- `round`는 같은 반려견의 끝난 회차(DONE·FAILED)를 측정일·만든 시각 순으로 센 번호(1부터)다. 분석 실패 회차도 세고, 측정 중·집계 중 회차는 세지 않는다.
+- `previous`는 바로 앞 DONE 회차이고 없으면 `null`이다(이때 `changes`는 모두 빈 배열). 사이에 FAILED 회차가 있으면 `previous.round`는 `session.round - 1`이 아니다.
+- `previous.label`은 직전 회차를 가리키는 글이다. `{round}회차, {측정일}` 모양이고, 직전 회차의 측정일이 이번 회차와 같으면 그 회차를 만든 시각(한국 시간)이 붙는다(`2회차, 2026년 11월 10일 오전 9:38`). `sentences`의 "직전 회차(…)" 괄호 안도 같은 글이다. "직전 회차(" 같은 앞뒤 글은 들어 있지 않다.
+- `session.symmetry_score`는 대칭 점수(0~100)이고 회차 결과의 값과 같다. `baseline`은 기준 회차이고, 없거나 이 회차 자신이면 `null`이다. `baseline.diff`는 이 회차의 점수 − 기준 회차의 점수다. `history`는 이 회차까지(이 회차 포함) 끝난 회차를 오래된 순으로 최대 8개 준다. FAILED 회차는 `symmetry_score`가 `null`이다.
+- `legs`는 몸 그림용 다리 쌍 요약이다. 쌍마다 좌우 차이(대칭 지수)가 가장 큰 수치 하나이고, 비교할 수 있는 수치가 없는 쌍은 빠진다. `level`은 차이 단계로 대칭 지수가 5 미만이면 `SIMILAR`, 10 미만이면 `SLIGHT`, 그 이상이면 `LARGE`다. `weak_limb`는 값이 작은 쪽 다리이고 `SIMILAR`면 `null`이다. `session.symmetry_level`은 100 − 대칭 점수에 같은 경계를 쓴 단계다.
+- `sentences`는 보고서의 문장이다. `glossary`는 보호자용에서 쓰인 전문 용어의 설명이고 수의사용은 빈 배열이다.
+- `gaits`는 보행 유형별 묶음이다. `rows`는 수치 표(`cells`의 키는 다리 코드, 측정하지 못한 칸은 `value`가 `null`이고 `reason`에 사유 문장), `compare`는 좌우 비교(회차 결과의 다리 비교와 같은 값), `changes`는 직전 회차와 비교(`diff`는 이번 − 직전, `change`는 `INCREASE`·`DECREASE`·`WITHIN_RANGE` 또는 `null`, 비교하지 못했으면 `note`에 사유)다.
+- 글은 모두 화면에 그대로 찍는 문자열이다(단위와 소수 자리까지 서버가 붙인다). `value`·`diff_value`·`symmetry_value`는 그림을 그릴 때만 쓴다.
+- 웹의 보고서 인쇄 화면은 지금 이 API가 아니라 보고서 화면과 같은 조회(회차 결과 등)로 그린다. 이 API는 서버가 검사한 글·숫자를 그대로 쓰려는 화면을 위한 것이다.
+
 ---
 
 ## 8. 이력·비교·추이
@@ -940,8 +1045,7 @@ S5의 관절 각도 곡선 그래프에 쓴다.
   "items": [
     {"metric_code": "rom_stifle", "limb": "RH", "gait_type": "TROT", "unit": "deg",
      "base_value": 38.2, "target_value": 42.0, "diff": 3.8,
-     "judgement": "UNKNOWN",
-     "note": {"code": "RANGE_NOT_SET", "message": "변화 판단 기준이 아직 정해지지 않았습니다."}}
+     "judgement": "WITHIN_RANGE", "note": null}
   ]
 }
 ```
@@ -957,7 +1061,8 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 | `UNKNOWN` | 판단하지 않았다. 값과 `diff`는 있다 | `MODEL_CHANGED`(분석 방식이 바뀜) 또는 `RANGE_NOT_SET`(기준 미정, 또는 두 회차 중 한쪽이라도 그 수치·그 다리의 `n_passes`가 8 미만) |
 | `NOT_COMPARABLE` | 한쪽에 값이 없거나 측정 불가. `diff`는 `null` | `NO_DATA` 또는 측정 불가 사유 |
 
-- 지금은 기업의 오차 범위 값을 받기 전이라, 비교할 수 있는 항목은 `UNKNOWN` + `RANGE_NOT_SET`으로 온다. 값이 없거나 측정 불가인 항목은 `NOT_COMPARABLE`, 두 회차의 분석 방식이 다르면 `UNKNOWN` + `MODEL_CHANGED`다.
+- 오차 범위는 서버 설정에 수치별로 있다. 지금 값은 어깨 가동 범위(`rom_shoulder`) 5.0°, 앞발목(`rom_carpus`) 11.8°, 고관절(`rom_hip`) 5.0°, 무릎(`rom_stifle`) 8.0°, 뒷발목(`rom_tarsus`) 5.9°, 입각기 비율(`stance_ratio`) 5.8%p다. `diff`의 크기가 이 값 이하면 `WITHIN_RANGE`, 넘으면 `INCREASE`·`DECREASE`다. 이 여섯이 아닌 수치는 `UNKNOWN` + `RANGE_NOT_SET`으로 온다. 값은 팀이 기업 영상으로 낸 것이고 기업 값을 받으면 바뀔 수 있으니, 화면은 값을 따로 적어 두지 말고 `judgement`를 쓴다.
+- 값이 없거나 측정 불가인 항목은 `NOT_COMPARABLE`, 두 회차의 분석 방식이 다르면 `UNKNOWN` + `MODEL_CHANGED`다.
 - "좋아짐·나빠짐"이 아니라 "증가·감소"로만 표시한다.
 - 비교할 수 없는 요청은 400 `COMPARE_INVALID`이고 `detail.reason`으로 빈 화면 문구를 고른다:
   - `NO_DONE_SESSION`: 완료 회차가 하나도 없다.
@@ -1030,12 +1135,12 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 - **`GET /admin/institutions`**: 응답 200 `{"items": [InstitutionAdminOut, …]}`. 페이지 없이 전체이고 이름 순서다.
 - **`POST /admin/institutions`**: 요청 `{"code": null, "name": "크림 재활센터", "contract_ends_at": "2027-10-30"}`. 응답 201 **InstitutionAdminOut**. 기관 코드가 겹치면 422 `VALIDATION_ERROR`(`fields`에 `code`)다.
 - **`PATCH /admin/institutions/{institution_id}`**: 요청 `{"name"?, "contract_ends_at"?}`. 보낸 필드만 바꾸고 `contract_ends_at`의 `null`은 기한 없음이다. 응답 200 **InstitutionAdminOut**.
-- **`GET /admin/institutions/{institution_id}/device-codes`**: 응답 200 `{"items": [DeviceCodeOut, …]}`. 회수된 코드도 들어 있고 `revoked_at`으로 구분한다.
+- **`GET /admin/institutions/{institution_id}/device-codes`**: 응답 200 `{"items": [DeviceCodeOut, …]}`. 회수된 코드도 들어 있고 `revoked_at`으로 구분한다. `code`는 `ADMIN`에게는 전체, `STAFF`에게는 가운데 두 묶음을 가린 값이다(회수된 코드도 같다).
 - **`POST /admin/institutions/{institution_id}/device-codes`**: 요청 `{"note"?: "2호기"}`. 본문을 비워도 된다. 응답 201 **DeviceCodeOut**. 기관마다 쓸 수 있는 코드는 하나라, 회수하지 않은 코드가 있으면 409 `DEVICE_CODE_EXISTS`다. 새 코드를 주려면 먼저 회수한다.
 - **`PATCH /admin/device-codes/{device_code_id}`**: 요청 `{"note"?}`(`null`은 메모 지우기). 응답 200 **DeviceCodeOut**. `max_accounts`는 없어졌고 보내도 무시한다.
 - **`POST /admin/device-codes/{device_code_id}/revoke`**: 본문 없음. 이미 회수됐어도 200이다. 기존 계정은 그대로 쓴다(막으려면 계정 중지). 응답 200 **DeviceCodeOut**.
-- **`GET /admin/institutions/{institution_id}/staff`**: 응답 200 `{"items": [{id, login_id, name, email, role, is_active, device_code_id, created_at}, …]}`.
-- **`PATCH /admin/staff/{staff_id}`**: 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`이다.
+- **`GET /admin/institutions/{institution_id}/staff`**: 응답 200 `{"items": [{id, login_id, name, email, role, is_active, withdrawn_at, device_code_id, created_at}, …]}`. `withdrawn_at`은 스스로 탈퇴한 시각이고 탈퇴하지 않았으면 `null`이다.
+- **`PATCH /admin/staff/{staff_id}`**: 요청 `{"is_active": false}`. 응답 200: 위 목록의 항목 하나. 자기 자신에게 false를 보내면 409 `SELF_DISABLE`이다. 탈퇴한 계정에 true를 보내면 `withdrawn_at`도 `null`로 돌아간다.
 
 ### `GET /health` — 서버 상태
 
@@ -1043,7 +1148,9 @@ S5의 관절 각도 곡선 그래프에 쓴다.
 
 ### `GET /metrics` — 요청 수·처리 시간 (선택)
 
-Prometheus 텍스트 형식. 내부망에서만 연다.
+Prometheus 텍스트 형식. 경로는 `/api/v1` 아래가 아니라 루트 `/metrics`다. 서버 앞의 nginx는 `/api/`만 서버로 넘기므로 밖에서는 닿지 않고, 내부망의 수집기만 읽는다. 서버 설정 `METRICS_ENABLED=true`일 때만 생기는 선택 항목이다(기본은 꺼짐, 꺼져 있으면 404).
+
+내는 값은 셋이다: `http_requests_total{method,path,status}`(요청 수), `http_request_duration_seconds`(처리 시간 히스토그램, `method`·`path`별), `app_info{version}`. `path`는 실제 주소가 아니라 `/api/v1/dogs/{dog_id}` 같은 주소 틀이라 ID나 검색어가 남지 않는다. 값은 서버가 켜진 뒤의 누계다. 화면(웹·앱)은 이 API를 쓰지 않는다.
 
 ---
 
@@ -1113,7 +1220,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `walk_speed` | 보행 속도 | `body_per_sec` | NONE |
 | `gait_cycles` | 측정된 보행 주기 수 | `count` | NONE |
 
-단위: `deg`(°), `pct`(%), `pct_body`(몸통 길이 대비 %), `body_per_sec`(몸통 길이/초), `count`(회). 거리 수치는 cm가 아니라 몸통 길이 대비 값이다.
+단위: `deg`(°), `pct`(%), `pct_body`(몸통 길이 대비 %), `body_per_sec`(몸통 길이/초), `count`(회). 거리 수치는 cm가 아니라 몸통 길이 대비 값이다. 몸통 길이는 등 가운데(13번째 등뼈)부터 골반 윗부분까지의 길이라 흔히 말하는 몸길이(어깨~엉덩이)의 절반쯤이다. 그래서 화면과 보고서에는 '등 길이'로 적는다(보고서의 수치 이름도 '걸음 길이(등 길이 기준)'이다).
 
 ---
 
@@ -1137,8 +1244,8 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `PASSWORD_MISMATCH` | 400 | 현재 비밀번호가 맞지 않습니다. | |
 | `RESET_TOKEN_INVALID` | 400 | 재설정 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요. | 재설정 요청 화면으로 |
 | `AUTH_REQUIRED` | 401 | 로그인이 필요합니다. | 로그인 화면으로 |
-| `AUTH_EXPIRED` | 401 | 로그인 시간이 지났습니다. 다시 로그인해 주세요. | 로그인 화면으로 |
-| `LOGIN_FAILED` | 401 | 아이디 또는 비밀번호가 맞지 않습니다. | |
+| `AUTH_EXPIRED` | 401 | 로그인 시간이 지났습니다. 다시 로그인해 주세요. | 로그인 화면으로. 토큰 만료, 또는 비밀번호를 바꾸기 전에 받은 토큰 |
+| `LOGIN_FAILED` | 401 | 아이디 또는 비밀번호가 맞지 않습니다. 5회 틀리면 30분 동안 로그인할 수 없습니다. | 잠긴 계정에 로그인해도 같다 |
 | `ACCOUNT_DISABLED` | 403 | 사용이 중지된 계정입니다. | 로그인 화면으로 |
 | `CONTRACT_EXPIRED` | 403 | 기관의 이용 계약이 만료되었습니다. 크림오프에 문의해 주세요. | 만료 안내 화면으로 |
 | `FORBIDDEN` | 403 | 이 기능을 사용할 권한이 없습니다. | |
@@ -1152,6 +1259,7 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | `SHOT_IN_PROGRESS` | 409 | 분석 중인 촬영이 있어 지금은 지울 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요. | |
 | `SHOT_NOT_FAILED` | 409 | 실패한 촬영만 다시 분석할 수 있습니다. | |
 | `REPORT_IN_PROGRESS` | 409 | 보고서를 만드는 중입니다. 잠시 후 다시 시도해 주세요. | |
+| `REPORT_CHECK_FAILED` | 409 | 보고서 검사를 통과하지 못해 내보내지 않았습니다. | 보고서 내용(62번)이 글 검사·수치 대조에 걸림 |
 | `DEVICE_CODE_EXISTS` | 409 | 이 기관에는 쓸 수 있는 디바이스 코드가 이미 있습니다. 회수한 뒤 새로 발급해 주세요. | 관리자 화면: 회수한 뒤 발급 |
 | `LOGIN_ID_TAKEN` | 409 | 이미 사용 중인 아이디입니다. | 아이디 칸 표시 |
 | `DOG_MODIFIED` | 409 | 다른 담당자가 먼저 수정했습니다. 화면을 새로 불러온 뒤 다시 시도해 주세요. | 반려견을 다시 조회 |
@@ -1324,14 +1432,14 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 
 ### 12.9 차트 자료
 
-바이탈의 범위는 아직 제안 값이다(병원 의견을 받으면 바뀔 수 있다).
+바이탈의 범위는 아직 제안 값이다(병원 의견을 받으면 바뀔 수 있다). 바이탈 저장(PUT)은 잰 값만 보낸다(하나는 있어야 한다). 회차를 시작하며 보내는 `vital`에서는 다섯 값이 모두 필수다.
 
 | 대상 | 필드 | 필수 | 규칙 |
 | --- | --- | --- | --- |
-| 바이탈 | `weight_kg` | 필수 | 0.5~100.0, 소수 둘째 자리까지 |
-| 바이탈 | `temp_c` | 필수 | 30.0~45.0, 소수 첫째 자리까지 |
-| 바이탈 | `heart_rate` | 필수 | 정수 20~300 |
-| 바이탈 | `sbp`, `dbp` | 필수 | 정수. `sbp` 30~300, `dbp` 10~250, `dbp`가 `sbp`보다 작아야 한다 |
+| 바이탈 | `weight_kg` | 선택 | 0.5~100.0, 소수 둘째 자리까지 |
+| 바이탈 | `temp_c` | 선택 | 30.0~45.0, 소수 첫째 자리까지 |
+| 바이탈 | `heart_rate` | 선택 | 정수 20~300 |
+| 바이탈 | `sbp`, `dbp` | 선택 | 정수. `sbp` 30~300, `dbp` 10~250, `dbp`가 `sbp`보다 작아야 한다. 둘을 함께 보낸다 |
 | 진단 이력 | `occurred_on` | 필수 | 오늘(한국 날짜)까지 |
 | 진단 이력 | `kind` | 필수 | `DIAGNOSIS`·`SURGERY`·`REHAB` |
 | 진단 이력 | `title` | 필수 | 1~100자 |
@@ -1342,6 +1450,8 @@ Prometheus 텍스트 형식. 내부망에서만 연다.
 | 메모·진료 기록 | `body` | 필수 | 1~2,000자. 앞뒤 공백은 서버가 지운다 |
 | 메모·진료 기록 | `important` | 선택 | 기본 false |
 | 메모·진료 기록 | `session_id` | 선택 | 이 반려견의 회차 |
+| 메모·진료 기록 | `visited_on` | 선택 | 방문일. 기본 오늘(한국 날짜). 미래 날짜는 422. 쓴 뒤에는 바꿀 수 없다 |
+| 그날 기록 | `date` | 선택 | `YYYY-MM-DD`. 기본 오늘(한국 날짜) |
 | 사진 | `file` | 필수 | JPEG 또는 PNG(파일 이름이 아니라 내용으로 가린다). 20 MB 이하, 4,000만 화소 이하 |
 | 사진 | `kind` | 필수 | `PRE_OP`(수술 전)·`POST_OP`(수술 후)·`XRAY`(방사선)·`PHOTO`(사진) |
 | 사진 | `taken_on` | 선택 | 기본 오늘. 미래 날짜 불가 |

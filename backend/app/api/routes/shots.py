@@ -16,8 +16,13 @@ router = APIRouter(prefix="/shots", tags=["회차 측정"])
 
 
 @router.get("/{shot_id}", response_model=ShotDetailOut)
-def get_shot(shot_id: uuid.UUID, staff: CurrentStaff, db: DbSession) -> ShotDetailOut:
-    return shot_service.shot_detail(db, staff.institution_id, shot_id)
+def get_shot(shot_id: uuid.UUID, reader: ReadCaller, db: DbSession) -> ShotDetailOut:
+    """촬영 상세(BE-08·11). 인쇄 토큰도 받는다(11.6).
+
+    응답에 결과 영상의 서명 주소가 실리므로, 인쇄 토큰은 그 토큰을 만든 회차의 촬영만 연다. 같은 기관이어도
+    다른 회차의 촬영이면 없는 것과 같이 404다.
+    """
+    return shot_service.shot_detail(db, reader.institution_id, shot_id, only_session=reader.print_session_id)
 
 
 @router.post("/{shot_id}/retry", response_model=ShotOut)

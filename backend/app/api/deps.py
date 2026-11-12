@@ -142,7 +142,7 @@ AdminStaff = Annotated[AuthStaff, Depends(require_admin)]
 CreamoffStaff = Annotated[AuthStaff, Depends(require_creamoff)]
 
 
-# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 2·3·8·9·17·18·22·55·62번) ----
+# ---- 인쇄 토큰으로도 열리는 조회 (11.6, 15.2의 2·3·8·9·13·17·18·22·23·55·62번) ----
 
 
 @dataclass(frozen=True)
@@ -151,10 +151,14 @@ class Reader:
 
     인쇄 토큰은 그 기관의 읽기 전용이다: 이 Reader를 받는 GET 라우트만 열리고, 로그인한 CLIENT가 읽는 것과 같은
     것을 읽는다(다른 기관·휴지통의 반려견은 404). 쓰기 라우트는 CurrentStaff를 받으므로 인쇄 토큰으로는 401이다.
+
+    print_session_id는 인쇄 토큰을 만든 회차다(로그인이면 None). 촬영 상세(13번)만 이 값으로 좁힌다: 응답에
+    결과 영상 주소가 실리므로 인쇄 토큰은 그 회차의 촬영만 연다(11.6).
     """
 
     institution_id: uuid.UUID
     is_print: bool = False
+    print_session_id: uuid.UUID | None = None
 
 
 def _print_reader(token: str) -> Reader | None:
@@ -169,7 +173,7 @@ def _print_reader(token: str) -> Reader | None:
         raise AppError(ErrorCode.AUTH_EXPIRED) from None
     except TokenError:
         return None
-    return Reader(institution_id=claims.institution_id, is_print=True)
+    return Reader(institution_id=claims.institution_id, is_print=True, print_session_id=claims.session_id)
 
 
 def get_reader(db: DbSession, authorization: Annotated[str | None, Header()] = None) -> Reader:
