@@ -28,7 +28,9 @@ DONE = AnalysisStatus("done", model_name="fs-v4", model_version="0.1.0")
 
 
 def _settings(**overrides: Any) -> Settings:
-    return get_settings().model_copy(update={"WORKER_MAX_IN_FLIGHT_PER_INSTITUTION": 100, **overrides})
+    return get_settings().model_copy(
+        update={"WORKER_QUEUE_PER_INSTITUTION": 100, "WORKER_HOURLY_PER_INSTITUTION": 1000, **overrides}
+    )
 
 
 class ScriptedClient:

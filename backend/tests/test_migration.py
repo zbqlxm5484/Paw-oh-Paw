@@ -95,6 +95,7 @@ EXPECTED_INDEXES = {
     "ix_dog_note_dog_visited",
     "ix_dog_note_revision_note",
     "ix_session_dog_date",
+    "ix_session_queued_at",
     "ix_shot_status",
     "ix_shot_video",
     "uq_device_code_active",
@@ -318,6 +319,47 @@ def test_0022_adds_login_lock_columns_and_leaves_accounts_as_they_were(engine: E
         with engine.connect() as conn:
             assert not any(_has_column(conn, "staff", column) for column in columns)
             assert conn.execute(text("SELECT count(*) FROM staff")).scalar_one() == 2
+    finally:
+        command.upgrade(config, "head")
+
+
+def test_0023_adds_the_queue_time_and_leaves_sessions_as_they_were(engine: Engine, clean_tables: None) -> None:
+    """0023(v1.59): 있던 회차의 queued_at은 NULL이다(새 워커가 다음 바퀴에 줄에 세운다). 내리면 그 칸만 없어진다."""
+    config = alembic_config()
+    ids = {name: uuid.uuid4() for name in ("inst", "staff", "dog", "session")}
+    command.downgrade(config, "0022")
+    try:
+        with engine.begin() as conn:
+            assert not _has_column(conn, "measure_session", "queued_at")
+            conn.execute(text("INSERT INTO institution (id, code, name) VALUES (:inst, 'A', '병원 A')"), ids)
+            conn.execute(
+                text(
+                    "INSERT INTO staff (id, institution_id, login_id, password_hash, name, role) "
+                    "VALUES (:staff, :inst, 'kim01', 'x', '갑', 'CLIENT')"
+                ),
+                ids,
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO dog (id, institution_id, name, breed, weight_kg, size_class) "
+                    "VALUES (:dog, :inst, '보리', '믹스', 10, 'MEDIUM')"
+                ),
+                ids,
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO measure_session (id, dog_id, staff_id, measured_on, size_class) "
+                    "VALUES (:session, :dog, :staff, '2026-11-12', 'MEDIUM')"
+                ),
+                ids,
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT queued_at FROM measure_session")).scalar_one() is None
+        command.downgrade(config, "0022")
+        with engine.connect() as conn:
+            assert not _has_column(conn, "measure_session", "queued_at")
+            assert conn.execute(text("SELECT count(*) FROM measure_session")).scalar_one() == 1
     finally:
         command.upgrade(config, "head")
 

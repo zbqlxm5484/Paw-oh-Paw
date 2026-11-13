@@ -487,7 +487,9 @@ def test_end_to_end_with_mock_client(client: TestClient, db: Session, dog, auth_
     session = db.get(MeasureSession, uuid.UUID(session_id))
     _shot(db, session, 1, status="UPLOADED", uploaded_at=datetime.now(UTC))
     assert client.post(f"/api/v1/sessions/{session_id}/complete", headers=auth_headers).status_code == 200
-    settings = get_settings().model_copy(update={"WORKER_MAX_IN_FLIGHT_PER_INSTITUTION": 100})
+    settings = get_settings().model_copy(
+        update={"WORKER_QUEUE_PER_INSTITUTION": 100, "WORKER_HOURLY_PER_INSTITUTION": 1000}
+    )
     mock = MockAnalysisClient(delay_sec=0, case="valid")
 
     for _ in range(3):
