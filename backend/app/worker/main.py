@@ -318,6 +318,8 @@ def _lock_session(db: Session, session_id: uuid.UUID) -> bool:
 
 # 기관별 접수 제한을 세는 기간(12.4 분석 줄): 지난 1시간에 줄에 세운 회차를 센다
 QUEUE_WINDOW = timedelta(hours=1)
+# 줄에 선 순서를 그대로 쓰는 기간(12.4 분석 줄, 202 리뷰): 줄에 선 지 이만큼 지난 뒤에 올린 촬영은 다시 줄을 선다
+QUEUE_KEEP = timedelta(minutes=20)
 
 
 def admit_to_queue(db: Session, settings: Settings, stats: WorkerStats) -> None:
@@ -330,7 +332,25 @@ def admit_to_queue(db: Session, settings: Settings, stats: WorkerStats) -> None:
     넘치는 회차는 거절하지 않는다. 촬영은 UPLOADED로 남고(화면에는 대기 중) 자리가 나면 다음 바퀴에 줄에 선다.
     줄에 선 순서가 분석 순서다. 한 기관이 회차를 많이 올려도 앞에 세울 수 있는 회차는 줄 크기까지이고, 그 뒤에 온 다른
     기관의 회차가 그다음에 선다. queued_at은 이미 있는 값보다 늘 뒤가 되게 적는다(시계가 같은 값을 주어도 순서가 선다).
+
+    줄에 선 순서는 QUEUE_KEEP(20분) 동안만 쓴다. 기다리는 촬영이 모두 줄에 선 지 20분 뒤에 올린 것뿐인 회차는
+    queued_at을 지워 처음 온 회차처럼 다시 줄을 세운다(두 제한을 다시 본다). 그러지 않으면 열어 둔 옛 회차에 촬영을
+    더 올려 맨 앞으로 갈 수 있다(202 리뷰). 20분 안에 다시 찍은 촬영은 그 회차의 순서로 그대로 간다.
     """
+    late_only = (
+        select(Shot.session_id)
+        .join(MeasureSession, Shot.session_id == MeasureSession.id)
+        .where(Shot.status == UPLOADED, MeasureSession.queued_at.is_not(None))
+        .group_by(Shot.session_id, MeasureSession.queued_at)
+        .having(func.min(Shot.uploaded_at) > MeasureSession.queued_at + QUEUE_KEEP)
+    )
+    db.execute(
+        update(MeasureSession)
+        .where(MeasureSession.id.in_(late_only))
+        .values(queued_at=None)
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
     in_flight = select(Shot.session_id).where(Shot.status.in_(IN_FLIGHT))
     queued = dict(
         db.execute(

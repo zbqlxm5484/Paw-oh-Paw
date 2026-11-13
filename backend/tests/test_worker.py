@@ -357,6 +357,70 @@ def test_more_shots_of_a_queued_session_do_not_use_the_hourly_limit(db: Session,
     assert _fresh(db, more).status == "SUBMITTED" and _fresh(db, held).status == "UPLOADED"
 
 
+def test_shots_added_twenty_minutes_after_queueing_stand_in_line_again(db: Session, dog, staff) -> None:
+    # 202 리뷰: 줄에 선 지 20분 뒤에 올린 촬영은 옛 순서로 맨 앞에 가지 않는다. 회차가 다시 줄을 서고 두 제한을 본다
+    base = datetime.now(UTC)
+    old, fresh_one = _sessions(db, dog.institution_id, staff, 2)
+    _shot(db, old, 1, uploaded_at=base - timedelta(minutes=30))
+    settings, client = _queue_settings(WORKER_HOURLY_PER_INSTITUTION=2), FakeClient()
+    assert run_once(db, client, settings, get_storage()).queued == 1
+    # 30분 전에 줄에 선 것으로 만들고 분석을 끝낸다
+    db.execute(update(MeasureSession).where(MeasureSession.id == old.id).values(queued_at=base - timedelta(minutes=30)))
+    db.commit()
+    _finish_all(db, client)
+    run_once(db, client, settings, get_storage())
+
+    waiting = _shot(db, fresh_one, 1, uploaded_at=base)
+    late = _shot(db, old, 2, uploaded_at=base + timedelta(seconds=1))
+    stats = run_once(db, client, settings, get_storage())
+
+    # 먼저 올린 새 회차가 앞이고, 옛 회차는 그 뒤에 새로 줄을 섰다(접수 수 2를 다 썼다)
+    assert stats.queued == 2 and stats.claimed == 2
+    db.expire_all()
+    assert db.get(MeasureSession, fresh_one.id).queued_at < db.get(MeasureSession, old.id).queued_at
+    assert db.get(MeasureSession, old.id).queued_at > base - timedelta(minutes=1)
+    assert _fresh(db, waiting).status == "SUBMITTED" and _fresh(db, late).status == "SUBMITTED"
+
+
+def test_late_shots_wait_outside_the_line_when_the_hourly_limit_is_used_up(db: Session, dog, staff) -> None:
+    # 다시 줄을 설 때 1시간 접수 수가 찼으면 줄 밖에서 기다린다(그전에는 옛 순서로 바로 갔다)
+    base = datetime.now(UTC)
+    old, other = _sessions(db, dog.institution_id, staff, 2)
+    _shot(db, old, 1, uploaded_at=base - timedelta(minutes=30))
+    settings, client = _queue_settings(WORKER_HOURLY_PER_INSTITUTION=1), FakeClient()
+    run_once(db, client, settings, get_storage())
+    db.execute(update(MeasureSession).where(MeasureSession.id == old.id).values(queued_at=base - timedelta(minutes=90)))
+    db.commit()
+    _finish_all(db, client)
+    run_once(db, client, settings, get_storage())
+    _shot(db, other, 1, uploaded_at=base)
+    late = _shot(db, old, 2, uploaded_at=base + timedelta(seconds=1))
+
+    stats = run_once(db, client, settings, get_storage())
+
+    assert stats.queued == 1 and stats.claimed == 1  # 새 회차만 줄에 섰다
+    assert _fresh(db, late).status == "UPLOADED" and _queued(db, [old]) == [False]
+
+
+def test_shots_added_within_twenty_minutes_keep_the_place_while_the_session_waits(db: Session, dog, staff) -> None:
+    # 줄에서 20분 넘게 기다린 회차는 다시 서지 않는다: 먼저 올린 촬영이 아직 기다리고 있으면 그 순서 그대로다
+    base = datetime.now(UTC)
+    session = _session(db, dog, staff)
+    _shot(db, session, 1, uploaded_at=base - timedelta(minutes=40))
+    settings, client = _queue_settings(WORKER_MAX_IN_FLIGHT=1), FakeClient()
+    blocker = _session(db, dog, staff)
+    _shot(db, blocker, 1, uploaded_at=base - timedelta(minutes=50))
+    run_once(db, client, settings, get_storage())  # blocker가 자리를 차지하고 session은 줄에서 기다린다
+    stamp = base - timedelta(minutes=40)
+    db.execute(update(MeasureSession).where(MeasureSession.id == session.id).values(queued_at=stamp))
+    db.commit()
+    _shot(db, session, 2, uploaded_at=base)
+
+    assert run_once(db, client, settings, get_storage()).queued == 0
+    db.expire_all()
+    assert db.get(MeasureSession, session.id).queued_at == stamp
+
+
 def test_global_cap_still_applies_across_institutions(db: Session, dog, staff, other_staff) -> None:
     # 줄에 서 있어도 전체 자리(WORKER_MAX_IN_FLIGHT)가 없으면 못 가져간다. 줄에 선 순서대로
     mine = _session(db, dog, staff)

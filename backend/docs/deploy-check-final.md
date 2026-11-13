@@ -62,6 +62,7 @@
    | `REPORT_RENDERER_URL`, `REPORT_PRINT_URL` | 비어 있음 | Gotenberg를 올리지 않으면 비워 둔다 |
    | `API_DOCS_ENABLED` | `false` | 운영은 비워 두거나 `false` |
    | `JWT_SECRET`, `FILE_URL_SECRET` | 없음 | 운영과 개발이 서로 다른 값이어야 한다 |
+   | `WORKER_QUEUE_PER_INSTITUTION`, `WORKER_HOURLY_PER_INSTITUTION` | `4`, `10` | 분석 줄의 새 설정이다(명세 12.4). 기본값을 쓰면 넣지 않아도 된다. 옛 이름 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`은 남아 있어도 무시되고, 지워도 된다 |
 
 6. 개발 환경의 DB(11-11에 새로 생김)에 관리자 계정과 시연 자료가 있는가.
 7. 11-04에 넘긴 3번(과제 종료 때 돌릴 전체 파기 명령)이 정해졌는가.
@@ -144,7 +145,7 @@ echo "6 약관 필수";   curl -sS -w '\n%{http_code}\n' -X POST $BASE/api/v1/au
 | 1 | `docker compose -p creamoff ps` | nginx, api 한 색, web 한 색, worker 하나, postgres, redis가 떠 있다. worker는 둘이면 안 된다 | |
 | 2 | `docker compose -p creamoff run --rm --no-deps api-<색> alembic current` | `0023 (head)`(이 브랜치가 머지되기 전의 배포라면 `0022`) | |
 | 3 | 3절 5번의 `.env` 값 | 표와 같다 | |
-| 4 | worker 로그 | 기동 뒤 오류가 없다. 보고서 완료 로그에 `made_by=template`이 찍힌다(Gotenberg가 없을 때) | |
+| 4 | worker 로그 | 기동 줄(`worker started`)에 `queue_per_institution=4 hourly_per_institution=10`이 찍힌다. 기동 뒤 오류가 없다. 보고서 완료 로그에 `made_by=template`이 찍힌다(Gotenberg가 없을 때) | |
 | 5 | Prometheus의 `api` 대상 | `METRICS_ENABLED=true` 뒤에 up이고 `ApiDown`이 꺼진다 | |
 | 6 | 운영 배포 전의 DB 백업 | 있다(배포 때 0022와 0023이 돈다) | |
 | 7 | 시연 자료(`python -m scripts.seed_demo`) | 시연 날 운영 DB에 넣는다. `demo_seed` 폴더에 `face_masks.json`이 있어야 한다 | |
