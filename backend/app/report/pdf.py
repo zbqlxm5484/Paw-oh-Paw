@@ -40,6 +40,14 @@ class PdfSize(int):
         value.made_by = made_by
         return value
 
+    def __reduce__(self) -> tuple[type[PdfSize], tuple[int, str]]:
+        """자식 프로세스가 만든 값을 워커가 돌려받을 때(pickle) made_by까지 넘긴다.
+
+        int의 기본 방식은 바이트 수만 넘겨 __new__가 실패하고, 그러면 보고서 풀 전체가 깨진 것으로 처리된다
+        (BrokenProcessPool, 화면 인쇄를 켠 서버에서 보고서가 모두 REPORT_FAILED가 됐다).
+        """
+        return (PdfSize, (int(self), self.made_by))
+
 
 class PdfUnavailableError(ReportError):
     """WeasyPrint를 쓸 수 없다(패키지나 시스템 라이브러리 없음)."""
