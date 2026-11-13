@@ -731,6 +731,18 @@ export class AppProto extends DCLogic<Props, any> {
       regenRep: async () => { if (!R || !rep) return this.toast('아직 보고서가 없습니다'); try { await this.props.actions.regenerateReport(R.id, rep.id); this.toast('보고서를 다시 만들고 있습니다') } catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없습니다')) } },
       // 회차 결과 화면에서 바로 PDF(11-06): 보고서 화면을 한 번 더 거치지 않게
       savePdfG: () => this.savePdfOf(R, 'OWNER'), savePdfV: () => this.savePdfOf(R, 'VET'),
+      // 회차 결과 화면에서 두 판본(보호자용·수의사용)을 함께 다시 만든다(11-13). 보고서 화면에 가지 않고도 예전 PDF 를 새로 만들 수 있게
+      regenAll: async () => {
+        const reps = this.props.reports?.reports ?? []
+        if (!R || !reps.length) return this.toast('아직 보고서가 없습니다')
+        if (isDemo()) return this.toast('체험 모드에서는 보고서를 다시 만들 수 없습니다')
+        if (reps.some((x) => x.status === 'PENDING' || x.status === 'GENERATING')) return this.toast('보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
+        if (s.pdfBusy) return
+        this.setState({ pdfBusy: true })
+        try { for (const x of reps) await this.props.actions.regenerateReport(R.id, x.id); this.toast('보고서를 다시 만들고 있습니다. 잠시 뒤 PDF를 받아 주세요') }
+        catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없습니다')) }
+        finally { this.setState({ pdfBusy: false }) }
+      },
       saveRep: async () => {
         if (!rep || rep.status !== 'DONE' || !rep.download_url) return this.toast(rep && rep.status === 'FAILED' ? '보고서를 만들지 못했습니다. 다시 만들기를 눌러 주세요' : '보고서를 만드는 중입니다. 잠시 뒤 다시 눌러 주세요')
         if (isDemo()) return this.toast('체험 모드에서는 PDF를 받을 수 없습니다. 체험 모드를 끝내고 로그인하면 받을 수 있습니다')
