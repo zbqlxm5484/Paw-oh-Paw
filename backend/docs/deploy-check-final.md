@@ -6,6 +6,7 @@
 
 - 2026-11-12: **1\~3절을 채웠다.** develop `af8a7de`의 배포 파일과 백엔드 설정을 읽은 것이다.
 - 2026-11-12 13:51: 운영 주소에 4.1의 호출 여섯을 미리 돌렸다(4.0). 서버에서 본 것은 이것뿐이다.
+- 2026-11-13: develop `8ee66c1`을 다시 읽었다. 보고서 렌더러(Gotenberg)가 compose에 들어가(티켓 310) 2절의 보고서 PDF 줄, 3절 5번의 설정 줄, 4.2의 5번, 4.4의 1번과 4번을 고쳤다. 같은 날 로컬에서 같은 이미지로 보고서를 찍어 본 것을 2절 아래에 적었다.
 - 4.1\~4.4의 결과 칸은 운영 배포가 끝난 뒤에 채운다. 지금은 비어 있다.
 
 ## 1. 배포가 나가는 길 (저장소에서 본 것)
@@ -38,11 +39,13 @@
 | 업로드 한도 | `UPLOAD_MAX_MB` 기본 100과 컨테이너 nginx의 `client_max_body_size 100m`이 같다. 호스트 nginx와 GPU 서버의 값은 저장소에 없다 | `infra/docker/nginx.conf`, `config.py` |
 | 밖에서 열리는 경로 | `/api/`만 백엔드로 간다. `/metrics`·`/docs`·`/openapi.json`은 루트라서 화면 컨테이너로 가고 밖에서 보이지 않는다 | `nginx.conf`, `app/main.py` |
 | 기동을 막는 설정 | `DATABASE_URL`, `JWT_SECRET`, `FILE_URL_SECRET`(32자 이상, 서로 다른 값)이 없거나 틀리면 뜨지 않는다. `ANALYSIS_API_MODE=http`인데 주소가 없어도 뜨지 않는다 | `config.py` |
-| 보고서 PDF | compose에 Gotenberg가 없다. `REPORT_RENDERER_URL`이 비어 있으면 기본 템플릿(WeasyPrint)으로 만든다. 값을 비워 두면 그대로 동작한다 | `compose.yaml`, `config.py` |
+| 보고서 PDF | compose에 렌더러 `gotenberg`(headless Chromium, 밖으로 여는 포트 없음)가 있고, worker에만 `REPORT_RENDERER_URL=http://gotenberg:3000`과 `REPORT_PRINT_URL=http://nginx/web`이 들어간다(11-13, 티켓 310). 보고서 PDF는 웹의 인쇄 화면을 찍어 만들고, 렌더러가 답하지 않거나 `REPORT_RENDER_TIMEOUT_SEC`(기본 60초)을 넘기면 기본 템플릿(WeasyPrint)으로 만든다. 배포 스크립트가 postgres·redis와 함께 gotenberg를 먼저 띄운다 | `compose.yaml`, `infra/ci/deploy.sh`, `config.py`, `app/worker/report.py` |
 | `/metrics` | 기본이 꺼짐이다. Prometheus는 api 컨테이너 넷의 `/metrics`를 읽게 돼 있어, `METRICS_ENABLED=true`를 넣기 전에는 `ApiDown` 경보가 켜진 채다 | `config.py`, `infra/monitoring/prometheus/` |
 | Redis | compose에는 있지만 백엔드는 쓰지 않는다(설정에 `REDIS_URL`이 없다). 작업 큐는 DB다 | `compose.yaml`, `config.py` |
 | CI | check → build → smoke(배포 스크립트를 두 번 돌려 첫 배포와 색 전환을 본다) → deploy | `.gitlab-ci.yml` |
 | 첫 관리자와 시연 자료 | 배포 스크립트에 seed 단계가 없다. 운영과 개발의 DB가 따로라 각각 넣어야 한다 | `deploy.sh`, `backend/README.md` |
+
+보고서 PDF의 화면 인쇄는 11-13에 로컬에서 미리 돌려 봤다. develop 코드의 API와 웹, compose와 같은 이미지(`gotenberg/gotenberg:8`), 시연 자료로 워커와 같은 함수(인쇄 토큰 → 인쇄 화면 주소 → 렌더러)를 불렀다. 수의사용은 4쪽에 약 4초, 보호자용은 3쪽에 약 2초였다. 수의사용에는 '무릎을 가장 굽힌 순간·가장 편 순간' 칸(결과 영상의 프레임 넷)과 변화 프로필의 추이선이 나왔고, 세 번 찍어 세 번 모두 같았다. 로컬은 웹 개발 서버였으므로, 빌드된 웹과 nginx를 거치는 길은 서버에서 본다(4.2의 5번, 4.4의 4번).
 
 ## 3. 저장소로는 알 수 없는 것 (허정원에게 확인)
 
@@ -59,7 +62,7 @@
    | `FRONTEND_BASE_URL` | `http://localhost:5173` | 비밀번호 재설정 메일의 링크 앞부분이다. 웹이 `/web/` 아래에 있으므로 `https://<주소>/web` |
    | `SMTP_HOST` 등 | 비어 있음 | 비어 있으면 재설정 요청이 503 `MAIL_UNAVAILABLE`이다. 시연에서 재설정을 보일 때만 필요하다 |
    | `METRICS_ENABLED` | `false` | Prometheus가 읽게 하려면 `true` |
-   | `REPORT_RENDERER_URL`, `REPORT_PRINT_URL` | 비어 있음 | Gotenberg를 올리지 않으면 비워 둔다 |
+   | `REPORT_RENDERER_URL`, `REPORT_PRINT_URL` | 비어 있음 | `.env`에 넣지 않는다. compose가 worker에 직접 넣는다(`http://gotenberg:3000`, `http://nginx/web`). `.env`에 다른 값이 있어도 worker는 compose의 값을 쓴다 |
    | `API_DOCS_ENABLED` | `false` | 운영은 비워 두거나 `false` |
    | `JWT_SECRET`, `FILE_URL_SECRET` | 없음 | 운영과 개발이 서로 다른 값이어야 한다 |
    | `WORKER_QUEUE_PER_INSTITUTION`, `WORKER_HOURLY_PER_INSTITUTION` | `4`, `10` | 분석 줄의 새 설정이다(명세 12.4). 기본값을 쓰면 넣지 않아도 된다. 옛 이름 `WORKER_MAX_IN_FLIGHT_PER_INSTITUTION`은 남아 있어도 무시되고, 지워도 된다 |
@@ -123,7 +126,7 @@ echo "6 약관 필수";   curl -sS -w '\n%{http_code}\n' -X POST $BASE/api/v1/au
 | 2 | 회차 결과 화면 | 수치와 판정이 나온다 | |
 | 3 | 결과 영상 | 재생된다. 사람 얼굴이 가려져 있다 | |
 | 4 | 비교, 추이 | 그려진다 | |
-| 5 | 서버가 만든 보고서 PDF 두 판본(보고서 화면의 미리보기·내려받기) | 열린다. 한글이 깨지지 않는다 | |
+| 5 | 서버가 만든 보고서 PDF 두 판본(보고서 화면의 미리보기·내려받기) | 열린다. 한글이 깨지지 않는다. 화면 인쇄로 만든 것이면 웹의 보고서 화면과 같은 모양이고, 결과 영상이 있는 회차의 수의사용에는 '무릎을 가장 굽힌 순간·가장 편 순간' 칸과 변화 프로필의 추이선이 있다 | |
 | 6 | 관리자 계정으로 기관·기기 코드 목록 | 보인다 | |
 | 7 | 앱(APK) 로그인, 목록, 결과 | 된다. 앱이 운영 주소를 보고 있다 | |
 
@@ -142,10 +145,10 @@ echo "6 약관 필수";   curl -sS -w '\n%{http_code}\n' -X POST $BASE/api/v1/au
 
 | 번호 | 무엇을 | 기대하는 결과 | 결과 |
 | --- | --- | --- | --- |
-| 1 | `docker compose -p creamoff ps` | nginx, api 한 색, web 한 색, worker 하나, postgres, redis가 떠 있다. worker는 둘이면 안 된다 | |
+| 1 | `docker compose -p creamoff ps` | nginx, api 한 색, web 한 색, worker 하나, gotenberg, postgres, redis가 떠 있다. worker는 둘이면 안 된다 | |
 | 2 | `docker compose -p creamoff run --rm --no-deps api-<색> alembic current` | `0023 (head)`(이 브랜치가 머지되기 전의 배포라면 `0022`) | |
 | 3 | 3절 5번의 `.env` 값 | 표와 같다 | |
-| 4 | worker 로그 | 기동 줄(`worker started`)에 `queue_per_institution=4 hourly_per_institution=10`이 찍힌다. 기동 뒤 오류가 없다. 보고서 완료 로그에 `made_by=template`이 찍힌다(Gotenberg가 없을 때) | |
+| 4 | worker 로그 | 기동 줄(`worker started`)에 `queue_per_institution=4 hourly_per_institution=10`이 찍힌다. 기동 뒤 오류가 없다. 보고서 완료 로그(`report ready`)에 `made_by=screen`이 찍힌다. `made_by=template`이면 화면 인쇄가 안 돼 기본 템플릿으로 만든 것이고, 그 앞에 `screen print failed` 경고가 있다 | |
 | 5 | Prometheus의 `api` 대상 | `METRICS_ENABLED=true` 뒤에 up이고 `ApiDown`이 꺼진다 | |
 | 6 | 운영 배포 전의 DB 백업 | 있다(배포 때 0022와 0023이 돈다) | |
 | 7 | 시연 자료(`python -m scripts.seed_demo`) | 시연 날 운영 DB에 넣는다. `demo_seed` 폴더에 `face_masks.json`이 있어야 한다 | |
