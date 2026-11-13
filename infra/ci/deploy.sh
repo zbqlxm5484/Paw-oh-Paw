@@ -16,8 +16,8 @@ write_active() {   # $1=blue|green → nginx 볼륨의 active.conf 갱신
     | "${C[@]}" exec -T nginx sh -c 'cat > /etc/nginx/upstream/active.conf'
 }
 
-# 1. 인프라(postgres·redis·nginx) 준비. nginx 컨테이너만 만들어 두고 active.conf 가 없으면 blue 로 초기화
-"${C[@]}" up -d --wait postgres redis
+# 1. 인프라(postgres·redis·gotenberg·nginx) 준비. nginx 컨테이너만 만들어 두고 active.conf 가 없으면 blue 로 초기화
+"${C[@]}" up -d --wait postgres redis gotenberg
 "${C[@]}" up --no-start nginx
 NGINX_CID="$("${C[@]}" ps -aq nginx)"
 docker run --rm --volumes-from "$NGINX_CID" --entrypoint sh nginx:stable-alpine -c \
