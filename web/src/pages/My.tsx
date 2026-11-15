@@ -41,7 +41,7 @@ function TrashModal({ acct, items, onDone }: { acct: Account; items: TrashItem[]
                   <div style={css('font-size:15px;font-weight:700')}>{t.name} <span style={css('font-weight:500;color:#5B6472;font-size:14px')}>· {t.breed}</span></div>
                   <div style={css(`font-size:14px;margin-top:2px;color:${left <= 7 ? '#B4501A' : '#5B6472'}`)}>{dayLabel(t.deletedAt)} 삭제 · {left ? `${left}일 뒤 완전히 삭제` : '곧 완전히 삭제'}</div>
                 </div>
-                <button type="button" className="bt tap" disabled={!!busy} onClick={() => restore(t)} style={css(`height:44px;padding:0 16px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700;color:#B4501A;cursor:pointer;opacity:${busy && busy !== t.id ? '0.5' : '1'}`)}>{busy === t.id ? '복구 중…' : '복구'}</button>
+                <button type="button" className="bt tap" disabled={!!busy} onClick={() => restore(t)} style={css(`height:44px;padding:0 16px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700;color:#B4501A;cursor:pointer;opacity:${busy && busy !== t.id ? '0.5' : '1'}`)}><span style={css('position:relative;top:-3px')}>{busy === t.id ? '복구 중…' : '복구'}</span></button>
               </div>
             )
           })}
