@@ -33,7 +33,7 @@ export const r1 = (v: number) => Math.round(v * 10) / 10
 export const num = (v: number | null | undefined) => (v == null ? '—' : v)
 /** 회차 체중 문구. 그날 체중을 안 적은 회차(weight_kg null → '-')는 '-kg' 대신 측정 불가 표기 */
 export const wkg = (w: string) => (w && w !== '-' ? `체중 ${w}kg` : '체중 —')
-export const desc = (d: DDog) => [d.breed || '견종 미입력', d.birth ? d.birth + '년생' : null, d.kg ? d.kg + 'kg' : null].filter(Boolean).join(' · ')
+export const desc = (d: DDog) => [d.breed || '견종 미입력', d.birth ? d.birth + '년생' : null, d.kg ? d.kg + 'kg' : null].filter(Boolean).join(', ')
 export const chk = (on: boolean) => (on ? '#D2601A' : '#C9C4BC')
 export const pickSt = (on: boolean) => ({ bd: on ? '#D2601A' : '#ECE8E2', bg: on ? '#FCEEE3' : '#fff', c: on ? '#A8481A' : '#3A4250' })
 export const seg = (list: [string, string][], cur: string, set: (k: string) => void) => list.map(([k, label]) => { const on = cur === k; return { label, bg: on ? '#fff' : 'transparent', c: on ? '#1B2433' : '#5B6472', sh: on ? '0 1px 3px rgba(27,36,51,.12)' : 'none', pick: () => set(k) } })
@@ -73,7 +73,7 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
   let rp: any = { title: '', when: '', summary: '', items: [], rows: [], cond: '' }
   if (!R) return { rd, rp }
   const d = ctx.dogById(R.dog) || ({ name: '-', breed: '', birth: '', kg: '' } as DDog), stt = ST[R.st]
-  rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date} · ${sessNo(ctx, R)}회차 · ${wkg(R.w)}`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
+  rd = { ...rd, name: d.name, desc: desc(d), when: `${R.date}, ${sessNo(ctx, R)}회차, ${wkg(R.w)}`, st: stt[0], bg: stt[1], c: stt[2], fail: R.st === 'fail', ok: R.st !== 'fail', part: R.st === 'part',
     failMsg: R.status === 'FAILED' ? R.result?.fail_reason?.message || SERVER_FAIL_MSG : allShotsFailed(R.result) ? SHOTS_FAILED_MSG : NO_VALID_MSG, ex: R.ex.map(([n, c]) => ({ n, c })) }
   if (R.st === 'fail') return { rd, rp }
   const vv = valid(ctx, R.dog), idx = vv.findIndex((x) => x.id === R.id), P = vv[idx + 1]
@@ -92,22 +92,22 @@ export function resultVals(ctx: ResultCtx, R: DRes | undefined, G: DGait) {
     sym: num(R.sym), symD: sd[0], symDC: sd[1], rom: num(R.rom), romD: rdl[0], romDC: rdl[1], sL: num(sL), sR: num(sR),
     stD: sL == null || sR == null ? '측정 불가' : sL === sR ? '좌우 같음' : `${sL > sR ? '오른쪽' : '왼쪽'}이 ${Math.abs(sL - sR)}%p 짧음`, stC: '#5B6472',
     topTitle: top ? `${top.leg} ${top.n}에서 좌우 차이가 가장 큽니다` : R.loaded ? '좌우를 비교할 수 있는 항목이 없습니다' : '결과를 불러오는 중입니다',
-    topSub: top ? `왼 ${top.l}${top.u} · 오 ${top.r}${top.u} · 차이 ${top.df}${top.u} · 대칭 지수 차이 ${top.si.toFixed(1)}%` : '',
-    rank: [...meas.slice(1, 4).map((x) => ({ n: `${x.leg} · ${x.n}`, v: `차이 ${x.df}${x.u}`, c: '#fff' })), ...rows.filter((x) => x.na).map((x) => ({ n: `${x.leg} · ${x.n}`, v: '비교 불가', c: 'rgba(255,255,255,.5)' }))],
+    topSub: top ? `왼 ${top.l}${top.u}, 오 ${top.r}${top.u}, 차이 ${top.df}${top.u}, 대칭 지수 차이 ${top.si.toFixed(1)}%` : '',
+    rank: [...meas.slice(1, 4).map((x) => ({ n: `${x.leg}, ${x.n}`, v: `차이 ${x.df}${x.u}`, c: '#fff' })), ...rows.filter((x) => x.na).map((x) => ({ n: `${x.leg}, ${x.n}`, v: '비교 불가', c: 'rgba(255,255,255,.5)' }))],
     rows: rows.map((x) => ({ sec: x.sec || false, ok: !x.na, na: !!x.na, n: x.n, reason: x.reason || '', lv: x.na ? '' : x.l + x.u, rv: x.na ? '' : x.r + x.u, dv: x.na ? '' : r1(Math.abs(x.l - x.r)) + x.u })),
     pm: R.ps[0], pu: R.ps[1], px: R.ps[0] - R.ps[1], ex: R.ex.map(([n, c]) => ({ n, c })), model,
     kL: knee((stifle && !stifle.na ? stifle.l : 60) * 0.8), kR: knee((stifle && !stifle.na ? stifle.r : 55) * 0.8),
   })
   rp = {
-    title: `${d.name}의 걸음 보고서`, when: `${R.date} 측정 · ${sessNo(ctx, R)}회차 · ${desc(d)}`,
+    title: `${d.name}의 걸음 보고서`, when: `${R.date} 측정, ${sessNo(ctx, R)}회차, ${desc(d)}`,
     summary: topT ? `${topT.leg} ${topT.n}에서 왼쪽과 오른쪽 차이가 가장 컸습니다(${topT.df}${topT.u}). 수의사 선생님과 함께 확인해 보세요.` : '좌우를 비교할 수 있는 항목이 없습니다. 수의사 선생님과 함께 확인해 보세요.',
     items: [
       { k: '좌우 대칭 점수', v: num(R.sym) + '점', d: P ? `직전 ${num(P.sym)}점` : '첫 측정' },
-      { k: '뒷무릎 움직임 범위', v: stifle && !stifle.na ? `왼 ${stifle.l}° · 오 ${stifle.r}°` : '측정 불가', d: stifle && !stifle.na ? `차이 ${r1(Math.abs(stifle.l - stifle.r))}°` : '' },
-      { k: '걸음 길이(등 길이 대비)', v: sL != null && sR != null ? `왼 ${sL}% · 오 ${sR}%` : '측정 불가', d: sL != null && sR != null ? `차이 ${Math.abs(sL - sR)}%p` : '' },
+      { k: '뒷무릎 움직임 범위', v: stifle && !stifle.na ? `왼 ${stifle.l}°, 오 ${stifle.r}°` : '측정 불가', d: stifle && !stifle.na ? `차이 ${r1(Math.abs(stifle.l - stifle.r))}°` : '' },
+      { k: '걸음 길이(등 길이 대비)', v: sL != null && sR != null ? `왼 ${sL}%, 오 ${sR}%` : '측정 불가', d: sL != null && sR != null ? `차이 ${Math.abs(sL - sR)}%p` : '' },
     ],
     rows: [...rowsT.map((x) => ({ n: x.n, l: x.na ? '측정 불가' : x.l + x.u, r: x.na ? '—' : x.r + x.u, d: x.na ? '—' : r1(Math.abs(x.l - x.r)) + x.u })), { n: '대칭 점수', l: '—', r: '—', d: num(R.sym) + '점' }].map((x, i) => ({ ...x, bg: i % 2 ? '#fff' : '#FAF8F5' })),
-    cond: `측면 가로 촬영 · 영상 ${R.result?.shot_counts.total ?? '-'}개 · 통과 ${R.ps[0]}개 중 ${R.ps[1]}개 사용 · 분석 모델 ${model}. 측정 불가 항목은 사유와 함께 표시했습니다.`,
+    cond: `측면 가로 촬영, 영상 ${R.result?.shot_counts.total ?? '-'}개, 통과 ${R.ps[0]}개 중 ${R.ps[1]}개 사용, 분석 모델 ${model}. 측정 불가 항목은 사유와 함께 표시했습니다.`,
   }
   return { rd, rp }
 }

@@ -196,7 +196,7 @@ export function paintBody(svg: string, fills: Record<string, string>, focus: str
   return svg
 }
 
-// ── 수의사용 뒷무릎 각도 · 보행 주기: 이 회차의 실제 각도(GET /sessions/{id} → /shots/{id}/angles)로만 그린다 ──
+// ── 수의사용 뒷무릎 각도/보행 주기: 이 회차의 실제 각도(GET /sessions/{id} → /shots/{id}/angles)로만 그린다 ──
 // 곡선은 웹 3D 와 같은 views/gaitClip.ts(촬영 고르기·걸음 자르기·50칸 평균)로 만든다. 못 만들면 null → 칸을 뺀다(견본·합성 곡선 쓰지 않음)
 
 export interface KneeCurve { gait: string; L: number[] | null; R: number[] | null; strides: number }

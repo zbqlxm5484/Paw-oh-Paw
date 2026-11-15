@@ -81,7 +81,7 @@ export function fmtMonthDay(iso: string | null | undefined): string {
 export function dogDesc(d: { breed: string; birth_year: number | null; weight_kg: number }): string {
   return [d.breed || '견종 미입력', d.birth_year ? `${d.birth_year}년생` : null, d.weight_kg ? `${d.weight_kg}kg` : null]
     .filter(Boolean)
-    .join(' · ')
+    .join(', ')
 }
 
 export const SHOT_STATUS_LABEL: Record<ShotStatus, string> = {

@@ -38,8 +38,8 @@ function TrashModal({ acct, items, onDone }: { acct: Account; items: TrashItem[]
             return (
               <div key={t.id} style={css(`display:flex;align-items:center;gap:12px;min-height:68px;border-top:${i ? '1px solid #F2EFEA' : 'none'}`)}>
                 <div style={css('flex:1;min-width:0')}>
-                  <div style={css('font-size:15px;font-weight:700')}>{t.name} <span style={css('font-weight:500;color:#5B6472;font-size:14px')}>· {t.breed}</span></div>
-                  <div style={css(`font-size:14px;margin-top:2px;color:${left <= 7 ? '#B4501A' : '#5B6472'}`)}>{dayLabel(t.deletedAt)} 삭제 · {left ? `${left}일 뒤 완전히 삭제` : '곧 완전히 삭제'}</div>
+                  <div style={css('font-size:15px;font-weight:700')}>{t.name} <span style={css('font-weight:500;color:#5B6472;font-size:14px')}>({t.breed})</span></div>
+                  <div style={css(`font-size:14px;margin-top:2px;color:${left <= 7 ? '#B4501A' : '#5B6472'}`)}>{dayLabel(t.deletedAt)} 삭제, {left ? `${left}일 뒤 완전히 삭제` : '곧 완전히 삭제'}</div>
                 </div>
                 <button type="button" className="bt tap" disabled={!!busy} onClick={() => restore(t)} style={css(`height:44px;padding:0 16px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700;color:#B4501A;cursor:pointer;opacity:${busy && busy !== t.id ? '0.5' : '1'}`)}><span style={css('position:relative;top:-3px')}>{busy === t.id ? '복구 중…' : '복구'}</span></button>
               </div>
@@ -53,7 +53,7 @@ function TrashModal({ acct, items, onDone }: { acct: Account; items: TrashItem[]
 }
 
 export default function My() {
-  useTitle('마이페이지 · Paw oh Paw')
+  useTitle('마이페이지')
   const { acct, me, toast } = usePage({ login: true })
   // 삭제할 반려견: 시제품은 #delName 글자와 #delForm action 을 바꾼 뒤 연다
   const [del, setDel] = useState({ name: '', action: '', desc: '' })
@@ -70,7 +70,7 @@ export default function My() {
     id: d.id,
     init: Array.from(d.name)[0] || '',
     name: d.name,
-    desc: `${desc(d)} · ${SEX[d.sex || 'm'] ?? 'None'}`,
+    desc: `${desc(d)}, ${SEX[d.sex || 'm'] ?? 'None'}`,
     bt: i ? '1px solid #F2EFEA' : 'none',
   }))
 
@@ -93,7 +93,7 @@ export default function My() {
           <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:10px')}><b style={css('font-size:18px;letter-spacing:-0.4px')}>등록 반려견 <span style={css('color:#5B6472;font-weight:600;font-size:15px')}>{acct.dogs.length}마리</span></b><span style={css('display:flex;gap:8px;align-items:center')}><span data-pet="new" style={css('height:38px;padding:0 14px;border-radius:10px;background:#FCEEE3;color:#B4501A;display:flex;align-items:center;font-size:14px;font-weight:700;cursor:pointer')}>+ 반려견 추가</span>{trash.length ? <span data-open="trashModal" role="button" style={css('height:38px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;color:#3A4250;display:flex;align-items:center;font-size:14px;font-weight:700;cursor:pointer')}>반려견 복구 <span style={css('color:#B4501A;margin-left:4px')}>{trash.length}</span></span> : null}</span></div>
           <label style={css('height:42px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;gap:8px;padding:0 14px;margin-bottom:6px;color:#5B6472')}>
             <svg width="17" height="17" viewBox="0 0 24 24" style={{ flex: 'none' }}><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8"></circle><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"></path></svg>
-            <input value={mq} onChange={(e) => setMq(e.target.value)} placeholder="이름 · 견종 · 동물번호 · 생년으로 찾기" style={css('flex:1;min-width:0;border:none;outline:none;font-size:15px;background:transparent;color:#1B2433;font-family:inherit')} />
+            <input value={mq} onChange={(e) => setMq(e.target.value)} placeholder="이름, 견종, 동물번호, 생년으로 찾기" style={css('flex:1;min-width:0;border:none;outline:none;font-size:15px;background:transparent;color:#1B2433;font-family:inherit')} />
           </label>
           {/* 한 번에 다섯 마리(줄 높이 76px × 5)까지 보이고 나머지는 스크롤 */}
           <div className="dog-scroll" style={css('max-height:380px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px')}>
@@ -118,7 +118,7 @@ export default function My() {
           <PostForm action="/my/notif" style={css('margin:0')}>
             <button className="bt" type="submit" style={css('width:100%;background:none;display:flex;align-items:center;gap:14px;min-height:56px;padding:0;color:inherit')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-bell"></use></svg><span style={css('flex:1;font-size:15px')}>분석 완료 알림</span><span style={css(`width:50px;height:30px;border-radius:15px;background:${acct.notif_on ? '#D2601A' : '#DDD7CE'};position:relative;transition:background .2s`)}><span style={css(`position:absolute;top:2px;left:${acct.notif_on ? 22 : 2}px;width:26px;height:26px;border-radius:13px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s`)}></span></span></button>
           </PostForm>
-          <a className="lk" href={link('/about')} style={css('display:flex;align-items:center;gap:14px;min-height:56px')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-doc"></use></svg><span style={css('flex:1;font-size:15px')}>도움말 · 서비스 소개</span><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a>
+          <a className="lk" href={link('/about')} style={css('display:flex;align-items:center;gap:14px;min-height:56px')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-doc"></use></svg><span style={css('flex:1;font-size:15px')}>도움말/서비스 소개</span><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-chev"></use></svg></a>
           <a className="lk" href={link('/support')} style={css('display:flex;align-items:center;gap:14px;min-height:56px')}><svg width="22" height="22" viewBox="0 0 24 24"><use href="#w-headset"></use></svg><span style={css('flex:1;font-size:15px')}>고객센터</span><svg width="18" height="18" viewBox="0 0 24 24" style={css('color:#5B6472')}><use href="#w-chev"></use></svg></a>
           <div data-open="logoutModal" style={css('display:flex;align-items:center;min-height:52px;font-size:15px;color:#5B6472;cursor:pointer')}>로그아웃</div>
         </div>

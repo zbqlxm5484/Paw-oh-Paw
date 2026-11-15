@@ -25,7 +25,7 @@ export function ExcludeLine({ ex, kind }: { ex: readonly (readonly [string, numb
   return (
     <span style={css('flex-basis:100%;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.5;color:#5B6472')}>
       <span>{excludeText(s, kind === 'g' ? '분석에 쓰지 못한 걸음' : '쓰지 못한 걸음')}</span>
-      {terms.length ? <span style={css('font-size:12px;color:#5B6472')}>{terms.join(' · ')}</span> : null}
+      {terms.length ? <span style={css('font-size:12px;color:#5B6472')}>{terms.join(', ')}</span> : null}
     </span>
   )
 }
@@ -40,7 +40,7 @@ export function QualityCard({ r }: { r: Result }) {
     <div className="no-print" style={css(`display:flex;flex-direction:column;gap:10px;padding:16px 20px;border-radius:14px;background:#fff;border:1px solid ${ok ? '#ECE8E2' : '#F0D2BC'}`)}>
       <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap')}>
         <b style={css('font-size:15px')}>측정 신뢰도</b>
-        <span style={css('font-size:13px;color:#5B6472')}>쪽마다 {MIN_PASSES}번 이상 쓴 걸음이 있어야 지난 측정과 변화를 판단해요 · 권장 촬영은 회차마다 약 20번(좌우 반반)</span>
+        <span style={css('font-size:13px;color:#5B6472')}>쪽마다 {MIN_PASSES}번 이상 쓴 걸음이 있어야 지난 측정과 변화를 판단해요. 권장 촬영은 회차마다 약 20번(좌우 반반)</span>
       </div>
       <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px')}>
         {q.sides.map((s) => {

@@ -90,7 +90,7 @@ export function AngleFrames({ sessionId, gait, onSettled }: { sessionId: string;
   if (!cur) return null
   return (
     <section className="rep-sec" style={css('display:flex;flex-direction:column;gap:10px')}>
-      <h2 style={css(H2)}>무릎을 가장 굽힌 순간 · 가장 편 순간 <span style={css('font-size:13px;font-weight:600;color:#5B6472')}>{GAIT_KO[cur[0].gait] ?? cur[0].gait}</span></h2>
+      <h2 style={css(H2)}>무릎을 가장 굽힌 순간, 가장 편 순간 <span style={css('font-size:13px;font-weight:600;color:#5B6472')}>{GAIT_KO[cur[0].gait] ?? cur[0].gait}</span></h2>
       <span style={css('font-size:13px;color:#5B6472;line-height:1.5')}>결과 영상(관절점·골격 표시, 사람 얼굴 가림)에서 유효 통과 중 무릎 각도가 가장 작은 프레임과 가장 큰 프레임을 그대로 옮겼습니다.</span>
       {cur.map((x) => (
         <div key={x.shotId} style={css('display:flex;flex-direction:column;gap:6px')}>
@@ -101,7 +101,7 @@ export function AngleFrames({ sessionId, gait, onSettled }: { sessionId: string;
                 <img src={img} alt={`${SIDE[x.side] ?? ''} 뒷다리 무릎 ${label}`} style={css('width:100%;display:block;border-radius:10px;background:#1B2433')} />
                 <figcaption style={css('display:flex;justify-content:space-between;gap:8px;font-size:13px;font-variant-numeric:tabular-nums')}>
                   <span><b>{label}</b> <b style={css('font-size:15px')}>{f.deg.toFixed(1)}°</b></span>
-                  <span style={css('color:#5B6472')}>{f.sec.toFixed(2)}초 · {f.frame}프레임</span>
+                  <span style={css('color:#5B6472')}>{f.sec.toFixed(2)}초, {f.frame}프레임</span>
                 </figcaption>
               </figure>
             ))}

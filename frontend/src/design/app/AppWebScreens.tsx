@@ -77,7 +77,7 @@ export function HomeBody({ h }: { h: WebHome }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{h.ana.name}{h.ana.label}</div>
               {h.ana.measuring ? <div style={{ fontSize: 13, color: SUB, marginTop: 3, lineHeight: 1.5 }}>{h.ana.hint}</div> : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}><div style={{ flex: 1, height: 5, borderRadius: 3, background: '#FCEEE3' }}><div style={{ width: `${h.ana.pct}%`, height: '100%', borderRadius: 3, background: ORANGE, transition: 'width .2s' }} /></div><span style={{ fontSize: 12, color: SUB, whiteSpace: 'nowrap', ...tnum }}>{h.ana.step} · {h.ana.pct}%</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}><div style={{ flex: 1, height: 5, borderRadius: 3, background: '#FCEEE3' }}><div style={{ width: `${h.ana.pct}%`, height: '100%', borderRadius: 3, background: ORANGE, transition: 'width .2s' }} /></div><span style={{ fontSize: 12, color: SUB, whiteSpace: 'nowrap', ...tnum }}>{h.ana.step}, {h.ana.pct}%</span></div>
               )}
             </div>
           </div>
@@ -118,7 +118,7 @@ export function HomeBody({ h }: { h: WebHome }) {
                   {r.live ? <span style={chip('#FCEEE3', '#A8481A')}><span style={{ width: 6, height: 6, borderRadius: 3, background: ORANGE, marginRight: 4 }} />측정 중</span> : null}
                   {r.st ? <span style={chip(r.st.bg, r.st.c)}>{r.st.t}</span> : null}
                 </div>
-                <span style={{ fontSize: 13, color: SUB, ...tnum, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.when}{r.when && r.sub ? ' · ' : ''}{r.sub}</span>
+                <span style={{ fontSize: 13, color: SUB, ...tnum, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.when}{r.when && r.sub ? ', ' : ''}{r.sub}</span>
                 {r.chips.length ? <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{r.chips.map((c, j) => <span key={j} style={chip(c.bg, c.c)}>{c.t}</span>)}</div> : null}
               </div>
               {r.sym ? (
@@ -192,16 +192,16 @@ export function DogBody({ d }: { d: WebDog }) {
               {vit.note ? <span style={{ fontSize: 13, color: '#5B6472' }}>{vit.note}</span> : null}
             </div>
             <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <b style={{ fontSize: 15 }}>진단 · 수술</b>
+              <b style={{ fontSize: 15 }}>진단/수술</b>
               {vit.hist.length ? vit.hist.map((x, i) => (
                 <div key={x.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingTop: i ? 8 : 0, borderTop: i ? `1px solid ${LINE2}` : 'none' }}>
                   <span style={chip(x.kind === '수술' ? '#FCEEE3' : x.kind === '진단' ? '#EEF1F6' : '#F2EEE8', x.kind === '수술' ? '#A8481A' : x.kind === '진단' ? '#4A5A78' : INK2, { flex: 'none' })}>{x.kind}</span>
-                  <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><b style={{ fontSize: 14, lineHeight: 1.4 }}>{x.title}</b><span style={{ fontSize: 12, color: SUB, ...tnum }}>{x.day}{x.site ? ` · ${x.site}` : ''}{x.by ? ` · ${x.by}` : ''}</span></div>
+                  <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}><b style={{ fontSize: 14, lineHeight: 1.4 }}>{x.title}</b><span style={{ fontSize: 12, color: SUB, ...tnum }}>{x.day}{x.site ? `, ${x.site}` : ''}{x.by ? `, ${x.by}` : ''}</span></div>
                 </div>
               )) : <span style={{ fontSize: 14, color: '#5B6472' }}>기록된 진단·수술이 없습니다</span>}
             </div>
             <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}><b style={{ fontSize: 15 }}>경과 한눈에 보기</b>{d.trend.has ? <span style={{ fontSize: 13, color: SUB }}>최근 대칭 점수 <b style={{ color: INK, ...tnum }}>{d.trend.sym}점</b> · <b style={{ color: d.trend.c }}>{d.trend.label}</b></span> : null}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}><b style={{ fontSize: 15 }}>경과 한눈에 보기</b>{d.trend.has ? <span style={{ fontSize: 13, color: SUB }}>최근 대칭 점수 <b style={{ color: INK, ...tnum }}>{d.trend.sym}점</b>, <b style={{ color: d.trend.c }}>{d.trend.label}</b></span> : null}</div>
               {d.trend.has ? (
                 <svg viewBox="0 0 320 110" style={{ width: '100%', display: 'block' }}>
                   {[20, 50, 80].map((y) => <line key={y} x1="24" x2="300" y1={y} y2={y} stroke="#F0ECE6" />)}
@@ -222,7 +222,7 @@ export function DogBody({ d }: { d: WebDog }) {
                 <div key={h.id} onClick={h.open} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 0', borderTop: i ? `1px solid ${LINE2}` : 'none', cursor: 'pointer' }}>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}><b style={{ fontSize: 15, ...tnum }}>{h.no}</b><span style={{ fontSize: 14, color: SUB, ...tnum }}>{h.date}</span>{h.base ? <span style={chip(INK, '#fff', { height: 20, fontSize: 12 })}>기준</span> : null}{h.rep !== '—' ? <span style={chip('#F2EEE8', INK2, { height: 20, fontSize: 12 })}>보고서</span> : null}</div>
-                    <span style={{ fontSize: 13, color: SUB, ...tnum }}>체중 {h.w} · 유효 통과 {h.pass} · 모델 {h.model}</span>
+                    <span style={{ fontSize: 13, color: SUB, ...tnum }}>체중 {h.w}, 유효 통과 {h.pass}, 모델 {h.model}</span>
                     {h.canBase ? <span onClick={h.setBase} style={{ alignSelf: 'flex-start', fontSize: 13, fontWeight: 700, color: '#B4501A', minHeight: 44, margin: '-11px 0', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>기준 회차로 지정</span> : null}
                   </div>
                   <span style={chip(h.bg, h.c, { height: 24, fontSize: 12 })}>{h.st}</span>

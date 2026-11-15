@@ -212,7 +212,7 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
           }}>
           <label style={{ width: '100%', maxWidth: 560, height: 44, borderRadius: 22, border: '1px solid #E2DCD3', background: '#fff', display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', color: '#7A808A' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" style={{ flex: 'none' }}><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8"></circle><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"></path></svg>
-            <input name="q" key={q} defaultValue={q} placeholder="반려견 검색 (이름 · 동물번호 · 진단 · 보호자 · 메모)" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 15, background: 'transparent', color: '#1B2433' }} />
+            <input name="q" key={q} defaultValue={q} placeholder="반려견 검색 (이름, 동물번호, 진단, 보호자, 메모)" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 15, background: 'transparent', color: '#1B2433' }} />
           </label>
         </form>
         <a className="lk hv-orange" href={link('/upload')} style={{ height: 44, padding: '0 18px', borderRadius: 12, background: '#D2601A', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, flex: 'none' }}><svg width="18" height="18" viewBox="0 0 24 24"><use href="#w-up"></use></svg>새 측정</a>

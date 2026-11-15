@@ -281,7 +281,7 @@ export class AppProto extends DCLogic<Props, any> {
 
     const qq = (s.q || '').trim()
     const shown = dogs.filter((d) => !qq || d.name.includes(qq))
-    const homeDogs = shown.map((d) => { const all = results.filter((r) => r.dog === d.id); return { init: d.name[0], name: d.name, desc: desc(d), live: !!d.open, meta: all.length ? `마지막 측정 ${all[0].date} · ${all.length}회차` : '아직 측정 기록이 없습니다', open: () => this.openDog(d.id) } })
+    const homeDogs = shown.map((d) => { const all = results.filter((r) => r.dog === d.id); return { init: d.name[0], name: d.name, desc: desc(d), live: !!d.open, meta: all.length ? `마지막 측정 ${all[0].date}, ${all.length}회차` : '아직 측정 기록이 없습니다', open: () => this.openDog(d.id) } })
 
     // 주소의 반려견 id 가 없으면(지웠거나 다른 기관) 다른 반려견을 대신 보여 주지 않는다(none 상태로 안내)
     const D = this.props.params.dogId ? dogById(this.props.params.dogId) : dogs[0]
@@ -290,10 +290,10 @@ export class AppProto extends DCLogic<Props, any> {
     if (D) {
       const all = results.filter((r) => r.dog === D.id), bId = baseOf(D), bR = results.find((r) => r.id === bId)
       dd = { name: D.name, init: D.name[0], desc: desc(D),
-        tags: [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ''), SEX[D.sex || 'm']],
+        tags: [SIZE[D.size] + (D.sizeManual ? ' (직접 지정)' : ''), SEX[D.sex || 'm']],
         rows: [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력', sub: '' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택', sub: '' },
-          { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '' }],
-        hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차 · ${r.date}`, sub: r.st === 'fail' ? `${wkg(r.w)} · 쓸 수 있는 통과 없음` : `${wkg(r.w)} · 유효 통과 ${r.ps[1]} · 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
+          { k: '기준 회차', v: bR ? `${bR.date}, ${sessNo(bR)}회차` : '없음', sub: D.base ? '' : bR ? '가장 이른 회차로 자동 지정' : '' }, { k: '내부 메모', v: D.memo || '없음', sub: '' }],
+        hist: all.map((r, i) => { const stt = ST[r.st]; return { title: `${sessNo(r)}회차, ${r.date}`, sub: r.st === 'fail' ? `${wkg(r.w)}, 쓸 수 있는 통과 없음` : `${wkg(r.w)}, 유효 통과 ${r.ps[1]}, 모델 ${r.model}`, base: r.id === bId, rep: !!r.rep, canBase: r.st !== 'fail' && r.id !== bId,
           setBase: async (e: any) => { e.stopPropagation(); try { await this.props.actions.updateDog(D.id, { baseline_session_id: r.id, version: D.raw.version }); this.toast(`${r.date} 회차를 기준으로 정했습니다`) } catch (err) { this.toast(err instanceof ApiError && err.code === 'DOG_MODIFIED' ? DOG_MODIFIED_MSG : errMsg(err, '기준 회차를 바꾸지 못했습니다')) } },
           st: stt[0], bg: stt[1], c: stt[2], bt: i ? '1px solid #F2EFEA' : 'none', open: () => this.openRes(r.id) } }),
         has: all.length > 0, none: !all.length, count: all.length + '회차',
@@ -315,7 +315,7 @@ export class AppProto extends DCLogic<Props, any> {
     if (CD && cmpd && cmpd.cmp) {
       const c = cmpd.cmp, mode = this.props.ui.cmp
       const B = results.find((r) => r.id === c.base.session_id), T = results.find((r) => r.id === c.target.session_id)
-      const when = (r: DRes | undefined, iso: string) => (r ? `${r.date} · ${sessNo(r)}회차` : short(iso))
+      const when = (r: DRes | undefined, iso: string) => (r ? `${r.date}, ${sessNo(r)}회차` : short(iso))
       cp = { has: true, none: false, name: CD.name, baseLabel: mode === 'base' ? '기준 회차' : '직전 회차', baseDate: when(B, c.base.measured_on), tDate: when(T, c.target.measured_on),
         modelChanged: c.model_changed, modelMsg: `두 회차의 분석 모델이 다릅니다(${c.base.model_version ?? '-'} → ${c.target.model_version ?? '-'}). 분석 방식이 바뀌어 수치를 그대로 비교하기 어렵습니다.`,
         rows: cmpd.rows, ...cmpd.trend,
@@ -330,7 +330,7 @@ export class AppProto extends DCLogic<Props, any> {
     const setSo = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ so: { ...st.so, [k]: v } })); if (k === 'dev') this.checkDev(v) }
     const devHint = !s.so.dev.trim() ? '측정 기기 뒷면 라벨에 적혀 있습니다.'
       : !s.devChk || s.devChk.code !== s.so.dev.trim() ? '기기 번호를 확인하는 중…'
-      : s.devChk.err ? s.devChk.err : typeof s.devChk.left === 'number' ? `${s.devChk.org} · 가입할 수 있는 계정 ${s.devChk.left}개` : `${s.devChk.org} · 확인됐습니다`
+      : s.devChk.err ? s.devChk.err : typeof s.devChk.left === 'number' ? `${s.devChk.org}, 가입할 수 있는 계정 ${s.devChk.left}개` : `${s.devChk.org}, 확인됐습니다`
     const devHc = s.devChk && s.devChk.code === s.so.dev.trim() && s.devChk.err ? '#C2412D' : s.devChk && s.devChk.code === s.so.dev.trim() ? '#2E7D4F' : '#5B6472'
     const notifOn = acct.notifOn ?? s.notifOn
     const setPet = (k: string) => (e: any) => { const v = e.target.value; this.setState((st: any) => ({ pet: { ...st.pet, [k]: v } })) }
@@ -414,7 +414,7 @@ export class AppProto extends DCLogic<Props, any> {
         for (const c of srv) {
           if (c.code === 'RESHOOT_NEEDED') {
             if (!latest || latest.st === 'fail') out.push(latest ? failChip(latest) : { t: '재촬영 필요', bg: '#FBE0D9', c: '#C2412D' })
-            else out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
+            else out.push({ t: '일부 유효, 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
           } else if (c.code === 'GAIT_BETTER' && c.delta != null) out.push({ t: `보행 좋아짐 +${c.delta}점`, bg: '#E8F3EC', c: '#2E8B57' })
           else if (c.code === 'GAIT_WORSE' && c.delta != null) out.push({ t: `보행 나빠짐 −${-c.delta}점`, bg: '#F8E7E3', c: '#C2412D' })
           else if (c.code === 'IMPORTANT_NOTE') out.push({ t: '중요 메모', bg: '#EEF1F6', c: '#4A5A78' })
@@ -425,7 +425,7 @@ export class AppProto extends DCLogic<Props, any> {
       for (const r of results.filter((x) => x.dog === d.id && daysAgo(x.measured_on) <= 7).slice(0, 1)) {
         if (r.st === 'fail') out.push(failChip(r))
         else {
-          if (r.st === 'part') out.push({ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
+          if (r.st === 'part') out.push({ t: '일부 유효, 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' })
           const p = prevValid(r)
           if (p && r.sym != null && p.sym != null && r.sym - p.sym >= 3) out.push({ t: `보행 좋아짐 +${r.sym - p.sym}점`, bg: '#E8F3EC', c: '#2E8B57' })
           else if (p && r.sym != null && p.sym != null && p.sym - r.sym >= 3) out.push({ t: `보행 나빠짐 −${p.sym - r.sym}점`, bg: '#F8E7E3', c: '#C2412D' })
@@ -441,7 +441,7 @@ export class AppProto extends DCLogic<Props, any> {
       // 오늘 회차가 여러 개여도 칩은 가장 최근 회차 하나만(results 는 최신순)
       const res = results.filter((r) => r.dog === d.id && r.measured_on === todayIso), live = !!ana && ana.dog === d.id
       if (!res.length && !live) return []
-      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정 · 대칭 점수 ${r.sym ?? '—'}점`, bg: '#F1ECE5', c: '#5B6472' }))]
+      const chips = [...(live ? [{ t: ana!.status === 'MEASURING' ? '촬영 중' : '분석 중', bg: '#FCEEE3', c: '#A8481A' }] : []), ...res.slice(0, 1).map((r) => (r.st === 'fail' ? failChip(r) : { t: `보행 측정, 대칭 점수 ${r.sym ?? '—'}점`, bg: '#F1ECE5', c: '#5B6472' }))]
       const times = res.map((r) => r.time).filter(Boolean).sort()
       return [{ key: d.id, when: times[0] || '', name: d.name, sub: d.breed || '견종 미입력', chips: [...chips, ...badgeChips(d)], right: res.map(byOf).find((b) => b !== '—') || '', live, open: () => this.openDog(d.id) }]
     })
@@ -453,7 +453,7 @@ export class AppProto extends DCLogic<Props, any> {
       if (s.pd === 'custom') return (!s.pdFrom || d >= s.pdFrom) && (!s.pdTo || d <= s.pdTo)
       return true
     }
-    const analysisRows: HomeRow[] = results.filter((r) => keepIds.has(r.dog) && (!s.by || byOf(r) === s.by) && inPeriod(r.measured_on)).map((r) => { const d = dogById(r.dog)!; return { key: r.id, when: `${short(r.date)} ${r.time}`.trim(), name: d.name, sub: `${d.breed || '견종 미입력'} · ${sessNo(r)}회차`, chips: [], sym: symChip(r), st: stChip(r), right: byOf(r), open: () => this.openRes(r.id) } })
+    const analysisRows: HomeRow[] = results.filter((r) => keepIds.has(r.dog) && (!s.by || byOf(r) === s.by) && inPeriod(r.measured_on)).map((r) => { const d = dogById(r.dog)!; return { key: r.id, when: `${short(r.date)} ${r.time}`.trim(), name: d.name, sub: `${d.breed || '견종 미입력'}, ${sessNo(r)}회차`, chips: [], sym: symChip(r), st: stChip(r), right: byOf(r), open: () => this.openRes(r.id) } })
     // 정렬: 측정 중인 반려견이 맨 위, 나머지는 서버 순서(마지막 측정일 최신순, 측정 전은 아래, 같으면 최근 등록순)
     const isLive = (d: DDog) => !!d.open || (!!ana && ana.dog === d.id)
     // 가장 최근 분석 결과 한 칸(정상이면 대칭 지수, 일부 유효·실패면 다시 찍을지 안내). 회차마다 칩이 쌓이지 않게 하나만
@@ -461,14 +461,14 @@ export class AppProto extends DCLogic<Props, any> {
       const r = results.find((x) => x.dog === d.id && x.loaded)
       if (!r) return []
       if (r.st === 'fail') return [failChip(r)]
-      if (r.st === 'part') return [{ t: '일부 유효 · 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' }]
-      return [{ t: `보행 측정 · 대칭 점수 ${r.sym ?? '—'}점`, bg: '#F1ECE5', c: '#5B6472' }]
+      if (r.st === 'part') return [{ t: '일부 유효, 재촬영 권장', bg: '#FAF1DF', c: '#9A6A12' }]
+      return [{ t: `보행 측정, 대칭 점수 ${r.sym ?? '—'}점`, bg: '#F1ECE5', c: '#5B6472' }]
     }
     // 변화 칩 중 재촬영·실패·일부 유효는 latestChip 과 겹치므로 뺀다(좋아짐·나빠짐·중요 메모만)
-    const RETAKE_T = new Set(['재촬영 필요', '분석 실패', '일부 유효 · 재촬영 권장'])
+    const RETAKE_T = new Set(['재촬영 필요', '분석 실패', '일부 유효, 재촬영 권장'])
     const dogRows: HomeRow[] = [...hvDogs.filter(isLive), ...hvDogs.filter((d) => !isLive(d))].map((d) => {
       const all = results.filter((r) => r.dog === d.id), last = all[0], tr = trendOf(d.id)
-      return { key: d.id, when: last ? `마지막 측정 ${short(last.date)}` : '측정 전', name: d.name, sub: `${SEX[d.sex || 'm']} · ${ageOf(d)} · ${d.breed || '견종 미입력'} · ${SIZE[d.size]}`,
+      return { key: d.id, when: last ? `마지막 측정 ${short(last.date)}` : '측정 전', name: d.name, sub: `${SEX[d.sex || 'm']}, ${ageOf(d)}, ${d.breed || '견종 미입력'}, ${SIZE[d.size]}`,
         // 셋째 줄: 수술·질병 이름, 그 뒤에 조치가 필요한 변화(재촬영 필요·보행 좋아짐/나빠짐)
         chips: [...badgeChips(d), ...latestChip(d), ...changesOf(d).filter((c) => !RETAKE_T.has(c.t))], right: `분석 ${all.length}건`,
         sym: tr.has ? { t: `${tr.sym}점`, bg: '#F2EFEA', c: '#1B2433', d: tr.label, dc: tr.c } : undefined, open: () => this.openDog(d.id) }
@@ -497,7 +497,7 @@ export class AppProto extends DCLogic<Props, any> {
       view: s.hv, q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) },
       rows: s.hv === 'today' ? todayRows : s.hv === 'analyses' ? analysisRows : s.hv === 'staff' ? staffRows : dogRows,
       empty: !dogs.length ? '첫 반려견을 등록해 주세요. 이름·견종·체중만 있으면 바로 보행 측정을 시작할 수 있습니다.' : s.hv === 'today' ? '오늘 진행한 분석 및 측정이 없습니다.' : qq ? `‘${qq}’ 에 맞는 ${s.hv === 'analyses' ? '분석이' : s.hv === 'staff' ? '담당자가' : '반려견이'} 없습니다.` : s.hv === 'analyses' ? (s.pd !== 'all' ? '이 기간에 한 분석이 없습니다.' : '아직 분석 결과가 없습니다.') : s.hv === 'staff' ? '아직 촬영한 분석이 없습니다.' : '등록된 반려견이 없습니다.',
-      ana: { on: !!ana && li, thumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, name: anaDog ? anaDog.name : '', label: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', hint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', pct: Math.round(anaP / 5 * 100), step: ana?.label ?? STEPS[anaFloor], n: anaFloor + 1, measuring: !!ana && ana.status === 'MEASURING',
+      ana: { on: !!ana && li, thumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, name: anaDog ? anaDog.name : '', label: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', hint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부. 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', pct: Math.round(anaP / 5 * 100), step: ana?.label ?? STEPS[anaFloor], n: anaFloor + 1, measuring: !!ana && ana.status === 'MEASURING',
         open: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)) },
     }
     const webDog: WebDog = (() => {
@@ -506,8 +506,8 @@ export class AppProto extends DCLogic<Props, any> {
       return {
         none: !D, missing: !D && !!this.props.params.dogId && dogs.length > 0,
         name: D ? D.name : '반려견을 찾을 수 없습니다', init: D ? D.name[0] : '?', desc: D ? desc(D) : '', live: !!D?.open,
-        tags: D ? [SIZE[D.size] + (D.sizeManual ? ' · 직접 지정' : ''), SEX[D.sex || 'm'], ageOf(D), ...(D.focus ? [`관심 다리 ${LIMB[D.focus]}`] : [])] : [],
-        cells: D ? [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택' }, { k: '기준 회차', v: bR ? `${bR.date} · ${sessNo(bR)}회차` : '없음', sub: D.base ? '직접 지정' : bR ? '가장 이른 회차' : '' }, { k: '측정 횟수', v: `${all.length}회차`, sub: all[0] ? `마지막 ${short(all[0].date)}` : '' }] : [],
+        tags: D ? [SIZE[D.size] + (D.sizeManual ? ' (직접 지정)' : ''), SEX[D.sex || 'm'], ageOf(D), ...(D.focus ? [`관심 다리 ${LIMB[D.focus]}`] : [])] : [],
+        cells: D ? [{ k: '재활 시작일', v: D.rehab ? fmtD(D.rehab) : '미입력' }, { k: '관심 다리', v: D.focus ? LIMB[D.focus] : '미선택' }, { k: '기준 회차', v: bR ? `${bR.date}, ${sessNo(bR)}회차` : '없음', sub: D.base ? '직접 지정' : bR ? '가장 이른 회차' : '' }, { k: '측정 횟수', v: `${all.length}회차`, sub: all[0] ? `마지막 ${short(all[0].date)}` : '' }] : [],
         emr: { dogId: D?.id ?? null, kg: D?.kg ?? '' },
         memo: D?.memo || '없음', trend: D ? trendOf(D.id) : { has: false, pts: [], line: '', label: '', c: '', sym: null },
         hist: all.map((r, i) => ({ id: r.id, no: `${sessNo(r)}회차`, date: r.date, w: r.w && r.w !== '-' ? `${r.w}kg` : '—', pass: r.st === 'fail' ? '—' : `${r.ps[1]} / ${r.ps[0]}`, model: r.model, rep: r.rep ? '있음' : '—', base: r.id === bId, canBase: r.st !== 'fail' && r.id !== bId, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], open: () => this.openRes(r.id), setBase: dd.hist[i] ? dd.hist[i].setBase : () => {} })),
@@ -530,7 +530,7 @@ export class AppProto extends DCLogic<Props, any> {
       chips: [{ id: 'all', init: '전체', name: '전체' }, ...repDogs.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name }))].map((c) => ({ ...c, on: s.filt === c.id, pick: () => this.setState({ filt: c.id, resShown: 50 }) })),
       rows: repRows.slice(0, s.resShown).map((r) => {
         const d = dogById(r.dog)!, rp = repOf(r)
-        return { id: r.id, thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, name: d.name, when: `${r.date} · ${sessNo(r)}회차`, sub: `${d.breed || '견종 미입력'}${r.sym != null && r.st !== 'fail' ? ` · 대칭 점수 ${r.sym}점` : ''}`,
+        return { id: r.id, thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, name: d.name, when: `${r.date}, ${sessNo(r)}회차`, sub: `${d.breed || '견종 미입력'}${r.sym != null && r.st !== 'fail' ? `, 대칭 점수 ${r.sym}점` : ''}`,
           owner: rp?.OWNER === 'DONE', vet: rp?.VET === 'DONE', openOwner: () => openRepOf(r.id, 'g'), openVet: () => openRepOf(r.id, 'v') }
       }),
       more: repRows.length > s.resShown ? `더 보기 (${repRows.length - s.resShown}건 남음)` : '', loadMore: () => this.setState({ resShown: s.resShown + 50 }),
@@ -542,7 +542,7 @@ export class AppProto extends DCLogic<Props, any> {
         cta: li ? { label: '보행 분석 시작하기', go: () => this.goCapture() } : { label: '기관 계정 만들기', go: () => this.nav('signupOrg') }, login: li ? undefined : () => this.nav('login') }} />,
       gait3dBody: sc === 'gait3d' ? (() => {
         const RD3 = R ? dogById(R.dog) : undefined
-        return <Gait3dBody result={R?.result} name={RD3?.name ?? ''} when={R ? `${R.date} · ${sessNo(R)}회차` : ''} size={RD3?.size ?? 'M'} sym={R?.sym ?? null} back={this.back} />
+        return <Gait3dBody result={R?.result} name={RD3?.name ?? ''} when={R ? `${R.date}, ${sessNo(R)}회차` : ''} size={RD3?.size ?? 'M'} sym={R?.sym ?? null} back={this.back} />
       })() : null,
       go3d: () => { if (R) this.nav('gait3d', `/sessions/${R.id}/3d`) }, go3dOn: !!R && R.st !== 'fail' && !!R.result,
       homeBody: <HomeBody h={webHome} />, dogBody: <DogBody d={webDog} />, resultsBody: <ReportsBody r={webReports} />,
@@ -597,7 +597,7 @@ export class AppProto extends DCLogic<Props, any> {
       hasDogs: dogs.length > 0, noDogs: !dogs.length, dogCount: dogs.length + '마리',
       q: s.q, onQ: (e: any) => { const v = e.target.value; this.setState({ q: v }) }, homeDogs, noMatch: !!qq && !shown.length,
       goPetNew: this.goPetNew, goCapture: () => this.goCapture(), dd,
-      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)), anaMeasuring: !!ana && ana.status === 'MEASURING', anaLabel: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', anaHint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부 · 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
+      anaOn: !!ana && li && sc !== 'analyzing', anaThumb: ana ? <SessionThumb sessionId={ana.sessionId} w={44} h={44} /> : null, goAnalyzing: () => ana && (ana.status === 'MEASURING' ? this.nav('capReview', `/sessions/${ana.sessionId}`) : this.nav('analyzing', `/sessions/${ana.sessionId}/analyzing`)), anaMeasuring: !!ana && ana.status === 'MEASURING', anaLabel: ana && ana.status === 'MEASURING' ? ' 촬영 중' : ' 분석 중', anaHint: ana && ana.status === 'MEASURING' ? `영상 ${ana.n}개 첨부. 측정 종료를 누르지 않았습니다. 눌러서 이어가기` : '', anaName: anaSess ? anaSess.dog.name : (anaDog ? anaDog.name : ''), anaPct: anaPctNow, anaN: anaFloor + 1, anaStep: anaStepNow,
       // 발자국 각도: 홀수 번째는 오른쪽 위로 조금 더 틀어 한 방향으로만 향하지 않게 섞는다
       prints: (() => { const ph = Math.floor(Date.now() / 420) % 11; return Array.from({ length: 8 }, (_, i) => { const on = ph <= 8 ? i < ph : ph === 9; const jx = [0, 6, -8, 4, -4, 10, -2, 5][i], jr = -23 + [-6, 22, -10, 28, -4, 18, -12, 25][i]; return { x: (i % 2 ? 236 : 118) + jx * 2 + Math.round(Math.sin(i * 0.9) * 22), y: 656 - i * 68 + (i % 2 ? 10 : 0), r: jr, op: on ? 1 : 0, s: on ? 1 : 0.7 } }) })(),
 
@@ -610,7 +610,7 @@ export class AppProto extends DCLogic<Props, any> {
         { label: '출생연도 (선택)', ph: '예) 2019', val: s.pet.birth, on: setPet('birth') }],
       sexes: Object.entries(SEX).map(([k, label]) => ({ label, ...pickSt(s.pet.sex === k), pick: () => this.setState((st: any) => ({ pet: { ...st.pet, sex: k } })) })),
       sizes: Object.entries(SIZE).map(([k, label]) => ({ label, ...pickSt((s.pet.size || autoSz) === k), pick: () => this.setState((st: any) => ({ pet: { ...st.pet, size: st.pet.size === k ? null : k } })) })),
-      sizeNote: s.pet.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다',
+      sizeNote: s.pet.size ? '직접 선택. 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다',
       limbs: Object.entries(LIMB).map(([k, label]) => ({ label, ...pickSt(s.pet.focus === k), pick: () => this.setState((st: any) => ({ pet: { ...st.pet, focus: st.pet.focus === k ? null : k } })) })),
       petRehab: s.pet.rehab, onRehab: setPet('rehab'), petMemo: s.pet.memo, onMemo: setPet('memo'),
       petBg: s.pet.name && s.pet.breed && s.pet.kg ? '#D2601A' : '#C3C8CF',
@@ -663,7 +663,7 @@ export class AppProto extends DCLogic<Props, any> {
       capPrevOn: sc === 'capReview' && !!this.lastFileUrl, // 앱 안 녹화를 못 쓰는 기기에서는 샘플 영상을 틀지 않고 안내 문구만(11-06, 실기기에서 다른 개 썸네일이 보여 헷갈림)
       capVidSrc: undefined, capVidPoster: undefined, noInAppCam: !camera.canRecordInApp(),
       camLoading: !!s.camLoading, camOp: s.camLoading ? 0 : 1,
-      recTime: `영상 ${Math.min(16, shots + (s.pend || 0) + 1)}/16 · ${s.recSec >= 0 ? `00:${String(Math.min(99, s.recSec)).padStart(2, '0')} 녹화 중` : '00:00 / 00:04'}`, recPillBg: s.busy || s.recSec >= 0 ? '#C2412D' : 'rgba(14,18,23,.55)', recDot: s.busy || s.recSec >= 0 ? '#fff' : '#E5604D',
+      recTime: `영상 ${Math.min(16, shots + (s.pend || 0) + 1)}/16, ${s.recSec >= 0 ? `00:${String(Math.min(99, s.recSec)).padStart(2, '0')} 녹화 중` : '00:00 / 00:04'}`, recPillBg: s.busy || s.recSec >= 0 ? '#C2412D' : 'rgba(14,18,23,.55)', recDot: s.busy || s.recSec >= 0 ? '#fff' : '#E5604D',
       recBtnS: s.busy || s.recSec >= 0 ? 30 : 62, recBtnR: s.busy || s.recSec >= 0 ? 8 : 31,
       capHint: s.busy ? '영상을 올리는 중입니다' : s.recSec < 0 && s.pend > 0 ? `앞 영상 ${s.pend}개를 올리는 중입니다. 바로 다음 영상을 찍어도 됩니다` : s.recSec >= 0 ? '반려견이 화면을 다 지나가면 버튼을 다시 눌러 멈춰 주세요' : s.camLive ? '점선 안에 반려견 옆모습이 들어오게 맞추고 촬영 버튼을 눌러 주세요' : '촬영 버튼을 누르면 카메라가 열립니다. 점선 안에 반려견 옆모습이 들어오게 맞춰 주세요',
       // 촬영 버튼: 기기 카메라(파일 입력 capture)
@@ -699,7 +699,7 @@ export class AppProto extends DCLogic<Props, any> {
       },
 
       filters: [{ id: 'all', label: '전체' }, ...dogs.map((d) => ({ id: d.id, label: d.name }))].map((f) => { const on = s.filt === f.id; return { label: f.label, bg: on ? '#1B2433' : '#fff', c: on ? '#fff' : '#3A4250', bd: on ? '#1B2433' : '#ECE8E2', pick: () => this.setState({ filt: f.id }) } }),
-      resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date} · ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? (r.status === 'FAILED' || allShotsFailed(r.result) ? '분석 실패' : '다시 촬영 필요') : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, open: () => this.openRes(r.id) })),
+      resList: filtDogs.map((r, i) => ({ name: dogById(r.dog)!.name, when: `${r.date}, ${sessNo(r)}회차`, st: ST[r.st][0], bg: ST[r.st][1], c: ST[r.st][2], sym: r.st === 'fail' ? (r.status === 'FAILED' || allShotsFailed(r.result) ? '분석 실패' : '다시 촬영 필요') : `유효 통과 ${r.ps[1]}`, bt: i ? '1px solid #F2EFEA' : 'none', thumb: <SessionThumb sessionId={r.id} w={52} h={44} />, open: () => this.openRes(r.id) })),
       hasRes: filtDogs.length > 0, noRes: !filtDogs.length,
       rd, retake: () => { if (R) this.goCapture(R.dog) },
       gaitSegs: seg([['walk', '평보'], ['trot', '속보']], G, (k) => this.setState({ gait: k })), gaitName: rd.gaitName,
@@ -725,7 +725,7 @@ export class AppProto extends DCLogic<Props, any> {
         const vsBase = bR && bR.id !== R.id && bR.sym != null && R.sym != null ? { d: R.sym - bR.sym, date: lbl(bR) } : null
         return <AppReport kind={s.repType === 'v' ? 'v' : 'g'} result={R.result} dogName={RD?.name ?? ''} dogSize={RD?.size ?? 'M'} focus={RD?.focus ?? null}
           sym={R.sym} symHist={symHist} prevLabel={prevR ? lbl(prevR) : undefined} vsBase={vsBase} passes={R.ps} excluded={R.ex} vet={this.props.vetReport} />
-      })() : null, isRepV: s.repType === 'v', repKind: s.repType === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용',
+      })() : null, isRepV: s.repType === 'v', repKind: s.repType === 'v' ? '보행 분석 보고서 (수의사용)' : '보행 분석 보고서 (보호자용)',
       repStatus: R ? this.props.reportStatus(rep, R.model) : '',
       repSegs: seg([['g', '보호자용'], ['v', '수의사용']], s.repType, (k) => this.setState({ repType: k })),
       regenRep: async () => { if (!R || !rep) return this.toast('아직 보고서가 없습니다'); try { await this.props.actions.regenerateReport(R.id, rep.id); this.toast('보고서를 다시 만들고 있습니다') } catch (e) { this.toast(errMsg(e, '지금은 다시 만들 수 없습니다')) } },
@@ -770,7 +770,7 @@ export class AppProto extends DCLogic<Props, any> {
       ],
       helpCards: HELP_CARDS, helpContact: HELP_CONTACT.map((c) => ({ ...c, open: () => { if (c.href) window.location.href = c.href } })),
       helpLinks: [{ label: '고객센터 안내 전체 보기', on: () => this.nav('legal', '/legal/support') }, { label: '서비스 소개', on: () => this.nav('story') }],
-      myDogs: dogs.map((d) => ({ init: d.name[0], name: d.name, desc: desc(d) + ' · ' + SEX[d.sex || 'm'], edit: () => this.nav('petNew', `/dogs/${d.id}/edit`), del: () => this.setState({ sheet: 'del', delId: d.id }) })),
+      myDogs: dogs.map((d) => ({ init: d.name[0], name: d.name, desc: desc(d) + ', ' + SEX[d.sex || 'm'], edit: () => this.nav('petNew', `/dogs/${d.id}/edit`), del: () => this.setState({ sheet: 'del', delId: d.id }) })),
       myDogCount: dogs.length + '마리',
       // 알림 설정: 서버가 notif_on 을 주면(192) 그 값이 기준이고 PATCH 로 저장한다. 예전 서버면 이 기기에만 둔다
       tgBg: notifOn ? '#D2601A' : '#DDD7CE', tgX: notifOn ? 22 : 2, toggleNotif: () => {

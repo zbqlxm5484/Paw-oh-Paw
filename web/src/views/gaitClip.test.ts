@@ -86,6 +86,6 @@ describe('촬영 고르기·불러오기', () => {
       demo: async () => demoClip,
     }, 's1', 'TROT')
     expect(ok.real).toBe(true)
-    expect(ok.note).toMatch(/^이 회차 실제 측정 · 속보 \d+걸음 평균$/)
+    expect(ok.note).toMatch(/^이 회차 실제 측정, 속보 \d+걸음 평균$/)
   })
 })

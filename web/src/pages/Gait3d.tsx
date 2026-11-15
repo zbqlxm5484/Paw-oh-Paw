@@ -68,7 +68,7 @@ function prepare(acct: Account, r: Result) {
   const ctx: Ctx = {
     model_url: staticUrl(model), legs, roms, stance, speed, rom_ref: ROM_REF, overall,
     gait_src: s
-      ? `${source_name(s)} 회차 · 관절 가동 범위는 AI-Hub 71878 라벨 관절점, 입각기 비율은 공개 논문(PLOS ONE 2018) 실측 분포, 보행 속도는 합성`
+      ? `${source_name(s)} 회차, 관절 가동 범위는 AI-Hub 71878 라벨 관절점, 입각기 비율은 공개 논문(PLOS ONE 2018) 실측 분포, 보행 속도는 합성`
       : '시연용 합성 수치(실제 개의 값이 아님)',
     // 측정 걸음: 이 회차의 실제 관절 각도(백엔드 회차만). 못 받으면 시연용 한 걸음 곡선(tools/build_demo_clip.py, 공개 논문 + 합성)
     gait_url: staticUrl('assets/dog3d/gait_demo.json'),
@@ -118,7 +118,7 @@ export default function Gait3d() {
   if (acct && (!r || r.st === 'fail')) go = redirect(r ? `/results/${rid}` : '/results', '3D 로 볼 수 없는 회차입니다')
   useRedirect(go)
   const [pv] = useState(() => (acct && r && !go ? prepare(acct, r) : null))
-  useTitle(`${pv ? pv.rd.name : ''} 3D 보기 · Paw oh Paw`)
+  useTitle(`${pv ? pv.rd.name : ''} 3D 보기`)
   const [loading, setLoading] = useState<string | null>('3D 모델을 불러오는 중…')
   const viewRef = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -174,7 +174,7 @@ export default function Gait3d() {
                 <button key={k} className="bt view-btn" type="button" data-view={k} onClick={() => setView(k)} style={css(`height:44px;padding:0 11px;border-radius:9px;border:1px solid ${k === view.main ? '#D2601A' : '#E2DCD3'};background:#fff;color:${k === view.main ? '#B4501A' : '#1B2433'};font-size:13px;font-weight:700`)}>{label}{k === view.main ? ' ★' : k === view.sub ? ' ☆' : ''}</button>
               ))}
             </div>
-            <span className="g3d-hint" style={css('position:absolute;left:14px;bottom:12px;font-size:13px;color:#5B6472')}>끌어서 돌리기 · 휠로 확대 · 다리에 마우스를 올리면 수치</span>
+            <span className="g3d-hint" style={css('position:absolute;left:14px;bottom:12px;font-size:13px;color:#5B6472')}>끌어서 돌리기, 휠로 확대, 다리에 마우스를 올리면 수치</span>
             {/* 측정 걸음의 출처: 이 회차 실제 측정 / 견본 */}
             <span id="gait-src" style={css(`position:absolute;right:14px;bottom:10px;max-width:calc(100% - 330px);padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.9);border:1px solid ${gaitNote && !gaitNote.real ? '#F0C9A8' : '#ECE8E2'};font-size:12px;line-height:1.4;color:${gaitNote && !gaitNote.real ? '#B4501A' : '#5B6472'};pointer-events:none;text-align:right`)}>{gaitNote ? gaitNote.note : '이 회차 관절 각도를 불러오는 중…'}</span>
             <div id="tip" ref={tipRef} style={css('position:absolute;display:none;pointer-events:none;min-width:200px;padding:10px 12px;border-radius:12px;background:rgba(27,36,51,.94);color:#fff;font-size:13px;line-height:1.55;box-shadow:0 8px 24px rgba(27,36,51,.25)')}></div>
@@ -513,7 +513,7 @@ function mount(ctx: Ctx, el: Els): () => void {
     const rows = L.mets.map((m) => '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#C9CFD8">' + m.n
       + '</span><span><b style="color:' + (m.lower && L.weak ? '#FFB199' : '#fff') + '">' + m.v + '</b> <span style="color:#5B6472">/ 반대 '
       + m.other + '</span></span></div>').join('')
-    return '<b style="font-size:14px">' + L.label + (L.weak ? ' · 덜 씁니다' : '') + '</b>' + rows
+    return '<b style="font-size:14px">' + L.label + (L.weak ? ' (덜 씁니다)' : '') + '</b>' + rows
   }
   function bodyTip() {
     return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 점수 <b>' + OVERALL.sym + '점</b></div><div style="color:#C9CFD8">'

@@ -47,10 +47,10 @@ export const MEMO_CAT: Record<string, [string, string]> = {
 }
 export const NOTE_CAT = ['S', 'O', 'A', 'P', ...Object.keys(MEMO_CAT)]
 export const SOAP: Record<string, [string, string]> = {
-  S: ['주관', '보호자 말 · 증상'],
-  O: ['객관', '검사 · 관찰'],
-  A: ['평가', '판단 · 진단'],
-  P: ['계획', '처치 · 다음 방문'],
+  S: ['주관', '보호자 말, 증상'],
+  O: ['객관', '검사, 관찰'],
+  A: ['평가', '판단, 진단'],
+  P: ['계획', '처치, 다음 방문'],
 }
 // 바이탈 참고 범위(일반 성견). 혈압은 수축기 기준(ACVIM 2018: 140~159 경계, 160 이상 높음)
 export const VITAL_REF = {

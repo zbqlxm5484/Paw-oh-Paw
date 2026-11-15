@@ -81,7 +81,7 @@ describe('날짜·설명·체급', () => {
   })
 
   it('반려견 한 줄 설명은 빈 값을 빼고 잇는다', () => {
-    expect(dogDesc({ breed: '말티즈', birth_year: 2020, weight_kg: 3.2 })).toBe('말티즈 · 2020년생 · 3.2kg')
+    expect(dogDesc({ breed: '말티즈', birth_year: 2020, weight_kg: 3.2 })).toBe('말티즈, 2020년생, 3.2kg')
     expect(dogDesc({ breed: '', birth_year: null, weight_kg: 0 })).toBe('견종 미입력')
   })
 

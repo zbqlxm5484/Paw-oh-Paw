@@ -169,7 +169,7 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
                   setS((p) => ({ ...p, breed: name }))
                 }}>{name}</div>
             ))}
-            {showSug && !list.length ? <div style={css('min-height:44px;padding:0 16px;display:flex;align-items:center;font-size:14px;color:#5B6472')}>목록에 없습니다 · 입력한 이름으로 등록됩니다</div> : null}
+            {showSug && !list.length ? <div style={css('min-height:44px;padding:0 16px;display:flex;align-items:center;font-size:14px;color:#5B6472')}>목록에 없습니다. 입력한 이름으로 등록됩니다</div> : null}
           </div>
         </label>
         <div style={css('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px')}>
@@ -180,7 +180,7 @@ export function PetModal({ next_url, open = false, dogs }: { next_url: string; o
           <div style={css('display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px')}>{Object.entries(SEX).map(([k, label]) => <div key={k} className="pick" data-field="sex" data-val={k} style={pickStyle('sex', k, '15px')} onClick={() => pick('sex', k, false)}>{label}</div>)}</div>
         </div>
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
-          <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>체급</span><span id="sizeNote" style={css('font-size:13px;color:#5B6472')}>{s.size ? '직접 선택 · 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다'}</span></div>
+          <div style={css('display:flex;align-items:baseline;justify-content:space-between;gap:8px')}><span style={css('font-size:14px;font-weight:600')}>체급</span><span id="sizeNote" style={css('font-size:13px;color:#5B6472')}>{s.size ? '직접 선택. 다시 누르면 자동 분류' : '견종·체중으로 자동 분류됩니다'}</span></div>
           <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px')}>{Object.entries(SIZE).map(([k, label]) => <div key={k} className="pick" data-field="size" data-val={k} data-toggle="1" style={pickStyle('size', k, '15px')} onClick={() => pick('size', k, true)}>{label}</div>)}</div>
         </div>
         <div style={css('height:1px;background:#ECE8E2')}></div>
@@ -248,7 +248,7 @@ export function DeleteModal({ name = '', action = '', desc = '' }: { name?: stri
   return (
     <OpenModal id="delModal">
       <b style={css('font-size:22px;letter-spacing:-0.5px')}><span id="delName">{name}</span> 정보를 삭제하시겠습니까?</b>
-      {desc ? <span style={css('font-size:14px;color:#3A4250;padding:10px 12px;border-radius:10px;background:#F7F4EF')}>{name} · {desc}</span> : null}
+      {desc ? <span style={css('font-size:14px;color:#3A4250;padding:10px 12px;border-radius:10px;background:#F7F4EF')}>{name}, {desc}</span> : null}
       <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>측정 이력과 보고서도 함께 휴지통으로 옮겨지고, 30일 동안은 마이페이지의 ‘반려견 복구’에서 되돌릴 수 있습니다.</span>
       <PostForm action={action} id="delForm" style={css('display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0')}>
         <div data-close="" style={css('height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer')}>취소</div>

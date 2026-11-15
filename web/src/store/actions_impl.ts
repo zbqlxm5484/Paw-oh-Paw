@@ -537,7 +537,7 @@ post('/analyze', (_p, fd) => {
     if (!file.name) continue
     const ext = suffix(file.name)
     if (!VIDEO_EXT.includes(ext) && !(file.type || '').startsWith('video/'))
-      return redirect(`/upload?dog=${dog}`, '영상 파일(MP4 · MOV)만 올릴 수 있습니다')
+      return redirect(`/upload?dog=${dog}`, '영상 파일(MP4/MOV)만 올릴 수 있습니다')
     saved.push(URL.createObjectURL(file)) // 시제품은 uploads/ 에 저장한 주소
   }
   const n = saved.length || Math.max(0, Math.min(I(fd, 'demo_count', 0), config.MAX_SHOTS))
