@@ -2,9 +2,9 @@
 // - 가짜 서버 모드(vite --mode mock): 백엔드 없이 시연 데이터(fixture)만 쓴다. 웹 시제품과 픽셀 비교할 때 쓴다.
 // - 기본 모드: 로그인·가입·내 정보·반려견·회차 시작·영상 올리기·관리자는 백엔드 develop API 를 부른다.
 //   바이탈·진단 이력·메모·진료 기록(271)은 반려견 차트를 열 때 syncDogChart 가 서버에서 읽는다.
-import { api, tokenStore, type DogHistoryOut, type DogOut, type NoteOut, type NoteRevisionOut, type StaffOut, type VitalOut } from '../api/client'
+import { api, tokenStore, type DogHistoryOut, type DogOut, type ImageOut, type NoteOut, type NoteRevisionOut, type StaffOut, type VitalOut } from '../api/client'
 import { db, changed } from './db'
-import type { Account, Dog, History, Note, Staff, Vital } from './types'
+import type { Account, Dog, History, Image, Note, Staff, Vital } from './types'
 import { syncSessions } from './sessions_backend'
 
 /** 백엔드에서 읽어 온 기관 id(시연 기관 demo 와 구분) */
@@ -41,6 +41,13 @@ export function toVital(v: VitalOut): Vital {
 }
 function toHistory(h: DogHistoryOut): History {
   return { id: h.id, day: h.occurred_on, kind: KIND_IN[h.kind] ?? h.kind, title: h.title, site: h.site ?? '', by: h.clinician ?? '', author: h.staff?.name ?? '' }
+}
+/** 사진 종류: 서버 코드 ↔ 화면 코드(config IMG_KIND 의 키) */
+const IMG_IN: Record<string, string> = { PRE_OP: 'pre', POST_OP: 'post', XRAY: 'xray', PHOTO: 'photo' }
+export const IMG_OUT: Record<string, string> = { pre: 'PRE_OP', post: 'POST_OP', xray: 'XRAY', photo: 'PHOTO' }
+/** ImageOut → 화면 Image. path 는 서명 주소(화면에서 fileHref 로 연다) */
+export function toImage(m: ImageOut): Image {
+  return { id: m.id, day: m.taken_on, kind: IMG_IN[m.kind] ?? m.kind.toLowerCase(), caption: m.caption ?? '', path: m.file_url, author: m.staff?.name ?? '' }
 }
 /** NoteOut → 화면 Note. revs = 고치기 전 내용들(오래된 것부터, [쓴 시각, 쓴 사람, 내용]) */
 function toNote(n: NoteOut, revs: NoteRevisionOut[] = []): Note {
@@ -99,8 +106,8 @@ export function toDog(o: DogOut, prev?: Dog): Dog {
 export async function syncDogChart(acctId: string, dogId: string): Promise<void> {
   if (MOCK || !isRemote(acctId)) return
   const opt = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null)
-  const [o, vs, hs, ns] = await Promise.all([
-    opt(api.dog(dogId)), opt(api.vitals(dogId)), opt(api.history(dogId)), opt(listAllNotes(dogId)),
+  const [o, vs, hs, ns, ims] = await Promise.all([
+    opt(api.dog(dogId)), opt(api.vitals(dogId)), opt(api.history(dogId)), opt(listAllNotes(dogId)), opt(api.images(dogId)),
   ])
   const acct = db.accounts[acctId] // 읽는 사이 syncFromBackend 가 기관 객체를 바꿨을 수 있어 다시 찾는다
   const i = acct ? acct.dogs.findIndex((d) => d.id === dogId) : -1
@@ -109,6 +116,7 @@ export async function syncDogChart(acctId: string, dogId: string): Promise<void>
   if (o) d = toDog(o, d)
   if (vs) d = { ...d, vitals: vs.items.map(toVital) }
   if (hs) d = { ...d, history: hs.items.map(toHistory) }
+  if (ims) d = { ...d, images: ims.items.map(toImage) }
   if (ns) {
     // 고친 적 있는 기록만 이력을 따로 읽는다
     const revs = await Promise.all(ns.map((n) => (n.revision_count ? api.noteRevisions(n.id).then((r) => r.items).catch(() => []) : Promise.resolve([]))))
@@ -117,6 +125,16 @@ export async function syncDogChart(acctId: string, dogId: string): Promise<void>
   d.chart_loaded = !!(vs && hs && ns)
   acct.dogs[i] = d
   changed()
+}
+
+/** 반려견 사진 올리기·지우기(15.11). 끝나면 차트를 다시 읽어 서명 주소까지 새로 받는다. 실패하면 서버 메시지로 throw */
+export async function uploadDogImage(acctId: string, dogId: string, file: File, kind: string, takenOn?: string, caption?: string): Promise<void> {
+  await api.uploadImage(dogId, file, IMG_OUT[kind] ?? kind, takenOn, caption)
+  await syncDogChart(acctId, dogId)
+}
+export async function deleteDogImage(acctId: string, dogId: string, imageId: string): Promise<void> {
+  await api.deleteImage(imageId)
+  await syncDogChart(acctId, dogId)
 }
 
 /** 홈 '오늘' 목록용: 기관의 그날 기록(GET /daily-records)으로 오늘 기록이 있는 반려견 차트만 읽는다. 그 API 가 없으면 아래 방식:
