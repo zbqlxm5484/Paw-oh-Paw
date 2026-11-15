@@ -1,18 +1,59 @@
 // dog.html + main.py dog_chart(): 반려견 차트. EMR 처럼 진료 기록 = 왼쪽 방문 목록 + 가운데 그날 기록, 오른쪽 진단 이력.
 // 경과 = 그래프·측정 이력(두 회차 비교 버튼)·바이탈 표, 진단 이력 = 기록 추가 + 목록(11-02). 11-09 QA: 경과 비교를 위 버튼에서 경과 탭 안으로
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { PostForm, staticUrl, usePage, useTitle } from '../app/page'
 import { setToast } from '../app/session'
-import { MEMO_CAT, SITE, SOAP, STAGE_NAMES, link } from '../config'
+import { IMG_KIND, MEMO_CAT, SITE, SOAP, STAGE_NAMES, link } from '../config'
 import { activeJobs, dogOf, isoToday } from '../store/db'
-import { isRemote, syncDogChart } from '../store/backend'
+import { deleteDogImage, isRemote, syncDogChart, uploadDogImage } from '../store/backend'
+import { fileHref } from '../api/client'
 import { care_team, chart_summary, dog_detail, dx_history, image_list, kg_trend, memos as memos_of, patient_row, valid, visits, vital_rows } from '../views/views'
 import { MemoCard, MemoForm, type MemoX } from './parts/DogPanel'
 import { PetModal } from './parts/Modals'
 import { VFlagBadge, VV } from './parts/Vital'
+
+/** 서버 사진은 서명 주소(http·/api/…), 시연 사진은 static 경로 */
+const imgSrc = (p: string): string => (/^(https?:)?\//.test(p) ? fileHref(p) : staticUrl(p))
+
+/** 경과 탭: 반려견 사진 올리기(15.11). 서버 기관에서만 보인다 */
+function ImageUpload({ acctId, dogId, today }: { acctId: string; dogId: string; today: string }) {
+  const [kind, setKind] = useState('photo')
+  const [day, setDay] = useState(today)
+  const [caption, setCaption] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [key, setKey] = useState(0)
+  const send = async () => {
+    if (!file || busy) return
+    setBusy(true); setMsg('')
+    try {
+      await uploadDogImage(acctId, dogId, file, kind, day || undefined, caption.trim() || undefined)
+      setFile(null); setCaption(''); setKey((k) => k + 1); setMsg('사진을 올렸습니다')
+    } catch (e) {
+      setMsg(e instanceof Error && e.message ? e.message : '사진을 올리지 못했습니다')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const FIN = 'height:40px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 10px;font-size:14px;font-family:inherit;min-width:0'
+  return (
+    <div style={css('display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:4px;border-top:1px solid #F0ECE6')}>
+      <select aria-label="사진 종류" value={kind} onChange={(e) => setKind(e.target.value)} style={css(FIN)}>
+        {Object.entries(IMG_KIND).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+      </select>
+      <input aria-label="찍은 날" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} style={css(FIN)} />
+      <input aria-label="설명" placeholder="설명(선택, 100자)" maxLength={100} value={caption} onChange={(e) => setCaption(e.target.value)} style={css(FIN + ';flex:1 1 160px')} />
+      <input key={key} aria-label="사진 파일" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={css('font-size:14px;max-width:100%')} />
+      <button type="button" className="btn tap" disabled={!file || busy} onClick={send} style={css('height:44px;padding:0 16px;border-radius:10px;border:0;background:#D2601A;color:#fff;font-weight:700;font-size:14px;cursor:pointer;opacity:' + (!file || busy ? '0.5' : '1'))}>{busy ? '올리는 중…' : '사진 올리기'}</button>
+      {msg ? <span role="status" style={css('font-size:13px;color:#5B6472;flex-basis:100%')}>{msg}</span> : null}
+      <span style={css('font-size:12px;color:#5B6472;flex-basis:100%')}>사람 얼굴은 서버가 가려서 저장합니다(방사선 사진 제외).</span>
+    </div>
+  )
+}
 
 const CHART_TABS: [string, string][] = [['visits', '진료 기록'], ['progress', '경과'], ['dx', '진단 이력']]
 const _OLD_TABS: Record<string, string> = { summary: 'progress', gait: 'progress', vitals: 'visits', notes: 'visits', history: 'dx' } // 예전 주소
@@ -195,8 +236,8 @@ export default function DogPage() {
               <b className="v-h">영상 · 사진</b>
               <div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px')}>
                 {sel.imgs.map((im) => (
-                  <a key={im.id} className="lk img-card" href={staticUrl(im.path)} data-lightbox="" data-caption={`${im.caption} · ${im.kind}`}>
-                    <span className="img-thumb"><img src={staticUrl(im.path)} alt={im.caption} loading="lazy" /></span>
+                  <a key={im.id} className="lk img-card" href={imgSrc(im.path)} data-lightbox="" data-caption={`${im.caption} · ${im.kind}`}>
+                    <span className="img-thumb"><img src={imgSrc(im.path)} alt={im.caption} loading="lazy" /></span>
                     <b style={css('font-size:14px')}>{im.caption}</b><span style={css('font-size:12px;color:#5B6472')}>{im.kind}{im.by ? ` · ${im.by}` : ''}</span>
                   </a>
                 ))}
@@ -231,13 +272,17 @@ export default function DogPage() {
             <div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px')}>
               {imgs.map((im) => (
                 <div key={im.id} className="img-card">
-                  <a className="lk img-thumb" href={staticUrl(im.path)} data-lightbox="" data-caption={`${im.caption} · ${im.kind} · ${im.date}`}><img src={staticUrl(im.path)} alt={im.caption} loading="lazy" /></a>
+                  <a className="lk img-thumb" href={imgSrc(im.path)} data-lightbox="" data-caption={`${im.caption} · ${im.kind} · ${im.date}`}><img src={imgSrc(im.path)} alt={im.caption} loading="lazy" /></a>
                   <span style={css('display:flex;align-items:center;gap:6px')}><span style={css(`padding:1px 7px;border-radius:6px;font-size:12px;font-weight:700;${im.pre ? 'background:#EEF1F6;color:#4A5A78' : im.post ? 'background:#FCEEE3;color:#A8481A' : 'background:#F1ECE5;color:#5B6472'}`)}>{im.kind}</span><b style={css('font-size:14px')}>{im.caption}</b></span>
-                  <a className="lk tap" href={link(`/dogs/${cur.id}?v=${im.day}`)} style={css('font-size:12px;color:#5B6472')}>{im.date} 방문{im.by ? ` · ${im.by}` : ''} ›</a>
+                  <span style={css('display:flex;align-items:center;justify-content:space-between;gap:8px')}>
+                    <a className="lk tap" href={link(`/dogs/${cur.id}?v=${im.day}`)} style={css('font-size:12px;color:#5B6472')}>{im.date} 방문{im.by ? ` · ${im.by}` : ''} ›</a>
+                    {remote ? <button type="button" className="tap" onClick={() => { if (window.confirm('이 사진을 지울까요? 되돌릴 수 없습니다.')) deleteDogImage(acctId, cur.id, im.id).catch((e) => window.alert(e instanceof Error ? e.message : '지우지 못했습니다')) }} style={css('min-height:44px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;color:#B4501A;font-size:13px;font-weight:600;cursor:pointer')}>삭제</button> : null}
+                  </span>
                 </div>
               ))}
             </div>
           ) : <span style={css('font-size:14px;color:#5B6472')}>올린 영상·사진이 없습니다.</span>}
+          {remote ? <ImageUpload acctId={acctId} dogId={cur.id} today={today_iso} /> : null}
         </div>
         {sm.has ? (
           <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px')}>
