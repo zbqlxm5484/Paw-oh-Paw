@@ -298,6 +298,9 @@ export const api = {
   createDog: (body: Record<string, unknown>) => request<DogOut>('/dogs', { method: 'POST', body }),
   updateDog: (id: string, body: Record<string, unknown>) => request<DogOut>(`/dogs/${id}`, { method: 'PATCH', body }),
   /** 휴지통으로 보냄(서버가 정한 기간 뒤 영구 삭제). 회차·영상도 같이 숨는다 */
+  /** 휴지통 목록(15.5): 최근에 넣은 것부터. deleted_at·purge_at 이 채워져 온다 */
+  trashDogs: (page = 1, size = 100) => request<Paged<DogOut & { deleted_at?: string | null; purge_at?: string | null }>>(`/dogs?trash=true&page=${page}&size=${size}`),
+  restoreDog: (id: string) => request<DogOut>(`/dogs/${id}/restore`, { method: 'POST' }),
   deleteDog: (id: string) => request<void>(`/dogs/${id}`, { method: 'DELETE' }),
   /** 기관의 모든 회차, 최신순(BE-33) */
   instSessions: (page = 1, size = 100) => request<{ items: { id: string; measured_on: string; status: string; dog: { id: string; name: string } }[]; total: number }>(`/sessions?page=${page}&size=${size}`),

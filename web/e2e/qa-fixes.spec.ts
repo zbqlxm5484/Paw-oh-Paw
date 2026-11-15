@@ -34,7 +34,7 @@ test.describe('반려견 삭제 확인', () => {
     const modal = page.locator('#delModal')
     await expect(modal).toBeVisible()
     await expect(modal).toContainText(`${name} 정보를 삭제하시겠습니까?`)
-    await expect(modal).toContainText('휴지통으로 옮겨지고, 30일 동안은 복구할 수 있습니다')
+    await expect(modal).toContainText('휴지통으로 옮겨지고, 30일 동안은 마이페이지의 ‘반려견 복구’에서 되돌릴 수 있습니다')
     await expect(modal).not.toContainText('되돌릴 수 없습니다')
     // 삭제하면 목록에서 빠지고 알림이 뜬다
     await modal.getByRole('button', { name: '삭제' }).click()
