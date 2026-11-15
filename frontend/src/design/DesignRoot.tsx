@@ -14,7 +14,7 @@ import { useSession } from '../api/sessions'
 import type { DeviceCodeVerifyOut, Limb, LoginIn, ReportOut, ReportsOut, SessionDetailOut, SignupIn } from '../api/types'
 import * as authApi from '../api/auth'
 import { useAuth } from '../app/auth'
-import { enterDemo, exitDemo, isDemo, takeDemoAutologin } from '../app/demoMode'
+import { isDemo } from '../app/demoMode'
 import { AppProto } from './app/AppProto'
 import { AppVetSections, mainGaitOf } from './app/AppVetSections'
 import { useCompare, useTrends } from '../api/results'
@@ -239,7 +239,6 @@ function AppShell(props: ProtoProps) {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#E9E6E1', padding: '24px 0' }}>
         <AppProto {...props} rootStyle={{ maxHeight: 'calc(100dvh - 48px)' }} />
-        <DemoPill screen={props.screen} />
       </div>
     )
   }
@@ -251,7 +250,6 @@ function AppShell(props: ProtoProps) {
       {/* 디자인의 가짜 상태 표시줄(9:41)은 데스크톱 시안 틀에서만. 폰에서는 진짜 상태 표시줄과 겹친다 */}
       <style>{'.pp-fakebar{display:none !important}'}</style>
       <AppProto {...props} rootStyle={{ width: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }} />
-      <DemoPill screen={props.screen} />
     </div>
   )
 }
@@ -266,56 +264,3 @@ if (landingPreload) {
 
 const SAFE_BOTTOM = 'var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))'
 
-/** 체험 모드 버튼. 로그인 전에는 "서버 없이 둘러보기", 체험 중에는 "체험 모드 끝내기"(src/app/demoMode.ts) */
-/** 체험 모드 버튼은 첫 화면·로그인·홈에서만 띄운다(결과·보고서·촬영 화면의 내용을 가리지 않게).
- *  마이페이지는 아래쪽 로그아웃·알림 행과 겹치고 위쪽은 기관 제목과 겹쳐서 뺐다(끝내기는 홈에서) */
-const PILL_SCREENS = new Set(['landing', 'login', 'home'])
-
-function DemoPill({ screen }: { screen: string }) {
-  const { loggedIn, login } = useAuth()
-  const demo = isDemo()
-  useEffect(() => {
-    // 체험 모드에 막 들어왔으면 가짜 계정으로 바로 로그인한다(가짜 서버는 아무 아이디·비밀번호나 받는다)
-    if (demo && !loggedIn && takeDemoAutologin()) void login({ login_id: 'demo', password: 'demo' })
-  }, [demo, loggedIn, login])
-  if ((!demo && loggedIn) || !PILL_SCREENS.has(screen)) return null
-  return (
-    <button
-      type="button"
-      onClick={() => (demo ? exitDemo() : enterDemo())}
-      style={{
-        position: 'fixed',
-        // 화면 위쪽은 헤더(로고·알림·기관 칩)와 겹쳐서 아래 탭바 바로 위에 둔다
-        // 웰컴 화면은 아래쪽에 '서비스 소개 자세히 보기'·회원가입·로그인이 있어 그 위로 더 올린다(누르는 영역이 겹치지 않게)
-        bottom: screen === 'landing' ? `calc(${SAFE_BOTTOM} + 176px)` : `calc(${SAFE_BOTTOM} + 124px)`,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 1000,
-        // 누르는 영역은 44px, 보이는 알약은 30px 그대로
-        height: '44px',
-        padding: 0,
-        border: 'none',
-        background: 'transparent',
-        fontFamily: 'inherit',
-        cursor: 'pointer',
-      }}
-    >
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          height: '30px',
-          padding: '0 12px',
-          borderRadius: '15px',
-          background: demo ? '#D2601A' : 'rgba(27,36,51,.55)',
-          color: '#fff',
-          fontSize: '12px',
-          fontWeight: 600,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {demo ? '체험 모드 · 끝내기' : '서버 없이 둘러보기'}
-      </span>
-    </button>
-  )
-}

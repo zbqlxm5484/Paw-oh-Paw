@@ -5,7 +5,7 @@ import { RouterProvider } from 'react-router-dom'
 
 import { ApiError } from './api/client'
 import { AuthProvider } from './app/auth'
-import { isDemo } from './app/demoMode'
+import { dropLeftoverDemo } from './app/demoMode'
 import { router } from './app/router'
 import { listenDeepLinks } from './app/deepLinks'
 import './styles/global.css'
@@ -23,8 +23,9 @@ const queryClient = new QueryClient({
 
 async function enableMocking() {
   const mode = import.meta.env.VITE_MOCK
-  // 체험 모드(src/app/demoMode.ts)는 빌드 설정과 상관없이 전부 가짜 서버로 간다
-  if (mode === '1' || isDemo()) {
+  // 앱의 체험 모드(서버 없이 둘러보기)는 없앴다. 가짜 서버는 개발용 VITE_MOCK=1 빌드에서만
+  dropLeftoverDemo()
+  if (mode === '1') {
     const { worker } = await import('./mocks/browser')
     await worker.start()
   } else if (mode === 'partial') {

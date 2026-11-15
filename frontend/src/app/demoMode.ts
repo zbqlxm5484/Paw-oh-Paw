@@ -49,6 +49,18 @@ export function exitDemo(next = '/') {
   window.location.replace(next)
 }
 
+/** 앱에서 체험 모드 진입을 없앴다(11-15). 예전 판에서 체험 모드로 켜 둔 기기는 시작할 때 조용히 끄고 가짜 토큰을 지운다 */
+export function dropLeftoverDemo(): void {
+  if (!isDemo()) return
+  clearTokens()
+  try {
+    localStorage.removeItem(DEMO_KEY)
+    localStorage.removeItem(AUTOLOGIN_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
 /** 체험 모드에 막 들어왔을 때 한 번만 true. 가짜 계정으로 바로 로그인시키는 데 쓴다 */
 export function takeDemoAutologin(): boolean {
   if (get(AUTOLOGIN_KEY) !== '1') return false
