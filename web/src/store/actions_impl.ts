@@ -499,6 +499,8 @@ post('/dogs/:dog_id/delete', (p) => {
   if (!acct) return need_login()
   const d = dogOf(acct, p.dog_id)
   if (!d) return redirect('/my')
+  // 휴지통에 30일 둔다(마이페이지 '반려견 복구'로 되돌림)
+  acct.trash = [{ dog: d, results: acct.results.filter((r) => r.dog === d.id), jobs: acct.jobs.filter((j) => j.dog === d.id), at: new Date().toISOString() }, ...(acct.trash ?? [])]
   acct.dogs = acct.dogs.filter((x) => x.id !== p.dog_id)
   acct.results = acct.results.filter((r) => r.dog !== p.dog_id)
   acct.jobs = acct.jobs.filter((j) => j.dog !== p.dog_id)

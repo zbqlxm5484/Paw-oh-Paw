@@ -249,7 +249,7 @@ export function DeleteModal({ name = '', action = '', desc = '' }: { name?: stri
     <OpenModal id="delModal">
       <b style={css('font-size:22px;letter-spacing:-0.5px')}><span id="delName">{name}</span> 정보를 삭제하시겠습니까?</b>
       {desc ? <span style={css('font-size:14px;color:#3A4250;padding:10px 12px;border-radius:10px;background:#F7F4EF')}>{name} · {desc}</span> : null}
-      <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>측정 이력과 보고서도 함께 휴지통으로 옮겨지고, 30일 동안은 복구할 수 있습니다.</span>
+      <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>측정 이력과 보고서도 함께 휴지통으로 옮겨지고, 30일 동안은 마이페이지의 ‘반려견 복구’에서 되돌릴 수 있습니다.</span>
       <PostForm action={action} id="delForm" style={css('display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0')}>
         <div data-close="" style={css('height:52px;border-radius:14px;background:#F2EEE8;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer')}>취소</div>
         <button className="bt" type="submit" style={css('height:52px;border-radius:14px;background:#D2601A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700')}>삭제</button>
