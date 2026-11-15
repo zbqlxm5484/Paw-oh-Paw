@@ -6,7 +6,7 @@ import { link } from '../config'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 
 export default function NotFound() {
-  useTitle('없는 페이지 · Paw oh Paw')
+  useTitle('없는 페이지')
   const { me, toast } = usePublicPage()
   const home = me ? '/home' : '/'
 

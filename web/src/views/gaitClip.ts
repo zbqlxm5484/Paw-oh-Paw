@@ -245,9 +245,9 @@ export const DEMO_NOTE = '견본 걸음입니다(이 회차의 각도를 불러�
 /** 출처 표시 문구 */
 export function realNote(info: ClipInfo): string {
   const side = (s: 'L' | 'R') => (s === 'L' ? '왼쪽' : '오른쪽')
-  let t = `이 회차 실제 측정 · ${GAIT_KO[info.gait] ?? info.gait} ${info.strides}걸음 평균`
-  if (info.mirrored.length) t += ` · ${info.mirrored.map(side).join('·')} 다리는 촬영이 없어 반대쪽 값을 비춰 그림`
-  else if (info.borrowed.length) t += ' · 걸음을 못 자른 관절 일부는 반대쪽 값으로 채움'
+  let t = `이 회차 실제 측정, ${GAIT_KO[info.gait] ?? info.gait} ${info.strides}걸음 평균`
+  if (info.mirrored.length) t += `, ${info.mirrored.map(side).join('·')} 다리는 촬영이 없어 반대쪽 값을 비춰 그림`
+  else if (info.borrowed.length) t += '. 걸음을 못 자른 관절 일부는 반대쪽 값으로 채움'
   return t
 }
 

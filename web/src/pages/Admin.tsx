@@ -81,7 +81,7 @@ function CodeLine({ c, can_write }: { c: CodeRow; can_write: boolean }) {
 }
 
 export default function Admin() {
-  useTitle('서비스 관리 · Paw oh Paw')
+  useTitle('서비스 관리')
   const { toast, query, go } = usePublicPage()
   const demo = query.get('demo') || ''
   const s = admin_staff(demo)
@@ -103,7 +103,7 @@ export default function Admin() {
       <main style={css('max-width:1100px;margin:0 auto;padding:36px 32px 96px;display:flex;flex-direction:column;gap:24px')}>
         <div style={css('display:flex;align-items:flex-end;gap:16px')}>
           <div style={css('display:flex;flex-direction:column;gap:6px')}><span style={css('font-size:14px;color:#5B6472')}>서비스 운영</span><h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.8px')}>기관·디바이스 코드·계정</h1></div>
-          <span style={css('margin-left:auto;font-size:14px;color:#5B6472')}>{me.name} · {can_write ? '관리자' : '임시 스태프 (보기만)'}</span>
+          <span style={css('margin-left:auto;font-size:14px;color:#5B6472')}>{me.name}, {can_write ? '관리자' : '임시 스태프 (보기만)'}</span>
           <PostForm action="/logout"><button type="submit" style={css(BTN)}>로그아웃</button></PostForm>
         </div>
         {can_write && (
@@ -130,7 +130,7 @@ export default function Admin() {
               <div style={css('display:flex;flex-direction:column;gap:8px')}><b style={css('font-size:15px')}>담당자 계정</b>
                 {i.staff.map((st) => (
                   <div key={st.id} style={css(`display:flex;align-items:center;gap:10px;border-top:1px solid #F2EFEA;padding-top:8px;opacity:${st.active ? '1' : '.5'}`)}>
-                    <b style={css('font-size:14px;white-space:nowrap')}>{st.name}</b><span style={css('font-size:13px;color:#5B6472;min-width:0;flex:1 1 140px;overflow-wrap:anywhere')}>{st.login_id} · {st.email}</span>
+                    <b style={css('font-size:14px;white-space:nowrap')}>{st.name}</b><span style={css('font-size:13px;color:#5B6472;min-width:0;flex:1 1 140px;overflow-wrap:anywhere')}>{st.login_id}, {st.email}</span>
                     <span style={css('margin-left:auto;font-size:13px;color:#5B6472;white-space:nowrap')}>{st.active ? '사용 중' : '중지됨'}</span>
                     {can_write && <PostForm action={`/admin/staff/${st.id}`}><button type="submit" style={css(BTN)}>{st.active ? '중지' : '재개'}</button></PostForm>}
                   </div>

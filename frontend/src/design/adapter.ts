@@ -243,7 +243,7 @@ export function compareRows(cmp: CompareOut | undefined, focus: Limb | null): DC
       const u = UNIT_SIGN[it.unit]
       const bt = i ? '1px solid #F2EFEA' : 'none'
       const isFocus = !!focus && it.limb === focus
-      const limb = it.limb === 'NONE' ? '전체' : LIMB_KO[it.limb] + (isFocus ? ' · 관심 다리' : '')
+      const limb = it.limb === 'NONE' ? '전체' : LIMB_KO[it.limb] + (isFocus ? ' (관심 다리)' : '')
       const lc = isFocus ? '#B4501A' : '#5B6472'
       if (it.base_value == null || it.target_value == null) {
         return { n, limb, lc, vals: it.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
@@ -301,7 +301,7 @@ export function trendLines(t: TrendsOut | undefined, tk: string): DTrend {
 /** 보고서 상태 한 줄(디자인 repStatus) */
 export function reportStatusLine(r: ReportOut | undefined, model: string): string {
   if (!r) return '보고서가 아직 없습니다'
-  if (r.status === 'DONE') return `생성 완료 · ${r.generation_ms != null ? (r.generation_ms / 1000).toFixed(1) : '-'}초 · 분석 모델 ${r.model_version ?? model} · 템플릿 ${r.template_version ?? '-'}`
-  if (r.status === 'FAILED') return `만들지 못했습니다 · ${r.fail_reason?.message ?? ''}`
+  if (r.status === 'DONE') return `생성 완료, ${r.generation_ms != null ? (r.generation_ms / 1000).toFixed(1) : '-'}초, 분석 모델 ${r.model_version ?? model}, 템플릿 ${r.template_version ?? '-'}`
+  if (r.status === 'FAILED') return `만들지 못했습니다. ${r.fail_reason?.message ?? ''}`
   return r.status === 'GENERATING' ? '보고서를 만드는 중입니다' : '보고서 생성을 기다리는 중입니다'
 }

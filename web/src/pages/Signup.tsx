@@ -22,7 +22,7 @@ interface Verified {
 }
 
 export default function Signup() {
-  useTitle('회원가입 · Paw oh Paw')
+  useTitle('회원가입')
   const { me, toast } = usePublicPage()
   const demo_code = show_code(DEMO_CODE)
   const codeRef = useRef<HTMLInputElement>(null)
@@ -122,7 +122,7 @@ export default function Signup() {
             </div>
           </fieldset>
           <button className="bt" type="submit" id="soBtn" style={css(`height:56px;border-radius:14px;background:${ok() ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin-top:6px`)}>회원가입</button>
-          <a className="lk tap" href={link('/login')} style={css('align-self:center;font-size:14px;color:#5B6472')}>이미 계정이 있습니다 · <b style={css('color:#1B2433')}>로그인</b></a>
+          <a className="lk tap" href={link('/login')} style={css('align-self:center;font-size:14px;color:#5B6472')}>이미 계정이 있습니다. <b style={css('color:#1B2433')}>로그인</b></a>
         </PostForm>
       </main>
     </Base>

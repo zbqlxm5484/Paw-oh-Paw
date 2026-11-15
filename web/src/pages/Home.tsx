@@ -29,7 +29,7 @@ const intParam = (s: string | null, dflt: number): number => (s && /^[+-]?\d+$/.
 export default function Home() {
   const { acct, me, toast, query } = usePage({ login: true })
   const navigate = useNavigate()
-  useTitle('홈 · Paw oh Paw')
+  useTitle('홈')
   const dog = query.get('dog') || ''
   const toDog = acct && dog && dogOf(acct, dog) ? `/dogs/${dog}` : ''
   useEffect(() => {
@@ -127,13 +127,13 @@ export default function Home() {
     table = (
       <div className="tbl" style={css(`--tw:${changed ? 1080 : 940}px;--tw-n:620px`)}>
         <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:14px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472`)}>
-          <span>반려견</span><span className="tbl-opt">견종 · 체급</span><span>체중 · 체온 · 심박 · 혈압</span><span className={dxOpt}>수술 · 진단</span>{changed ? <span>일주일 간 변동</span> : null}<span className="tbl-opt">분석</span><span>단계</span>
+          <span>반려견</span><span className="tbl-opt">견종/체급</span><span>체중/체온/심박/혈압</span><span className={dxOpt}>수술/진단</span>{changed ? <span>일주일 간 변동</span> : null}<span className="tbl-opt">분석</span><span>단계</span>
         </div>
         {rows.map((r, i) => {
           const bs = r.badges.filter((b: Badge) => b.kind !== 'warn')
           return (
             <div key={r.id} className="hv-row tbl-r" data-href={`/dogs/${r.id}`} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:14px;padding:13px 20px;border-top:${bt(i)};align-items:center;cursor:pointer`)}>
-              <div style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}><span style={css('font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{r.no}</span><b style={css('font-size:15px')}>{r.name}</b><span style={css('font-size:13px;color:#5B6472')}>{r.sex} · {r.age}</span><span className="tbl-n" style={css('font-size:13px;color:#5B6472')}>{r.breed} · {r.size}</span></div>
+              <div style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}><span style={css('font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{r.no}</span><b style={css('font-size:15px')}>{r.name}</b><span style={css('font-size:13px;color:#5B6472')}>{r.sex}, {r.age}</span><span className="tbl-n" style={css('font-size:13px;color:#5B6472')}>{r.breed}, {r.size}</span></div>
               <div className="tbl-opt" style={css('display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:15px;font-weight:600')}>{r.breed}</span><span style={css('font-size:13px;color:#5B6472')}>{r.size}</span></div>
               <div style={css('display:grid;grid-template-columns:repeat(4,auto);justify-content:start;column-gap:12px;row-gap:2px;font-variant-numeric:tabular-nums')}>
                 {['체중', '체온', '심박', '혈압'].map((k) => <span key={k} style={css('font-size:12px;color:#5B6472;white-space:nowrap')}>{k}</span>)}
@@ -213,7 +213,7 @@ export default function Home() {
         {/* 고른 반려견 · 촬영 담당자 */}
         {by ? (
           <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
-            <span style={css('font-size:15px;color:#5B6472')}><b style={css('color:#1B2433')}>{by}</b> 님이 촬영한 분석 · {hv.total}건</span>
+            <span style={css('font-size:15px;color:#5B6472')}><b style={css('color:#1B2433')}>{by}</b> 님이 촬영한 분석, {hv.total}건</span>
             <a className="lk" href={link(qs({ view: 'staff', by: '', page: '' }))} style={css('height:44px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600')}>✕ 담당자 목록으로</a>
           </div>
         ) : null}

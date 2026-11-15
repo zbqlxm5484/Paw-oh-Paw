@@ -49,7 +49,7 @@ export function AppChangeProfile({ base, gait }: { base: CompareOut | undefined;
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
       <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800 }}>기준 회차 대비 변화</h3>
-      <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>기준 {korDate(base.base.measured_on)} → 이번 {korDate(base.target.measured_on)} · 관절 가동 범위. 회색 띠는 오차 범위예요</span>
+      <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>기준 {korDate(base.base.measured_on)} → 이번 {korDate(base.target.measured_on)}, 관절 가동 범위. 회색 띠는 오차 범위예요</span>
       {rows.map((x, i) => {
         const bar = geom(x.diff, scale)
         const band = x.tol != null ? geom(x.tol, scale) : null

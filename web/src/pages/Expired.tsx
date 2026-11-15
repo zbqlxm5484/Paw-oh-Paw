@@ -9,7 +9,7 @@ import AuthBar, { usePublicPage } from './parts/AuthBar'
 import { SUPPORT } from '../legal/content'
 
 export default function Expired() {
-  useTitle('이용 계약 만료 · Paw oh Paw')
+  useTitle('이용 계약 만료')
   const { me, toast, query, go } = usePublicPage()
   const demo = query.get('demo') || ''
   const s = demo ? db.staff['s_exp'] : currentStaff()
@@ -29,7 +29,7 @@ export default function Expired() {
           <h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.8px')}>{inst}의 이용 계약이 만료되었습니다</h1>
           <p style={css('margin:0;font-size:18px;color:#5B6472;line-height:1.6')}>{ends ? `계약 종료일은 ${ends.slice(0, 4)}년 ${parseInt(ends.slice(5, 7), 10)}월 ${parseInt(ends.slice(8), 10)}일이었습니다. ` : ''}지금은 반려견·측정 자료를 볼 수 없습니다. 재계약하면 같은 계정으로 바로 다시 쓸 수 있고, 그동안의 자료는 그대로 보관됩니다.</p>
           <div style={css('border-radius:14px;background:#F2EEE8;padding:18px 20px;display:flex;flex-direction:column;gap:6px;font-size:15px;color:#3A4250')}><b>고객센터</b><span>{SUPPORT.email}{SUPPORT.placeholder ? ' (준비 중)' : ''}</span></div>
-          <div style={css('display:flex;gap:10px;align-items:center')}><span style={css('font-size:14px;color:#5B6472')}>{s.name} · {s.login_id}</span>
+          <div style={css('display:flex;gap:10px;align-items:center')}><span style={css('font-size:14px;color:#5B6472')}>{s.name}, {s.login_id}</span>
             <PostForm action="/logout" style={css('margin-left:auto')}><button type="submit" style={css('height:48px;padding:0 22px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;font-size:15px;font-weight:600;cursor:pointer')}>로그아웃</button></PostForm></div>
         </div>
       </main>

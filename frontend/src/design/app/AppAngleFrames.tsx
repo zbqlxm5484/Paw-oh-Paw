@@ -1,4 +1,4 @@
-// 앱 보고서 · 수의사용 '무릎을 가장 굽힌 순간·가장 편 순간'(285, 웹 pages/parts/AngleFrames.tsx 와 같은 구성):
+// 앱 보고서 (수의사용) '무릎을 가장 굽힌 순간·가장 편 순간'(285, 웹 pages/parts/AngleFrames.tsx 와 같은 구성):
 // 이 회차 결과 영상(관절점·골격을 그리고 얼굴을 가린 영상)에서 대표 보행의 무릎 각도가 가장 작은·큰 프레임을 잘라 그림 두 장으로 싣는다(쪽마다 한 촬영).
 // 영상은 보이지 않게 불러 그 시각으로 옮긴 뒤 canvas 로 찍어 jpeg 그림(<img>)으로 넣는다(화면 그대로 PDF 에도 나온다).
 // 결과 영상이 없거나(만드는 중·실패), 각도가 없거나, 영상을 못 찍으면 칸을 통째로 뺀다. 측정한 프레임만 싣는다.
@@ -89,7 +89,7 @@ export function AppAngleFrames({ sessionId, gait }: { sessionId: string; gait: s
   if (!cur) return null
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <h3 style={H2}>무릎을 가장 굽힌 순간 · 가장 편 순간 <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B6472' }}>{GAIT_KO[cur[0].gait] ?? cur[0].gait}</span></h3>
+      <h3 style={H2}>무릎을 가장 굽힌 순간, 가장 편 순간 <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B6472' }}>{GAIT_KO[cur[0].gait] ?? cur[0].gait}</span></h3>
       <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>결과 영상(관절점·골격 표시, 사람 얼굴 가림)에서 유효 통과 중 무릎 각도가 가장 작은 프레임과 가장 큰 프레임을 그대로 옮겼습니다.</span>
       {cur.map((x) => (
         <div key={x.shotId} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -100,7 +100,7 @@ export function AppAngleFrames({ sessionId, gait }: { sessionId: string; gait: s
                 <img src={img} alt={`${SIDE[x.side] ?? ''} 뒷다리 무릎 ${label}`} style={{ width: '100%', display: 'block', borderRadius: 8, background: '#1B2433' }} />
                 <figcaption style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
                   <span><b>{label}</b> <b style={{ fontSize: '14px' }}>{f.deg.toFixed(1)}°</b></span>
-                  <span style={{ color: '#5B6472', fontSize: '12px' }}>{f.sec.toFixed(2)}초 · {f.frame}프레임</span>
+                  <span style={{ color: '#5B6472', fontSize: '12px' }}>{f.sec.toFixed(2)}초, {f.frame}프레임</span>
                 </figcaption>
               </figure>
             ))}

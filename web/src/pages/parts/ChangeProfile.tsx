@@ -98,7 +98,7 @@ export function ChangeProfile({ acct, r, gait, fromServer, onSettled, spark = tr
     <section className="rep-sec" data-section="change-profile" style={css('display:flex;flex-direction:column;gap:10px')}>
       <div style={css('display:flex;align-items:baseline;gap:10px;flex-wrap:wrap')}>
         <b style={css('font-size:18px;font-weight:800;letter-spacing:-0.3px')}>기준 회차 대비 변화</b>
-        <span style={css('font-size:13px;color:#5B6472')}>기준 {korDate(view.baseDate)} → 이번 {korDate(view.targetDate)} · {gait} · 관절 가동 범위</span>
+        <span style={css('font-size:13px;color:#5B6472')}>기준 {korDate(view.baseDate)} → 이번 {korDate(view.targetDate)}, {gait}, 관절 가동 범위</span>
       </div>
       <span style={css('font-size:13px;color:#5B6472;line-height:1.5')}>
         막대는 이번 값에서 기준 값을 뺀 크기예요. 회색 띠는 오차 범위(같은 상태를 다시 재도 생길 수 있는 차이)이고, 띠를 벗어난 관절만 색으로 표시했어요.

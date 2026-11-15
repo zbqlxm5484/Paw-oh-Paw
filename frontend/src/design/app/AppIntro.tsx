@@ -135,7 +135,7 @@ export function IntroBody({ i }: { i: IntroProps }) {
 
         {/* 6. 경과 비교·3D */}
         <div style={sec}>
-          <Head k="경과 비교 · 3D" t="경과 비교부터 3D 모델까지" p="기준 회차나 직전 회차와 나란히 놓고 무엇이 좋아졌는지 봅니다. 회차 결과에서 3D 보기를 누르면 측정한 수치로 다시 걷는 3D 모델을 손가락으로 돌려 볼 수 있습니다." />
+          <Head k="경과 비교/3D" t="경과 비교부터 3D 모델까지" p="기준 회차나 직전 회차와 나란히 놓고 무엇이 좋아졌는지 봅니다. 회차 결과에서 3D 보기를 누르면 측정한 수치로 다시 걷는 3D 모델을 손가락으로 돌려 볼 수 있습니다." />
           <Reveal>
             <div style={{ borderRadius: 18, overflow: 'hidden', border: `1px solid ${LINE}`, background: '#fff' }}>
               <img src={IMG + '3d.webp'} alt="" loading="lazy" style={{ width: '100%', display: 'block' }} />

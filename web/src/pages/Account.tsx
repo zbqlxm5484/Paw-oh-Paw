@@ -8,7 +8,7 @@ import { link } from '../config'
 const INP = 'height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 16px;font-size:15px;color:#1B2433;outline:none'
 
 export default function Account() {
-  useTitle('기본 정보 · Paw oh Paw')
+  useTitle('기본 정보')
   const { acct, me, toast } = usePage({ login: true, creamoff: true }) // 관리자도 비밀번호·내 정보는 바꾼다
   if (!acct || !me) return null
   const ends = acct.contract_ends
@@ -17,7 +17,7 @@ export default function Account() {
     ['아이디', me.login_id],
     ['가입일', me.joined || acct.joined],
     ['계약 종료일', ends ? `${ends.slice(0, 4)}년 ${parseInt(ends.slice(5, 7), 10)}월 ${parseInt(ends.slice(8), 10)}일까지` : '기한 없음'],
-    ['같은 기관 담당자', `${staffOf(acct.id).filter((x) => x.active).length}명 · 진료 및 분석 정보를 함께 확인할 수 있습니다`],
+    ['같은 기관 담당자', `${staffOf(acct.id).filter((x) => x.active).length}명, 진료 및 분석 정보를 함께 확인할 수 있습니다`],
   ]
 
   return (

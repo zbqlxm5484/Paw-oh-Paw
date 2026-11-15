@@ -85,7 +85,7 @@ const TRUST: [string, string][] = [
 ]
 
 export default function About() {
-  useTitle('서비스 소개 · Paw oh Paw')
+  useTitle('서비스 소개')
   const { acct, me, toast } = usePage()
   const img = staticUrl('assets/')
   const root = useRef<HTMLDivElement>(null)
@@ -294,7 +294,7 @@ export default function About() {
                 </div>
               ))}
             </div>
-            <div id="an-done" style={css('font-size:13px;line-height:1.4;font-weight:600;color:#B4501A;opacity:0')}>분석 완료 · 보고서를 만들고 있습니다</div>
+            <div id="an-done" style={css('font-size:13px;line-height:1.4;font-weight:600;color:#B4501A;opacity:0')}>분석 완료. 보고서를 만들고 있습니다</div>
           </div>
           <div id="sz-head" style={css(HEAD_C)}>
             <h2 style={css(T.h2)}>소형견부터 대형견까지</h2>
@@ -320,7 +320,7 @@ export default function About() {
                 </div>
                 {/* 차팅 카드 */}
                 <div id="em-card" style={css(`position:absolute;left:38%;top:44%;width:30%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;box-shadow:0 24px 50px -20px rgba(25,31,40,.4);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:0;color:${INK}`)}>
-                  <b style={css('font-size:14px;font-weight:700')}>보리 · 오늘 진료 기록</b>
+                  <b style={css('font-size:14px;font-weight:700')}>보리, 오늘 진료 기록</b>
                   <div style={css('display:grid;grid-template-columns:repeat(4,1fr);gap:6px')}>
                     {[['체중', '28.1kg'], ['체온', '38.6℃'], ['심박', '92'], ['혈압', '142/84']].map(([k, v]) => <div key={k} style={css('background:#FAF7F2;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:2px')}><span style={css('font-size:12px;color:#5B6472;font-weight:600')}>{k}</span><b style={css('font-size:13px;font-weight:700')}>{v}</b></div>)}
                   </div>
@@ -359,7 +359,7 @@ export default function About() {
                 <div style={css('position:absolute;inset:0;background:#FAF9F5')}></div>
                 <div style={css('position:absolute;inset:0;transform:scale(.93);transform-origin:50% 0')}>
                 <img src={`${img}about-3d-169.jpg`} alt="3D 보행 모델 화면" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} />
-                <div id="rp-tip" style={css(`position:absolute;left:31%;top:49%;transform:translate(8px,-100%);background:${INK};color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.4;font-weight:700;box-shadow:0 10px 24px -10px rgba(0,0,0,.5);white-space:nowrap;opacity:0`)}>오른뒤 무릎 <span style={css('color:#FF9A5C')}>32°</span> · 왼뒤 53°</div>
+                <div id="rp-tip" style={css(`position:absolute;left:31%;top:49%;transform:translate(8px,-100%);background:${INK};color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.4;font-weight:700;box-shadow:0 10px 24px -10px rgba(0,0,0,.5);white-space:nowrap;opacity:0`)}>오른뒤 무릎 <span style={css('color:#FF9A5C')}>32°</span>, 왼뒤 53°</div>
                 <div id="rp-card-3" className="rp-card" style={css(`position:absolute;width:24%;background:#fff;border:1px solid #ECE8E2;border-radius:14px;box-shadow:0 24px 50px -20px rgba(25,31,40,.4);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:0;color:${INK};right:calc(5.5% + var(--cutx, 0px) / 0.93);top:63%;width:25%`)}>
                   <span style={css('font-size:12px;font-weight:700;color:#B4501A;letter-spacing:.02em')}>3D 모델</span>
                   <b style={css('font-size:14px;font-weight:700;line-height:1.35')}>측정한 수치로 다시 걷습니다</b>

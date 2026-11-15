@@ -339,7 +339,7 @@ export function mount(ctx: Ctx, el: Els): () => void {
     const rows = L.mets.map((m) => '<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:#C9CFD8">' + m.n
       + '</span><span><b style="color:' + (m.lower && L.weak ? '#FFB199' : '#fff') + '">' + m.v + '</b> <span style="color:#8E949C">/ 반대 '
       + m.other + '</span></span></div>').join('')
-    return '<b style="font-size:14px">' + L.label + (L.weak ? ' · 덜 씁니다' : '') + '</b>' + rows
+    return '<b style="font-size:14px">' + L.label + (L.weak ? ' (덜 씁니다)' : '') + '</b>' + rows
   }
   function bodyTip() {
     return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 점수 <b>' + OVERALL.sym + '점</b></div><div style="color:#C9CFD8">'

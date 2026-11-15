@@ -6,7 +6,7 @@ import AuthBar, { usePublicPage } from './parts/AuthBar'
 import { link } from '../config'
 
 export default function Forgot() {
-  useTitle('비밀번호 찾기 · Paw oh Paw')
+  useTitle('비밀번호 찾기')
   const { me, toast, query } = usePublicPage()
   const sent = query.get('sent') || ''
   const resetLink = query.get('link') || ''
@@ -18,7 +18,7 @@ export default function Forgot() {
           <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:24px;padding:52px 48px;display:flex;flex-direction:column;gap:20px')}>
             <h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.8px')}>메일을 확인해 주세요</h1>
             <p style={css('margin:0;font-size:18px;color:#5B6472;line-height:1.6')}>가입한 아이디라면 등록된 이메일로 비밀번호 재설정 링크를 보냈습니다. 링크는 30분 동안 쓸 수 있습니다.</p>
-            {resetLink && <div style={css('border-radius:12px;background:#F2EEE8;padding:14px 18px;font-size:14px;color:#5B6472')}>시제품에는 메일 서버가 없어 링크를 여기에 보여 줍니다 · <a className="lk" href={link(resetLink)} style={css('font-weight:700;color:#D2601A')}>재설정 링크 열기</a></div>}
+            {resetLink && <div style={css('border-radius:12px;background:#F2EEE8;padding:14px 18px;font-size:14px;color:#5B6472')}>시제품에는 메일 서버가 없어 링크를 여기에 보여 줍니다. <a className="lk" href={link(resetLink)} style={css('font-weight:700;color:#D2601A')}>재설정 링크 열기</a></div>}
             <a className="lk tap" href={link('/login')} style={css('font-size:15px;font-weight:600;color:#1B2433')}>로그인으로 돌아가기</a>
           </div>
         ) : (

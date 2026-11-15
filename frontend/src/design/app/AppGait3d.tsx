@@ -103,7 +103,7 @@ export function Gait3dBody(p: Gait3dProps) {
           <span data-testid="gait-src" style={{ position: 'absolute', left: 10, top: 10, right: 10, width: 'fit-content', maxWidth: 'calc(100% - 20px)', padding: '4px 9px', borderRadius: 8, background: 'rgba(255,255,255,.88)', border: `1px solid ${gaitNote && !gaitNote.real ? '#F0C9A8' : LINE}`, fontSize: 12, lineHeight: 1.4, color: gaitNote && !gaitNote.real ? '#B4501A' : SUB, pointerEvents: 'none' }}>
             {gaitNote ? gaitNote.note : '이 회차 관절 각도를 불러오는 중…'}
           </span>
-          <span style={{ position: 'absolute', left: 12, bottom: 10, fontSize: 12, color: '#5B6472', pointerEvents: 'none' }}>끌어서 돌리기 · 두 손가락으로 확대 · 다리를 누르면 수치</span>
+          <span style={{ position: 'absolute', left: 12, bottom: 10, fontSize: 12, color: '#5B6472', pointerEvents: 'none' }}>끌어서 돌리기, 두 손가락으로 확대, 다리를 누르면 수치</span>
           <div ref={tipRef} style={{ position: 'absolute', display: 'none', pointerEvents: 'none', minWidth: 190, padding: '10px 12px', borderRadius: 12, background: 'rgba(27,36,51,.94)', color: '#fff', fontSize: 13, lineHeight: 1.55, boxShadow: '0 8px 24px rgba(27,36,51,.25)' }} />
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

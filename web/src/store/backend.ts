@@ -228,7 +228,7 @@ export async function syncFromBackend(me?: StaffOut): Promise<string> {
     if (!onlyDog) {
       try {
         const dev = (await api.myDevice()).device
-        acct.dev = dev ? `${dev.code_masked} · ${dev.issued_at.slice(0, 10)} 발급` : '-'
+        acct.dev = dev ? `${dev.code_masked}, ${dev.issued_at.slice(0, 10)} 발급` : '-'
       } catch {
         /* 이 API 가 없는 서버면 그대로 둔다 */
       }

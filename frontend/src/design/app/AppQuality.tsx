@@ -32,7 +32,7 @@ export function AppExcludeLine({ ex, kind }: { ex: readonly (readonly [string, n
   return (
     <span style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '3px', lineHeight: 1.5, color: '#5B6472' }}>
       <span>{excludeText(s, kind === 'g' ? '분석에 쓰지 못한 걸음' : '쓰지 못한 걸음')}</span>
-      {terms.length ? <span style={{ fontSize: '12px', color: '#5B6472' }}>{terms.join(' · ')}</span> : null}
+      {terms.length ? <span style={{ fontSize: '12px', color: '#5B6472' }}>{terms.join(', ')}</span> : null}
     </span>
   )
 }

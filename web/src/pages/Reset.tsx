@@ -8,7 +8,7 @@ import { link } from '../config'
 const INP = 'height:58px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 18px;font-size:18px;color:#1B2433;outline:none'
 
 export default function Reset() {
-  useTitle('비밀번호 재설정 · Paw oh Paw')
+  useTitle('비밀번호 재설정')
   const { me, toast, query } = usePublicPage()
   const token = query.get('token') || ''
 

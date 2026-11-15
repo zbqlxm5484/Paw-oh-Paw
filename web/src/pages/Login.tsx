@@ -7,7 +7,7 @@ import AuthBar, { usePublicPage } from './parts/AuthBar'
 import { link } from '../config'
 
 export default function Login() {
-  useTitle('로그인 · Paw oh Paw')
+  useTitle('로그인')
   const { me, toast } = usePublicPage()
   const [id, setId] = useState('')
   const [pw, setPw] = useState('')
