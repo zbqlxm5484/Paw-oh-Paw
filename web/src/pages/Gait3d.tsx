@@ -58,10 +58,8 @@ function prepare(acct: Account, r: Result) {
   const model = 'assets/dog3d/' + (d && d.size === 'L' ? 'husky.glb' : 'shiba.glb')
   // 이 회차에서 잰 다리별 관절 가동 범위: 3D 측정 걸음의 다리 뼈 배율(좌우 중 큰 쪽 대비)에 쓴다
   const { roms, stance } = legNums(r)
-  // 겹쳐 보기: 이 반려견의 기준 회차(없으면 가장 오래된 유효 회차). 이 회차가 그 회차면 겹칠 것이 없다
-  const bid = d ? base_of(acct, d) : null
-  const br = bid && bid !== r.id ? resultOf(acct, bid) : undefined
-  const ghost = br && br.m && Object.keys(br.m).length ? { ...legNums(br), label: `${br.date} 기준 회차` } : null
+  // 기준 회차 겹치기는 뺐다(11-16 사용자 결정, 앱은 11-09에 먼저 뺌). 겹칠 회차를 만들지 않는다
+  const ghost: Ctx['ghost'] = null
   const s = session(r.src)
   const speed = s && s.walk_speed ? Math.min(1.3, Math.max(0.7, s.walk_speed / MEDIAN_SPEED)) : 1 // 재생 빠르기(시연 회차 중앙값 대비)
   const view = best_view(bm)
@@ -139,7 +137,7 @@ export default function Gait3d() {
   useEffect(() => {
     if (!pv) return
     return mount(pv.ctx, {
-      box: viewRef.current!, tip: tipRef.current!, real: realRef.current!, gen: genRef.current!, walk: walkRef.current!, stop: stopRef.current!, ghost: ghostRef.current!,
+      box: viewRef.current!, tip: tipRef.current!, real: realRef.current!, gen: genRef.current!, walk: walkRef.current!, stop: stopRef.current!, ghost: ghostRef.current,
       setLoading, api,
     })
   }, [pv])
@@ -165,8 +163,6 @@ export default function Gait3d() {
               <span style={css('width:1px;height:22px;background:#E2DCD3;margin:0 4px')}></span>
               <button className="bt" id="walk" ref={walkRef} type="button" onClick={() => api.current?.setWalking(true)} style={css('height:44px;padding:0 18px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>걷기</button>
               <button className="bt" id="stop" ref={stopRef} type="button" onClick={() => api.current?.setWalking(false)} style={css('height:44px;padding:0 18px;border-radius:9px;border:1px solid #D2601A;background:#D2601A;color:#fff;font-size:14px;font-weight:700')}>멈춤</button>
-              <span style={css('width:1px;height:22px;background:#E2DCD3;margin:0 4px')}></span>
-              <button className="bt" id="ghost" ref={ghostRef} type="button" title={pv.ctx.ghost ? `${pv.ctx.ghost.label}을 반투명 파란색으로 겹쳐 걷습니다` : '겹쳐 볼 기준 회차가 없어요(이 회차가 기준 회차)'} onClick={() => { const on = !ghostOn; setGhostOn(on); api.current?.setGhost(on) }} style={css('height:44px;padding:0 14px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;font-size:14px;font-weight:700')}>기준 회차 겹치기</button>
             </div>
             {/* 보는 각도: 추천 각도에 표시, 누르면 그 방향으로 카메라를 옮긴다 */}
             <div className="g3d-tb g3d-tb-r" style={css('position:absolute;right:14px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.9);border:1px solid #ECE8E2;box-shadow:0 4px 14px rgba(27,36,51,.08)')}>
@@ -189,9 +185,7 @@ export default function Gait3d() {
               {([['front', '앞다리'], ['hind', '뒷다리']] as const).map(([part, label]) => {
                 const p = bm.legs[part]
                 return <div key={part} style={css('display:flex;flex-direction:column;gap:3px')}><span style={css('display:flex;justify-content:space-between;font-size:13px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span><span style={css('font-size:15px;line-height:1.5')}>{p.say}</span></div>
-              })}
-              {pv.ctx.ghost ? <span style={css('font-size:12px;color:#5B6472;line-height:1.5')}><b style={css('color:#3B6FE0')}>기준 회차 겹치기</b>: {pv.ctx.ghost.label}의 수치로 걷는 모습을 반투명 파란색으로 같은 박자에 겹칩니다. 두 회차의 다리 움직임 폭과 딛는 길이를 견줄 수 있습니다.</span> : null}
-            </div>
+              })}            </div>
           </aside>
         </div>
       </main>
@@ -208,7 +202,7 @@ interface Els {
   gen: HTMLButtonElement
   walk: HTMLButtonElement
   stop: HTMLButtonElement
-  ghost: HTMLButtonElement
+  ghost: HTMLButtonElement | null
   setLoading: (s: string | null) => void
   api: { current: { setView: (k: string) => void; setMode: (m: string) => void; setWalking: (on: boolean) => void; setGhost: (on: boolean) => void } | null }
 }
@@ -560,12 +554,12 @@ function mount(ctx: Ctx, el: Els): () => void {
   // 기준 회차 겹쳐 보기: 측정 걸음일 때만
   function setGhost(on: boolean) {
     ghostOn = on && !!ghost
-    mark(el.ghost, ghostOn)
+    if (el.ghost) mark(el.ghost, ghostOn)
     showRigs()
   }
   function showRigs() {
     const real = mode === 'real' && !!gait
-    el.ghost.disabled = !ghost || !real
+    if (el.ghost) el.ghost.disabled = !ghost || !real
     if (ghost) ghost.root.visible = real && ghostOn
     for (const rig of [main, ghost]) if (rig) for (const pm of Object.values(rig.prints)) pm.visible = real && rig.root.visible
     if (real) syncBody()
