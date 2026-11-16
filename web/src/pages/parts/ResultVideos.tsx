@@ -90,7 +90,7 @@ export function ResultVideos({ sessionId }: { sessionId: string }) {
           return (
             <button key={s.id} type="button" onClick={() => setPick(s.id)}
               style={css(`height:44px;padding:0 12px;border-radius:9px;border:1px solid ${on ? '#D2601A' : '#E2DCD3'};background:${on ? '#FFF4EC' : '#fff'};color:${on ? '#A8481A' : '#3A4250'};font-size:13px;font-weight:${on ? 700 : 600};display:flex;align-items:center;gap:6px;cursor:pointer`)}>
-              {s.seq_no}번{side ? ` · ${SIDE[side] ?? side}` : ''}
+              {s.seq_no}번{side ? `, ${SIDE[side] ?? side}` : ''}
               {val ? <span style={css(`padding:1px 6px;border-radius:6px;background:${val[1]};color:${val[2]};font-size:12px;font-weight:700`)}>{val[0]}</span> : null}
             </button>
           )

@@ -27,7 +27,7 @@ export default function Analyzing() {
   const { job_id = '' } = useParams()
   const navigate = useNavigate()
   const { acct, me, toast } = usePage({ login: true, jobId: job_id })
-  useTitle('분석 중 · Paw oh Paw')
+  useTitle('분석 중')
   const isDemo = job_id === 'demo'
   const job = acct && !isDemo ? jobOf(acct, job_id) : undefined
   const p0 = job ? jobProgress(job) : 0
@@ -98,7 +98,7 @@ export default function Analyzing() {
       <main style={css('max-width:none;margin:0;padding:80px 80px 96px')}>
         <div style={css('display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center')}>
           <b style={css('font-size:28px;letter-spacing:-1px')}>분석 중입니다</b>
-          <span style={css('font-size:18px;color:#5B6472;font-variant-numeric:tabular-nums')}>{dog_name} · <span id="anaStep">{step}</span> · <span id="anaPct">{pct}</span>%</span>
+          <span style={css('font-size:18px;color:#5B6472;font-variant-numeric:tabular-nums')}>{dog_name}, <span id="anaStep">{step}</span>, <span id="anaPct">{pct}</span>%</span>
           <div style={css('position:relative;width:100%;max-width:1400px;height:340px;margin:64px 0 24px')}>
             {JY.map((jy, i) => {
               const up = i % 2 === 0

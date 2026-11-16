@@ -47,7 +47,7 @@ function LegCard({ bm, kind, code, align }: { bm: BM; kind: string; code: string
   const m0 = g.mets[0]
   return (
     <div style={css(`display:flex;flex-direction:column;gap:6px;align-items:${align === 'r' ? 'flex-end' : 'flex-start'};text-align:${align === 'r' ? 'right' : 'left'}`)}>
-      <span style={css(`display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:${g.c};flex-direction:${align === 'r' ? 'row-reverse' : 'row'}`)}><span style={css(`width:12px;height:12px;border-radius:4px;background:${g.dot};border:1px solid #B8B0A4`)}></span>{g.label}{g.weak ? ' · 덜 씁니다' : ''}</span>
+      <span style={css(`display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:${g.c};flex-direction:${align === 'r' ? 'row-reverse' : 'row'}`)}><span style={css(`width:12px;height:12px;border-radius:4px;background:${g.dot};border:1px solid #B8B0A4`)}></span>{g.label}{g.weak ? ' (덜 씁니다)' : ''}</span>
       {kind === 'g' ? (
         <>
           <span style={css('font-size:13px;color:#5B6472')}>{m0.n}</span>
@@ -68,7 +68,7 @@ function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; pa
   return (
     <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:15px;line-height:1.5')}>
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
-      <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? ' · 일부만 써서 덜 정확할 수 있어요' : ''}</span>
+      <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? '. 일부만 써서 덜 정확할 수 있어요' : ''}</span>
       <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `직전 회차(${bm.prev_label || prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
     </div>
   )
@@ -86,7 +86,7 @@ export default function Report() {
   const r = acct && !isOld ? resultOf(acct, rid) : undefined
   const d = acct && r ? dogOf(acct, r.dog) : undefined
   const v = acct && r ? result_view(acct, r) : null
-  useTitle(`${v ? v.rd.name : ''} 분석 결과 · Paw oh Paw`)
+  useTitle(`${v ? v.rd.name : ''} 분석 결과`)
   // 오른쪽 칸 메모·진료 기록: 백엔드 기관이면 그 반려견 차트를 서버에서 읽는다(271)
   const acctId = acct?.id ?? '', dogId = d?.id ?? ''
   useEffect(() => {
@@ -128,7 +128,7 @@ export default function Report() {
           </div>
           {rd.fail || !bm ? (
             <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:12px')}>
-              <div style={css('display:flex;align-items:center;gap:10px')}><b style={css('font-size:18px')}>{rd.name} · {rd.when}</b><span style={css(`padding:4px 10px;border-radius:8px;background:${rd.bg};color:${rd.c};font-size:13px;font-weight:700`)}>{rd.st}</span></div>
+              <div style={css('display:flex;align-items:center;gap:10px')}><b style={css('font-size:18px')}>{rd.name}, {rd.when}</b><span style={css(`padding:4px 10px;border-radius:8px;background:${rd.bg};color:${rd.c};font-size:13px;font-weight:700`)}>{rd.st}</span></div>
               <b style={css('font-size:18px')}>분석하지 못했습니다</b>
               <span style={css('font-size:15px;line-height:1.6;color:#5B6472')}>{r.fail_msg || '쓸 수 있는 통과가 없었습니다. 반려견이 뛰지 않고, 멈추거나 앉지 않고, 일직선으로 걷도록 다시 찍어 주세요.'}</span>
               {excludeSummary(r.ex) ? (
@@ -191,7 +191,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
   }, [vetReady, realKnee, onReady])
   return (
     <div className="print-paper" style={css('background:#fff;border-radius:6px;box-shadow:0 18px 50px rgba(27,36,51,.1);padding:48px 52px;display:flex;flex-direction:column;gap:22px;min-height:960px')}>
-      <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{kind === 'v' ? '보행 분석 보고서 · 수의사용' : '보행 분석 보고서 · 보호자용'}</span></div>
+      <div style={css('display:flex;align-items:center;justify-content:space-between')}><div style={css('display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800')}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:28px;height:28px;object-fit:contain')} />Paw oh Paw</div><span style={css('font-size:13px;color:#5B6472')}>{kind === 'v' ? '보행 분석 보고서 (수의사용)' : '보행 분석 보고서 (보호자용)'}</span></div>
       <div style={css('height:3px;background:#D2601A;width:56px')}></div>
       <div><div style={css('font-size:28px;font-weight:800;letter-spacing:-0.9px')}>{rp.title}</div><div style={css('font-size:14px;color:#5B6472;margin-top:6px')}>{rp.when}</div></div>
 
@@ -209,7 +209,7 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
           </div>
           <div style={css('display:flex;justify-content:space-between;font-size:12px;color:#5B6472')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
           {kind === 'g' ? <span style={css('font-size:12px;color:#5B6472')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-          <span style={css('font-size:15px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <> · 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+          <span style={css('font-size:15px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <>, 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
         </div>
       </div>
 
@@ -241,8 +241,8 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
             <div key={part} style={css('padding:16px 18px;border-radius:12px;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
               <span style={css('display:flex;justify-content:space-between;font-size:14px;font-weight:700')}><span>{label}</span><span style={css(`color:${p.c}`)}>{p.level}</span></span>
               <span style={css(`font-size:15px;line-height:1.55;font-weight:600`)}>{p.say}</span>
-              {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff} · 대칭 지수 차이 {pystr(p.si)}%</span>
-                : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#5B6472')}>{READ[p.metric]}</span></> : null}</span>}
+              {kind === 'v' ? <span style={css('font-size:13px;color:#5B6472')}>가장 큰 차이: {p.metric} {p.diff}, 대칭 지수 차이 {pystr(p.si)}%</span>
+                : <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>{p.metric} 왼쪽 <b style={css('color:#1B2433')}>{p.left}</b>, 오른쪽 <b style={css('color:#1B2433')}>{p.right}</b>{READ[p.metric] ? <><br /><span style={css('color:#5B6472')}>{READ[p.metric]}</span></> : null}</span>}
             </div>
           )
         })}
@@ -291,11 +291,11 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
 type Tick = { y: number; x: number; t: string }
 type KC = { y: Tick[]; x: Tick[]; x0: number; x1: number; ref_band: string; ref_mean: string; L: string; R: string }
 
-/** 수의사용: 뒷무릎 각도 · 보행 주기 */
+/** 수의사용: 뒷무릎 각도/보행 주기 */
 export function KneeChart({ kc }: { kc: KC }) {
   return (
     <div>
-      <b style={css('font-size:15px')}>뒷무릎 각도 · 보행 주기</b>
+      <b style={css('font-size:15px')}>뒷무릎 각도/보행 주기</b>
       <svg viewBox="0 0 320 150" style={css('width:100%;max-width:520px;display:block;margin-top:8px;font-family:inherit')}>
         <g stroke="#ECE8E2" strokeDasharray="3 4">{kc.y.map((t: Tick, i: number) => <line key={i} x1={kc.x0} y1={t.y} x2={kc.x1} y2={t.y}></line>)}</g>
         <g fontSize="12" fill="#5B6472">{kc.y.map((t: Tick, i: number) => <text key={i} x={kc.x0 - 5} y={t.y + 3} textAnchor="end">{t.t}</text>)}

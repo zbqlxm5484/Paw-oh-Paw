@@ -126,7 +126,7 @@ export function AppReport(p: AppReportProps) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: align === 'r' ? 'flex-end' : 'flex-start', textAlign: align === 'r' ? 'right' : 'left' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 800, color: g.c, flexDirection: align === 'r' ? 'row-reverse' : 'row' }}>
-          <span style={{ width: 9, height: 9, borderRadius: 3, background: g.dot, border: '1px solid #B8B0A4' }} />{g.label}{g.weak ? ' · 덜 씁니다' : ''}
+          <span style={{ width: 9, height: 9, borderRadius: 3, background: g.dot, border: '1px solid #B8B0A4' }} />{g.label}{g.weak ? ' (덜 씁니다)' : ''}
         </span>
         {p.kind === 'g' ? (m0 ? (
           <>
@@ -181,7 +181,7 @@ export function AppReport(p: AppReportProps) {
           <div key={label} style={{ ...box({ border: '1px solid #ECE8E2' }), display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700 }}><span>{label}</span><span style={{ color: P.lv[3] }}>{P.lv[1]}</span></span>
             <span style={{ fontSize: p.kind === 'g' ? '14px' : '13px', lineHeight: 1.5, fontWeight: 600 }}>{P.say}</span>
-            {p.kind === 'v' && P.worst ? <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>가장 큰 차이: {P.worst.n} {r1(Math.abs(P.worst.l - P.worst.r))}{P.worst.u} · 대칭 지수 차이 {P.si}%</span> : null}
+            {p.kind === 'v' && P.worst ? <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>가장 큰 차이: {P.worst.n} {r1(Math.abs(P.worst.l - P.worst.r))}{P.worst.u}, 대칭 지수 차이 {P.si}%</span> : null}
             {p.kind === 'g' && P.worst && READ[P.worst.n] ? <span style={{ fontSize: '12px', color: '#5B6472', lineHeight: 1.5 }}>{P.worst.n}: {READ[P.worst.n]}</span> : null}
           </div>
         ))}

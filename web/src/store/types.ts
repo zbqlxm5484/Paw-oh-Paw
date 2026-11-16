@@ -163,6 +163,9 @@ export interface Staff {
   reset_until: number
 }
 
+/** 시연 기관 휴지통 한 칸: 지운 반려견과 그 회차·작업을 그대로 둔다(복구하면 되돌림) */
+export interface TrashEntry { dog: Dog; results: Result[]; jobs: Account['jobs']; at: string }
+
 export interface Account {
   id: string
   login_id: string
@@ -172,6 +175,8 @@ export interface Account {
   dev: string
   joined: string
   dogs: Dog[]
+  /** 시연 기관 휴지통(서버 기관은 서버가 들고 있다) */
+  trash?: TrashEntry[]
   results: Result[] // 최신 회차가 앞
   jobs: Job[]
   notif_on: boolean

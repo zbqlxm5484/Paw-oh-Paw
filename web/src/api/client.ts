@@ -137,6 +137,11 @@ export interface NoteOut {
   /** 방문일(YYYY-MM-DD, 271). 예전 서버면 없다 */
   visited_on?: string
 }
+/** 반려견 사진(15.11). file_url 은 서명 주소(url_expires_at 까지) */
+export interface ImageOut {
+  id: string; taken_on: string; kind: string; caption: string | null; width: number; height: number; masked_faces: number
+  staff: StaffRef | null; created_at: string; file_url: string; url_expires_at: string
+}
 export interface NoteRevisionOut { id: string; body: string; category: string; important: boolean; staff: StaffRef | null; revised_at: string }
 export interface Paged<T> { items: T[]; total: number; page: number; size: number }
 export interface ReasonOut { code: string; message: string }
@@ -293,6 +298,9 @@ export const api = {
   createDog: (body: Record<string, unknown>) => request<DogOut>('/dogs', { method: 'POST', body }),
   updateDog: (id: string, body: Record<string, unknown>) => request<DogOut>(`/dogs/${id}`, { method: 'PATCH', body }),
   /** 휴지통으로 보냄(서버가 정한 기간 뒤 영구 삭제). 회차·영상도 같이 숨는다 */
+  /** 휴지통 목록(15.5): 최근에 넣은 것부터. deleted_at·purge_at 이 채워져 온다 */
+  trashDogs: (page = 1, size = 100) => request<Paged<DogOut & { deleted_at?: string | null; purge_at?: string | null }>>(`/dogs?trash=true&page=${page}&size=${size}`),
+  restoreDog: (id: string) => request<DogOut>(`/dogs/${id}/restore`, { method: 'POST' }),
   deleteDog: (id: string) => request<void>(`/dogs/${id}`, { method: 'DELETE' }),
   /** 기관의 모든 회차, 최신순(BE-33) */
   instSessions: (page = 1, size = 100) => request<{ items: { id: string; measured_on: string; status: string; dog: { id: string; name: string } }[]; total: number }>(`/sessions?page=${page}&size=${size}`),
@@ -343,6 +351,18 @@ export const api = {
   noteRevisions: (id: string) => request<{ items: NoteRevisionOut[] }>(`/notes/${id}/revisions`),
   /** 메모·진료 기록 한 건과 그 수정 이력을 지운다(271) */
   deleteNote: (id: string) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
+  // ── 반려견 사진(15.11) ──
+  images: (dogId: string) => request<{ items: ImageOut[] }>(`/dogs/${dogId}/images`),
+  /** kind = PRE_OP·POST_OP·XRAY·PHOTO. taken_on 을 빼면 오늘. 사람 얼굴은 서버가 가려 저장한다(XRAY 제외) */
+  uploadImage: (dogId: string, file: File, kind: string, taken_on?: string, caption?: string) => {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    fd.append('kind', kind)
+    if (taken_on) fd.append('taken_on', taken_on)
+    if (caption) fd.append('caption', caption)
+    return request<ImageOut>(`/dogs/${dogId}/images`, { method: 'POST', body: fd })
+  },
+  deleteImage: (id: string) => request<void>(`/images/${id}`, { method: 'DELETE' }),
   /** 기관의 그날 기록(271): 그날 바이탈·메모(방문일)·회차. date 를 빼면 오늘 */
   dailyRecords: (date?: string) => request<{ date: string; vitals: VitalOut[]; notes: NoteOut[]; sessions: { id: string; dog?: { id: string } | null; dog_id?: string }[] }>(`/daily-records${date ? `?date=${date}` : ''}`),
   /** 내 기관의 측정 기기(271): 가린 코드와 발급 시각. 없으면 device 가 null */

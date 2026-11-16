@@ -499,6 +499,8 @@ post('/dogs/:dog_id/delete', (p) => {
   if (!acct) return need_login()
   const d = dogOf(acct, p.dog_id)
   if (!d) return redirect('/my')
+  // 휴지통에 30일 둔다(마이페이지 '반려견 복구'로 되돌림)
+  acct.trash = [{ dog: d, results: acct.results.filter((r) => r.dog === d.id), jobs: acct.jobs.filter((j) => j.dog === d.id), at: new Date().toISOString() }, ...(acct.trash ?? [])]
   acct.dogs = acct.dogs.filter((x) => x.id !== p.dog_id)
   acct.results = acct.results.filter((r) => r.dog !== p.dog_id)
   acct.jobs = acct.jobs.filter((j) => j.dog !== p.dog_id)
@@ -535,7 +537,7 @@ post('/analyze', (_p, fd) => {
     if (!file.name) continue
     const ext = suffix(file.name)
     if (!VIDEO_EXT.includes(ext) && !(file.type || '').startsWith('video/'))
-      return redirect(`/upload?dog=${dog}`, '영상 파일(MP4 · MOV)만 올릴 수 있습니다')
+      return redirect(`/upload?dog=${dog}`, '영상 파일(MP4/MOV)만 올릴 수 있습니다')
     saved.push(URL.createObjectURL(file)) // 시제품은 uploads/ 에 저장한 주소
   }
   const n = saved.length || Math.max(0, Math.min(I(fd, 'demo_count', 0), config.MAX_SHOTS))

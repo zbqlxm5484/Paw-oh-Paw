@@ -1,4 +1,4 @@
-// 앱 보고서 · 수의사용 탭(웹 수의사용 보고서와 같은 구성, S15P31A404-210·103):
+// 앱 보고서 (수의사용) 탭(웹 수의사용 보고서와 같은 구성, S15P31A404-210·103):
 // 왼쪽과 오른쪽 비교(관절별 위아래 막대), 뒷무릎 각도·보행 주기, 무릎을 가장 굽힌·편 순간(결과 영상 프레임, AppAngleFrames), 지난 측정과 비교(서버 비교 API), 무릎 가동 범위 변화(서버 추이 API).
 import type { CompareItem, CompareOut, SessionResultOut, TrendsOut } from '../../api/types'
 import { useEffect, useState } from 'react'
@@ -149,7 +149,7 @@ function useRealKnee(sessionId: string): { L: number[] | null; R: number[] | nul
   return state.id === sessionId ? state.v : undefined
 }
 
-/** 뒷무릎 각도 · 보행 주기: 이 회차의 실제 관절 각도로만 그린다. 못 만들면 칸을 뺀다(측정값이 아닌 합성 곡선은 싣지 않는다, 11-10) */
+/** 뒷무릎 각도/보행 주기: 이 회차의 실제 관절 각도로만 그린다. 못 만들면 칸을 뺀다(측정값이 아닌 합성 곡선은 싣지 않는다, 11-10) */
 function KneeCycle({ result }: { result: SessionResultOut }) {
   const knee = useRealKnee(result.id)
   if (!knee) return null
@@ -164,7 +164,7 @@ function KneeCycle({ result }: { result: SessionResultOut }) {
   const mid = Math.floor((lo + hi) / 2)
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <h3 style={H2}>뒷무릎 각도 · 보행 주기</h3>
+      <h3 style={H2}>뒷무릎 각도/보행 주기</h3>
       <svg viewBox="0 0 320 150" style={{ width: '100%', display: 'block', fontFamily: 'inherit' }}>
         <g stroke="#ECE8E2" strokeDasharray="3 4">{[hi, mid, lo].map((v) => <line key={v} x1={x0} y1={Y(v)} x2={x1} y2={Y(v)} />)}</g>
         <g fontSize="12" fill="#5B6472">

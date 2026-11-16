@@ -1,18 +1,59 @@
 // dog.html + main.py dog_chart(): 반려견 차트. EMR 처럼 진료 기록 = 왼쪽 방문 목록 + 가운데 그날 기록, 오른쪽 진단 이력.
 // 경과 = 그래프·측정 이력(두 회차 비교 버튼)·바이탈 표, 진단 이력 = 기록 추가 + 목록(11-02). 11-09 QA: 경과 비교를 위 버튼에서 경과 탭 안으로
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
 import { PostForm, staticUrl, usePage, useTitle } from '../app/page'
 import { setToast } from '../app/session'
-import { MEMO_CAT, SITE, SOAP, STAGE_NAMES, link } from '../config'
+import { IMG_KIND, MEMO_CAT, SITE, SOAP, STAGE_NAMES, link } from '../config'
 import { activeJobs, dogOf, isoToday } from '../store/db'
-import { isRemote, syncDogChart } from '../store/backend'
+import { deleteDogImage, isRemote, syncDogChart, uploadDogImage } from '../store/backend'
+import { fileHref } from '../api/client'
 import { care_team, chart_summary, dog_detail, dx_history, image_list, kg_trend, memos as memos_of, patient_row, valid, visits, vital_rows } from '../views/views'
 import { MemoCard, MemoForm, type MemoX } from './parts/DogPanel'
 import { PetModal } from './parts/Modals'
 import { VFlagBadge, VV } from './parts/Vital'
+
+/** 서버 사진은 서명 주소(http·/api/…), 시연 사진은 static 경로 */
+const imgSrc = (p: string): string => (/^(https?:)?\//.test(p) ? fileHref(p) : staticUrl(p))
+
+/** 경과 탭: 반려견 사진 올리기(15.11). 서버 기관에서만 보인다 */
+function ImageUpload({ acctId, dogId, today }: { acctId: string; dogId: string; today: string }) {
+  const [kind, setKind] = useState('photo')
+  const [day, setDay] = useState(today)
+  const [caption, setCaption] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [key, setKey] = useState(0)
+  const send = async () => {
+    if (!file || busy) return
+    setBusy(true); setMsg('')
+    try {
+      await uploadDogImage(acctId, dogId, file, kind, day || undefined, caption.trim() || undefined)
+      setFile(null); setCaption(''); setKey((k) => k + 1); setMsg('사진을 올렸습니다')
+    } catch (e) {
+      setMsg(e instanceof Error && e.message ? e.message : '사진을 올리지 못했습니다')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const FIN = 'height:40px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;padding:0 10px;font-size:14px;font-family:inherit;min-width:0'
+  return (
+    <div style={css('display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:4px;border-top:1px solid #F0ECE6')}>
+      <select aria-label="사진 종류" value={kind} onChange={(e) => setKind(e.target.value)} style={css(FIN)}>
+        {Object.entries(IMG_KIND).map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+      </select>
+      <input aria-label="찍은 날" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} style={css(FIN)} />
+      <input aria-label="설명" placeholder="설명(선택, 100자)" maxLength={100} value={caption} onChange={(e) => setCaption(e.target.value)} style={css(FIN + ';flex:1 1 160px')} />
+      <input key={key} aria-label="사진 파일" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={css('font-size:14px;max-width:100%')} />
+      <button type="button" className="btn tap" disabled={!file || busy} onClick={send} style={css('height:44px;padding:0 16px;border-radius:10px;border:0;background:#D2601A;color:#fff;font-weight:700;font-size:14px;cursor:pointer;opacity:' + (!file || busy ? '0.5' : '1'))}>{busy ? '올리는 중…' : '사진 올리기'}</button>
+      {msg ? <span role="status" style={css('font-size:13px;color:#5B6472;flex-basis:100%')}>{msg}</span> : null}
+      <span style={css('font-size:12px;color:#5B6472;flex-basis:100%')}>사람 얼굴은 서버가 가려서 저장합니다(방사선 사진 제외).</span>
+    </div>
+  )
+}
 
 const CHART_TABS: [string, string][] = [['visits', '진료 기록'], ['progress', '경과'], ['dx', '진단 이력']]
 const _OLD_TABS: Record<string, string> = { summary: 'progress', gait: 'progress', vitals: 'visits', notes: 'visits', history: 'dx' } // 예전 주소
@@ -30,7 +71,7 @@ export default function DogPage() {
   const loc = useLocation()
   const cur = acct ? dogOf(acct, dog_id) : undefined
   const missing = !!acct && !cur
-  useTitle(cur ? `${cur.name} · Paw oh Paw` : 'Paw oh Paw')
+  useTitle(cur ? cur.name : 'Paw oh Paw')
   // 백엔드 기관이면 차트를 열 때 바이탈·진단 이력·메모·상세(연락처 전체)를 서버에서 읽는다(271)
   const acctId = acct?.id ?? ''
   useEffect(() => {
@@ -113,7 +154,7 @@ export default function DogPage() {
           </div>
 
           {sel && sel.hist.length ? (
-            <div className="v-sec">{sel.hist.map((h, i) => <div key={i} style={css('font-size:15px')}><b style={css(`color:${h.kind == '수술' ? '#A8481A' : '#3A4250'}`)}>{h.kind}</b> {h.title}{h.site ? ` · ${SITE[h.site]}` : ''}{h.by ? <>{' '}<span style={css('color:#5B6472')}>· {h.by}</span></> : null}</div>)}</div>
+            <div className="v-sec">{sel.hist.map((h, i) => <div key={i} style={css('font-size:15px')}><b style={css(`color:${h.kind == '수술' ? '#A8481A' : '#3A4250'}`)}>{h.kind}</b> {h.title}{h.site ? `, ${SITE[h.site]}` : ''}{h.by ? <>{' '}<span style={css('color:#5B6472')}>({h.by})</span></> : null}</div>)}</div>
           ) : null}
 
           {/* 진료 기록(SOAP): 고른 방문 날짜(오늘까지)로 쓴다(방문일 271). 오늘은 바이탈 필수, 지난 방문은 바이탈을 비워도 된다 */}
@@ -160,7 +201,7 @@ export default function DogPage() {
                       ) : (
                         <div style={css('display:flex;gap:10px;align-items:flex-start')}><span style={css('flex:1;font-size:15px;line-height:1.6;white-space:pre-line;padding-top:2px')}>{n.text}</span><a className="lk tap" href={link(`/dogs/${cur.id}?v=${v}&edit=${n.id}#${n.id}`)} style={css('font-size:13px;font-weight:600;color:#B4501A;white-space:nowrap;position:relative;top:4px')}>고치기</a><PostForm action={`/dogs/${cur.id}/notes`} style={css('display:inline;margin:0')} onBefore={() => window.confirm('이 기록을 지울까요? 고친 이력도 함께 지워지고 되돌릴 수 없습니다.')}><input type="hidden" name="note_id" value={n.id} /><input type="hidden" name="delete" value="1" /><input type="hidden" name="next_url" value={`/dogs/${cur.id}?v=${v}`} /><button className="bt tap" type="submit" style={css('background:none;font-size:13px;font-weight:600;color:#B4501A;padding:0;white-space:nowrap;position:relative;top:1px')}>지우기</button></PostForm></div>
                       )}
-                      {n.revs && n.revs.length ? <details style={css('font-size:13px;color:#5B6472')}><summary style={css('cursor:pointer')}>고친 이력 {n.revs.length}건</summary>{[...n.revs].reverse().map((r, ri) => <div key={ri} style={css('padding:5px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:5px')}><span>{r.at} · {r.author}</span><div style={css('text-decoration:line-through;white-space:pre-line')}>{r.text}</div></div>)}</details> : null}
+                      {n.revs && n.revs.length ? <details style={css('font-size:13px;color:#5B6472')}><summary style={css('cursor:pointer')}>고친 이력 {n.revs.length}건</summary>{[...n.revs].reverse().map((r, ri) => <div key={ri} style={css('padding:5px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:5px')}><span>{r.at}, {r.author}</span><div style={css('text-decoration:line-through;white-space:pre-line')}>{r.text}</div></div>)}</details> : null}
                     </div>
                   </div>
                 ))}
@@ -174,7 +215,7 @@ export default function DogPage() {
               <b className="v-h">보행 측정</b>
               {sel.res.map((r) => (
                 <div key={r.id} style={css('display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:#FAF8F5')}>
-                  <b style={css('font-size:15px')}>{r.no}</b><span style={css('font-size:13px;color:#5B6472')}>{r.time} · {r.by}</span>
+                  <b style={css('font-size:15px')}>{r.no}</b><span style={css('font-size:13px;color:#5B6472')}>{r.time}, {r.by}</span>
                   <span style={css(`height:24px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:700;background:${r.bg};color:${r.c};display:inline-flex;align-items:center`)}>{r.st}</span>
                   {!r.fail ? <span style={css('font-size:14px')}>대칭 점수 <b style={css(`padding:2px 8px;border-radius:7px;background:${r.sym_bg};color:${r.sym_c}`)}>{r.sym}점</b>{r.sym_d ? <>{' '}<b style={css(`font-size:13px;color:${r.sym_dc}`)}>{r.sym_d}</b></> : null}</span> : null}
                   <span style={css('margin-left:auto;display:flex;gap:6px')}><a className="lk" href={link(`/results/${r.id}`)} style={css('height:44px;padding:0 12px;border-radius:9px;background:#D2601A;color:#fff;display:flex;align-items:center;font-size:14px;font-weight:700')}>결과 보기</a>{!r.fail ? <a className="lk" href={link(`/results/${r.id}/3d`)} style={css('height:44px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;font-size:14px;font-weight:600')}>3D</a> : null}</span>
@@ -192,12 +233,12 @@ export default function DogPage() {
 
           {sel && sel.imgs.length ? (
             <div className="v-sec">
-              <b className="v-h">영상 · 사진</b>
+              <b className="v-h">영상/사진</b>
               <div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px')}>
                 {sel.imgs.map((im) => (
-                  <a key={im.id} className="lk img-card" href={staticUrl(im.path)} data-lightbox="" data-caption={`${im.caption} · ${im.kind}`}>
-                    <span className="img-thumb"><img src={staticUrl(im.path)} alt={im.caption} loading="lazy" /></span>
-                    <b style={css('font-size:14px')}>{im.caption}</b><span style={css('font-size:12px;color:#5B6472')}>{im.kind}{im.by ? ` · ${im.by}` : ''}</span>
+                  <a key={im.id} className="lk img-card" href={imgSrc(im.path)} data-lightbox="" data-caption={`${im.caption}, ${im.kind}`}>
+                    <span className="img-thumb"><img src={imgSrc(im.path)} alt={im.caption} loading="lazy" /></span>
+                    <b style={css('font-size:14px')}>{im.caption}</b><span style={css('font-size:12px;color:#5B6472')}>{im.kind}{im.by ? `, ${im.by}` : ''}</span>
                   </a>
                 ))}
               </div>
@@ -211,8 +252,8 @@ export default function DogPage() {
           {dx.map((e, i) => (
             <div key={i} className="dx-card">
               <span style={css('display:flex;align-items:center;justify-content:space-between;gap:6px')}><b style={css('font-size:13px;font-variant-numeric:tabular-nums')}>{e.range}</b><span style={css(`padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;${e.done ? 'background:#F0EEEA;color:#5B6472' : 'background:#E7EEFB;color:#3B5BA9'}`)}>{e.done ? '종결' : '진행중'}</span></span>
-              <b style={css('font-size:14px')}>{e.title}{e.site ? <>{' '}<span style={css('color:#5B6472;font-weight:600')}>· {e.site}</span></> : null}</b>
-              {e.events.map((x, j) => <span key={j} style={css('font-size:13px;color:#5B6472')}><span style={css('font-variant-numeric:tabular-nums;color:#5B6472')}>{x.day}</span> {x.kind} · {x.title.split(' (')[0]}</span>)}
+              <b style={css('font-size:14px')}>{e.title}{e.site ? <>{' '}<span style={css('color:#5B6472;font-weight:600')}>({e.site})</span></> : null}</b>
+              {e.events.map((x, j) => <span key={j} style={css('font-size:13px;color:#5B6472')}><span style={css('font-variant-numeric:tabular-nums;color:#5B6472')}>{x.day}</span> {x.kind}, {x.title.split(' (')[0]}</span>)}
               <span style={css('display:flex;justify-content:space-between;font-size:12px;color:#5B6472')}><span>보행 측정 {e.n}회</span><span>{e.by}</span></span>
             </div>
           ))}
@@ -226,18 +267,22 @@ export default function DogPage() {
       <>
         {/* 환자 단위 영상·사진: 방문마다 흩어진 것을 촬영일 순으로 모아 수술 전·후를 나란히 본다 */}
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:12px')}>
-          <b style={css('font-size:15px')}>영상 · 사진 <span style={css('color:#5B6472;font-weight:600;font-size:14px')}>{imgs.length}</span></b>
+          <b style={css('font-size:15px')}>영상/사진 <span style={css('color:#5B6472;font-weight:600;font-size:14px')}>{imgs.length}</span></b>
           {imgs.length ? (
             <div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px')}>
               {imgs.map((im) => (
                 <div key={im.id} className="img-card">
-                  <a className="lk img-thumb" href={staticUrl(im.path)} data-lightbox="" data-caption={`${im.caption} · ${im.kind} · ${im.date}`}><img src={staticUrl(im.path)} alt={im.caption} loading="lazy" /></a>
+                  <a className="lk img-thumb" href={imgSrc(im.path)} data-lightbox="" data-caption={`${im.caption}, ${im.kind}, ${im.date}`}><img src={imgSrc(im.path)} alt={im.caption} loading="lazy" /></a>
                   <span style={css('display:flex;align-items:center;gap:6px')}><span style={css(`padding:1px 7px;border-radius:6px;font-size:12px;font-weight:700;${im.pre ? 'background:#EEF1F6;color:#4A5A78' : im.post ? 'background:#FCEEE3;color:#A8481A' : 'background:#F1ECE5;color:#5B6472'}`)}>{im.kind}</span><b style={css('font-size:14px')}>{im.caption}</b></span>
-                  <a className="lk tap" href={link(`/dogs/${cur.id}?v=${im.day}`)} style={css('font-size:12px;color:#5B6472')}>{im.date} 방문{im.by ? ` · ${im.by}` : ''} ›</a>
+                  <span style={css('display:flex;align-items:center;justify-content:space-between;gap:8px')}>
+                    <a className="lk tap" href={link(`/dogs/${cur.id}?v=${im.day}`)} style={css('font-size:12px;color:#5B6472')}>{im.date} 방문{im.by ? `, ${im.by}` : ''} ›</a>
+                    {remote ? <button type="button" className="tap" onClick={() => { if (window.confirm('이 사진을 지울까요? 되돌릴 수 없습니다.')) deleteDogImage(acctId, cur.id, im.id).catch((e) => window.alert(e instanceof Error ? e.message : '지우지 못했습니다')) }} style={css('min-height:44px;padding:0 12px;border-radius:9px;border:1px solid #E2DCD3;background:#fff;color:#B4501A;font-size:13px;font-weight:600;cursor:pointer')}>삭제</button> : null}
+                  </span>
                 </div>
               ))}
             </div>
           ) : <span style={css('font-size:14px;color:#5B6472')}>올린 영상·사진이 없습니다.</span>}
+          {remote ? <ImageUpload acctId={acctId} dogId={cur.id} today={today_iso} /> : null}
         </div>
         {sm.has ? (
           <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px')}>
@@ -254,9 +299,9 @@ export default function DogPage() {
           {sm.has ? (
             <svg viewBox={`0 0 ${sm.W} ${sm.H}`} style={css('width:100%;height:auto;max-height:300px')}>
               {sm.yt.map((t, i) => <Fragment key={`y${i}`}><line x1={sm.L} x2={sm.W - sm.R} y1={t.y} y2={t.y} stroke="#F0ECE6"></line><text x={sm.L - 8} y={t.y + 4} textAnchor="end" fontSize="12" fill="#5B6472">{t.v}%</text></Fragment>)}
-              {sm.marks.map((mk, i) => <Fragment key={`m${i}`}><line x1={mk.x} x2={mk.x} y1={sm.T - 6} y2={H_B} stroke={mk.kind == '수술' ? '#A8481A' : '#7A8FB5'} strokeWidth="1.5" strokeDasharray={mk.kind == '수술' ? '' : '4 3'}><title>{`${mk.day} ${mk.kind} · ${mk.label}`}</title></line><text x={mk.x + 4} y={sm.T + 2} fontSize="12" fontWeight="700" fill={mk.kind == '수술' ? '#A8481A' : '#5A6F95'}>{mk.label.slice(0, 12)}</text></Fragment>)}
+              {sm.marks.map((mk, i) => <Fragment key={`m${i}`}><line x1={mk.x} x2={mk.x} y1={sm.T - 6} y2={H_B} stroke={mk.kind == '수술' ? '#A8481A' : '#7A8FB5'} strokeWidth="1.5" strokeDasharray={mk.kind == '수술' ? '' : '4 3'}><title>{`${mk.day} ${mk.kind}, ${mk.label}`}</title></line><text x={mk.x + 4} y={sm.T + 2} fontSize="12" fontWeight="700" fill={mk.kind == '수술' ? '#A8481A' : '#5A6F95'}>{mk.label.slice(0, 12)}</text></Fragment>)}
               {sm.pts.length > 1 ? <polyline points={sm.line} fill="none" stroke="#D2601A" strokeWidth="2.5" strokeLinejoin="round"></polyline> : null}
-              {sm.pts.map((p, i) => <a key={`p${i}`} href={link(`/results/${p.id}`)}><circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#D2601A" strokeWidth="2.5"><title>{`${p.day} 대칭 점수 ${p.sym}점 · ${p.by}`}</title></circle></a>)}
+              {sm.pts.map((p, i) => <a key={`p${i}`} href={link(`/results/${p.id}`)}><circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#D2601A" strokeWidth="2.5"><title>{`${p.day} 대칭 점수 ${p.sym}점, ${p.by}`}</title></circle></a>)}
               {sm.notes.map((n, i) => <circle key={`n${i}`} cx={n.x} cy={H_B + 16} r="4.5" fill="#B9BEC6"><title>{`${n.day} ${n.t}`}</title></circle>)}
               {sm.vit.map((x, i) => <path key={`v${i}`} d={`M${x.x - 4},${H_B + 34} L${x.x + 4},${H_B + 34} L${x.x},${H_B + 27} Z`} fill="#9AA3AF"></path>)}
               {sm.ticks.map((t, i) => <text key={`t${i}`} x={t.x} y={sm.H - 4} textAnchor="middle" fontSize="12" fill="#5B6472">{t.t}</text>)}
@@ -271,11 +316,11 @@ export default function DogPage() {
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;overflow-x:auto')}>
           <div style={css('min-width:720px')}>
             <div style={css('display:flex;align-items:center;justify-content:space-between;padding:18px 24px 10px')}><b style={css('font-size:18px')}>측정 이력 <span style={css('color:#5B6472;font-weight:600;font-size:15px')}>{dd.count}</span></b>{valid(acct!, cur.id).length >= 2 ? <a className="lk hv-border" href={link(`/compare/${cur.id}`)} style={css('height:44px;padding:0 14px;border-radius:10px;border:1px solid #E2DCD3;background:#fff;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:700;color:#B4501A')}>두 회차 비교 ›</a> : <span title="유효한 회차가 2개 이상 있어야 비교할 수 있습니다" style={css('font-size:13px;color:#5B6472')}>두 회차 비교는 유효 회차 2개부터</span>}</div>
-            <div style={css('display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;padding:10px 24px;border-top:1px solid #ECE8E2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>회차</span><span>측정일</span><span>체중</span><span>유효 통과</span><span>측정자 · 모델</span><span>보고서</span><span>상태</span><span></span></div>
+            <div style={css('display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;padding:10px 24px;border-top:1px solid #ECE8E2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472')}><span>회차</span><span>측정일</span><span>체중</span><span>유효 통과</span><span>측정자/모델</span><span>보고서</span><span>상태</span><span></span></div>
             {dd.hist.map((h) => (
               <div key={h.id} className="hv-row" data-href={`/results/${h.id}`} style={css(`display:grid;grid-template-columns:1.1fr 1fr .9fr 1fr .8fr .8fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 24px;border-top:${h.bt};cursor:pointer;font-size:15px;font-variant-numeric:tabular-nums`)}>
                 <span style={css('display:flex;align-items:center;gap:6px')}><b>{h.no}</b>{h.base ? <span style={css('height:20px;padding:0 7px;border-radius:5px;background:#1B2433;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center')}>기준</span> : null}</span>
-                <span style={css('color:#5B6472')}>{h.date}</span><span>{h.w}</span><span>{h.pass}</span><span>{h.by.split(' ')[0]} · {h.model}</span><span>{h.rep}</span>
+                <span style={css('color:#5B6472')}>{h.date}</span><span>{h.w}</span><span>{h.pass}</span><span>{h.by.split(' ')[0]}, {h.model}</span><span>{h.rep}</span>
                 <span><span style={css(`height:26px;padding:0 10px;border-radius:8px;font-size:13px;font-weight:700;background:${h.bg};color:${h.c};display:inline-flex;align-items:center`)}>{h.st}</span></span>
                 <span style={css('text-align:right')}>{h.canBase ? <PostForm action={`/dogs/${cur.id}/base`} style={css('display:inline;margin:0')}><input type="hidden" name="rid" value={h.id} /><button className="bt tap" type="submit" style={css('background:none;font-size:13px;font-weight:700;color:#B4501A;padding:6px 0')}>기준 회차로 지정</button></PostForm> : null}</span>
               </div>
@@ -322,7 +367,7 @@ export default function DogPage() {
         <div style={css('background:#fff;border:1px solid #ECE8E2;border-radius:18px;padding:20px 24px;display:flex;flex-direction:column;gap:12px')}>
           {dx.map((e, i) => (
             <div key={i} style={css(`display:flex;flex-direction:column;gap:5px;padding-top:${i ? '12px' : '0'};border-top:${i ? '1px solid #F2EFEA' : 'none'}`)}>
-              <span style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}><b style={css('font-size:15px')}>{e.title}{e.site ? ` · ${e.site}` : ''}</b><span style={css(`padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;${e.done ? 'background:#F0EEEA;color:#5B6472' : 'background:#E7EEFB;color:#3B5BA9'}`)}>{e.done ? '종결' : '진행중'}</span><span style={css('margin-left:auto;font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{e.range} · 보행 측정 {e.n}회 · {e.by}</span></span>
+              <span style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}><b style={css('font-size:15px')}>{e.title}{e.site ? `, ${e.site}` : ''}</b><span style={css(`padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;${e.done ? 'background:#F0EEEA;color:#5B6472' : 'background:#E7EEFB;color:#3B5BA9'}`)}>{e.done ? '종결' : '진행중'}</span><span style={css('margin-left:auto;font-size:13px;color:#5B6472;font-variant-numeric:tabular-nums')}>{e.range}, 보행 측정 {e.n}회, {e.by}</span></span>
               {e.events.map((x, j) => <span key={j} style={css('font-size:14px;color:#3A4250;padding-left:12px;border-left:2px solid #ECE8E2')}><span style={css('color:#5B6472;font-variant-numeric:tabular-nums')}>{x.day}</span> <b>{x.kind}</b> {x.title}</span>)}
             </div>
           ))}
@@ -345,7 +390,7 @@ export default function DogPage() {
               <div key={key} style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;padding-top:8px;border-top:1px solid #F2EFEA')}>
                 <span style={css('color:#5B6472;font-variant-numeric:tabular-nums')}>{h.day.slice(2).replaceAll('-', '.')}</span>
                 <b style={css(`color:${h.kind === '수술' ? '#A8481A' : '#3A4250'}`)}>{h.kind}</b>
-                <span style={css('flex:1;min-width:160px')}>{h.title}{h.site ? ` · ${SITE[h.site] ?? ''}` : ''}{h.by ? <span style={css('color:#5B6472')}> · {h.by}</span> : null}</span>
+                <span style={css('flex:1;min-width:160px')}>{h.title}{h.site ? `, ${SITE[h.site] ?? ''}` : ''}{h.by ? <span style={css('color:#5B6472')}>, {h.by}</span> : null}</span>
                 <a className="lk tap" href={link(`/dogs/${cur.id}?tab=dx&hedit=${encodeURIComponent(key)}`)} style={css('font-size:13px;font-weight:600;color:#B4501A')}>고치기</a>
                 <PostForm action={`/dogs/${cur.id}/history/${encodeURIComponent(key)}`} style={css('display:inline;margin:0')} onBefore={() => window.confirm('이 기록을 지울까요? 되돌릴 수 없습니다.')}>
                   <input type="hidden" name="delete" value="1" />
@@ -362,7 +407,7 @@ export default function DogPage() {
             <a key={n.id} className="lk" href={link(`/dogs/${cur.id}?v=${n.at.slice(0, 10)}#${n.id}`)} style={css('display:flex;gap:10px;align-items:flex-start;min-height:44px;font-size:14px;padding-top:8px;border-top:1px solid #F2EFEA')}>
               <span style={css('color:#5B6472;font-variant-numeric:tabular-nums;white-space:nowrap')}>{n.at.slice(2, 10).replaceAll('-', '.')}</span>
               <span style={css('flex:1;min-width:0;white-space:pre-line;line-height:1.55')}>{n.text}</span>
-              <span style={css('font-size:13px;color:#5B6472;white-space:nowrap')}>{n.author ? `${n.author.split(' ')[0]} · ` : ''}방문 ›</span>
+              <span style={css('font-size:13px;color:#5B6472;white-space:nowrap')}>{n.author ? `${n.author.split(' ')[0]}, ` : ''}방문 ›</span>
             </a>
           ))}
           {!assess.length ? <span style={css('font-size:14px;color:#5B6472')}>진료 기록에 남긴 평가가 없습니다.</span> : null}
@@ -382,9 +427,9 @@ export default function DogPage() {
         {/* 차트 위 고정 줄(EMR 처럼): 환자 정보 · 바이탈 · 메모 · 담당. 어느 탭에서든 보이고, 메모는 여기서 바로 쓴다 */}
         <div className="chart-strip">
           <section className="cs-card">
-            <span className="cs-lb">환자 정보 · {row.no}</span>
+            <span className="cs-lb">환자 정보, {row.no}</span>
             <span style={css('display:flex;align-items:center;gap:8px')}><b style={css('font-size:22px;letter-spacing:-0.4px')}>{row.name}</b><span style={css(`padding:2px 8px;border-radius:7px;background:${row.st_bg};color:${row.st_c};font-size:13px;font-weight:700`)}>{row.stage}</span></span>
-            <span style={css('font-size:14px;color:#3A4250')}>{row.breed} · {row.size} · {row.age} · {row.sex}</span>
+            <span style={css('font-size:14px;color:#3A4250')}>{row.breed}, {row.size}, {row.age}, {row.sex}</span>
             <span style={css('font-size:13px;color:#5B6472')}>보호자 <b style={css('color:#1B2433')}>{row.owner}</b>{cur.phone ? <>{' '}<span style={css('font-variant-numeric:tabular-nums')}>{cur.phone}</span></> : null}</span>
             {row.badges.length ? <span style={css('display:flex;gap:5px;flex-wrap:wrap')}>{row.badges.map((b, i) => <span key={i} style={css(`padding:2px 8px;border-radius:6px;background:${tone[b.kind][0]};color:${tone[b.kind][1]};font-size:12px;font-weight:700`)}>{b.full || b.t}</span>)}</span> : null}
           </section>

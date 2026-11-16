@@ -30,6 +30,7 @@ class MeasureSession(Base):
         check_in("status", SessionStatus, name="ck_session_status"),
         check_in("size_class", SizeClass, name="ck_session_size_class"),
         Index("ix_session_dog_date", "dog_id", "measured_on"),
+        Index("ix_session_queued_at", "queued_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -53,6 +54,8 @@ class MeasureSession(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 회차 집계가 끝난 시각
     aggregated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 분석 줄에 선 시각(12.4 분석 줄). 워커가 적는다. 줄에 서기 전에는 NULL이고 이 순서대로 분석에 들어간다
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

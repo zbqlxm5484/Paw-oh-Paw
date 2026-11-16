@@ -5,9 +5,10 @@ import { css } from '../app/css'
 import { PostForm, useTitle } from '../app/page'
 import AuthBar, { usePublicPage } from './parts/AuthBar'
 import { link } from '../config'
+import { MOCK } from '../store/backend'
 
 export default function Login() {
-  useTitle('로그인 · Paw oh Paw')
+  useTitle('로그인')
   const { me, toast } = usePublicPage()
   const [id, setId] = useState('')
   const [pw, setPw] = useState('')
@@ -29,7 +30,8 @@ export default function Login() {
           <button className="bt" type="submit" id="liBtn" style={css(`height:62px;border-radius:14px;background:${ok() ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700`)}>로그인</button>
           <div style={css('display:flex;justify-content:space-between;align-items:center')}><a className="lk tap" href={link('/forgot')} style={css('font-size:15px;color:#5B6472')}>비밀번호를 잊으셨나요?</a><a className="lk tap" href={link('/signup')} style={css('font-size:15px;font-weight:600;color:#D2601A')}>디바이스 코드로 회원가입</a></div>
         </PostForm>
-        <PostForm action="/login/demo" style={css('margin-top:16px;text-align:center')}><button type="submit" className="tap" style={css('border:0;background:none;font-size:15px;color:#5B6472;text-decoration:underline;cursor:pointer')}>시연용 예시 기관으로 둘러보기</button></PostForm>
+        {/* 시연 계정이 생겨 운영 화면에서는 뺐다. e2e(가짜 서버 모드)만 이 버튼으로 들어간다 */}
+        {MOCK && <PostForm action="/login/demo" style={css('margin-top:16px;text-align:center')}><button type="submit" className="tap" style={css('border:0;background:none;font-size:15px;color:#5B6472;text-decoration:underline;cursor:pointer')}>시연용 예시 기관으로 둘러보기</button></PostForm>}
       </main>
     </Base>
   )

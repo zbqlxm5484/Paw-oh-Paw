@@ -24,7 +24,7 @@ export function MemoCard({ x, edit_url = '' }: { x: MemoX; edit_url?: string }) 
   return (
     <a className="lk memo-card" href={link(edit_url && x.id ? `${edit_url}${x.id}` : undefined)} title={x.text}>
       <span className="memo-text">{x.imp ? <><b style={css('color:#C2412D')}>●</b>{' '}</> : null}{x.text}</span>
-      <span className="memo-foot"><b style={css(`padding:1px 7px;border-radius:6px;background:${x.bg};color:${x.c}`)}>{x.cat}</b>{x.at ? <span>{x.at}{x.author ? ` · ${x.author.split(' ')[0]}` : ''}</span> : null}</span>
+      <span className="memo-foot"><b style={css(`padding:1px 7px;border-radius:6px;background:${x.bg};color:${x.c}`)}>{x.cat}</b>{x.at ? <span>{x.at}{x.author ? `, ${x.author.split(' ')[0]}` : ''}</span> : null}</span>
     </a>
   )
 }
@@ -54,7 +54,7 @@ export function MemoForm({ dog_id, next_url, memo_cat, edit = null, open = false
           {!edit ? <label className="tap" style={css('display:flex;align-items:center;gap:6px;font-size:13px;color:#3A4250;cursor:pointer')}><input type="checkbox" name="important" value="1" /> 중요 (홈 목록에 표시)</label> : <a className="lk tap" href={link(next_url)} style={css('font-size:13px;color:#5B6472')}>취소</a>}
           <button className="bt" type="submit" style={css('height:44px;padding:0 14px;border-radius:9px;background:#1B2433;color:#fff;font-size:14px;font-weight:700')}>{edit ? '저장' : '남기기'}</button>
         </div>
-        {edit && edit.revs && edit.revs.length ? <details style={css('font-size:13px;color:#5B6472')}><summary style={css('cursor:pointer')}>고친 이력 {edit.revs.length}건</summary>{[...edit.revs].reverse().map((r, i) => <div key={i} style={css('padding:4px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:4px')}>{r.at} · {r.author}<div style={css('text-decoration:line-through')}>{r.text}</div></div>)}</details> : null}
+        {edit && edit.revs && edit.revs.length ? <details style={css('font-size:13px;color:#5B6472')}><summary style={css('cursor:pointer')}>고친 이력 {edit.revs.length}건</summary>{[...edit.revs].reverse().map((r, i) => <div key={i} style={css('padding:4px 0 0 10px;border-left:2px solid #ECE8E2;margin-top:4px')}>{r.at}, {r.author}<div style={css('text-decoration:line-through')}>{r.text}</div></div>)}</details> : null}
       </PostForm>
       {edit ? (
         <PostForm action={`/dogs/${dog_id}/notes`} style={css('display:flex;justify-content:flex-end;margin:6px 0 0')} onBefore={() => window.confirm('이 메모를 지울까요? 고친 이력도 함께 지워지고 되돌릴 수 없습니다.')}>
@@ -79,7 +79,7 @@ export function DogPanel({ panel, next_url }: { panel: any; next_url: string }) 
       <div style={css('display:flex;flex-direction:column;gap:2px')}>
         <span style={css('font-size:13px;color:#5B6472')}>{panel.no}</span>
         <b style={css('font-size:18px')}>{panel.name} <span style={css(`padding:2px 8px;border-radius:7px;background:${panel.st_bg};color:${panel.st_c};font-size:12px;vertical-align:3px`)}>{panel.stage}</span></b>
-        <span style={css('font-size:14px;color:#3A4250')}>{panel.breed} · {panel.size} · {panel.age} · {panel.sex}</span>
+        <span style={css('font-size:14px;color:#3A4250')}>{panel.breed}, {panel.size}, {panel.age}, {panel.sex}</span>
       </div>
       <div style={css('display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;row-gap:2px;font-variant-numeric:tabular-nums')}>
         {['체중', '체온', '심박', '혈압'].map((k) => <span key={k} style={css('font-size:12px;color:#5B6472')}>{k}</span>)}
@@ -98,7 +98,7 @@ export function DogPanel({ panel, next_url }: { panel: any; next_url: string }) 
           <b style={css('font-size:14px')}>이 회차 진료 기록</b>
           {run_soap.map((g, i) => (
             <div key={i} style={css('display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;background:#FAF8F5')}>
-              <span style={css('font-size:12px;color:#5B6472')}>{g.at}{g.author ? ` · ${g.author}` : ''}</span>
+              <span style={css('font-size:12px;color:#5B6472')}>{g.at}{g.author ? `, ${g.author}` : ''}</span>
               {g.parts.map((n, j) => <span key={j} style={css('display:grid;grid-template-columns:18px 1fr;gap:6px;font-size:14px;line-height:1.5')}><b style={css('color:#5B6472')}>{n.cat}</b><span style={css('white-space:pre-line')}>{n.text}</span></span>)}
             </div>
           ))}

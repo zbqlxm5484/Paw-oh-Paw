@@ -27,7 +27,7 @@ function LegCard({ c, gait, pv, limb, align }: { c: ReportContentOut; gait: Repo
   const mets = legCard(gait, limb, c.edition, pv)
   return (
     <div style={css(`display:flex;flex-direction:column;gap:6px;align-items:${align === 'r' ? 'flex-end' : 'flex-start'};text-align:${align === 'r' ? 'right' : 'left'}`)}>
-      <span style={css(`display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:${color};flex-direction:${align === 'r' ? 'row-reverse' : 'row'}`)}><span style={css(`width:12px;height:12px;border-radius:4px;background:${fill};border:1px solid #B8B0A4`)}></span>{LIMB[limb]}{weak ? ' · 덜 씁니다' : ''}</span>
+      <span style={css(`display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:${color};flex-direction:${align === 'r' ? 'row-reverse' : 'row'}`)}><span style={css(`width:12px;height:12px;border-radius:4px;background:${fill};border:1px solid #B8B0A4`)}></span>{LIMB[limb]}{weak ? ' (덜 씁니다)' : ''}</span>
       {c.edition !== 'VET' ? (
         mets[0] ? (
           <>
@@ -113,7 +113,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
     `${c.session.measured_on} 측정`, `${c.session.round}회차`, c.dog.breed,
     c.session.weight_kg != null ? `체중 ${c.session.weight_kg}kg` : null,
     c.session.model_name ? `분석 모델 ${c.session.model_name}${c.session.model_version ? ` ${c.session.model_version}` : ''}` : null,
-  ].filter(Boolean).join(' · ')
+  ].filter(Boolean).join(', ')
   const previous = [s.previous_note, ...s.previous_gaps].filter((x): x is string => !!x)
 
   return (
@@ -146,7 +146,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
             <div style={css('display:flex;justify-content:space-between;font-size:12px;color:#5B6472')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
             <span style={css('font-size:15px;color:#3A4250')}>
               {bdiff != null && c.baseline ? <>기준 회차({c.baseline.measured_on})보다 <b style={css(`color:${bdiff > 0 ? '#2E8B57' : bdiff < 0 ? '#C2412D' : '#3A4250'}`)}>{bdiff > 0 ? '+' : ''}{bdiff}%p</b></> : c.baseline && c.baseline.session_id === c.session_id ? '이 회차가 기준 회차입니다' : null}
-              {c.dog.focus_limb && LIMB[c.dog.focus_limb] ? <>{bdiff != null || c.baseline ? ' · ' : ''}관심 다리 <b>{LIMB[c.dog.focus_limb]}</b>(점선)</> : null}
+              {c.dog.focus_limb && LIMB[c.dog.focus_limb] ? <>{bdiff != null || c.baseline ? ', ' : ''}관심 다리 <b>{LIMB[c.dog.focus_limb]}</b>(점선)</> : null}
             </span>
           </div>
         </div>
@@ -182,7 +182,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
               {x ? (
                 <>
                   <span style={css(`font-size:15px;line-height:1.55;font-weight:600`)}>{x.label}</span>
-                  <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>왼쪽 <b style={css('color:#1B2433')}>{x.left}</b> · 오른쪽 <b style={css('color:#1B2433')}>{x.right}</b> · 차이 <b style={css('color:#1B2433')}>{x.diff}</b>{vet ? <> · 대칭 지수 {x.symmetry_index}</> : null}</span>
+                  <span style={css('font-size:13px;line-height:1.5;color:#5B6472')}>왼쪽 <b style={css('color:#1B2433')}>{x.left}</b>, 오른쪽 <b style={css('color:#1B2433')}>{x.right}</b>, 차이 <b style={css('color:#1B2433')}>{x.diff}</b>{vet ? <>, 대칭 지수 {x.symmetry_index}</> : null}</span>
                 </>
               ) : <span style={css(SUB)}>{gait?.compare.find((y) => y.pair === pair)?.reason ?? ''}</span>}
             </div>
@@ -210,7 +210,7 @@ export function ServerReportPaper({ c, knee }: { c: ReportContentOut; knee?: Kne
               </div>
             ))}
           </section>
-          {/* 뒷무릎 각도 · 보행 주기: 이 회차의 실제 각도(GET /shots/{id}/angles)로 만든 곡선이 있을 때만. 견본·합성 곡선은 쓰지 않는다 */}
+          {/* 뒷무릎 각도/보행 주기: 이 회차의 실제 각도(GET /shots/{id}/angles)로 만든 곡선이 있을 때만. 견본·합성 곡선은 쓰지 않는다 */}
           {knee ? <section className="rep-sec rep-knee"><KneeChart kc={knee} /></section> : null}
           <section className="rep-sec rep-pb" style={css('display:flex;flex-direction:column;gap:8px')}>
             <h2 style={css(H2)}>직전 회차와 비교{c.previous ? <span style={css('font-size:14px;font-weight:600;color:#5B6472;margin-left:8px')}>{c.previous.label ?? `${c.previous.round}회차, ${c.previous.measured_on}`}</span> : null}</h2>

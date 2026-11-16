@@ -40,7 +40,7 @@ export function measureQuality(np: Record<string, number | null | undefined> | u
 
 /** "왼쪽 6/8 · 오른쪽 8/8" (그 쪽 걸음이 없으면 0) */
 export function sidesText(q: Quality): string {
-  return q.sides.map((s) => `${s.side} ${s.n ?? 0}/${MIN_PASSES}`).join(' · ')
+  return q.sides.map((s) => `${s.side} ${s.n ?? 0}/${MIN_PASSES}`).join(', ')
 }
 
 // ---- 쓰지 못한 걸음의 사유별 수(285) ----
@@ -75,7 +75,7 @@ export function excludeSummary(ex: readonly (readonly [string, number])[] | null
 
 /** "뛰었습니다. 천천히 걷게 해 주세요 (3번) · 중간에 멈췄습니다 (2번)". 사유 문구가 '…해 주세요'로 끝나기도 해서 수는 괄호에 둔다 */
 export function excludeReasonsText(s: ExcludeSummary): string {
-  return s.reasons.map((x) => `${x.msg} (${x.n}번)`).join(' · ')
+  return s.reasons.map((x) => `${x.msg} (${x.n}번)`).join(', ')
 }
 
 /** "쓰지 못한 걸음 5번: 뛰었습니다. 천천히 걷게 해 주세요 (3번) · 중간에 멈췄습니다 (2번)" */

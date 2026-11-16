@@ -84,7 +84,7 @@ export function legNote(x: LegChange): string {
   if (!x.compared) return '비교할 값 없음'
   if (x.short) return `걸음 수 부족(${MIN_PASSES}번 미만), 값만 비교`
   if (!x.joints.length) return '범위 안'
-  return x.joints.map((j) => `${j.n} ${j.dir}`).join(' · ')
+  return x.joints.map((j) => `${j.n} ${j.dir}`).join(', ')
 }
 
 export interface OwnerAdvice {

@@ -8,7 +8,7 @@ import AuthBar from './parts/AuthBar'
 
 export default function Legal({ kind }: { kind: LegalKind }) {
   const doc = LEGAL[kind]
-  useTitle(`${doc.title} · Paw oh Paw`)
+  useTitle(`${doc.title}`)
   const { acct, me, toast } = usePage()
   const others = (Object.keys(LEGAL) as LegalKind[]).filter((k) => k !== kind)
   return (
@@ -17,7 +17,7 @@ export default function Legal({ kind }: { kind: LegalKind }) {
         <article style={css('background:#fff;border:1px solid #ECE8E2;border-radius:24px;padding:48px 44px;display:flex;flex-direction:column;gap:28px')}>
           <header style={css('display:flex;flex-direction:column;gap:8px')}>
             <h1 style={css('margin:0;font-size:28px;font-weight:800;letter-spacing:-0.6px')}>{doc.title}</h1>
-            <p style={css('margin:0;font-size:15px;color:#5B6472')}>{doc.sub} · 시행 {doc.updated}</p>
+            <p style={css('margin:0;font-size:15px;color:#5B6472')}>{doc.sub}, 시행 {doc.updated}</p>
           </header>
           {doc.notice && <div style={css('background:#FAF1DF;border-radius:12px;padding:14px 18px;font-size:15px;line-height:1.5;color:#7A5410')}>{doc.notice}</div>}
           {doc.sections.map((s) => (

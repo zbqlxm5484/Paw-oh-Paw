@@ -88,7 +88,7 @@ describe('웹 보고서 문구 — 백엔드 보고서 검사 목록(terms.yaml)
     const g = P.find((p) => p.kind === 'g' && p.id.endsWith('/서버제외사유'))!
     const v = P.find((p) => p.kind === 'v' && p.id.endsWith('/서버제외사유'))!
     const total = SERVER_EXCLUDE.reduce((a, [, n]) => a + n, 0)
-    expect(g.t).toContain(`분석에 쓰지 못한 걸음 ${total}번: 사유를 알 수 없습니다 (16번) · 관절점 인식이 불안정해 계산하지 못했습니다 (15번)`)
+    expect(g.t).toContain(`분석에 쓰지 못한 걸음 ${total}번: 사유를 알 수 없습니다 (16번), 관절점 인식이 불안정해 계산하지 못했습니다 (15번)`)
     expect(v.t).toContain(`쓰지 못한 걸음 ${total}번: 사유를 알 수 없습니다 (16번)`)
   })
 

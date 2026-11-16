@@ -18,8 +18,8 @@ const siteOf = (h: HistorySummary) => (h.site ? SITE[h.site] ?? '' : '')
 export function badgesOfDog(o: DogOut | undefined): { t: string; kind: 'surg' | 'diag' }[] {
   const out: { t: string; kind: 'surg' | 'diag' }[] = []
   const s = o?.last_surgery, d = o?.last_diagnosis
-  if (s) out.push({ t: [head(s.title), siteOf(s), `D+${daysAgo(s.occurred_on)}`].filter(Boolean).join(' · '), kind: 'surg' })
-  if (d) out.push({ t: [head(d.title), siteOf(d)].filter(Boolean).join(' · '), kind: 'diag' })
+  if (s) out.push({ t: [head(s.title), siteOf(s), `D+${daysAgo(s.occurred_on)}`].filter(Boolean).join(', '), kind: 'surg' })
+  if (d) out.push({ t: [head(d.title), siteOf(d)].filter(Boolean).join(', '), kind: 'diag' })
   return out
 }
 
@@ -45,7 +45,7 @@ export function vitView(vitals: VitalOut[], history: DogHistoryOut[], dogKg: str
       { k: '심박', v: v?.heart_rate != null ? `${v.heart_rate}회/분` : '—' },
       { k: '혈압', v: v?.sbp != null ? `${v.sbp}/${v.dbp ?? '—'}` : '—', sub: v?.sbp != null ? 'mmHg' : '' },
     ],
-    when: v ? [fmt(v.measured_on), v.staff?.name].filter(Boolean).join(' · ') : '',
+    when: v ? [fmt(v.measured_on), v.staff?.name].filter(Boolean).join(', ') : '',
     note: has ? '' : '체온·심박·혈압은 아직 기록이 없습니다',
     hist: [...history].reverse().map((h) => ({ id: h.id, day: fmt(h.occurred_on), kind: KIND[h.kind] ?? h.kind, title: h.title, site: h.site ? SITE[h.site] ?? '' : '', by: h.clinician ?? '' })),
   }

@@ -82,7 +82,7 @@ export function useDesignData(focusSessionId?: string): DesignData {
 
   // 마이페이지 측정 기기(271). 이 API 가 없는 서버·체험 모드면 '-'
   const devQ = useQuery({ queryKey: ['auth', 'me', 'device'], queryFn: myDevice, enabled: loggedIn, retry: false, staleTime: 10 * 60_000 })
-  const dev = devQ.data?.device ? `${devQ.data.device.code_masked} · ${devQ.data.device.issued_at.slice(0, 10)} 발급` : '-'
+  const dev = devQ.data?.device ? `${devQ.data.device.code_masked}, ${devQ.data.device.issued_at.slice(0, 10)} 발급` : '-'
   const acct = useMemo(() => toAcct(staff, dev), [staff, dev])
   return {
     dogs, results, ana, acct, loggedIn,

@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import pickle
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -272,3 +273,10 @@ def test_worker_uses_the_built_in_template_without_the_settings(db: Session, dog
 def test_only_one_of_the_two_addresses_stops_the_worker(overrides: dict[str, str]) -> None:
     with pytest.raises(ValueError):
         ReportGenerator(_settings(**overrides), get_storage())
+
+
+def test_pdf_size_survives_the_trip_back_from_the_report_process() -> None:
+    """화면 인쇄를 켜면 자식 프로세스가 PdfSize를 돌려준다. 풀을 건너올 때(pickle) 깨지면 풀 전체가 죽는다."""
+    for made_by in ("screen", "template"):
+        back = pickle.loads(pickle.dumps(PdfSize(1234, made_by)))
+        assert back == 1234 and type(back) is PdfSize and back.made_by == made_by

@@ -30,7 +30,7 @@ export default function Compare() {
   const navigate = useNavigate()
   const loc = useLocation()
   const d = acct ? dogOf(acct, dog_id) : undefined
-  useTitle(`${d ? d.name : ''} 경과 비교 · Paw oh Paw`)
+  useTitle(`${d ? d.name : ''} 경과 비교`)
   const cmpKey = query.get('cmp') === 'prev' ? 'prev' : 'base'
   const remoteDog = !MOCK && !!d && !!acct?.results.some((r) => r.dog === d.id && (r.src ?? '').startsWith('backend:'))
   const [srv, setSrv] = useState<{ key: string; o: CompareOut } | null>(null)

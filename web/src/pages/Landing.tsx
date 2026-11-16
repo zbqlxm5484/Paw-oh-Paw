@@ -10,7 +10,7 @@ const RV = 'opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bez
 const RV2 = 'opacity:0;transform:translateY(72px);transition:opacity 1s cubic-bezier(.2,.7,.2,1) .15s,transform 1s cubic-bezier(.2,.7,.2,1) .15s'
 
 export default function Landing() {
-  useTitle('Paw oh Paw · 보행 영상 분석')
+  useTitle('Paw oh Paw')
   const { acct, me, toast } = usePage()
   const navigate = useNavigate()
   const img = staticUrl('assets/')

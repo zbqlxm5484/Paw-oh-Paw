@@ -48,7 +48,7 @@ describe('toDog: 271 칸', () => {
 describe('홈 배지·변동: 서버 값이 있으면 그것으로', () => {
   it('배지: 수술은 부위·D+일', () => {
     const d = toDog(out({ badges: [{ code: 'SURGERY', title: 'TPLO (경골 고원 수평화 절골술)', site: 'RH', on: daysBefore(71) }, { code: 'IMPORTANT_NOTE', title: null, site: null, on: isoToday() }], changes: [] }))
-    expect(badges(d)).toEqual([{ t: 'TPLO · 오른뒤 · D+71', kind: 'surg' }])
+    expect(badges(d)).toEqual([{ t: 'TPLO, 오른뒤, D+71', kind: 'surg' }])
   })
   it('변동: 재촬영은 가장 최근 회차가 실패면 재촬영 필요, 보행 점수 차는 서버 delta', () => {
     const d = toDog(out({ changes: [{ code: 'RESHOOT_NEEDED', on: daysBefore(1), delta: null }, { code: 'GAIT_WORSE', on: daysBefore(1), delta: -4 }, { code: 'IMPORTANT_NOTE', on: daysBefore(3), delta: null }], badges: [] }))
@@ -57,7 +57,7 @@ describe('홈 배지·변동: 서버 값이 있으면 그것으로', () => {
     expect(ch.map((c) => [c.t, c.tone])).toEqual([['재촬영 필요', 'bad'], ['보행 나빠짐 −4점', 'bad'], ['중요 메모', 'warn']])
     expect(last).toBe(daysBefore(1))
     const part = { ...fail, st: 'part' }
-    expect(changes(acct([d], [part]), d)[0][0].t).toBe('일부 유효 · 재촬영 권장')
+    expect(changes(acct([d], [part]), d)[0][0].t).toBe('일부 유효, 재촬영 권장')
   })
   it('예전 서버면 이 브라우저 기록으로 계산한다', () => {
     const d = { ...toDog(out()), history: [{ day: daysBefore(2), kind: '수술', title: 'TPLO', site: 'RH', by: '', author: '' }] }

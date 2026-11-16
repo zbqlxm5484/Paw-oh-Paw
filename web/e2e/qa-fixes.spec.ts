@@ -34,7 +34,7 @@ test.describe('반려견 삭제 확인', () => {
     const modal = page.locator('#delModal')
     await expect(modal).toBeVisible()
     await expect(modal).toContainText(`${name} 정보를 삭제하시겠습니까?`)
-    await expect(modal).toContainText('휴지통으로 옮겨지고, 30일 동안은 복구할 수 있습니다')
+    await expect(modal).toContainText('휴지통으로 옮겨지고, 30일 동안은 마이페이지의 ‘반려견 복구’에서 되돌릴 수 있습니다')
     await expect(modal).not.toContainText('되돌릴 수 없습니다')
     // 삭제하면 목록에서 빠지고 알림이 뜬다
     await modal.getByRole('button', { name: '삭제' }).click()
@@ -50,7 +50,7 @@ test.describe('보고서 표기', () => {
       await demoLogin(page)
       await page.goto(`/results/r1?type=${type}`)
       const main = page.locator('main')
-      await expect(main).toContainText(`보행 분석 보고서 · ${label}`)
+      await expect(main).toContainText(`보행 분석 보고서, ${label}`)
       await expect(main).not.toContainText('템플릿')
       await expect(main).toContainText('분석 모델') // 분석 모델 표기는 남는다
       // 맨 위 칸: '좌우 대칭 점수' 다음 줄에 'NN점'(%가 아님)
@@ -161,12 +161,12 @@ test.describe('경과 비교 관심 다리 칩', () => {
     await expect(page).toHaveURL(/leg=LH/)
     await expect(chips.filter({ hasText: /^왼뒤/ })).toHaveAttribute('aria-pressed', 'true')
     await expect(saved).toHaveAttribute('aria-pressed', 'false')
-    await expect(page.getByText('왼뒤 · 관심 다리').first()).toBeVisible()
-    await expect(page.getByText('오른뒤 · 관심 다리')).toHaveCount(0)
+    await expect(page.getByText('왼뒤, 관심 다리').first()).toBeVisible()
+    await expect(page.getByText('오른뒤, 관심 다리')).toHaveCount(0)
     // 비교 표의 첫 줄이 고른 다리
     // 칩(a[aria-pressed])이 아닌 곳에서 처음 나오는 다리 이름
     const firstLeg = await page.evaluate(() => {
-      const re = /^(왼앞|오른앞|왼뒤|오른뒤)( · 관심 다리)?$|^전체$/
+      const re = /^(왼앞|오른앞|왼뒤|오른뒤)(, 관심 다리)?$|^전체$/
       for (const el of document.querySelectorAll('main *')) {
         if (el.closest('a[aria-pressed]') || el.children.length) continue
         const t = (el.textContent ?? '').trim()
@@ -174,7 +174,7 @@ test.describe('경과 비교 관심 다리 칩', () => {
       }
       return ''
     })
-    expect(firstLeg).toBe('왼뒤 · 관심 다리')
+    expect(firstLeg).toBe('왼뒤, 관심 다리')
     // 기준/직전을 바꿔도 고른 다리가 유지된다
     await page.getByRole('link', { name: '직전 회차 대비' }).click()
     await expect(page).toHaveURL(/leg=LH/)
@@ -182,7 +182,7 @@ test.describe('경과 비교 관심 다리 칩', () => {
     // 정하지 않음
     await chips.filter({ hasText: '정하지 않음' }).click()
     await expect(page).toHaveURL(/leg=none/)
-    await expect(page.getByText(/ · 관심 다리$/)).toHaveCount(0)
+    await expect(page.getByText(/, 관심 다리$/)).toHaveCount(0)
     // 칩은 터치 영역 44px 이상
     const box = await chips.first().boundingBox()
     expect(box!.height).toBeGreaterThanOrEqual(44)

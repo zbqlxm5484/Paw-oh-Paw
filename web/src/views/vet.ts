@@ -200,7 +200,7 @@ export function serverCompareRows(o: CompareOut, focus?: string | null) {
     const u = UNIT[x.unit] ?? ''
     const isFocus = !!focus && x.limb === focus
     const bt = i ? '1px solid #F2EFEA' : 'none'
-    const limb = (LIMB_K[x.limb] ?? x.limb) + (isFocus ? ' · 관심 다리' : '') + ` · ${GAIT_NAME[x.gait_type] ?? x.gait_type}`
+    const limb = (LIMB_K[x.limb] ?? x.limb) + (isFocus ? ' (관심 다리)' : '') + `, ${GAIT_NAME[x.gait_type] ?? x.gait_type}`
     if (x.base_value == null || x.target_value == null) {
       return { n: CMP_NAME[x.metric_code], limb, lc: '#5B6472', vals: x.note?.message ?? '한쪽 회차에서 측정 불가', j: '비교 불가', bg: '#F4F2EE', c: '#5B6472', bt }
     }

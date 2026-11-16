@@ -29,7 +29,7 @@ const VITALS: [string, string, string][] = [['temp', '체온 ℃', '38.6'], ['hr
 
 export default function Upload() {
   const { acct, me, toast, query } = usePage({ login: true })
-  useTitle('보행 영상 분석 · Paw oh Paw')
+  useTitle('보행 영상 분석')
   const dogQ = query.get('dog') ?? ''
   const demoQ = Math.max(0, Math.min(parseInt(query.get('demo') ?? '0', 10) || 0, 16))
   // 처음 고른 반려견(주소의 dog, 없으면 첫 반려견). 목록 순서는 처음 그릴 때 정해지고(고른 반려견이 맨 위) 바뀌지 않는다
@@ -114,7 +114,7 @@ export default function Upload() {
       }
     })
     if (added) setDemo(0)
-    if (bad && !added) return window.ppToast('영상 파일(MP4 · MOV)만 올릴 수 있습니다')
+    if (bad && !added) return window.ppToast('영상 파일(MP4/MOV)만 올릴 수 있습니다')
     if (added) window.ppToast(added === 1 ? next.length + '번째 영상을 첨부했습니다' : '영상 ' + added + '개를 첨부했습니다')
     setFiles(next)
   }
@@ -196,7 +196,7 @@ export default function Upload() {
           <input type="file" name="files" id="filesField" multiple hidden />
           <div style={css('flex:1 1 460px;min-width:0;max-width:1100px;display:flex;flex-direction:column;gap:22px')}>
             <div style={css('display:flex;flex-direction:column;gap:10px')}><b style={css('font-size:15px')}>1. 반려견 선택</b>
-              <input id="dogFilter" placeholder="이름 · 동물번호로 찾기" autoComplete="off" onInput={(e) => setFilt(e.currentTarget.value.trim())} style={css('height:44px;max-width:420px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;padding:0 14px;font-size:15px;outline:none')} />
+              <input id="dogFilter" placeholder="이름, 동물번호로 찾기" autoComplete="off" onInput={(e) => setFilt(e.currentTarget.value.trim())} style={css('height:44px;max-width:420px;border-radius:12px;border:1px solid #E2DCD3;background:#fff;padding:0 14px;font-size:15px;outline:none')} />
               <div style={css('max-height:264px;overflow-y:auto;border:1px solid #ECE8E2;border-radius:14px;background:#fff')}>
                 {dogs.map((d, i) => (
                   // 환자가 많아서 이름·동물번호로 걸러 본다
@@ -204,7 +204,7 @@ export default function Upload() {
                     style={css(`display:${!filt || `${d.name} ${d.no}`.indexOf(filt) >= 0 ? 'flex' : 'none'};align-items:center;gap:12px;padding:9px 14px;border-top:${i ? '1px solid #F2EFEA' : 'none'};cursor:pointer`)}>
                     <div className="av" style={css(`width:34px;height:34px;flex:none;border-radius:50%;background:${d.av};color:${d.avc};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;box-shadow:${d.ring}`)}>{d.init}</div>
                     <span className="nm" style={css(`font-size:15px;color:${d.nc};font-weight:${d.nw}`)}>{d.name}</span>
-                    <span style={css('font-size:13px;color:#5B6472')}>{[d.no, d.breed].filter(Boolean).join(' · ')}{d.kg ? ` · ${d.kg}kg` : ''}</span>
+                    <span style={css('font-size:13px;color:#5B6472')}>{[d.no, d.breed].filter(Boolean).join(', ')}{d.kg ? `, ${d.kg}kg` : ''}</span>
                   </div>
                 ))}
               </div>
@@ -232,13 +232,13 @@ export default function Upload() {
                 style={css(`aspect-ratio:16 / 7;border-radius:18px;border:2px dashed ${over.drop ? '#D2601A' : '#D9D2C7'};background:${over.drop ? '#FFF6EE' : '#fff'};display:${n ? 'none' : 'flex'};flex-direction:column;align-items:center;justify-content:center;gap:12px;cursor:pointer;text-align:center;padding:24px`)}>
                 <div style={css('width:56px;height:56px;border-radius:16px;background:#FCEEE3;color:#D2601A;display:flex;align-items:center;justify-content:center')}><svg width="28" height="28" viewBox="0 0 24 24"><use href="#w-up"></use></svg></div>
                 <b style={css('font-size:18px')}>영상을 끌어다 놓거나 눌러서 선택하세요</b>
-                <span style={css('font-size:14px;color:#5B6472')}>MP4 · MOV · 가로 영상 · 4초씩 16개까지 차례대로</span>
+                <span style={css('font-size:14px;color:#5B6472')}>MP4/MOV, 가로 영상, 4초씩 16개까지 차례대로</span>
               </div>
               <div id="fileArea" style={css(`display:${n ? 'grid' : 'none'};grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start`)}>
                 <div style={css('border-radius:18px;overflow:hidden;background:#141B22;position:relative;aspect-ratio:16 / 9')}>
                   <video id="preview" ref={video} src={preview} autoPlay muted loop playsInline style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')}></video>
                   <div style={css('position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px')}>
-                    <span style={css('height:34px;padding:0 12px;border-radius:17px;background:rgba(14,18,23,.72);color:#fff;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums')}><svg width="16" height="16" viewBox="0 0 24 24" style={css('color:#3DD68C')}><use href="#w-check"></use></svg><span id="fileName">{(sel ? sel.name : '반려견') + ' · 영상 ' + n}</span></span>
+                    <span style={css('height:34px;padding:0 12px;border-radius:17px;background:rgba(14,18,23,.72);color:#fff;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums')}><svg width="16" height="16" viewBox="0 0 24 24" style={css('color:#3DD68C')}><use href="#w-check"></use></svg><span id="fileName">{(sel ? sel.name : '반려견') + ', 영상 ' + n}</span></span>
                     <span id="clearFiles" onClick={() => { setFiles([]); setDemo(0) }} style={css('height:34px;padding:0 12px;border-radius:17px;background:rgba(255,255,255,.92);display:flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer')}>모두 지우기</span>
                   </div>
                 </div>
