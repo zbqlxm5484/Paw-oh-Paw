@@ -202,7 +202,7 @@ function TopBar({ acct, nav, q }: { acct: Account; nav: string; q: string }) {
   return (
     <header className="no-print" style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(250,243,231,.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #ECE8E2' }}>
       <div style={{ padding: '0 25px', height: 74, display: 'flex', alignItems: 'center', gap: 28 }}>
-        <a className="lk" href={link('/home')} style={{ display: 'flex', alignItems: 'center', minHeight: 44, gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />Paw oh Paw</a>
+        <a className="lk" href={link('/home')} style={{ display: 'flex', alignItems: 'center', minHeight: 44, gap: 8, fontSize: 18, fontWeight: 800, letterSpacing: '-0.4px', flex: 'none' }}><img className="brand-word-logo" src={staticUrl('assets/logo.png')} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} /><span className="brand-word">Paw oh Paw</span></a>
         {/* 가운데 검색: 어느 화면에서든 이름·동물번호·특이사항·메모·진단·보호자로 찾는다 */}
         <form method="get" action="/home" style={{ flex: 1, display: 'flex', justifyContent: 'center', margin: 0, minWidth: 0 }}
           onSubmit={(e) => {

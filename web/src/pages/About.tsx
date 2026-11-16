@@ -34,7 +34,7 @@ function GuestBar({ loggedIn }: { loggedIn: boolean }) {
   return (
     <header id="ab-bar" style={css('position:fixed;top:0;left:0;right:0;z-index:50;transition:opacity .25s ease,transform .25s ease')}>
       <div style={css('height:68px;padding:0 40px;display:flex;align-items:center;justify-content:space-between;gap:16px')}>
-        <a className="lk" href={link('/')} style={css(`display:flex;align-items:center;min-height:44px;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px;color:${INK}`)}><img src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} />Paw oh Paw</a>
+        <a className="lk" href={link('/')} style={css(`display:flex;align-items:center;min-height:44px;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.4px;color:${INK}`)}><img className="brand-word-logo" src={staticUrl('assets/logo.png')} alt="" style={css('width:30px;height:30px;object-fit:contain')} /><span className="brand-word">Paw oh Paw</span></a>
         <nav style={css('display:flex;align-items:center;gap:6px')}>
           {loggedIn ? (
             <a className="lk" href={link('/home')} style={css(`height:44px;padding:0 16px;border-radius:10px;background:${INK};color:#fff;display:flex;align-items:center;font-size:15px;font-weight:700`)}>홈으로</a>
