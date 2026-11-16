@@ -26,6 +26,10 @@ form.inline { display: contents; }
 
 /* 디자인의 style-hover / style-focus */
 .hv-orange:hover { background: #B4501A !important; color: #fff !important; }
+/* 상단바 'Paw oh Paw' 글자: Fredoka(없으면 Nunito ExtraBold) */
+.brand-word { font-family: 'Fredoka', 'Nunito', sans-serif; font-weight: 700; letter-spacing: 0; font-size: 26px; }
+/* 상단바 로고 그림도 글자에 맞춰 키운다 */
+.brand-word-logo { width: 38px !important; height: 38px !important; }
 .hv-row:hover { background: #FFFCF8 !important; }
 .hv-menu:hover { background: #FAF6F0 !important; }
 .hv-border:hover { border-color: #D2601A !important; }

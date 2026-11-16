@@ -64,7 +64,7 @@ export default function Landing() {
         <div style={css('position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,36,51,.35) 0%,rgba(27,36,51,0) 22%);pointer-events:none')}></div>
         <header style={css('position:absolute;top:0;left:0;right:0;z-index:2')}>
           <div style={css('padding:25px 25px 0;display:flex;align-items:center;justify-content:space-between;gap:16px')}>
-            <a className="lk" href={link(acct ? '/home' : '/')} style={css('display:flex;align-items:center;min-height:44px;gap:8px;color:#fff;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img src={`${img}logo.png`} alt="" style={css('width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.25))')} />Paw oh Paw</a>
+            <a className="lk" href={link(acct ? '/home' : '/')} style={css('display:flex;align-items:center;min-height:44px;gap:8px;color:#fff;font-size:18px;font-weight:800;letter-spacing:-0.4px')}><img className="brand-word-logo" src={`${img}logo.png`} alt="" style={css('width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 1px 6px rgba(0,0,0,.25))')} /><span className="brand-word">Paw oh Paw</span></a>
             <nav style={css('display:flex;align-items:center;gap:8px')}>
               <a className="lk" href={link('/about')} style={css('height:44px;padding:0 14px;display:flex;align-items:center;font-size:15px;font-weight:600;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.3)')}>서비스 소개</a>
               {acct ? (

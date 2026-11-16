@@ -9,6 +9,10 @@
   font-display: swap;
 }
 
+/* 상단바 'Paw oh Paw' 글자: Fredoka(없으면 Nunito ExtraBold) */
+.brand-word { font-family: 'Fredoka', 'Nunito', sans-serif; font-weight: 700; letter-spacing: 0; font-size: 26px; }
+.brand-word-logo { width: 34px !important; height: 34px !important; }
+
 /* 디자인 템플릿의 body 규칙 그대로. 화면 자체의 스타일은 생성된 AppView(인라인)에 있다 */
 * {
   box-sizing: border-box;
