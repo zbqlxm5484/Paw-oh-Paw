@@ -145,9 +145,10 @@ export default function Upload() {
   useEffect(() => {
     if (phoneN >= MAX_SHOTS && showQr) {
       setShowQr(false)
-      window.ppToast(`폰에서 영상 ${MAX_SHOTS}개가 모두 올라왔습니다`)
+      // 이 화면에서 올린 영상이 섞여 있으면 폰에서 올라왔다고 알리지 않는다
+      if (foreignN >= MAX_SHOTS) window.ppToast(`폰에서 영상 ${MAX_SHOTS}개가 모두 올라왔습니다`)
     }
-  }, [phoneN, showQr])
+  }, [phoneN, foreignN, showQr])
 
   const go: Go | null = acct && !acct.dogs.length ? redirect('/home?modal=pet', '먼저 반려견을 등록해 주세요') : null
   useRedirect(go)
@@ -393,7 +394,7 @@ export default function Upload() {
             <span style={css('font-size:15px;color:#5B6472')}>다 올리면 분석 화면으로 넘어갑니다. 이 창을 닫지 말아 주세요</span>
           </div>
         ) : null}
-        {showQr && phoneSid ? <PhoneCaptureModal sid={phoneSid} shots={phoneN} onClose={() => setShowQr(false)} /> : null}
+        {showQr && phoneSid ? <PhoneCaptureModal sid={phoneSid} shots={foreignN} onClose={() => setShowQr(false)} /> : null}
       </main>
     </Base>
   )
