@@ -1,8 +1,9 @@
 // upload.html + static/upload.js + main.py upload(): 반려견 고르기, 영상 16개까지 차례로 첨부(끌어 놓기 · 고르기), 분석 시작
 import { useFirstFrames, useShotVideos } from '../app/thumbs'
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { cancelPhoneSession, dropEmptySession, openSession, PhoneCaptureModal, shotAction, usePhoneShots } from './parts/PhoneCapture'
 import { MOCK, isRemote } from '../store/backend'
+import { api, ApiError } from '../api/client'
 import { useNavigate } from 'react-router-dom'
 import { Base } from '../app/Base'
 import { css } from '../app/css'
@@ -13,6 +14,7 @@ import { dogOf } from '../store/db'
 import { avatar } from '../views/views'
 import { GuideModal, PetModal } from './parts/Modals'
 import { takeFiles } from '../store/uploadRetry'
+import { useUploadProgress } from '../store/uploadProgress'
 
 /** 서버의 RedirectResponse: 지금 주소를 바꿔 치운다 */
 function useRedirect(g: Go | null) {
@@ -44,21 +46,101 @@ export default function Upload() {
   const [showQr, setShowQr] = useState(false)
   const { shots: phoneShots, reload: reloadPhone } = usePhoneShots(phoneSid)
   const phoneN = phoneShots.length
+  // 첨부하는 즉시 올리기(314): 서버 기관이면 영상을 칸에 넣는 순간 회차를 열고 뒤에서 차례로 올린다.
+  // '분석 시작'을 누를 때는 이미 올라가 있어 바로 분석 화면으로 넘어간다. 시연 기관·mock 은 예전처럼 누를 때 처리한다.
+  // files = 아직 올리지 않은 영상(올릴 차례를 기다리는 줄), sent = 이 화면에서 올린 영상(서버 촬영 id 와 원본 파일)
+  const pre = !MOCK && !!acct && isRemote(acct.id)
+  const [sent, setSent] = useState<{ id: string; file: File }[]>([])
+  const [upFile, setUpFile] = useState<File | null>(null) // 지금 올리는 영상
+  // 다 올라가기 전에 '분석 시작'을 눌렀으면 남은 영상을 다 올린 뒤 스스로 제출한다(total = 이 화면에서 올리는 영상 수)
+  const [autoStart, setAutoStart] = useState<{ total: number; fails: number } | null>(null)
+  const gen = useRef(0) // 반려견을 바꾸거나 회차를 취소하면 올린다. 그 전에 시작한 업로드의 결과는 버린다
+  const upBusy = useRef(false)
+  const fails = useRef(0)
+  const reloadRef = useRef(reloadPhone)
+  reloadRef.current = reloadPhone
+  const mine = useMemo(() => new Map(sent.map((s) => [s.id, s.file])), [sent])
+  // 올렸지만 회차 조회(3초마다)에 아직 안 잡힌 영상. 그사이 칸이 비어 보이지 않게 이 화면이 들고 있는 파일로 채운다
+  const seen = useRef(new Set<string>())
+  for (const p of phoneShots) seen.current.add(p.id)
+  const pend = sent.filter((s) => !seen.current.has(s.id)).map((s) => s.file)
+  // 폰 등 다른 곳에서 올라온 영상 수(있으면 이 화면이 회차를 마음대로 지우지 않는다)
+  const foreignN = phoneShots.filter((p) => !mine.has(p.id)).length
   // 이번 화면에서 새로 연 회차인지(이어 쓰는 회차면 원래 있던 영상도 센다), 분석을 시작했는지
   const [phoneCreated, setPhoneCreated] = useState(false)
-  const leave = useRef({ sid: '', created: false, n: 0, submitted: false })
-  leave.current = { ...leave.current, sid: phoneSid, created: phoneCreated, n: phoneN }
-  // 영상 없이 화면을 떠나면 새로 연 빈 회차를 지운다
+  const leave = useRef({ sid: '', created: false, n: 0, ours: false, submitted: false })
+  leave.current = { ...leave.current, sid: phoneSid, created: phoneCreated, n: phoneN, ours: pre && !foreignN }
+  // 분석을 시작하지 않고 화면을 떠나면 새로 연 회차를 지운다: 영상이 없거나, 이 화면에서 올린 영상뿐일 때(폰에서 올린 영상이 있으면 남긴다)
   useEffect(() => () => {
     const l = leave.current
-    if (l.sid && l.created && !l.n && !l.submitted) dropEmptySession(l.sid)
+    gen.current++
+    if (l.sid && l.created && !l.submitted && (!l.n || l.ours)) dropEmptySession(l.sid)
   }, [])
+  // 줄 맨 앞 영상을 올린다. 하나가 끝나면 다음 영상으로 이어진다(올린 순서 = 촬영 번호)
+  useEffect(() => {
+    if (!pre || upBusy.current || !files.length) return
+    const file = files[0], g = gen.current
+    upBusy.current = true
+    setUpFile(file)
+    void (async () => {
+      let opened = !!phoneSid
+      try {
+        let sid = phoneSid
+        if (!sid) {
+          const weight = (document.querySelector('input[name=weight]') as HTMLInputElement | null)?.value.trim() ?? ''
+          if (weight && !Number.isFinite(Number(weight))) throw new Error('체중은 숫자로 적어 주세요')
+          const o = await openSession(selId, weight)
+          if (g !== gen.current) {
+            if (o.created) dropEmptySession(o.id)
+            return
+          }
+          sid = o.id
+          opened = true
+          setPhoneSid(o.id)
+          setPhoneCreated(o.created)
+        }
+        const shot = await api.uploadShot(sid, file)
+        if (g !== gen.current) return
+        setSent((s) => [...s, { id: shot.id, file }])
+        setFiles((fs) => fs.filter((x) => x !== file))
+        reloadRef.current()
+      } catch (e) {
+        if (g !== gen.current) return
+        fails.current++
+        const m = e instanceof Error ? e.message : '올리지 못했습니다'
+        // 영상 하나가 검사에 걸린 것이면 그 영상만 빼고 이어 간다. 회차를 못 열었거나 연결이 끊겼으면 남은 영상을 모두 내려놓는다
+        const one = opened && e instanceof ApiError && e.code !== 'SESSION_CLOSED' && e.code !== 'NOT_FOUND'
+        if (one) {
+          setFiles((fs) => fs.filter((x) => x !== file))
+          window.ppToast(`'${file.name}' 올리기 실패: ${m}`)
+        } else {
+          setFiles([])
+          window.ppToast(opened ? `영상을 올리지 못했습니다: ${m}. 영상을 다시 넣어 주세요` : m)
+        }
+      } finally {
+        upBusy.current = false
+        setUpFile(null)
+      }
+    })()
+  }, [pre, files, upFile, phoneSid, selId])
+  // 남은 영상이 다 올라가면 제출한다. 기다리는 동안 실패한 영상이 있었으면 멈추고 사용자가 보고 다시 누르게 한다
+  useEffect(() => {
+    if (!autoStart || files.length || upFile) return
+    setAutoStart(null)
+    if (fails.current !== autoStart.fails) return
+    ;(document.getElementById('upForm') as HTMLFormElement | null)?.requestSubmit()
+  }, [autoStart, files, upFile])
+  // '분석 시작' 뒤 영상을 올리는 동안의 진행(올리는 중이 아니면 null)
+  const sending = useUploadProgress()
   const [over, setOver] = useState({ drop: false, slot: false })
   const picker = useRef<HTMLInputElement>(null)
   const video = useRef<HTMLVideoElement>(null)
   const urls = useRef(new WeakMap<File, string>())
-  const thumbs = useFirstFrames(files)
-  const phoneVideos = useShotVideos(phoneShots)
+  const localFiles = useMemo(() => [...sent.map((s) => s.file), ...files], [sent, files])
+  const thumbs = useFirstFrames(localFiles)
+  // 이 화면에서 올린 영상은 들고 있는 파일로 썸네일을 그리므로 서버 영상 주소를 묻지 않는다
+  const foreignShots = useMemo(() => phoneShots.filter((p) => !mine.has(p.id)), [phoneShots, mine])
+  const phoneVideos = useShotVideos(foreignShots)
   // 폰에서 16개가 다 올라오면 QR 창을 닫는다(폰도 촬영 화면을 닫는다)
   useEffect(() => {
     if (phoneN >= MAX_SHOTS && showQr) {
@@ -71,7 +153,7 @@ export default function Upload() {
   useRedirect(go)
 
   // 첫 영상을 미리 보기(없으면 견본 영상)
-  const want = files.length ? files[0] : null
+  const want = localFiles.length ? localFiles[0] : null
   let preview = SAMPLE
   if (want) {
     let u = urls.current.get(want)
@@ -90,8 +172,11 @@ export default function Upload() {
   const sel = dogOf(acct, selId) || first
   const order = [first, ...acct.dogs.filter((d) => d.id !== first.id)] // 고른 반려견을 맨 위에
   const dogs = order.map((d) => ({ id: d.id, init: d.name.slice(0, 1), name: d.name, no: d.no, breed: d.breed || '견종 미입력', kg: d.kg, ...avatar(d.id === sel.id) }))
-  const n = files.length + phoneN || demo
+  const locals = [...pend, ...files] // 서버 조회에 아직 안 잡힌 영상 + 올릴 차례를 기다리는 영상
+  const n = locals.length + phoneN || demo
   const max = MAX_SHOTS
+  // 덮개에 보일 진행: 남은 영상을 올리며 기다리는 중(autoStart)이거나, 제출한 뒤 처리 중(sending)
+  const wait = autoStart ? { done: Math.min(sent.length, autoStart.total), total: autoStart.total } : sending
 
   // 3. 영상 첨부
   const add = (list: FileList | File[]) => {
@@ -108,14 +193,14 @@ export default function Upload() {
         bad++
         return
       }
-      if (next.length + phoneN < max) { // 폰에서 올라온 영상까지 합쳐 16개
+      if (next.length + pend.length + phoneN < max) { // 이미 올라간 영상까지 합쳐 16개
         next.push(f)
         added++
       }
     })
     if (added) setDemo(0)
     if (bad && !added) return window.ppToast('영상 파일(MP4/MOV)만 올릴 수 있습니다')
-    if (added) window.ppToast(added === 1 ? next.length + '번째 영상을 첨부했습니다' : '영상 ' + added + '개를 첨부했습니다')
+    if (added) window.ppToast(added === 1 ? next.length + pend.length + phoneN + '번째 영상을 첨부했습니다' : '영상 ' + added + '개를 첨부했습니다')
     setFiles(next)
   }
   const dragProps = (k: 'drop' | 'slot') => ({
@@ -135,20 +220,37 @@ export default function Upload() {
       window.ppToast('보행 영상을 1개 이상 올려 주세요')
       return false
     }
+    // 아직 올리는 중이면 제출을 미루고 진행을 보여 준다. 다 올라가면 위 효과가 다시 제출한다
+    if (pre && (files.length || upFile)) {
+      setAutoStart({ total: sent.length + files.length, fails: fails.current })
+      return false
+    }
     fd.delete('files')
-    files.forEach((f) => fd.append('files', f))
-    fd.set('demo_count', String(files.length || phoneN ? 0 : demo))
+    if (!pre) files.forEach((f) => fd.append('files', f))
+    fd.set('demo_count', String(locals.length || phoneN ? 0 : demo))
     fd.set('sid', phoneSid)
+    fd.set('sid_new', phoneCreated ? '1' : '')
     leave.current.submitted = true
   }
 
   // 반려견을 바꾸면 다른 반려견의 QR 회차는 놓는다(그 회차로 영상이 올라가지 않게). 이미 올라온 영상이 있으면 확인을 받는다
   const pickDog = (id: string) => {
     if (id === sel.id) return
-    if (phoneSid) {
+    if (phoneSid && pre && phoneCreated && !foreignN) {
+      // 이 화면에서 올린 영상뿐이면 그 회차를 지우고, 고른 영상을 바꾼 반려견의 회차로 다시 올린다
+      gen.current++
+      dropEmptySession(phoneSid)
+      setFiles([...sent.map((s) => s.file), ...files])
+      setSent([])
+      setPhoneSid('')
+      setPhoneCreated(false)
+      setShowQr(false)
+    } else if (phoneSid) {
       const to = dogOf(acct, id)?.name ?? '다른 반려견'
-      if (phoneN && !window.confirm(`폰으로 올린 영상 ${phoneN}개는 ${sel.name}의 회차에 그대로 남습니다. ${to}(으)로 바꾸시겠습니까?`)) return
+      if (phoneN && !window.confirm(`올린 영상 ${phoneN}개는 ${sel.name}의 회차에 그대로 남습니다. ${to}(으)로 바꾸시겠습니까?`)) return
       if (!phoneN && phoneCreated) dropEmptySession(phoneSid)
+      gen.current++
+      setSent([])
       setPhoneSid('')
       setPhoneCreated(false)
       setShowQr(false)
@@ -160,6 +262,9 @@ export default function Upload() {
   const cancelPhone = async () => {
     if (phoneN && !window.confirm(`이 회차에 올라온 영상 ${phoneN}개${phoneCreated ? '' : '(앞서 올린 영상 포함)'}가 모두 지워집니다. 회차를 취소하시겠습니까?`)) return
     if (await cancelPhoneSession(phoneSid)) {
+      gen.current++
+      setFiles([])
+      setSent([])
       setPhoneSid('')
       setPhoneCreated(false)
       setShowQr(false)
@@ -188,6 +293,7 @@ export default function Upload() {
           <input type="hidden" name="dog" value={sel.id} />
           <input type="hidden" name="demo_count" value="0" />
           <input type="hidden" name="sid" value={phoneSid} />
+          <input type="hidden" name="sid_new" value={phoneCreated ? '1' : ''} />
           <input type="file" id="fileInput" ref={picker} accept="video/*,.mp4,.mov,.m4v" multiple hidden
             onChange={(e) => {
               if (e.currentTarget.files) add(e.currentTarget.files)
@@ -210,7 +316,7 @@ export default function Upload() {
               </div>
               <span data-pet="new" style={css('align-self:flex-start;font-size:15px;font-weight:700;color:#D2601A;cursor:pointer')}>+ 새 반려견 등록</span>
             </div>
-            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:15px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#5B6472;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '폰 촬영 회차를 연 뒤에는 체중을 바꿀 수 없습니다' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:15px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div></label>
+            <label style={css('display:flex;flex-direction:column;gap:8px;max-width:320px')}><span style={css('font-size:15px;font-weight:700')}>2. 오늘 체중 <span style={css('color:#5B6472;font-weight:500;font-size:14px')}>선택</span></span><div style={css('position:relative;display:flex')}><input className="inp" name="weight" id="sessW" readOnly={!!phoneSid} title={phoneSid ? '영상을 올리기 시작한 뒤에는 체중을 바꿀 수 없습니다' : undefined} placeholder={sel.kg ? '등록 체중 ' + sel.kg : '예) 28.1'} inputMode="decimal" style={css('flex:1;min-width:0;height:52px;border-radius:12px;border:1px solid #ECE8E2;background:#fff;padding:0 44px 0 16px;font-size:15px;color:#1B2433;outline:none')} /><span style={css('position:absolute;right:16px;top:0;bottom:0;display:flex;align-items:center;font-size:15px;color:#5B6472;pointer-events:none')}>kg</span></div>{phoneSid ? <span style={css('font-size:13px;color:#5B6472;line-height:1.5')}>영상을 올리기 시작해 체중이 고정됐습니다. 바꾸려면 영상을 모두 지운 뒤 다시 넣어 주세요</span> : null}</label>
             <div style={css('display:flex;flex-direction:column;gap:8px')}><span style={css('font-size:15px;font-weight:700')}>오늘 바이탈 <span style={css('color:#5B6472;font-weight:500;font-size:14px')}>선택</span></span>
               <div style={css('display:grid;grid-template-columns:repeat(4,minmax(0,140px));gap:10px')}>
                 {VITALS.map(([nm, label, ph]) => (
@@ -225,7 +331,7 @@ export default function Upload() {
                 <div style={css('display:flex;align-items:center;gap:10px;flex-wrap:wrap')}>
                   <button type="button" className="bt hv-border" onClick={startPhone} style={css('height:44px;padding:0 16px;border-radius:12px;background:#fff;border:1px solid #E2DCD3;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700')}>📱 폰으로 촬영하기</button>
                   {phoneSid ? <button type="button" className="hv-dark" onClick={cancelPhone} style={css('height:44px;padding:0 10px;background:none;border:0;font-size:14px;font-weight:600;color:#5B6472;text-decoration:underline;cursor:pointer')}>이 회차 취소</button> : null}
-                  <span style={css('font-size:13px;color:#5B6472')}>{phoneSid ? (phoneN ? `폰에서 영상 ${phoneN}개가 올라왔습니다` : 'QR 을 찍어 폰에서 촬영해 주세요') : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있습니다'}</span>
+                  <span style={css('font-size:13px;color:#5B6472')}>{foreignN ? `폰에서 영상 ${foreignN}개가 올라왔습니다` : phoneSid && !sent.length && !files.length ? 'QR 을 찍어 폰에서 촬영해 주세요' : 'QR 을 폰으로 찍으면 폰 카메라로 바로 찍어 이 회차에 올릴 수 있습니다'}</span>
                 </div>
               ) : null}
               <div id="dropZone" className="drop" onClick={() => picker.current?.click()} {...dragProps('drop')}
@@ -239,7 +345,7 @@ export default function Upload() {
                   <video id="preview" ref={video} src={preview} autoPlay muted loop playsInline style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')}></video>
                   <div style={css('position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px')}>
                     <span style={css('height:34px;padding:0 12px;border-radius:17px;background:rgba(14,18,23,.72);color:#fff;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums')}><svg width="16" height="16" viewBox="0 0 24 24" style={css('color:#3DD68C')}><use href="#w-check"></use></svg><span id="fileName">{(sel ? sel.name : '반려견') + ', 영상 ' + n}</span></span>
-                    <span id="clearFiles" onClick={() => { setFiles([]); setDemo(0) }} style={css('height:34px;padding:0 12px;border-radius:17px;background:rgba(255,255,255,.92);display:flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer')}>모두 지우기</span>
+                    <span id="clearFiles" onClick={() => { if (pre && phoneSid) void cancelPhone(); else { setFiles([]); setDemo(0) } }} style={css('height:34px;padding:0 12px;border-radius:17px;background:rgba(255,255,255,.92);display:flex;align-items:center;font-size:13px;font-weight:700;cursor:pointer')}>모두 지우기</span>
                   </div>
                 </div>
                 <div className="drop" id="slotBox" {...dragProps('slot')} style={css(`background:${over.slot ? '#FFF6EE' : '#fff'};border:1px solid ${over.slot ? '#D2601A' : '#ECE8E2'};border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px`)}>
@@ -250,17 +356,21 @@ export default function Upload() {
                       const done = i < n
                       const next = i === n
                       const fromPhone = i < phoneN // 폰에서 올라온 영상(이 브라우저에 파일이 없다)
-                      const file = fromPhone ? undefined : files[i - phoneN]
                       const ps = fromPhone ? phoneShots[i] : undefined
+                      // 서버에 올라간 칸이라도 이 화면에서 올린 영상이면 들고 있는 파일로 썸네일을 그린다
+                      const own = ps ? mine.get(ps.id) : undefined
+                      const file = fromPhone ? own : locals[i - phoneN]
+                      const waiting = pre && !fromPhone && done && i - phoneN >= pend.length // 아직 서버로 올리지 않은 영상
                       const busy = !!ps && (ps.status === 'SUBMITTED' || ps.status === 'ANALYZING')
                       const failed = ps?.status === 'FAILED'
                       return (
-                        <div key={i} title={done && file ? file.name : ps ? (failed ? `분석 실패: ${ps.fail_reason?.message ?? ''}` : '폰에서 올린 영상') : undefined} onClick={next ? () => picker.current?.click() : undefined}
+                        <div key={i} title={file ? file.name : ps ? (failed ? `분석 실패: ${ps.fail_reason?.message ?? ''}` : '폰에서 올린 영상') : undefined} onClick={next ? () => picker.current?.click() : undefined}
                           style={css('aspect-ratio:16 / 10;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;' +
                             'background:' + (failed ? '#7A2E22' : done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
                           {file && thumbs.get(file) ? <img src={thumbs.get(file)} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
-                          {ps && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
-                          {fromPhone ? <span style={css('font-size:12px;font-weight:700;color:rgba(255,255,255,.85)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
+                          {ps && !own && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
+                          {fromPhone && (failed || busy || !own) ? <span style={css('position:relative;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
+                          {waiting ? <span style={css('position:absolute;left:0;right:0;bottom:0;padding:2px 0;background:rgba(14,18,23,.6);font-size:11px;font-weight:700;color:#fff;text-align:center')}>{file === upFile ? '올리는 중' : '올릴 차례 대기'}</span> : null}
                           {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:12px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
                           {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지우시겠습니까? 지운 영상은 되돌릴 수 없습니다.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
@@ -277,6 +387,14 @@ export default function Upload() {
             <button className="bt" type="submit" id="startBtn" style={css(`align-self:flex-end;width:240px;height:58px;border-radius:14px;background:${n ? '#D2601A' : '#C3C8CF'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700`)}>분석 시작</button>
           </div>
         </PostForm>
+        {/* 영상을 다 올려야 분석 중 화면으로 넘어간다. 그동안 멈춘 것처럼 보이지 않게 몇 개째인지 덮개로 알린다 */}
+        {wait ? (
+          <div role="status" aria-live="polite" style={css('position:fixed;inset:0;z-index:1000;background:rgba(250,249,245,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center')}>
+            <b style={css('font-size:24px;letter-spacing:-0.6px;font-variant-numeric:tabular-nums')}>{wait.total ? `영상 올리는 중 ${wait.done} / ${wait.total}` : '분석을 준비하는 중입니다'}</b>
+            {wait.total ? <div style={css('width:320px;max-width:100%;height:8px;border-radius:4px;background:#FCEEE3')}><div style={css(`width:${Math.round((wait.done / wait.total) * 100)}%;height:100%;border-radius:4px;background:#D2601A;transition:width .3s`)}></div></div> : null}
+            <span style={css('font-size:15px;color:#5B6472')}>다 올리면 분석 화면으로 넘어갑니다. 이 창을 닫지 말아 주세요</span>
+          </div>
+        ) : null}
         {showQr && phoneSid ? <PhoneCaptureModal sid={phoneSid} shots={phoneN} onClose={() => setShowQr(false)} /> : null}
       </main>
     </Base>
