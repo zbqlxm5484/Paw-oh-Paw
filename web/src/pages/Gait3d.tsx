@@ -14,7 +14,7 @@ import { redirect, setToast, type Go } from '../app/session'
 import { dogOf, resultOf } from '../store/db'
 import type { Account, Result } from '../store/types'
 import { session, source_name } from '../views/real'
-import { base_of, best_view, body_map, MEDIAN_SPEED, result_view, ROM_REF } from '../views/views'
+import { best_view, body_map, MEDIAN_SPEED, result_view, ROM_REF } from '../views/views'
 import { link } from '../config'
 import { api as backendApi } from '../api/client'
 import { MOCK } from '../store/backend'
@@ -126,7 +126,6 @@ export default function Gait3d() {
   const stopRef = useRef<HTMLButtonElement>(null)
   const ghostRef = useRef<HTMLButtonElement>(null)
   const api = useRef<{ setView: (k: string) => void; setMode: (m: string) => void; setWalking: (on: boolean) => void; setGhost: (on: boolean) => void } | null>(null)
-  const [ghostOn, setGhostOn] = useState(false)
   const [gaitNote, setGaitNote] = useState<{ real: boolean; note: string } | null>(null)
   useEffect(() => {
     let live = true
