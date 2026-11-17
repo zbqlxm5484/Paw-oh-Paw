@@ -360,7 +360,6 @@ export default function Upload() {
                       // 서버에 올라간 칸이라도 이 화면에서 올린 영상이면 들고 있는 파일로 썸네일을 그린다
                       const own = ps ? mine.get(ps.id) : undefined
                       const file = fromPhone ? own : locals[i - phoneN]
-                      const waiting = pre && !fromPhone && done && i - phoneN >= pend.length // 아직 서버로 올리지 않은 영상
                       const busy = !!ps && (ps.status === 'SUBMITTED' || ps.status === 'ANALYZING')
                       const failed = ps?.status === 'FAILED'
                       return (
@@ -369,8 +368,7 @@ export default function Upload() {
                             'background:' + (failed ? '#7A2E22' : done ? '#141B22' : next ? '#FCEEE3' : '#F4F1EC') + ';border:1.5px ' + (next ? 'dashed' : 'solid') + ' ' + (done ? '#141B22' : next ? '#D2601A' : '#ECE8E2') + ';cursor:' + (next ? 'pointer' : 'default'))}>
                           {file && thumbs.get(file) ? <img src={thumbs.get(file)} alt="" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {ps && !own && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
-                          {fromPhone && (failed || busy || !own) ? <span style={css('position:relative;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)')}>{failed ? '분석 실패' : busy ? '분석 중' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
-                          {waiting ? <span style={css('position:absolute;left:0;right:0;bottom:0;padding:2px 0;background:rgba(14,18,23,.6);font-size:11px;font-weight:700;color:#fff;text-align:center')}>{file === upFile ? '올리는 중' : '올릴 차례 대기'}</span> : null}
+                          {fromPhone && (failed || !own) ? <span style={css('position:relative;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)')}>{failed ? '분석 실패' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
                           {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:12px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
                           {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지우시겠습니까? 지운 영상은 되돌릴 수 없습니다.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
