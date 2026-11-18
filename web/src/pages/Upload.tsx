@@ -153,18 +153,27 @@ export default function Upload() {
   const go: Go | null = acct && !acct.dogs.length ? redirect('/home?modal=pet', '먼저 반려견을 등록해 주세요') : null
   useRedirect(go)
 
-  // 첫 영상을 미리 보기. 이 탭이 들고 있는 파일 → 서버에 올라간 영상(폰 QR·새로고침 뒤) 순.
-  // 견본 영상은 ?demo= 시연 때만 쓴다(실제 첨부가 있는데 랜딩 영상이 나오던 문제). 주소를 받기 전에는 비워 둔다
-  const want = localFiles.length ? localFiles[0] : null
-  const serverFirst = foreignShots.map((s) => phoneVideos[s.id]).find(Boolean)
-  let preview: string | undefined = serverFirst ?? (phoneN ? undefined : SAMPLE)
-  if (want) {
-    let u = urls.current.get(want)
+  // 가장 최근에 올린 영상을 미리 보기. 웹·폰(QR) 어디서 올렸든 같다.
+  // 올릴 차례를 기다리는 파일이 있으면 그중 마지막, 없으면 서버 촬영 중 순번이 가장 큰 것(이 탭에서 올린 건 들고 있는 파일, 폰 영상은 서버 주소).
+  // 견본 영상은 ?demo= 시연 때만 쓴다. 폰 영상 주소를 받기 전에는 바로 앞 영상을 보인다
+  const blobUrl = (f: File) => {
+    let u = urls.current.get(f)
     if (!u) {
-      u = URL.createObjectURL(want)
-      urls.current.set(want, u)
+      u = URL.createObjectURL(f)
+      urls.current.set(f, u)
     }
-    preview = u
+    return u
+  }
+  let preview: string | undefined
+  if (files.length) preview = blobUrl(files[files.length - 1])
+  // 방금 올렸지만 서버 조회에 아직 안 잡힌 파일이 서버 촬영보다 새것이다
+  else if (pend.length) preview = blobUrl(pend[pend.length - 1])
+  else {
+    for (let i = phoneShots.length - 1; i >= 0 && !preview; i--) {
+      const own = mine.get(phoneShots[i].id)
+      preview = own ? blobUrl(own) : phoneVideos[phoneShots[i].id]
+    }
+    if (!preview && !phoneN) preview = SAMPLE
   }
   useEffect(() => {
     const v = video.current
