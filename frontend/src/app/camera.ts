@@ -14,8 +14,51 @@ export function canRecordInApp(): boolean {
   return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined' && MP4_TYPES.some((t) => MediaRecorder.isTypeSupported(t))
 }
 
+/**
+ * 카메라가 살아 있나. 앱이 백그라운드로 가면 안드로이드가 카메라를 빼앗는데, WebView 는 트랙을 'live' 로 둔 채
+ * 프레임만 멈추는 경우가 있다(11-18 실기기: 미리보기가 멈추고 녹화가 3초 16KB). 그래서 끊김 신호를 따로 기억한다
+ */
+let lost = false
 export function isLive(): boolean {
-  return !!stream && stream.getVideoTracks().some((t) => t.readyState === 'live')
+  return !lost && !!stream && stream.getVideoTracks().some((t) => t.readyState === 'live' && !t.muted)
+}
+
+/** 새로 받은 스트림에 끊김 감시를 단다 */
+function watch(s: MediaStream): MediaStream {
+  lost = false
+  for (const t of s.getVideoTracks()) {
+    t.addEventListener('ended', () => { if (stream === s) lost = true })
+    t.addEventListener('mute', () => { if (stream === s) lost = true })
+    t.addEventListener('unmute', () => { if (stream === s && t.readyState === 'live') lost = false })
+  }
+  return s
+}
+
+/** 끊긴 스트림은 닫고 새로 받는다 */
+async function freshStream(): Promise<MediaStream> {
+  if (stream && !isLive()) {
+    stream.getTracks().forEach((t) => t.stop())
+    stream = null
+  }
+  if (!stream) stream = watch(await navigator.mediaDevices.getUserMedia(CONSTRAINTS))
+  return stream
+}
+
+/** 앱이 다시 화면에 오면 카메라를 다시 붙여야 한다(백그라운드 동안 시스템이 끊는다). 촬영 화면이 이 콜백을 등록한다 */
+let onResume: (() => void) | null = null
+export function setResumeHandler(fn: (() => void) | null): void {
+  onResume = fn
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      // 녹화 중에 화면을 떠나면 그 녹화는 버린다(뒤쪽이 빈 영상이 된다)
+      if (recorder && recorder.state !== 'inactive') { recorder.onstop = null; recorder.stop(); recorder = null; chunks = []; cancelAnimationFrame(canvasLoop) }
+      if (stream) lost = true
+    } else if (stream || onResume) {
+      onResume?.()
+    }
+  })
 }
 
 export function isRecording(): boolean {
@@ -27,7 +70,7 @@ export async function warm(): Promise<void> {
   cancelStop()
   if (!canRecordInApp() || isLive()) return
   try {
-    stream = await navigator.mediaDevices.getUserMedia(CONSTRAINTS)
+    await freshStream()
   } catch {
     stream = null
   }
@@ -55,7 +98,7 @@ export async function startPreview(el: HTMLVideoElement): Promise<boolean> {
   if (!canRecordInApp()) return false
   try {
     cancelStop()
-    if (!isLive()) stream = await navigator.mediaDevices.getUserMedia(CONSTRAINTS)
+    await freshStream()
     el.removeAttribute('src')
     el.srcObject = stream
     el.muted = true
@@ -76,6 +119,7 @@ export function stopPreview(): void {
   recorder = null
   stream?.getTracks().forEach((t) => t.stop())
   stream = null
+  lost = false
 }
 
 let canvasLoop = 0
@@ -113,11 +157,16 @@ function landscapeStream(): MediaStream {
   return canvas.captureStream(fps)
 }
 
+let recStart = 0
+/** 정상 녹화는 12Mbps 라 1초에 1MB 안팎이다. 1초당 100KB 도 안 되면 카메라가 멈춘 채 찍힌 빈 영상으로 본다 */
+const MIN_BYTES_PER_SEC = 100_000
+
 export function startRecording(): boolean {
-  if (!stream || isRecording()) return false
+  if (!stream || !isLive() || isRecording()) return false
   const mimeType = MP4_TYPES.find((t) => MediaRecorder.isTypeSupported(t))
   if (!mimeType) return false
   chunks = []
+  recStart = Date.now()
   recorder = new MediaRecorder(landscapeStream(), { mimeType, videoBitsPerSecond: 12_000_000 })
   recorder.ondataavailable = (e) => {
     if (e.data.size) chunks.push(e.data)
@@ -136,7 +185,13 @@ export function stopRecording(): Promise<File | null> {
       const blob = new Blob(chunks, { type: 'video/mp4' })
       chunks = []
       const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
-      console.info('[camera] recorded', blob.size)
+      const sec = (Date.now() - recStart) / 1000
+      console.info('[camera] recorded', blob.size, sec.toFixed(1))
+      if (sec >= 1 && blob.size < sec * MIN_BYTES_PER_SEC) {
+        console.warn('[camera] recording looks empty, dropped')
+        lost = true
+        return resolve(null)
+      }
       resolve(blob.size ? new File([blob], `pawohpaw-${stamp}.mp4`, { type: 'video/mp4' }) : null)
     }
     r.stop()

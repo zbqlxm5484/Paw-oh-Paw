@@ -153,9 +153,11 @@ export default function Upload() {
   const go: Go | null = acct && !acct.dogs.length ? redirect('/home?modal=pet', '먼저 반려견을 등록해 주세요') : null
   useRedirect(go)
 
-  // 첫 영상을 미리 보기(없으면 견본 영상)
+  // 첫 영상을 미리 보기. 이 탭이 들고 있는 파일 → 서버에 올라간 영상(폰 QR·새로고침 뒤) 순.
+  // 견본 영상은 ?demo= 시연 때만 쓴다(실제 첨부가 있는데 랜딩 영상이 나오던 문제). 주소를 받기 전에는 비워 둔다
   const want = localFiles.length ? localFiles[0] : null
-  let preview = SAMPLE
+  const serverFirst = foreignShots.map((s) => phoneVideos[s.id]).find(Boolean)
+  let preview: string | undefined = serverFirst ?? (phoneN ? undefined : SAMPLE)
   if (want) {
     let u = urls.current.get(want)
     if (!u) {
@@ -361,7 +363,6 @@ export default function Upload() {
                       // 서버에 올라간 칸이라도 이 화면에서 올린 영상이면 들고 있는 파일로 썸네일을 그린다
                       const own = ps ? mine.get(ps.id) : undefined
                       const file = fromPhone ? own : locals[i - phoneN]
-                      const busy = !!ps && (ps.status === 'SUBMITTED' || ps.status === 'ANALYZING')
                       const failed = ps?.status === 'FAILED'
                       return (
                         <div key={i} title={file ? file.name : ps ? (failed ? `분석 실패: ${ps.fail_reason?.message ?? ''}` : '폰에서 올린 영상') : undefined} onClick={next ? () => picker.current?.click() : undefined}
@@ -371,7 +372,6 @@ export default function Upload() {
                           {ps && !own && phoneVideos[ps.id] ? <video src={`${phoneVideos[ps.id]}#t=0.1`} muted playsInline preload="metadata" style={css('position:absolute;inset:0;width:100%;height:100%;object-fit:cover')} /> : null}
                           {fromPhone && (failed || !own) ? <span style={css('position:relative;font-size:12px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)')}>{failed ? '분석 실패' : phoneCreated ? '폰' : '올린 영상'}</span> : null}
                           {ps && failed ? <button type="button" title="다시 분석" onClick={() => void shotAction('retry', ps.id, reloadPhone)} style={css('position:absolute;left:6px;bottom:5px;height:22px;padding:0 8px;border-radius:11px;border:0;background:rgba(255,255,255,.92);font-size:12px;font-weight:700;cursor:pointer')}>다시 분석</button> : null}
-                          {ps && !busy ? <button type="button" title="이 영상 지우기" aria-label="이 영상 지우기" onClick={() => { if (window.confirm(`${i + 1}번 영상을 지우시겠습니까? 지운 영상은 되돌릴 수 없습니다.`)) void shotAction('delete', ps.id, reloadPhone) }} style={css('position:absolute;right:5px;top:4px;width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.85);color:#1B2433;font-size:13px;line-height:1;cursor:pointer')}>×</button> : null}
                           {next ? <span style={css('font-size:22px;font-weight:500;color:#D2601A;line-height:1')}>+</span> : null}
                           <span style={css('position:absolute;left:7px;top:4px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:' + (done ? '0 1px 3px rgba(0,0,0,.6)' : 'none') + ';color:' + (done ? 'rgba(255,255,255,.85)' : next ? '#B4501A' : '#A0A7B2'))}>{i + 1}</span>
                         </div>
