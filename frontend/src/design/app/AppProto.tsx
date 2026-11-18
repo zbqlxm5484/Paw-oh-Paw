@@ -56,7 +56,20 @@ export class AppProto extends DCLogic<Props, any> {
     if (this.props.screen === 'capGuide') this.enterCapGuide()
   }
   /** 촬영 화면에 들어올 때: 가로 안내 애니메이션, 하단바 숨김, 카메라 미리 켜기 */
-  enterCapGuide() { this.startRot(); void camera.setNavBarHidden(true); if (camera.canRecordInApp()) { this.setState({ camLoading: !camera.isLive() }); void camera.warm() } }
+  enterCapGuide() { this.startRot(); void camera.setNavBarHidden(true); if (camera.canRecordInApp()) { this.setState({ camLoading: !camera.isLive() }); void camera.warm(); camera.setResumeHandler(this.resumeCam) } }
+  /** 촬영 화면에서 앱이 백그라운드에 갔다 돌아오면 시스템이 카메라를 끊어 둔다. 미리보기를 새로 붙인다(녹화 중이던 건 camera.ts 가 버렸다) */
+  resumeCam = () => {
+    if (this.props.screen !== 'capGuide') return
+    clearInterval(this.recTick)
+    this.setState({ camLive: false, camLoading: true, recSec: -1 })
+    for (const el of this.vids) {
+      if (!el.isConnected) continue
+      void camera.startPreview(el).then((ok) => {
+        if (ok) camera.uprightInRotatedBox(el)
+        this.setState({ camLive: ok, camLoading: false })
+      })
+    }
+  }
   /** 체험 모드에서 로그인·회원가입 화면에 오면 체험 모드를 끝내고 같은 화면을 다시 연다.
    *  체험 모드는 모든 요청이 가짜 서버로 가서, 그대로 로그인하면 실제 계정도 가짜 데이터만 보였다 */
   leaveDemoForAuth() {
@@ -69,14 +82,14 @@ export class AppProto extends DCLogic<Props, any> {
       this.syncRoute()
       this.leaveDemoForAuth()
       if (this.props.screen === 'capGuide') this.enterCapGuide()
-      if (prev.screen === 'capGuide' && this.props.screen !== 'capGuide') { if (camera.isRecording()) void camera.stopRecording(); camera.stopLater(); void camera.setNavBarHidden(false); clearInterval(this.recTick); this.setState({ camLive: false, recSec: -1, camLoading: false }) }
+      if (prev.screen === 'capGuide' && this.props.screen !== 'capGuide') { camera.setResumeHandler(null); if (camera.isRecording()) void camera.stopRecording(); camera.stopLater(); void camera.setNavBarHidden(false); clearInterval(this.recTick); this.setState({ camLive: false, recSec: -1, camLoading: false }) }
       if (this.props.screen === 'story') this.setState({ page: 0 })
     }
     if (prev.data.dogs !== this.props.data.dogs) this.syncRoute()
     const s = this.props.session
     if (this.props.screen === 'analyzing' && s && (s.status === 'DONE' || s.status === 'FAILED') && s.id === this.props.params.sessionId) this.props.nav(`/sessions/${s.id}/result`, { replace: true })
   }
-  componentWillUnmount() { camera.stopPreview(); void camera.setNavBarHidden(false); clearInterval(this.recTick); cancelAnimationFrame(this.raf); clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.tt); clearTimeout(this.r1); clearTimeout(this.r2) }
+  componentWillUnmount() { camera.setResumeHandler(null); camera.stopPreview(); void camera.setNavBarHidden(false); clearInterval(this.recTick); cancelAnimationFrame(this.raf); clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.tt); clearTimeout(this.r1); clearTimeout(this.r2) }
   syncRoute() {
     const { screen, params, data } = this.props
     if (screen === 'petNew') {
@@ -672,6 +685,8 @@ export class AppProto extends DCLogic<Props, any> {
         if (camera.isRecording()) {
           clearInterval(this.recTick); this.setState({ recSec: -1 })
           const f = await camera.stopRecording()
+          // 카메라가 멈춘 채 찍힌 빈 영상은 올리지 않는다. 미리보기를 다시 붙이고 다시 찍게 한다
+          if (!f) { this.toast('영상이 제대로 찍히지 않았습니다. 다시 찍어 주세요'); this.resumeCam(); return }
           const total = this.shots() + (this.state.pend || 0) + (f ? 1 : 0)
           this.queueUpload(f)
           // 16번째까지 찍었으면 촬영 화면을 닫는다(카메라도 꺼진다). 남은 영상은 첨부 목록 화면에서 계속 올라간다
@@ -686,6 +701,8 @@ export class AppProto extends DCLogic<Props, any> {
           this.recTick = setInterval(() => this.setState({ recSec: Math.floor((Date.now() - t0) / 1000) }), 250)
           return
         }
+        // 미리보기가 켜져 있던 카메라가 끊겼으면 기기 카메라 앱으로 넘기지 않고 다시 켠다
+        if (s.camLive) { this.toast('카메라를 다시 켜는 중입니다. 잠시 뒤 다시 눌러 주세요'); this.resumeCam(); return }
         const [f] = await this.props.pickFile(true); await this.addFile(f ?? null)
       },
       startAna: async () => {
