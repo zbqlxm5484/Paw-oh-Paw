@@ -153,9 +153,11 @@ export default function Upload() {
   const go: Go | null = acct && !acct.dogs.length ? redirect('/home?modal=pet', '먼저 반려견을 등록해 주세요') : null
   useRedirect(go)
 
-  // 첫 영상을 미리 보기(없으면 견본 영상)
+  // 첫 영상을 미리 보기. 이 탭이 들고 있는 파일 → 서버에 올라간 영상(폰 QR·새로고침 뒤) 순.
+  // 견본 영상은 ?demo= 시연 때만 쓴다(실제 첨부가 있는데 랜딩 영상이 나오던 문제). 주소를 받기 전에는 비워 둔다
   const want = localFiles.length ? localFiles[0] : null
-  let preview = SAMPLE
+  const serverFirst = foreignShots.map((s) => phoneVideos[s.id]).find(Boolean)
+  let preview: string | undefined = serverFirst ?? (phoneN ? undefined : SAMPLE)
   if (want) {
     let u = urls.current.get(want)
     if (!u) {
