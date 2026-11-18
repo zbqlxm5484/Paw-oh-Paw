@@ -14,7 +14,7 @@ import { redirect, setToast, type Go } from '../app/session'
 import { dogOf, resultOf } from '../store/db'
 import type { Account, Result } from '../store/types'
 import { session, source_name } from '../views/real'
-import { best_view, body_map, MEDIAN_SPEED, result_view, ROM_REF } from '../views/views'
+import { best_view, body_map, MEDIAN_SPEED, NO_SYM_HINT, result_view, ROM_REF } from '../views/views'
 import { link } from '../config'
 import { api as backendApi } from '../api/client'
 import { MOCK } from '../store/backend'
@@ -38,7 +38,7 @@ type Ctx = {
   stance: Record<string, number | null>
   speed: number
   rom_ref: Record<string, number>
-  overall: { sym: number; front: string; hind: string }
+  overall: { sym: string; front: string; hind: string }
   gait_url: string
   /** 측정 걸음 곡선을 주는 함수(이 회차의 실제 각도 → 없으면 견본, views/gaitClip.ts loadSessionGait). 없으면 gait_url 을 받는다 */
   gait_load?: () => Promise<GaitClip | null>
@@ -54,7 +54,7 @@ function prepare(acct: Account, r: Result) {
   const bm = body_map(acct, r)
   const legs: Record<string, Leg> = {}
   for (const [k, v] of Object.entries(bm.legs)) if (k.length === 2) legs[k] = v as unknown as Leg // LF·RF·LH·RH (front·hind 는 한 쌍 요약)
-  const overall = { sym: bm.sym, front: bm.legs.front.say, hind: bm.legs.hind.say }
+  const overall = { sym: bm.nosym ? '—' : String(bm.sym), front: bm.legs.front.say, hind: bm.legs.hind.say }
   const model = 'assets/dog3d/' + (d && d.size === 'L' ? 'husky.glb' : 'shiba.glb')
   // 이 회차에서 잰 다리별 관절 가동 범위: 3D 측정 걸음의 다리 뼈 배율(좌우 중 큰 쪽 대비)에 쓴다
   const { roms, stance } = legNums(r)
@@ -178,7 +178,8 @@ export default function Gait3d() {
             <div style={css('padding:18px;border-radius:16px;background:#fff;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:6px')}>
               <b style={css('font-size:22px')}>{rd.name}</b>
               <span style={css('font-size:14px;color:#5B6472')}>{rd.desc}</span>
-              <span style={css('font-size:14px')}>좌우 대칭 점수 <b>{bm.sym}점</b></span>
+              <span style={css('font-size:14px')}>좌우 대칭 점수 <b>{bm.nosym ? '—' : `${bm.sym}점`}</b></span>
+              {bm.nosym ? <span style={css('font-size:13px;color:#5B6472')}>{NO_SYM_HINT}</span> : null}
             </div>
             <div style={css('padding:18px;border-radius:16px;background:#fff;border:1px solid #ECE8E2;display:flex;flex-direction:column;gap:10px')}>
               {([['front', '앞다리'], ['hind', '뒷다리']] as const).map(([part, label]) => {
@@ -509,7 +510,7 @@ function mount(ctx: Ctx, el: Els): () => void {
     return '<b style="font-size:14px">' + L.label + (L.weak ? ' (덜 씁니다)' : '') + '</b>' + rows
   }
   function bodyTip() {
-    return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 점수 <b>' + OVERALL.sym + '점</b></div><div style="color:#C9CFD8">'
+    return '<b style="font-size:14px">몸 전체</b><div>좌우 대칭 점수 <b>' + OVERALL.sym + (OVERALL.sym === '—' ? '' : '점') + '</b></div><div style="color:#C9CFD8">'
       + OVERALL.front + '</div><div style="color:#C9CFD8">' + OVERALL.hind + '</div>'
   }
   const onMove = (e: PointerEvent) => {

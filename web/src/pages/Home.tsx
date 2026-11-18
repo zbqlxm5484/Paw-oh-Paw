@@ -97,23 +97,23 @@ export default function Home() {
       </div>
     )
   } else if (view === 'analyses') {
-    const cols = '104px minmax(190px,1.5fr) minmax(170px,1.4fr) 66px 128px 96px minmax(100px,.8fr)'
-    const colsN = '92px minmax(140px,1.3fr) minmax(110px,1fr) 56px 110px 88px' // 좁은 창: 촬영 칸 숨김
+    const cols = '118px minmax(190px,1.5fr) minmax(170px,1.4fr) 66px 128px 96px minmax(100px,.8fr)'
+    const colsN = '110px minmax(140px,1.3fr) minmax(110px,1fr) 56px 110px 88px' // 좁은 창: 촬영 칸 숨김
     table = (
       <div className="tbl" style={css('--tw:900px;--tw-n:680px')}>
         <div className="tbl-r" style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;background:#FAF7F2;border-bottom:1px solid #ECE8E2;font-size:13px;font-weight:700;color:#5B6472`)}>
-          <span>측정일</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 점수</span><span>상태</span><span className="tbl-opt">촬영</span>
+          <span>측정 일시</span><span>반려견</span><span>병명</span><span>회차</span><span>대칭 점수</span><span>상태</span><span className="tbl-opt">촬영</span>
         </div>
         {rows.map((r, i) => (
           <div key={r.id} className="hv-row tbl-r" data-href={`/results/${r.id}`} style={css(`--tc:${cols};--tc-n:${colsN};display:grid;gap:12px;padding:12px 20px;border-top:${bt(i)};align-items:center;cursor:pointer;background:#fff`)}>
-            <span style={css('font-size:14px;color:#5B6472;font-variant-numeric:tabular-nums')}>{r.when}</span>
+            <b style={css('font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap')}>{r.when}</b>{/* 오늘 탭 시각과 같은 글씨 */}
             <span style={css('display:flex;flex-direction:column;gap:2px;min-width:0')}>
               <span style={css('font-size:12px;color:#5B6472;font-variant-numeric:tabular-nums')}>{r.no}</span>
               <span style={css('white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}><a className="lk" href={link(`/dogs/${r.dog}`)} style={css('font-size:15px;font-weight:700;border-bottom:1px dashed #C9C2B8')}>{r.name}</a>{' '}<span style={css('font-size:14px;color:#5B6472')}>({r.breed})</span></span>
             </span>
             <span style={css('font-size:15px;font-weight:600;color:#3A4250;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')} title={r.dx}>{r.dx}</span>
             <span style={css('font-size:14px;color:#5B6472')}>{r.no_s}</span>
-            <span style={css('display:flex;align-items:center;gap:6px')}><b style={css(`padding:4px 10px;border-radius:8px;background:${r.sym_bg};color:${r.sym_c};font-size:14px;font-variant-numeric:tabular-nums`)}>{r.sym}</b>{r.sym_d ? <span style={css(`font-size:13px;font-weight:700;color:${r.sym_dc}`)}>{r.sym_d}</span> : null}</span>
+            <span style={css('display:flex;align-items:center;gap:6px')}><b style={css(`padding:4px 10px;border-radius:8px;background:${r.sym_bg};color:${r.sym_c};font-size:14px;font-variant-numeric:tabular-nums`)} title={r.sym_tip || undefined}>{r.sym}</b>{r.sym_tip ? <span style={css('font-size:12px;color:#5B6472;line-height:1.3')}>양쪽 면 필요</span> : null}{r.sym_d ? <span style={css(`font-size:13px;font-weight:700;color:${r.sym_dc}`)}>{r.sym_d}</span> : null}</span>
             <span><span style={css(`padding:4px 9px;border-radius:8px;background:${r.bg};color:${r.c};font-size:13px;font-weight:700;white-space:nowrap`)}>{r.st}</span></span>
             <a className="lk tbl-opt" href={link(qs({ by: r.by, page: '' }))} style={css('font-size:14px;color:#5B6472;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{r.by}</a>
           </div>

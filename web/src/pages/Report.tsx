@@ -69,7 +69,7 @@ function FirstSummary({ bm, rd }: { bm: BM; rd: { pm?: unknown; pu?: unknown; pa
     <div style={css('display:grid;grid-template-columns:88px 1fr;row-gap:8px;column-gap:14px;padding:16px 20px;border-radius:14px;border:1.5px solid #E9D3C2;background:#FFF9F4;font-size:15px;line-height:1.5')}>
       <b style={css('color:#A8481A')}>주요 결과</b><span>{owner_guide(bm).summary}</span>
       <b style={css('color:#A8481A')}>측정 품질</b><span>걸은 횟수 {String(rd.pm)}번 중 {String(rd.pu)}번을 분석에 썼어요{rd.part ? '. 일부만 써서 덜 정확할 수 있어요' : ''}</span>
-      <b style={css('color:#A8481A')}>이전 대비</b><span>{prev ? `직전 회차(${bm.prev_label || prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
+      <b style={css('color:#A8481A')}>이전 대비</b><span>{bm.nosym ? '이번 회차는 대칭 점수가 없어 비교할 수 없어요' : prev ? `직전 회차(${bm.prev_label || prev.t})보다 좌우 대칭 점수 ${bm.sym > prev.v ? '+' : ''}${bm.sym - prev.v}점` : '첫 측정이라 비교할 회차가 없어요'}</span>
     </div>
   )
 }
@@ -201,15 +201,15 @@ export function ReportPaper({ acct, r, rd, rp, bm, kind, fromServer, onReady }: 
       <div style={css('display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;padding:20px 22px;border-radius:14px;background:#FAF7F2')}>
         <div style={css('display:flex;flex-direction:column;gap:2px')}>
           <span style={css('font-size:14px;font-weight:700;color:#5B6472')}>좌우 대칭 점수</span>
-          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.sym_level[3]}`)}>{bm.sym}<span style={css('font-size:18px')}>점</span></b>
+          <b style={css(`font-size:44px;letter-spacing:-1px;line-height:1.1;color:${bm.nosym ? '#5B6472' : bm.sym_level[3]}`)}>{bm.nosym ? '—' : <>{bm.sym}<span style={css('font-size:18px')}>점</span></>}</b>
         </div>
         <div style={css('display:flex;flex-direction:column;gap:8px')}>
           <div style={css('position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#F2A898 0%,#F2A898 60%,#F7D6AE 60%,#F7D6AE 80%,#DCEFE2 80%,#DCEFE2 100%)')}>
-            <span style={css(`position:absolute;top:-5px;left:calc(${bm.sym}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>
+            {bm.nosym ? null : <span style={css(`position:absolute;top:-5px;left:calc(${bm.sym}% - 2px);width:4px;height:22px;border-radius:2px;background:#1B2433`)}></span>}
           </div>
           <div style={css('display:flex;justify-content:space-between;font-size:12px;color:#5B6472')}><span>0</span><span>80</span><span>90</span><span>100 (완전 대칭)</span></div>
           {kind === 'g' ? <span style={css('font-size:12px;color:#5B6472')}>왼쪽·오른쪽 다리를 얼마나 고르게 쓰는지예요. 100에 가까울수록 양쪽을 비슷하게 써요</span> : null}
-          <span style={css('font-size:15px;color:#3A4250')}>{bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <>, 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
+          <span style={css('font-size:15px;color:#3A4250')}>{bm.nosym ? '한쪽 면만 분석돼 좌우를 비교할 수 없어요. 왼쪽·오른쪽 면을 모두 찍어야 대칭 점수가 나와요' : bm.vs_base != null ? <>기준 회차({bm.base_label || bm.base_date})보다 <b style={css(`color:${bm.vs_base > 0 ? '#2E8B57' : bm.vs_base < 0 ? '#C2412D' : '#3A4250'}`)}>{bm.vs_base > 0 ? '+' : ''}{bm.vs_base}점</b></> : '첫 측정입니다'}{bm.focus ? <>, 관심 다리 <b>{bm.focus}</b>(점선)</> : null}</span>
         </div>
       </div>
 
