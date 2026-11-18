@@ -704,7 +704,7 @@ export function today_rows(acct: Account, dogs: Dog[], day = isoToday()) {
     if (!(notes.length || res.length || vit || live.has(d.id))) continue
     const job = live.get(d.id)
     const hm = (ms: number) => { const t = new Date(ms); return `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` }
-    const times = [...notes.map((n) => n.at.slice(11, 16)), ...res.map((r) => r.time), ...(vit?.at ? [vit.at.slice(11, 16)] : []), ...(job?.started ? [hm(job.started)] : [])].filter((t) => /^\d{2}:\d{2}$/.test(t))
+    const times = [...notes.map((n) => n.at.slice(11, 16)), ...res.map((r) => r.time), ...(job?.started ? [hm(job.started)] : [])].filter((t) => /^\d{2}:\d{2}$/.test(t))
     const steps: [string, string, string][] = []
     if (vit) steps.push(['바이탈', '#E7EEFB', '#3B5BA9'])
     if (notes.some((n) => n.cat in SOAP)) steps.push(['진료 기록', '#E3F1E7', '#2E7A4F'])
