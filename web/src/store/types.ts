@@ -97,6 +97,7 @@ export interface Result {
   w: string
   model: string
   sym: number
+  nosym?: boolean // 서버가 대칭 점수를 못 냄(왼쪽·오른쪽 값이 다 있는 쌍이 없음). sym 은 0 이지만 보이지 않고 추이·비교에서도 뺀다
   rom: number
   sL: number
   sR: number
