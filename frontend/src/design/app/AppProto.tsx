@@ -18,6 +18,7 @@ import { IntroBody } from './AppIntro'
 import { Gait3dBody } from './AppGait3d'
 import { DogBody, HomeBody, ReportsBody, type HomeRow, type WebDog, type WebHome, type WebReports } from './AppWebScreens'
 import { exitDemo, isDemo } from '../../app/demoMode'
+import { preloadLanding } from '../../app/landingPreload'
 import { badgesOfDog, emrSearchText } from '../../app/emr'
 import { LEGAL, TERM_LINKS, type LegalKind } from '../../legal/content'
 import { HELP_CARDS, HELP_CONTACT } from '../help'
@@ -101,6 +102,7 @@ export class AppProto extends DCLogic<Props, any> {
     if (this.props.session && this.state.capDog !== this.props.session.dog_id) this.setState({ capDog: this.props.session.dog_id })
   }
   startSplash() {
+    preloadLanding()
     clearTimeout(this.t1); clearTimeout(this.t2)
     this.setState({ splash: true, joint: false })
     this.t1 = setTimeout(() => this.setState({ joint: true }), 300)
