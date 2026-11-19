@@ -1,13 +1,8 @@
 @import './tokens.css';
 
-/* 디자인 폰트(Pretendard Variable). 디자인 내보내기에 들어 있던 파일을 그대로 쓴다. 오프라인·PWA 에서도 같은 글꼴 */
-@font-face {
-  font-family: 'Pretendard Variable';
-  src: url('/pretendard-variable.woff2') format('woff2-variations');
-  font-weight: 45 920;
-  font-style: normal;
-  font-display: swap;
-}
+/* 디자인 폰트(Pretendard Variable). 통파일(2MB)을 첫 화면마다 받던 것을 글자 범위별 조각(dynamic subset)으로 바꿨다.
+   화면에 쓰인 글자의 조각만 받는다. 같은 글꼴 이름이라 화면은 그대로. 오프라인은 서비스 워커가 한 번 받은 조각을 캐시한다(vite.config.ts) */
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 
 /* 상단바 'Paw oh Paw' 글자: Fredoka(없으면 Nunito ExtraBold) */
 /* 26px 이면 좁은 폰에서 오른쪽 알림·계정 칸에 밀려 두 줄로 넘어갔다 → 21px, 한 줄 고정 */

@@ -254,13 +254,6 @@ function AppShell(props: ProtoProps) {
   )
 }
 
-// 첫 화면(시작 로고 2.2초 뒤)의 배경 영상을 로고가 떠 있는 동안 미리 받아 둔다. 붙이지 않은 video 라 화면에는 안 보인다
-const landingPreload = typeof document !== 'undefined' ? document.createElement('video') : null
-if (landingPreload) {
-  landingPreload.muted = true
-  landingPreload.preload = 'auto'
-  landingPreload.src = '/assets/landing.mp4'
-}
 
 const SAFE_BOTTOM = 'var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))'
 

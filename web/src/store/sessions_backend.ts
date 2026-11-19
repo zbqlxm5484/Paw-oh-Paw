@@ -89,7 +89,11 @@ export function toResult(o: SessionResultOut, dog: string): Result {
     for (const x of pick[0]!.metrics) if (x.limb !== 'NONE' && typeof x.n_passes === 'number') np[x.limb] = Math.max(np[x.limb] ?? 0, x.n_passes)
     if (Object.keys(np).length) r.np = np
     // 대칭 점수는 서버 값을 그대로 쓴다(앱과 같은 숫자). 예전 서버라 필드가 없으면 위에서 화면 계산한 값
-    if (o.symmetry_score !== undefined) r.sym = o.symmetry_score ?? 0
+    // null 은 0점이 아니라 '점수 없음'(한쪽 면만 분석됨). 화면은 — 와 안내(NO_SYM_HINT)로 보인다
+    if (o.symmetry_score !== undefined) {
+      r.sym = o.symmetry_score ?? 0
+      r.nosym = o.symmetry_score == null
+    }
     r.gait = pick[1]
     r.mg = mg
   }
