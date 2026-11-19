@@ -33,10 +33,18 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           // 화면 파일만 미리 캐시. /api 는 네트워크만 쓴다(폴링·서명 주소가 캐시되면 안 된다)
-          globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+          // 글꼴 조각(woff2 수십 개)과 3D 화면 전용 three.js 는 미리 받지 않는다. 쓰는 순간 받고 아래 runtimeCaching 이 캐시한다
+          globPatterns: ['**/*.{js,css,html,svg}'],
+          globIgnores: ['**/Gait3dMount-*.js'],
           // /web 은 같은 도메인의 수의사용 웹(별도 앱)이라 앱 index.html 로 대신 응답하면 안 된다
           navigateFallbackDenylist: [/^\/api\//, /^\/web(\/|$)/],
-          runtimeCaching: [],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/') && /\.(woff2|js)$/.test(url.pathname),
+              handler: 'CacheFirst',
+              options: { cacheName: 'static-assets', expiration: { maxEntries: 200 } },
+            },
+          ],
         },
         devOptions: { enabled: false },
       }),

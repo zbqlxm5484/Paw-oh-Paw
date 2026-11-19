@@ -6,7 +6,8 @@ import { getAngles } from '../../api/results'
 import { getSession } from '../../api/sessions'
 import type { SessionResultOut } from '../../api/types'
 import { legCards } from './AppReport'
-import { mount, type Ctx, type Els } from './Gait3dMount'
+// three.js(약 600KB)는 3D 보기에서만 쓴다 → 화면에 들어올 때 따로 받는다(첫 로딩 번들에서 뺌)
+import type { Ctx, Els } from './Gait3dMount'
 import { loadSessionGait, type GaitLoad } from './gaitClip'
 
 const INK = '#1B2433', SUB = '#5B6472', LINE = '#ECE8E2', ORANGE = '#D2601A'
@@ -81,7 +82,13 @@ export function Gait3dBody(p: Gait3dProps) {
   const api: Els['api'] = useRef(null) as Els['api']
   useEffect(() => {
     if (!ctx || !boxRef.current) return
-    return mount(ctx, { box: boxRef.current, tip: tipRef.current!, real: realRef.current!, gen: genRef.current!, walk: walkRef.current!, stop: stopRef.current!, setLoading, api })
+    let dead = false
+    let unmount: (() => void) | undefined
+    import('./Gait3dMount').then(({ mount }) => {
+      if (dead || !boxRef.current) return
+      unmount = mount(ctx, { box: boxRef.current, tip: tipRef.current!, real: realRef.current!, gen: genRef.current!, walk: walkRef.current!, stop: stopRef.current!, setLoading, api })
+    }).catch(() => { if (!dead) setLoading('3D 모델을 불러오지 못했습니다') })
+    return () => { dead = true; unmount?.() }
   }, [ctx, api])
 
   const btn: CSSProperties = { height: 44, padding: '0 12px', borderRadius: 10, border: '1px solid #E2DCD3', background: '#fff', fontSize: 14, fontWeight: 700, color: INK, fontFamily: 'inherit', whiteSpace: 'nowrap' }
